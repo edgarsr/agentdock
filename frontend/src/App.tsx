@@ -22,7 +22,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
-      {currentView === 'chat' ? <ChatView /> : <DesignSystemView />}
+      {currentView === 'chat' && <ChatView />}
+      {currentView === 'demo' && <DesignSystemView />}
     </div>
   );
 }

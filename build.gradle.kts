@@ -1,5 +1,6 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "1.9.22"
+    id("org.jetbrains.kotlin.jvm") version "2.2.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
     id("org.jetbrains.intellij.platform") version "2.10.5"
 }
 
@@ -18,10 +19,11 @@ dependencies {
         intellijIdeaCommunity("2024.3.1")
         jetbrainsRuntime()
     }
+    implementation("com.agentclientprotocol:acp:0.14.1")
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 intellijPlatform {
@@ -40,10 +42,10 @@ tasks {
         enabled = false
     }
 
+    val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
+
     val npmBuild by registering(Exec::class) {
         workingDir = file("frontend")
-        // Use npm.cmd on Windows so Gradle can find npm; on Linux/macOS use "npm"
-        val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
         commandLine(npm, "run", "build")
     }
 

@@ -4,3 +4,4 @@ build/
 /.intellijPlatform/
 /src/main/resources/webview/
 .idea
+.kotlin

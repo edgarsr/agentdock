@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
@@ -14,9 +15,15 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
+import unified.llm.acp.AcpClientService
+import unified.llm.acp.AcpDebugBridge
 import java.awt.BorderLayout
 import java.awt.Cursor
 import javax.swing.JLabel
@@ -35,6 +42,10 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         val browser = JBCefBrowser()
+        val service = AcpClientService(project)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val bridge = AcpDebugBridge(browser, service, scope)
+        bridge.install()
 
         // Create Header Actions
         val newChatAction = object : AnAction("New Chat", "Start a new chat session", AllIcons.General.Add) {
@@ -42,18 +53,15 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                 browser.cefBrowser.executeJavaScript("if(window.setView) window.setView('chat')", browser.cefBrowser.url, 0)
             }
         }
-
         val designSystemAction = object : AnAction("Design System", "View design system demo", AllIcons.Actions.Colors) {
             override fun actionPerformed(e: AnActionEvent) {
                 browser.cefBrowser.executeJavaScript("if(window.setView) window.setView('demo')", browser.cefBrowser.url, 0)
             }
         }
 
-        toolWindow.setTitleActions(listOf(newChatAction, designSystemAction))
-
         // Solve JCEF cursor: pointer not working issue on Windows
         // We catch the cursor change in JS and manually set it via Swing Component
-        val cursorQuery = JBCefJSQuery.create(browser)
+        val cursorQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase)
         cursorQuery.addHandler { cursorType ->
             ApplicationManager.getApplication().invokeLater {
                 val component = browser.component
@@ -92,6 +100,8 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         });
                     """.trimIndent()
                     cefBrowser.executeJavaScript(cursorInjection, cefBrowser.url, 0)
+                    bridge.injectReadySignal(cefBrowser)
+                    bridge.injectDebugApi(cefBrowser)
                 }
             }
         }, browser.cefBrowser)
@@ -108,8 +118,24 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
         val content = ContentFactory.getInstance().createContent(panel, "", false)
 
         Disposer.register(content, browser)
+        Disposer.register(content, object : Disposable {
+            override fun dispose() {
+                scope.coroutineContext[Job]?.cancel()
+            }
+        })
+        Disposer.register(content, object : Disposable {
+            override fun dispose() {
+                service.dispose()
+            }
+        })
 
         toolWindow.contentManager.addContent(content)
+        
+        // Ensure title actions are set after content is added and remain visible
+        // Setting title actions after content addition ensures they are properly attached
+        ApplicationManager.getApplication().invokeLater {
+            toolWindow.setTitleActions(listOf(newChatAction, designSystemAction))
+        }
     }
 
     private fun createBrowserPanel(browser: JBCefBrowser): JPanel {
