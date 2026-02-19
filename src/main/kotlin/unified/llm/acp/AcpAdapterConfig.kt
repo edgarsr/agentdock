@@ -1,140 +1,117 @@
 package unified.llm.acp
 
-import java.util.Properties
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.io.InputStreamReader
 
 /**
  * Configuration for ACP adapters.
- * Reads adapter configuration from acp-adapters.properties file.
- *
- * Format:
- * adapter.default=<adapter-name>
- * adapter.<name>.resource=<resource-directory-name>
- * adapter.<name>.displayName=<display-name>
- * adapter.<name>.npmPackage=<npm-package-name>
- * adapter.<name>.npmVersion=<npm-package-version>
- * adapter.<name>.launchPath=<relative-path-to-node-entrypoint>
- * adapter.<name>.defaultModelId=<model-id> (optional)
- * adapter.<name>.models=<comma-separated-model-ids> (optional)
- * adapter.<name>.model.<model-id>.displayName=<display-name> (optional)
- * adapter.<name>.patch.<n>.file=<relative-path>
- * adapter.<name>.patch.<n>.find=<text-to-find>
- * adapter.<name>.patch.<n>.replace=<replacement-text>
+ * Reads adapter configuration from acp-adapters.json file.
  */
+@OptIn(ExperimentalSerializationApi::class)
 object AcpAdapterConfig {
-    private const val CONFIG_FILE = "/acp-adapters.properties"
 
-    data class Patch(val file: String, val find: String, val replace: String)
+    @Serializable
+    data class ModeInfo(val id: String, val displayName: String)
+
+    @Serializable
     data class ModelInfo(val id: String, val displayName: String)
 
+    @Serializable
     data class AdapterInfo(
-        val name: String,
-        val resourceName: String,
+        val name: String = "", // Filled after parsing
+        val resourceName: String? = null,
         val displayName: String,
         val npmPackage: String? = null,
         val npmVersion: String? = null,
         val launchPath: String,
         val defaultModelId: String? = null,
         val models: List<ModelInfo> = emptyList(),
-        val args: String? = null,
-        val patches: List<Patch> = emptyList()
-    )
-
-    private val config: Map<String, AdapterInfo> by lazy { parseConfig() }
-
-    fun getDefaultAdapterName(): String {
-        return config["default"]?.name
-            ?: throw IllegalStateException(
-                "No default adapter configured in $CONFIG_FILE. Set 'adapter.default' property."
-            )
+        val defaultModeId: String? = null,
+        val modes: List<ModeInfo> = emptyList(),
+        val args: List<String> = emptyList(),
+        val patches: List<String> = emptyList(),
+        /**
+         * How to handle model changes mid-session:
+         * - "restart-resume": restart ACP process and resume the previous session (preserves history)
+         * - "restart": restart ACP process with a new session (history reset)
+         * - "in-session": call sess.setModel() without restarting (works if adapter supports it)
+         * Default: "in-session"
+         */
+        val modelChangeStrategy: String = "in-session"
+    ) {
+        // Helper to handle optional resourceName logic
+        fun getEffectiveResourceName(): String = resourceName ?: name
     }
 
+    @Serializable
+    private data class ConfigRoot(
+        val defaultAdapter: String,
+        val adapters: Map<String, AdapterInfo>
+    )
+
+    private const val CONFIG_FILE = "/acp-adapters.json"
+
+    private val json = Json { 
+        ignoreUnknownKeys = true 
+        allowComments = true
+        isLenient = true
+    }
+
+    private val loadedConfig: Pair<String, Map<String, AdapterInfo>> by lazy { parseConfig() }
+
+    fun getDefaultAdapterName(): String = loadedConfig.first
+
     fun getAdapterInfo(name: String): AdapterInfo {
-        return config[name] ?: throw IllegalStateException(
-            "Adapter '$name' not found in configuration. " +
-            "Available adapters: ${config.keys.joinToString(", ")}"
+        return loadedConfig.second[name] ?: throw IllegalStateException(
+            "Adapter '$name' not found. Available: ${loadedConfig.second.keys.joinToString(", ")}"
         )
     }
 
-    fun getAllAdapters(): Map<String, AdapterInfo> = config
+    fun getAllAdapters(): Map<String, AdapterInfo> = loadedConfig.second
 
     fun getDefaultAdapterResourceName(): String {
-        return getAdapterInfo(getDefaultAdapterName()).resourceName
+        val name = getDefaultAdapterName()
+        return getAdapterInfo(name).getEffectiveResourceName()
     }
 
     fun getDefaultModelId(): String? {
         return getAdapterInfo(getDefaultAdapterName()).defaultModelId
     }
 
-    private fun parseConfig(): Map<String, AdapterInfo> {
-        val props = Properties()
-        val configStream = AcpAdapterConfig::class.java.getResourceAsStream(CONFIG_FILE)
-            ?: throw IllegalStateException(
-                "Configuration file $CONFIG_FILE not found in plugin resources. " +
-                "Ensure the file exists in src/main/resources/"
+    private fun parseConfig(): Pair<String, Map<String, AdapterInfo>> {
+        val content = readResource(CONFIG_FILE)
+        val root = json.decodeFromString<ConfigRoot>(content)
+        
+        val processedAdapters = root.adapters.mapValues { (key, info) ->
+            // Resolve external patch files
+            val strings = info.patches.map { p -> resolveContent(p) }
+
+            // Ensure name is set and resourceName defaults to name if null
+            info.copy(
+                name = key,
+                resourceName = info.resourceName ?: key,
+                patches = strings
             )
-
-        configStream.use { props.load(it) }
-
-        val defaultName = props.getProperty("adapter.default")
-            ?: throw IllegalStateException("No 'adapter.default' property found in $CONFIG_FILE")
-
-        val adapters = mutableMapOf<String, AdapterInfo>()
-
-        // Register default adapter under "default" key
-        adapters["default"] = buildAdapterInfo(props, defaultName)
-
-        // Load all adapter definitions by scanning for adapter.<name>.resource keys
-        props.stringPropertyNames().forEach { key ->
-            if (key.startsWith("adapter.") && key.endsWith(".resource")) {
-                val adapterName = key.removePrefix("adapter.").removeSuffix(".resource")
-                if (adapterName != "default") {
-                    adapters[adapterName] = buildAdapterInfo(props, adapterName)
-                }
-            }
         }
-
-        check(adapters.isNotEmpty()) {
-            "No adapters configured in $CONFIG_FILE. Add at least one adapter definition."
-        }
-
-        return adapters
+        
+        return root.defaultAdapter to processedAdapters
     }
 
-    private fun buildAdapterInfo(props: Properties, name: String): AdapterInfo {
-        val patches = mutableListOf<Patch>()
-        val models = mutableListOf<ModelInfo>()
-        var i = 1
-        while (true) {
-            val file = props.getProperty("adapter.$name.patch.$i.file") ?: break
-            val find = props.getProperty("adapter.$name.patch.$i.find") ?: break
-            val replace = props.getProperty("adapter.$name.patch.$i.replace") ?: break
-            patches.add(Patch(file, find, replace))
-            i++
+    private fun resolveContent(text: String): String {
+        if (text.startsWith("@")) {
+            val path = text.substring(1)
+            // Ensure path starts with / for resource loading from root
+            val resourcePath = if (path.startsWith("/")) path else "/$path"
+            return readResource(resourcePath)
         }
-        props.getProperty("adapter.$name.models")
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.forEach { modelId ->
-                val displayName = props.getProperty("adapter.$name.model.$modelId.displayName", modelId)
-                models.add(ModelInfo(modelId, displayName))
-            }
+        return text
+    }
 
-        val defaultModelId = props.getProperty("adapter.$name.defaultModelId")
-        if (!defaultModelId.isNullOrBlank() && models.none { it.id == defaultModelId }) {
-            models.add(0, ModelInfo(defaultModelId, defaultModelId))
-        }
-        return AdapterInfo(
-            name = name,
-            resourceName = props.getProperty("adapter.$name.resource", name),
-            displayName = props.getProperty("adapter.$name.displayName", name),
-            npmPackage = props.getProperty("adapter.$name.npmPackage"),
-            npmVersion = props.getProperty("adapter.$name.npmVersion"),
-            launchPath = props.getProperty("adapter.$name.launchPath"),
-            defaultModelId = defaultModelId,
-            models = models,
-            args = props.getProperty("adapter.$name.args"),
-            patches = patches
-        )
+    private fun readResource(path: String): String {
+        val stream = AcpAdapterConfig::class.java.getResourceAsStream(path)
+            ?: throw IllegalStateException("Resource not found: $path")
+        return stream.reader().use { it.readText() }
     }
 }

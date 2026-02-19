@@ -11,7 +11,10 @@ import com.agentclientprotocol.model.AcpCreatedSessionResponse
 import com.agentclientprotocol.model.ClientCapabilities
 import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.ModelId
+import com.agentclientprotocol.model.SessionModeId
+
 import com.agentclientprotocol.model.PermissionOption
+import com.agentclientprotocol.model.PermissionOptionId
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
 import com.agentclientprotocol.model.SessionId
@@ -20,6 +23,7 @@ import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.transport.StdioTransport
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,9 +38,17 @@ import kotlinx.io.buffered
 import kotlinx.io.asSink
 import kotlinx.serialization.json.JsonElement
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
+import java.util.UUID
 
 private val log = Logger.getInstance(AcpClientService::class.java)
+
+data class PermissionRequest(
+    val requestId: String,
+    val description: String,
+    val options: List<PermissionOption>
+)
 
 /**
  * Minimal ACP client service: spawns the configured ACP adapter process, runs protocol with raw message logging.
@@ -55,6 +67,13 @@ class AcpClientService(private val project: Project) {
         logCallback?.invoke(entry)
     }
 
+    @Volatile
+    private var permissionRequestHandler: ((PermissionRequest) -> Unit)? = null
+
+    fun setOnPermissionRequest(handler: (PermissionRequest) -> Unit) {
+        permissionRequestHandler = handler
+    }
+
     enum class Status { NotStarted, Initializing, Ready, Prompting, Error }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -63,6 +82,11 @@ class AcpClientService(private val project: Project) {
     private val sessionIdRef = AtomicReference<String?>(null)
     private val activeAdapterNameRef = AtomicReference<String?>(null)
     private val activeModelIdRef = AtomicReference<String?>(null)
+
+    private val activeModeIdRef = AtomicReference<String?>(null)
+    
+    // Map of requestId -> Deferred response
+    private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<RequestPermissionResponse>>()
 
     @Volatile private var process: Process? = null
     @Volatile private var client: Client? = null
@@ -73,13 +97,14 @@ class AcpClientService(private val project: Project) {
     fun sessionId(): String? = sessionIdRef.get()
     fun activeAdapterName(): String? = activeAdapterNameRef.get()
     fun activeModelId(): String? = activeModelIdRef.get()
+    fun activeModeId(): String? = activeModeIdRef.get()
 
     fun getAvailableModels(adapterName: String? = null): List<AcpAdapterConfig.ModelInfo> {
         return AcpAdapterPaths.getAdapterInfo(adapterName).models
     }
 
     @Suppress("OPT_IN_USAGE")
-    suspend fun startAgent(adapterName: String? = null, preferredModelId: String? = null) {
+    suspend fun startAgent(adapterName: String? = null, preferredModelId: String? = null, resumeSessionId: String? = null, forceRestart: Boolean = false) {
         withContext(Dispatchers.IO) {
             lifecycleMutex.withLock {
                 val requestedAdapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
@@ -87,7 +112,8 @@ class AcpClientService(private val project: Project) {
                 val currentAdapterName = activeAdapterNameRef.get()
                 val currentStatus = statusRef.get()
 
-                if (currentStatus == Status.Ready && currentAdapterName == requestedAdapterName) {
+                // Skip restart if same adapter is already ready and no forced restart or session resume is requested
+                if (currentStatus == Status.Ready && currentAdapterName == requestedAdapterName && resumeSessionId == null && !forceRestart) {
                     return@withLock
                 }
 
@@ -118,10 +144,7 @@ class AcpClientService(private val project: Project) {
 
                 val nodeCmd = if (System.getProperty("os.name").lowercase().contains("win")) "node.exe" else "node"
                 val command = mutableListOf(nodeCmd, adapterInfo.launchPath)
-                adapterInfo.args?.let { argsString ->
-                    // Simple split by space, handles most cases like --experimental-acp
-                    command.addAll(argsString.split(" ").filter { it.isNotBlank() })
-                }
+                command.addAll(adapterInfo.args)
 
                 val processBuilder = ProcessBuilder(command)
                     .directory(adapterRoot)
@@ -163,7 +186,12 @@ class AcpClientService(private val project: Project) {
                 prot.start()
                 c.initialize(ClientInfo(com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION, ClientCapabilities()))
                 val params = SessionCreationParameters(cwd = cwd, mcpServers = emptyList())
-                val sess = c.newSession(params, operationsFactory)
+                val sess = if (resumeSessionId != null) {
+                    log.info("Resuming session $resumeSessionId after model change")
+                    c.resumeSession(SessionId(resumeSessionId), params, operationsFactory)
+                } else {
+                    c.newSession(params, operationsFactory)
+                }
                 session = sess
                 sessionIdRef.set(sess.sessionId.value)
 
@@ -185,6 +213,17 @@ class AcpClientService(private val project: Project) {
                     }
                 }
 
+                val defaultModeId = adapterInfo.defaultModeId
+                if (defaultModeId != null) {
+                   try {
+                       log.info("Setting startup mode to: $defaultModeId")
+                       sess.setMode(SessionModeId(defaultModeId))
+                       activeModeIdRef.set(defaultModeId)
+                   } catch (e: Exception) {
+                       log.warn("Failed to set startup mode to $defaultModeId: ${e.message}", e)
+                   }
+                }
+
                 activeAdapterNameRef.set(requestedAdapterName)
                 statusRef.set(Status.Ready)
             } catch (e: Exception) {
@@ -201,22 +240,107 @@ class AcpClientService(private val project: Project) {
     suspend fun setModel(modelId: String): Boolean {
         val trimmedModelId = modelId.trim()
         if (trimmedModelId.isEmpty()) return false
-        val sess = session ?: return false
-        val adapterName = activeAdapterNameRef.get()
-        val availableModels = getAvailableModels(adapterName)
+        if (session == null) return false
+
+        val currentModelId = activeModelIdRef.get()
+        if (currentModelId == trimmedModelId) return true
+
+        val adapterName = activeAdapterNameRef.get() ?: return false
+        val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
+        val availableModels = adapterInfo.models
         if (availableModels.isNotEmpty() && availableModels.none { it.id == trimmedModelId }) {
             log.warn("Model '$trimmedModelId' is not configured for adapter '$adapterName'")
             return false
         }
+
+        return when (adapterInfo.modelChangeStrategy) {
+            "restart-resume" -> {
+                val oldSessionId = sessionIdRef.get()
+                try {
+                    log.info("Model change ($adapterName): $currentModelId -> $trimmedModelId, restarting with session resume")
+                    startAgent(adapterName, trimmedModelId, oldSessionId)
+                    true
+                } catch (e: Exception) {
+                    log.warn("Failed to restart agent for model '$trimmedModelId': ${e.message}", e)
+                    false
+                }
+            }
+            "restart" -> {
+                try {
+                    log.info("Model change ($adapterName): $currentModelId -> $trimmedModelId, restarting with new session")
+                    startAgent(adapterName, trimmedModelId, resumeSessionId = null, forceRestart = true)
+                    true
+                } catch (e: Exception) {
+                    log.warn("Failed to restart agent for model '$trimmedModelId': ${e.message}", e)
+                    false
+                }
+            }
+            "in-session" -> {
+                val sess = session ?: return false
+                try {
+                    withContext(Dispatchers.IO) {
+                        sess.setModel(ModelId(trimmedModelId))
+                    }
+                    activeModelIdRef.set(trimmedModelId)
+                    log.info("Model change ($adapterName): $currentModelId -> $trimmedModelId (in-session)")
+                    true
+                } catch (e: Exception) {
+                    log.warn("Failed to set model '$trimmedModelId' in-session: ${e.message}", e)
+                    false
+                }
+            }
+            else -> {
+                log.warn("Unknown modelChangeStrategy '${adapterInfo.modelChangeStrategy}' for adapter '$adapterName', defaulting to restart")
+                try {
+                    startAgent(adapterName, trimmedModelId, resumeSessionId = null)
+                    true
+                } catch (e: Exception) {
+                    log.warn("Failed to restart agent for model '$trimmedModelId': ${e.message}", e)
+                    false
+                }
+            }
+        }
+    }
+
+    @Suppress("OPT_IN_USAGE")
+    suspend fun setMode(modeId: String): Boolean {
+        val trimmedModeId = modeId.trim()
+        if (trimmedModeId.isEmpty()) return false
+        val sess = session ?: return false
+        
+        val adapterName = activeAdapterNameRef.get()
+        if (adapterName != null) {
+            val info = AcpAdapterPaths.getAdapterInfo(adapterName)
+            if (info.modes.isNotEmpty() && info.modes.none { it.id == trimmedModeId }) {
+                log.warn("Mode '$trimmedModeId' is not configured for adapter '$adapterName'")
+                return false
+            }
+        }
+
         return try {
             withContext(Dispatchers.IO) {
-                sess.setModel(ModelId(trimmedModelId))
+                sess.setMode(SessionModeId(trimmedModeId))
             }
-            activeModelIdRef.set(trimmedModelId)
+            activeModeIdRef.set(trimmedModeId)
             true
         } catch (e: Exception) {
-            log.warn("Failed to set model '$trimmedModelId': ${e.message}", e)
+            log.warn("Failed to set mode '$trimmedModeId': ${e.message}", e)
             false
+        }
+    }
+
+    fun respondToPermissionRequest(requestId: String, decision: String) {
+        val deferred = pendingRequests.remove(requestId)
+        if (deferred != null) {
+            val response = if (decision == "deny") {
+                RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
+            } else {
+                // Assuming decision is the optionId if not "deny"
+                RequestPermissionResponse(RequestPermissionOutcome.Selected(PermissionOptionId(decision)))
+            }
+            deferred.complete(response)
+        } else {
+            log.warn("Received response for unknown request ID: $requestId")
         }
     }
 
@@ -263,6 +387,10 @@ class AcpClientService(private val project: Project) {
         sessionIdRef.set(null)
         activeAdapterNameRef.set(null)
         activeModelIdRef.set(null)
+        activeModeIdRef.set(null)
+        // Cancel all pending requests
+        pendingRequests.values.forEach { it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled)) }
+        pendingRequests.clear()
     }
 
     private fun resolveModelToApply(
@@ -278,14 +406,47 @@ class AcpClientService(private val project: Project) {
         return defaultModelId
     }
 
-    private class MinimalSessionOperations : ClientSessionOperations {
+    private inner class MinimalSessionOperations : ClientSessionOperations {
         override suspend fun requestPermissions(
             toolCall: SessionUpdate.ToolCallUpdate,
             permissions: List<PermissionOption>,
             _meta: JsonElement?
         ): RequestPermissionResponse {
-            val first = permissions.firstOrNull() ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
-            return RequestPermissionResponse(RequestPermissionOutcome.Selected(first.optionId))
+            if (permissions.isEmpty()) return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
+            
+            // If mode is "bypassPermissions" (or similar), we might want to auto-allow.
+            // But currently the SDK/Agent decides if it asks. If it asks, we should probably check mode locally or ask user.
+            // Since mode logic is mostly agent-side, if we are here, the agent WANTS to ask.
+            // Exception: if we want to force-bypass even if agent asks (e.g. legacy behavior?), we could check activeMode.
+            // For now, implemented "Ask User" flow.
+
+            val requestId = UUID.randomUUID().toString()
+            // Extract meaningful info from toolCall.toString() which looks like ToolCallUpdate(toolCallId=..., title=..., kind=...)
+            val str = toolCall.toString()
+            val title = Regex("title=([^,)]+)").find(str)?.groupValues?.get(1) ?: "Unknown Action"
+            val kind = Regex("kind=([^,)]+)").find(str)?.groupValues?.get(1) ?: "OTHER"
+            
+            val desc = """
+                Action: $title
+                Type: $kind
+                
+                Raw: $str
+            """.trimIndent()
+
+            val request = PermissionRequest(requestId, desc, permissions)
+            val deferred = CompletableDeferred<RequestPermissionResponse>()
+            pendingRequests[requestId] = deferred
+            
+            permissionRequestHandler?.invoke(request) ?: run {
+                // If no handler, auto-deny or log error?
+                // For now, log warning and auto-allow ONLY if we want to preserve old behavior when UI handles are missing
+                // BUT user requested this feature. So we should probably wait or fail.
+                // If we wait without handler, we hang.
+                log.warn("No permission handler registered! Auto-denying request $requestId")
+                deferred.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
+            }
+
+            return deferred.await()
         }
 
         override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {}

@@ -20,6 +20,7 @@ dependencies {
         jetbrainsRuntime()
     }
     implementation("com.agentclientprotocol:acp:0.14.1")
+    implementation("io.github.java-diff-utils:java-diff-utils:4.15")
 }
 
 kotlin {
@@ -27,6 +28,7 @@ kotlin {
 }
 
 intellijPlatform {
+    buildSearchableOptions = false
     pluginConfiguration {
         version = providers.gradleProperty("pluginVersion")
         name = "Unified LLM Agents"
@@ -38,10 +40,6 @@ intellijPlatform {
 }
 
 tasks {
-    buildSearchableOptions {
-        enabled = false
-    }
-
     val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
 
     val npmBuild by registering(Exec::class) {

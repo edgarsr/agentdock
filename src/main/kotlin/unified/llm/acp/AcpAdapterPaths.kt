@@ -104,19 +104,11 @@ object AcpAdapterPaths {
     }
 
     private fun applyPatches(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo) {
-        for (patch in adapterInfo.patches) {
-            val target = File(adapterRoot, patch.file)
-            if (!target.isFile) {
-                log.warn("Patch target not found: ${target.absolutePath}")
-                continue
-            }
-            val original = target.readText()
-            val patched = original.replace(patch.find, patch.replace)
-            if (patched != original) {
-                target.writeText(patched)
-                log.info("Applied patch to ${patch.file}")
-            } else {
-                log.warn("Patch had no effect on ${patch.file} (find string not found)")
+        for (patchContent in adapterInfo.patches) {
+            // Use AcpPatchService to apply unified diff, target path is read from patch header
+            val success = AcpPatchService.applyPatch(adapterRoot, patchContent)
+            if (!success) {
+                log.warn("Failed to apply patch from configuration")
             }
         }
     }

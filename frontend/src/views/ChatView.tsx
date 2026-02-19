@@ -24,6 +24,19 @@ interface AgentOption {
   isDefault: boolean;
   defaultModelId?: string;
   models?: ModelOption[];
+  defaultModeId?: string;
+  modes?: ModeOption[];
+}
+
+interface ModeOption {
+  id: string;
+  displayName: string;
+}
+
+interface PermissionRequest {
+  requestId: string;
+  description: string;
+  options: { optionId: string; label: string }[];
 }
 
 interface DropdownOption {
@@ -43,6 +56,10 @@ declare global {
     __onStatus?: (status: string) => void;
     __onSessionId?: (id: string) => void;
     __onAdapters?: (adapters: AgentOption[]) => void;
+    __onMode?: (modeId: string) => void;
+    __setMode?: (modeId: string) => void;
+    __onPermissionRequest?: (request: PermissionRequest) => void;
+    __respondPermission?: (requestId: string, decision: string) => void;
     __cancelPrompt?: () => void;
   }
 }
@@ -162,20 +179,29 @@ export function ChatView() {
   const [availableAgents, setAvailableAgents] = useState<AgentOption[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({});
+  const [selectedModeByAgent, setSelectedModeByAgent] = useState<Record<string, string>>({});
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentAgentMessageRef = useRef<string>('');
   const pendingMessageRef = useRef<string | null>(null);
+  const pendingModeIdRef = useRef<string | null>(null);
   const startedAgentIdRef = useRef<string>('');
   const startedModelIdRef = useRef<string>('');
+  const startedModeIdRef = useRef<string>('');
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId);
   const availableModels = selectedAgent?.models ?? [];
+  const availableModes = selectedAgent?.modes ?? [];
   const selectedModelId = selectedAgent
     ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.defaultModelId || availableModels[0]?.id || '')
+    : '';
+  const selectedModeId = selectedAgent
+    ? (selectedModeByAgent[selectedAgent.id] || selectedAgent.defaultModeId || availableModes[0]?.id || '')
     : '';
 
   const agentOptions: DropdownOption[] = availableAgents.map((agent) => ({ id: agent.id, label: agent.displayName }));
   const modelOptions: DropdownOption[] = availableModels.map((model) => ({ id: model.id, label: model.displayName }));
+  const modeOptions: DropdownOption[] = availableModes.map((mode) => ({ id: mode.id, label: mode.displayName }));
 
   useEffect(() => {
     let retryTimer: number | undefined;
@@ -184,20 +210,28 @@ export function ChatView() {
         window.__requestAdapters();
       }
     };
+
+    const initAdapters = (adapters: AgentOption[]) => {
+      setAvailableAgents(adapters);
+      setSelectedAgentId((prev) => prev || adapters.find((a) => a.isDefault)?.id || adapters[0]?.id || '');
+      const modelMap: Record<string, string> = {};
+      const modeMap: Record<string, string> = {};
+      adapters.forEach((agent) => {
+        const defaultModel = agent.defaultModelId || agent.models?.[0]?.id || '';
+        if (defaultModel) modelMap[agent.id] = defaultModel;
+        const defaultMode = agent.defaultModeId || agent.modes?.[0]?.id || '';
+        if (defaultMode) modeMap[agent.id] = defaultMode;
+      });
+      setSelectedModelByAgent(modelMap);
+      setSelectedModeByAgent(modeMap);
+    };
+
     try {
       const cached = localStorage.getItem('unified-llm.adapters');
       if (cached) {
         const parsed = JSON.parse(cached) as AgentOption[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setAvailableAgents(parsed);
-          setSelectedAgentId((prev) => prev || parsed.find((agent) => agent.isDefault)?.id || parsed[0]?.id || '');
-          const initialModelMap: Record<string, string> = {};
-          parsed.forEach((agent) => {
-            const firstModel = agent.models?.[0]?.id;
-            const defaultModel = agent.defaultModelId || firstModel || '';
-            if (defaultModel) initialModelMap[agent.id] = defaultModel;
-          });
-          setSelectedModelByAgent(initialModelMap);
+          initAdapters(parsed);
         }
       }
     } catch {
@@ -254,6 +288,15 @@ export function ChatView() {
       if (s === 'ready' && pendingMessageRef.current && typeof window.__sendPrompt === 'function') {
         const messageToSend = pendingMessageRef.current;
         pendingMessageRef.current = null;
+
+        // Set mode before sending prompt to avoid race condition
+        const desiredMode = pendingModeIdRef.current;
+        pendingModeIdRef.current = null;
+        if (desiredMode && desiredMode !== startedModeIdRef.current && typeof window.__setMode === 'function') {
+          window.__setMode(desiredMode);
+          startedModeIdRef.current = desiredMode;
+        }
+
         setIsSending(true);
         const userMessage: Message = {
           id: `msg-${Date.now()}-user`,
@@ -281,6 +324,18 @@ export function ChatView() {
 
     window.__onSessionId = (id: string) => {
       console.debug('[ChatView] Session ID:', id);
+    };
+
+    window.__onMode = (modeId: string) => {
+      console.debug('[ChatView] Backend mode reported:', modeId);
+      // Only update the backend tracking ref; don't override user's dropdown selection.
+      // The mode useEffect handles syncing user selection → backend.
+      startedModeIdRef.current = modeId;
+    };
+
+    window.__onPermissionRequest = (request: PermissionRequest) => {
+      console.debug('[ChatView] Permission Request:', request);
+      setPermissionRequest(request);
     };
 
     window.__onAdapters = (adapters: AgentOption[]) => {
@@ -311,6 +366,21 @@ export function ChatView() {
         });
         return next;
       });
+      setSelectedModeByAgent((prev) => {
+        const next: Record<string, string> = { ...prev };
+        safeAdapters.forEach((agent) => {
+          if (next[agent.id]) return;
+          const firstMode = agent.modes?.[0]?.id;
+          const defaultMode = agent.defaultModeId || firstMode || '';
+          if (defaultMode) next[agent.id] = defaultMode;
+        });
+        Object.keys(next).forEach((agentId) => {
+          if (!safeAdapters.some((agent) => agent.id === agentId)) {
+            delete next[agentId];
+          }
+        });
+        return next;
+      });
     };
 
     if (typeof window.__notifyReady === 'function') {
@@ -325,6 +395,8 @@ export function ChatView() {
       window.__onStatus = undefined;
       window.__onSessionId = undefined;
       window.__onAdapters = undefined;
+      window.__onMode = undefined;
+      window.__onPermissionRequest = undefined;
       if (retryTimer) window.clearTimeout(retryTimer);
     };
   }, []);
@@ -347,6 +419,20 @@ export function ChatView() {
     }
   }, [selectedAgentId, selectedModelId, status]);
 
+  useEffect(() => {
+    if (!selectedAgentId || !selectedModeId) return;
+    if (status !== 'ready') return;
+    if (startedAgentIdRef.current !== selectedAgentId) return;
+    if (startedModeIdRef.current === selectedModeId) return;
+    if (typeof window.__setMode !== 'function') return;
+    try {
+      window.__setMode(selectedModeId);
+      startedModeIdRef.current = selectedModeId;
+    } catch (e) {
+      console.error('[ChatView] Failed to set mode:', e);
+    }
+  }, [selectedAgentId, selectedModeId, status]);
+
   const handleSend = async () => {
     const text = inputValue.trim();
     if (!text || isSending) return;
@@ -359,14 +445,17 @@ export function ChatView() {
       setIsSending(true);
       setInputValue('');
       pendingMessageRef.current = text;
+      pendingModeIdRef.current = selectedModeId || null;
       try {
         startedAgentIdRef.current = selectedAgent;
         startedModelIdRef.current = selectedModelId || '';
+        startedModeIdRef.current = '';
         window.__startAgent(selectedAgent || undefined, selectedModelId || undefined);
         return;
       } catch (e) {
         setIsSending(false);
         pendingMessageRef.current = null;
+        pendingModeIdRef.current = null;
         return;
       }
     }
@@ -397,10 +486,22 @@ export function ChatView() {
     }
   };
 
+  const handlePermissionDecision = (decision: string) => {
+    if (!permissionRequest) return;
+    try {
+      if (window.__respondPermission) {
+         window.__respondPermission(permissionRequest.requestId, decision);
+      }
+      setPermissionRequest(null);
+    } catch (e) {
+      console.error('[ChatView] Failed to respond to permission:', e);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-border bg-background">
         <span className="text-xs font-medium">UnifiedLLM</span>
         <div className="flex items-center gap-3">
           <button className="p-1 hover:bg-surface-hover rounded opacity-60 hover:opacity-100 transition-all">
@@ -415,8 +516,8 @@ export function ChatView() {
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      {/* Chat Area — scrollable, fills remaining space */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6">
         <div className="max-w-3xl mx-auto">
           {messages.length === 0 && (
             <div className="mt-20 space-y-4 text-center">Hello, world!</div>
@@ -443,8 +544,8 @@ export function ChatView() {
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="px-4 pb-4 pt-2">
+      {/* Input Area — always at bottom */}
+      <div className="flex-shrink-0 px-4 pb-4 pt-2">
         <div className="max-w-4xl mx-auto">
           <div className="bg-surface rounded-xl border border-border shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
             <textarea
@@ -481,6 +582,25 @@ export function ChatView() {
                   disabled={isSending}
                   onChange={(v) => setSelectedAgentId(v)}
                 />
+
+                {modeOptions.length > 0 && (
+                 <div className="h-4 w-[1px] bg-border mx-1" />
+                )}
+                {modeOptions.length > 0 && (
+                <ChatDropdown
+                  value={selectedModeId}
+                  options={modeOptions}
+                  placeholder="Mode"
+                  header="Mode"
+                  minWidthClass="min-w-[100px]"
+                  disabled={isSending || !selectedAgent}
+                  onChange={(mId) => {
+                     setSelectedModeByAgent((prev) => (
+                       selectedAgentId ? { ...prev, [selectedAgentId]: mId } : prev
+                     ));
+                  }}
+                />
+                )}
               </div>
 
               {/* Right Controls */}
@@ -540,6 +660,34 @@ export function ChatView() {
           </div>
         </div>
       </div>
+
+      {/* Permission Modal — fixed overlay above everything */}
+      {permissionRequest && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
+          <div className="bg-[#2d2d2d] text-[#CCCCCC] border border-[#454545] p-5 rounded-lg shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-200">
+            <h3 className="font-bold mb-3 text-lg border-b border-[#454545] pb-2 flex items-center gap-2">
+              <span className="text-yellow-500">&#9888;</span> Permission Required
+            </h3>
+            <div className="mb-6 text-sm leading-relaxed max-h-[60vh] overflow-y-auto whitespace-pre-wrap font-mono bg-[#1e1e1e] p-3 rounded border border-[#3c3c3c]">
+              {permissionRequest.description}
+            </div>
+            <div className="flex justify-end gap-3 pt-2 border-t border-[#454545]">
+              <button
+                onClick={() => handlePermissionDecision('deny')}
+                className="px-4 py-2 text-sm font-medium rounded bg-[#3c3c3c] hover:bg-[#4a4a4a] text-white transition-colors"
+              >
+                Deny
+              </button>
+              <button
+                onClick={() => handlePermissionDecision(permissionRequest.options[0]?.optionId || 'allow')}
+                className="px-4 py-2 text-sm font-medium rounded bg-[#0E639C] hover:bg-[#1177BB] text-white shadow-lg transition-colors"
+              >
+                Allow
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

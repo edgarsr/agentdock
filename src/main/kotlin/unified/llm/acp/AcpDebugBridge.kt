@@ -12,6 +12,11 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
 import org.cef.browser.CefBrowser
 
 private val log = Logger.getInstance(AcpDebugBridge::class.java)
@@ -28,8 +33,10 @@ class AcpDebugBridge(
     private var sendPromptQuery: JBCefJSQuery? = null
     private var startAgentQuery: JBCefJSQuery? = null
     private var setModelQuery: JBCefJSQuery? = null
+    private var setModeQuery: JBCefJSQuery? = null
     private var listAdaptersQuery: JBCefJSQuery? = null
     private var cancelPromptQuery: JBCefJSQuery? = null
+    private var respondPermissionQuery: JBCefJSQuery? = null
     private var readyQuery: JBCefJSQuery? = null
 
     private var currentPromptJob: Job? = null
@@ -40,6 +47,7 @@ class AcpDebugBridge(
 
     fun install() {
         service.setOnLogEntry { pushLogEntry(it) }
+        service.setOnPermissionRequest { pushPermissionRequest(it) }
 
         readyQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
             addHandler {
@@ -62,6 +70,7 @@ class AcpDebugBridge(
                         }
                         pushStatus(service.status().name.lowercase())
                         pushSessionId(service.sessionId())
+                        pushMode(service.activeModeId())
                     } catch (e: Exception) {
                         log.error("[AcpDebugBridge] Start agent failed", e)
                         pushStatus("error")
@@ -80,6 +89,20 @@ class AcpDebugBridge(
                     val ok = service.setModel(requestedModelId)
                     if (!ok) {
                         pushAgentText("[Error: Failed to set model '$requestedModelId']")
+                    }
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        setModeQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { modeId ->
+                val requestedModeId = modeId?.trim().orEmpty()
+                scope.launch(Dispatchers.Default) {
+                    if (requestedModeId.isEmpty()) return@launch
+                    val ok = service.setMode(requestedModeId)
+                    if (!ok) {
+                        pushAgentText("[Error: Failed to set mode '$requestedModeId']")
                     }
                 }
                 JBCefJSQuery.Response("ok")
@@ -137,6 +160,27 @@ class AcpDebugBridge(
                 JBCefJSQuery.Response("ok")
             }
         }
+
+        respondPermissionQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                // payload: "requestId|decision" or JSON
+                // Let's assume simple string with separator or JSON. 
+                // Using JSON for robustness.
+                try {
+                     val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
+                     val requestId = obj["requestId"]?.jsonPrimitive?.content ?: ""
+                     val decision = obj["decision"]?.jsonPrimitive?.content ?: ""
+                     if (requestId.isNotEmpty()) {
+                        scope.launch(Dispatchers.Default) {
+                            service.respondToPermissionRequest(requestId, decision)
+                        }
+                     }
+                } catch (e: Exception) {
+                    log.error("Failed to parse permission response", e)
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
     }
 
     /**
@@ -152,6 +196,10 @@ class AcpDebugBridge(
             setModelQuery?.inject("modelId") ?: "",
             "setModel"
         )
+        val setModeInject = decorateQueryInject(
+            setModeQuery?.inject("modeId") ?: "",
+            "setMode"
+        )
         val listAdaptersInject = decorateQueryInject(
             listAdaptersQuery?.inject("") ?: "",
             "listAdapters"
@@ -164,6 +212,10 @@ class AcpDebugBridge(
             cancelPromptQuery?.inject("") ?: "",
             "cancelPrompt"
         )
+        val respondPermissionInject = decorateQueryInject(
+            respondPermissionQuery?.inject("JSON.stringify({ requestId: requestId, decision: decision })") ?: "",
+            "respondPermission"
+        )
         val script = """
             (function() {
                 window.__onAcpLog = window.__onAcpLog || function(payload) {};
@@ -171,6 +223,8 @@ class AcpDebugBridge(
                 window.__onStatus = window.__onStatus || function(status) {};
                 window.__onSessionId = window.__onSessionId || function(id) {};
                 window.__onAdapters = window.__onAdapters || function(adapters) {};
+                window.__onMode = window.__onMode || function(modeId) {};
+                window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
                 window.__requestAdapters = function() {
                     try {
                         $listAdaptersInject
@@ -196,6 +250,14 @@ class AcpDebugBridge(
                         if (window.__onAgentText) window.__onAgentText('[Bridge error: ' + e.message + ']');
                     }
                 };
+                window.__setMode = function(modeId) {
+                    try {
+                        $setModeInject
+                    } catch (e) {
+                        console.error('[UnifiedLLM] Set mode bridge error', e);
+                        if (window.__onAgentText) window.__onAgentText('[Bridge error: ' + e.message + ']');
+                    }
+                };
                 window.__sendPrompt = function(message) {
                     try {
                         if (window.__onStatus) window.__onStatus('prompting');
@@ -211,6 +273,13 @@ class AcpDebugBridge(
                         $cancelPromptInject
                     } catch (e) {
                         console.error('[UnifiedLLM] Cancel Prompt bridge error', e);
+                    }
+                };
+                window.__respondPermission = function(requestId, decision) {
+                    try {
+                        $respondPermissionInject
+                    } catch (e) {
+                         console.error('[UnifiedLLM] Respond Permission bridge error', e);
                     }
                 };
                 // Prime adapter list automatically after bridge injection.
@@ -230,6 +299,10 @@ class AcpDebugBridge(
             window.__onSessionId = window.__onSessionId || function(id) {};
             window.__onAdapters = window.__onAdapters || function(adapters) {};
             window.__setModel = window.__setModel || function(modelId) {};
+            window.__setMode = window.__setMode || function(modeId) {};
+            window.__onMode = window.__onMode || function(modeId) {};
+            window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
+            window.__respondPermission = window.__respondPermission || function(requestId, decision) {};
             window.__notifyReady = function() {
                 try { $readyInject } catch (e) { console.error('[UnifiedLLM] notifyReady error', e); }
             };
@@ -290,6 +363,18 @@ class AcpDebugBridge(
         }
     }
 
+    fun pushMode(modeId: String?) {
+        val value = modeId ?: ""
+        val escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        runOnEdt {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onMode) window.__onMode('$escaped');",
+                browser.cefBrowser.url,
+                0
+            )
+        }
+    }
+
     fun pushSessionId(id: String?) {
         val value = id ?: ""
         val escaped = value.replace("\\", "\\\\").replace("'", "\\'")
@@ -299,6 +384,35 @@ class AcpDebugBridge(
                 browser.cefBrowser.url,
                 0
             )
+        }
+
+    }
+
+
+    fun pushPermissionRequest(request: PermissionRequest) {
+        val jsonObject = buildJsonObject {
+            put("requestId", request.requestId)
+            put("description", request.description)
+            put("options", buildJsonArray {
+                request.options.forEach { opt ->
+                    add(buildJsonObject {
+                        put("optionId", opt.optionId.toString())
+                        put("label", opt.toString())
+                    })
+                }
+            })
+        }
+        val jsonString = Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObject)
+        
+        // Escape for JS string injection
+        val escaped = jsonString.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+
+        runOnEdt {
+             browser.cefBrowser.executeJavaScript(
+                "if(window.__onPermissionRequest) window.__onPermissionRequest(JSON.parse('$escaped'));",
+                browser.cefBrowser.url,
+                0
+            )           
         }
     }
 
@@ -326,7 +440,13 @@ class AcpDebugBridge(
                         val modelDisplayName = escapeJsonStringValue(model.displayName)
                         """{"id":"$modelId","displayName":"$modelDisplayName"}"""
                     }
-                    """{"id":"$id","displayName":"$displayName","isDefault":$isDefault,"defaultModelId":"$defaultModelId","models":$modelsJson}"""
+                    val modesJson = info.modes.joinToString(prefix = "[", postfix = "]") { mode ->
+                        val modeId = escapeJsonStringValue(mode.id)
+                        val modeDisplayName = escapeJsonStringValue(mode.displayName)
+                        """{"id":"$modeId","displayName":"$modeDisplayName"}"""
+                    }
+                    val defaultModeId = escapeJsonStringValue(info.defaultModeId ?: "")
+                    """{"id":"$id","displayName":"$displayName","isDefault":$isDefault,"defaultModelId":"$defaultModelId","models":$modelsJson,"defaultModeId":"$defaultModeId","modes":$modesJson}"""
                 }
             val escaped = payload
                 .replace("\\", "\\\\")
