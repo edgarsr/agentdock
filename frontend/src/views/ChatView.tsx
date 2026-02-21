@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChatTab, AgentOption } from '../types/chat';
+import { ChatTab, AgentOption, HistorySessionMeta } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import TabBar from '../components/chat/TabBar';
 import ChatSessionView from '../components/chat/ChatSessionView';
@@ -96,6 +96,24 @@ export function ChatView() {
     }
   };
 
+  const handleOpenHistory = (item: HistorySessionMeta) => {
+    const newId = nextId('tab');
+    const newSessionId = nextId('ses');
+    const title = item.title || 'History Chat';
+    setTabs((prev) => [
+      ...prev,
+      {
+        id: newId,
+        title,
+        sessionId: newSessionId,
+        agentId: item.adapterName,
+        historySession: item
+      }
+    ]);
+    setActiveTabId(newId);
+    setShowHistory(false);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       <TabBar
@@ -127,6 +145,7 @@ export function ChatView() {
                   isActive={isTabActive && !showHistory} 
                   initialAgentId={tab.agentId}
                   chatId={tab.sessionId}
+                  historySession={tab.historySession}
                   availableAgents={availableAgents}
                   onAgentChangeRequest={(agentId) => handleNewTab(agentId)}
                />
@@ -136,7 +155,7 @@ export function ChatView() {
 
         {showHistory && (
             <div className="absolute inset-0 w-full h-full z-20 bg-background">
-                <HistoryPanel onClose={() => setShowHistory(false)} />
+                <HistoryPanel onClose={() => setShowHistory(false)} availableAgents={availableAgents} onOpenSession={handleOpenHistory} />
             </div>
         )}
       </div>

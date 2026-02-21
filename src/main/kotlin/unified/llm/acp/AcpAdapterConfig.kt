@@ -19,6 +19,15 @@ object AcpAdapterConfig {
     data class ModelInfo(val id: String, val displayName: String)
 
     @Serializable
+    data class HistoryConfig(
+        val parserStrategy: String,
+        val pathTemplate: String,
+        val resumeArgName: String? = null,
+        val cleanupTemplates: List<String> = emptyList(),
+        val metadataExtraction: Map<String, String> = emptyMap()
+    )
+
+    @Serializable
     data class AdapterInfo(
         val name: String = "", // Filled after parsing
         val resourceName: String? = null,
@@ -32,6 +41,7 @@ object AcpAdapterConfig {
         val modes: List<ModeInfo> = emptyList(),
         val args: List<String> = emptyList(),
         val patches: List<String> = emptyList(),
+        val historyConfig: HistoryConfig? = null,
         /**
          * How to handle model changes mid-session:
          * - "restart-resume": restart ACP process and resume the previous session (preserves history)

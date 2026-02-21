@@ -49,6 +49,26 @@ export interface ChatTab {
   title: string;
   sessionId: string; // Creates linkage to backend session
   agentId?: string; // If pre-selected
+  historySession?: HistorySessionMeta;
+}
+
+export interface HistorySessionMeta {
+  sessionId: string;
+  adapterName: string;
+  modelId?: string;
+  modeId?: string;
+  projectPath: string;
+  title: string;
+  filePath: string;
+  customVariables?: Record<string, string>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface HistoryReplayChunk {
+  chatId: string;
+  role: 'user' | 'assistant';
+  text: string;
 }
 
 declare global {
@@ -63,6 +83,9 @@ declare global {
     __respondPermission?: (requestId: string, decision: string) => void;
     __cancelPrompt?: (chatId: string) => void;
     __stopAgent?: (chatId: string) => void;
+    __requestHistoryList?: (projectPath?: string) => void;
+    __deleteHistorySession?: (meta: any) => void;
+    __loadHistorySession?: (chatId: string, adapterId: string, sessionId: string, modelId?: string, modeId?: string) => void;
 
     // Callbacks (Backend -> Frontend)
     // Note: These are set by the frontend on window.
@@ -73,5 +96,7 @@ declare global {
     __onAdapters?: (adapters: AgentOption[]) => void;
     __onMode?: (chatId: string, modeId: string) => void;
     __onPermissionRequest?: (request: PermissionRequest) => void;
+    __onHistoryList?: (list: HistorySessionMeta[]) => void;
+    __onHistoryReplay?: (payload: HistoryReplayChunk) => void;
   }
 }

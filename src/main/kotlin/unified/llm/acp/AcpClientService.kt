@@ -19,7 +19,10 @@ import com.agentclientprotocol.model.RequestPermissionResponse
 import com.agentclientprotocol.model.SessionId
 import com.agentclientprotocol.model.SessionUpdate
 import com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION
+import com.agentclientprotocol.model.AcpMethod
 import com.agentclientprotocol.protocol.Protocol
+import com.agentclientprotocol.rpc.JsonRpcNotification
+import com.agentclientprotocol.rpc.MethodName
 import com.agentclientprotocol.transport.StdioTransport
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
@@ -28,15 +31,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.asSource
 import kotlinx.io.buffered
 import kotlinx.io.asSink
 import kotlinx.serialization.json.JsonElement
+import kotlinx.atomicfu.AtomicRef
+import kotlinx.collections.immutable.PersistentMap
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -69,6 +77,13 @@ class AcpClientService(private val project: Project) {
     fun setOnPermissionRequest(handler: (PermissionRequest) -> Unit) {
         permissionRequestHandler = handler
     }
+    
+    @Volatile
+    private var sessionUpdateHandler: ((String, SessionUpdate) -> Unit)? = null
+
+    fun setOnSessionUpdate(handler: (String, SessionUpdate) -> Unit) {
+        sessionUpdateHandler = handler
+    }
 
     enum class Status { NotStarted, Initializing, Ready, Prompting, Error }
 
@@ -78,6 +93,10 @@ class AcpClientService(private val project: Project) {
         @Volatile var client: Client? = null
         @Volatile var protocol: Protocol? = null
         @Volatile var isInitialized: Boolean = false
+        @Volatile var sessionUpdateWrapped: Boolean = false
+        @Volatile var sessionUpdateScope: CoroutineScope? = null
+        @Volatile var sessionUpdateQueue: Channel<JsonRpcNotification>? = null
+        @Volatile var sessionUpdateWorker: Job? = null
 
         fun stop() {
             process?.destroyForcibly()
@@ -85,6 +104,13 @@ class AcpClientService(private val project: Project) {
             client = null
             protocol = null
             isInitialized = false
+            sessionUpdateQueue?.close()
+            sessionUpdateQueue = null
+            sessionUpdateWorker?.cancel()
+            sessionUpdateWorker = null
+            sessionUpdateScope?.coroutineContext?.cancel()
+            sessionUpdateScope = null
+            sessionUpdateWrapped = false
         }
     }
 
@@ -157,63 +183,9 @@ class AcpClientService(private val project: Project) {
                 try {
                     val sharedProc = activeProcesses.computeIfAbsent(requestedAdapterName) { SharedProcess(requestedAdapterName) }
                     context.sharedProcess = sharedProc
-                    
-                    sharedProc.mutex.withLock {
-                        if (sharedProc.process == null || !sharedProc.process!!.isAlive || forceRestart) {
-                            if (forceRestart && sharedProc.process != null) {
-                                sharedProc.stop()
-                            }
-                            
-                            log.info("[$chatId] Starting NEW shared process for $requestedAdapterName")
-                            val adapterRoot = AcpAdapterPaths.getAdapterRoot(requestedAdapterName)
-                                ?: throw IllegalStateException("ACP adapter directory not found: $requestedAdapterName")
-                            
-                            val launchFile = java.io.File(adapterRoot, adapterInfo.launchPath)
-                            if (!launchFile.isFile) throw IllegalStateException("Missing launch path: ${adapterInfo.launchPath}")
 
-                            val nodeCmd = if (System.getProperty("os.name").lowercase().contains("win")) "node.exe" else "node"
-                            val command = mutableListOf(nodeCmd, adapterInfo.launchPath)
-                            command.addAll(adapterInfo.args)
-
-                            val pb = ProcessBuilder(command).directory(adapterRoot).redirectErrorStream(false)
-                            pb.environment().putAll(System.getenv())
-                            val proc = withContext(Dispatchers.IO) { pb.start() }
-                            sharedProc.process = proc
-
-                            Thread {
-                                proc.errorStream.bufferedReader().useLines { lines ->
-                                    lines.forEach { line -> log.warn("[Shared:${requestedAdapterName} stderr] $line") }
-                                }
-                            }.apply { isDaemon = true; start() }
-
-                            val input = LineLoggingInputStream(proc.inputStream) { line ->
-                                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line))
-                            }.asSource().buffered()
-                            
-                            val output = LineLoggingOutputStream(proc.outputStream) { line ->
-                                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.SENT, line))
-                            }.asSink().buffered()
-
-                            val transport = StdioTransport(scope, Dispatchers.IO, input, output)
-                            val prot = Protocol(scope, transport)
-                            sharedProc.protocol = prot
-                            
-                            val clientsFactory = object : ClientOperationsFactory {
-                                override suspend fun createClientOperations(
-                                    sessionId: SessionId, 
-                                    sessionResponse: AcpCreatedSessionResponse
-                                ): ClientSessionOperations {
-                                    return this@AcpClientService.MinimalSessionOperations("unknown", context) 
-                                }
-                            }
-
-                            val c = Client(prot)
-                            sharedProc.client = c
-                            prot.start()
-                            c.initialize(ClientInfo(LATEST_PROTOCOL_VERSION, ClientCapabilities()))
-                            sharedProc.isInitialized = true
-                        }
-                    }
+                    ensureSharedProcessStarted(sharedProc, adapterInfo, context, chatId, forceRestart)
+                    ensureAsyncSessionUpdates(sharedProc)
 
                     val client = sharedProc.client!!
                     val cwd = project.basePath ?: System.getProperty("user.dir")
@@ -269,6 +241,78 @@ class AcpClientService(private val project: Project) {
 
                 } catch (e: Exception) {
                     log.error("Failed to start/attach to agent for $chatId", e)
+                    context.stop()
+                    context.statusRef.set(Status.Error)
+                    throw e
+                }
+            }
+        }
+    }
+
+    @Suppress("OPT_IN_USAGE")
+    suspend fun loadSession(
+        chatId: String,
+        adapterName: String,
+        sessionId: String,
+        preferredModelId: String? = null,
+        preferredModeId: String? = null
+    ) {
+        val context = sessions.computeIfAbsent(chatId) { AgentContext(chatId) }
+
+        withContext(Dispatchers.IO) {
+            context.lifecycleMutex.withLock {
+                val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
+                val requestedAdapterName = adapterInfo.name
+                val currentStatus = context.statusRef.get()
+
+                if (currentStatus != Status.NotStarted) {
+                    context.stop()
+                }
+
+                context.statusRef.set(Status.Initializing)
+
+                try {
+                    val sharedProc = activeProcesses.computeIfAbsent(requestedAdapterName) { SharedProcess(requestedAdapterName) }
+                    context.sharedProcess = sharedProc
+
+                    ensureSharedProcessStarted(sharedProc, adapterInfo, context, chatId)
+                    ensureAsyncSessionUpdates(sharedProc)
+
+                    val client = sharedProc.client!!
+                    val cwd = project.basePath ?: System.getProperty("user.dir")
+                    
+                    val factory = object : ClientOperationsFactory {
+                        override suspend fun createClientOperations(
+                            sessionId: SessionId, 
+                            sessionResponse: AcpCreatedSessionResponse
+                        ): ClientSessionOperations {
+                            return this@AcpClientService.MinimalSessionOperations(chatId, context)
+                        }
+                    }
+
+                    val params = SessionCreationParameters(cwd = cwd, mcpServers = emptyList())
+                    val sess = client.loadSession(SessionId(sessionId), params, factory)
+
+                    context.session = sess
+                    context.sessionIdRef.set(sessionId)
+
+                    context.activeAdapterNameRef.set(requestedAdapterName)
+
+                    if (sess.modesSupported) {
+                        context.activeModeIdRef.set(sess.currentMode.value.value)
+                    } else if (!preferredModeId.isNullOrBlank()) {
+                        context.activeModeIdRef.set(preferredModeId.trim())
+                    }
+                    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+                    if (sess.modelsSupported) {
+                        context.activeModelIdRef.set(sess.currentModel.value.value)
+                    } else if (!preferredModelId.isNullOrBlank()) {
+                        context.activeModelIdRef.set(preferredModelId.trim())
+                    }
+
+                    context.statusRef.set(Status.Ready)
+                } catch (e: Exception) {
+                    log.error("Failed to load session for $chatId", e)
                     context.stop()
                     context.statusRef.set(Status.Error)
                     throw e
@@ -441,8 +485,8 @@ class AcpClientService(private val project: Project) {
     }
 
     private fun resolveModelToApply(
-        pref: String?, 
-        available: List<AcpAdapterConfig.ModelInfo>, 
+        pref: String?,
+        available: List<AcpAdapterConfig.ModelInfo>,
         default: String?
     ): String? {
         val p = pref?.trim().takeUnless { it.isNullOrEmpty() }
@@ -450,6 +494,120 @@ class AcpClientService(private val project: Project) {
             return p
         }
         return default
+    }
+
+    /**
+     * Ensures that a shared ACP process is started for the given adapter.
+     * If the process is already running and healthy, does nothing.
+     * Otherwise, starts a new process and initializes the ACP client.
+     */
+    private suspend fun ensureSharedProcessStarted(
+        sharedProc: SharedProcess,
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        context: AgentContext,
+        chatId: String,
+        forceRestart: Boolean = false
+    ) {
+        val requestedAdapterName = adapterInfo.name
+        sharedProc.mutex.withLock {
+            val needsRestart = sharedProc.process == null || !sharedProc.process!!.isAlive ||
+                forceRestart || sharedProc.client == null || !sharedProc.isInitialized
+            if (needsRestart) {
+                if (sharedProc.process != null) {
+                    sharedProc.stop()
+                }
+
+                log.info("[$chatId] Starting shared process for $requestedAdapterName")
+                val adapterRoot = AcpAdapterPaths.getAdapterRoot(requestedAdapterName)
+                    ?: throw IllegalStateException("ACP adapter directory not found: $requestedAdapterName")
+
+                val launchFile = java.io.File(adapterRoot, adapterInfo.launchPath)
+                if (!launchFile.isFile) throw IllegalStateException("Missing launch path: ${adapterInfo.launchPath}")
+
+                val nodeCmd = if (System.getProperty("os.name").lowercase().contains("win")) "node.exe" else "node"
+                val command = mutableListOf(nodeCmd, adapterInfo.launchPath)
+                command.addAll(adapterInfo.args)
+
+                val pb = ProcessBuilder(command).directory(adapterRoot).redirectErrorStream(false)
+                pb.environment().putAll(System.getenv())
+                val proc = withContext(Dispatchers.IO) { pb.start() }
+                sharedProc.process = proc
+
+                Thread {
+                    proc.errorStream.bufferedReader().useLines { lines ->
+                        lines.forEach { line -> log.warn("[Shared:${requestedAdapterName} stderr] $line") }
+                    }
+                }.apply { isDaemon = true; start() }
+
+                val input = LineLoggingInputStream(proc.inputStream) { line ->
+                    onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line))
+                }.asSource().buffered()
+
+                val output = LineLoggingOutputStream(proc.outputStream) { line ->
+                    onLogEntry(AcpLogEntry(AcpLogEntry.Direction.SENT, line))
+                }.asSink().buffered()
+
+                val transport = StdioTransport(scope, Dispatchers.IO, input, output)
+                val prot = Protocol(scope, transport)
+                sharedProc.protocol = prot
+
+                val clientsFactory = object : ClientOperationsFactory {
+                    override suspend fun createClientOperations(
+                        sessionId: SessionId,
+                        sessionResponse: AcpCreatedSessionResponse
+                    ): ClientSessionOperations {
+                        return this@AcpClientService.MinimalSessionOperations("unknown", context)
+                    }
+                }
+
+                val c = Client(prot)
+                sharedProc.client = c
+                prot.start()
+                c.initialize(ClientInfo(LATEST_PROTOCOL_VERSION, ClientCapabilities()))
+                ensureAsyncSessionUpdates(sharedProc)
+                sharedProc.isInitialized = true
+            }
+        }
+    }
+
+    // Run session/update handlers off the protocol read loop to avoid blocking loadSession.
+    private fun ensureAsyncSessionUpdates(sharedProc: SharedProcess) {
+        if (sharedProc.sessionUpdateWrapped) return
+        val protocol = sharedProc.protocol ?: return
+        try {
+            val field = Protocol::class.java.getDeclaredField("notificationHandlers")
+            field.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val handlers = field.get(protocol) as AtomicRef<PersistentMap<MethodName, suspend (JsonRpcNotification) -> Unit>>
+            val methodName = AcpMethod.ClientMethods.SessionUpdate.methodName
+            val original = handlers.value[methodName] ?: return
+            val updateScope = CoroutineScope(scope.coroutineContext + Dispatchers.Default.limitedParallelism(1))
+            sharedProc.sessionUpdateScope = updateScope
+            val queue = Channel<JsonRpcNotification>(Channel.UNLIMITED)
+            sharedProc.sessionUpdateQueue = queue
+            sharedProc.sessionUpdateWorker = updateScope.launch {
+                for (notification in queue) {
+                    try {
+                        original(notification)
+                    } catch (e: Exception) {
+                        log.warn("Async session/update handler failed", e)
+                    }
+                }
+            }
+            val wrapped: suspend (JsonRpcNotification) -> Unit = { notification ->
+                val result = queue.trySend(notification)
+                if (!result.isSuccess) {
+                    updateScope.launch {
+                        runCatching { queue.send(notification) }
+                            .onFailure { log.warn("Failed to enqueue session/update notification", it) }
+                    }
+                }
+            }
+            handlers.value = handlers.value.put(methodName, wrapped)
+            sharedProc.sessionUpdateWrapped = true
+        } catch (e: Exception) {
+            log.warn("Failed to wrap session/update notifications", e)
+        }
     }
 
     private inner class MinimalSessionOperations(
@@ -487,7 +645,12 @@ class AcpClientService(private val project: Project) {
             return deferred.await()
         }
 
-        override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {}
+        override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
+            if (notification is SessionUpdate.CurrentModeUpdate) {
+                context.activeModeIdRef.set(notification.currentModeId.value)
+            }
+            sessionUpdateHandler?.invoke(chatId, notification)
+        }
     }
 }
 

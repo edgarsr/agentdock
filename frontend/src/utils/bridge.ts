@@ -1,4 +1,4 @@
-import { AgentOption, PermissionRequest } from '../types/chat';
+import { AgentOption, PermissionRequest, HistorySessionMeta, HistoryReplayChunk } from '../types/chat';
 
 export interface AgentTextEvent { chatId: string; text: string; }
 export interface StatusEvent { chatId: string; status: string; }
@@ -6,6 +6,8 @@ export interface SessionIdEvent { chatId: string; sessionId: string; }
 export interface ModeEvent { chatId: string; modeId: string; }
 export interface AdaptersEvent { adapters: AgentOption[]; }
 export interface PermissionRequestEvent { request: PermissionRequest; }
+export interface HistoryListEvent { list: HistorySessionMeta[]; }
+export interface HistoryReplayEvent extends HistoryReplayChunk {}
 
 const EVENT_NAMES = {
   AGENT_TEXT: 'acp-agent-text',
@@ -14,7 +16,9 @@ const EVENT_NAMES = {
   MODE: 'acp-mode',
   ADAPTERS: 'acp-adapters',
   PERMISSION: 'acp-permission',
-  LOG: 'acp-log'
+  LOG: 'acp-log',
+  HISTORY_LIST: 'history-list',
+  HISTORY_REPLAY: 'history-replay'
 };
 
 export const ACPBridge = {
@@ -47,6 +51,14 @@ export const ACPBridge = {
     
     window.__onAcpLog = (payload) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.LOG, { detail: payload }));
+    };
+
+    window.__onHistoryList = (list) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.HISTORY_LIST, { detail: { list } }));
+    };
+    
+    window.__onHistoryReplay = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.HISTORY_REPLAY, { detail: payload }));
     };
 
     // Notify ready
@@ -86,5 +98,27 @@ export const ACPBridge = {
   onLog: (callback: (e: CustomEvent) => void) => {
       window.addEventListener(EVENT_NAMES.LOG, callback as EventListener);
       return () => window.removeEventListener(EVENT_NAMES.LOG, callback as EventListener);
+  },
+
+  requestHistoryList: (projectPath?: string) => {
+    window.__requestHistoryList?.(projectPath);
+  },
+
+  onHistoryList: (callback: (e: CustomEvent<HistoryListEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.HISTORY_LIST, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.HISTORY_LIST, callback as EventListener);
+  },
+  
+  loadHistorySession: (chatId: string, adapterId: string, sessionId: string, modelId?: string, modeId?: string) => {
+    window.__loadHistorySession?.(chatId, adapterId, sessionId, modelId, modeId);
+  },
+  
+  onHistoryReplay: (callback: (e: CustomEvent<HistoryReplayEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.HISTORY_REPLAY, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.HISTORY_REPLAY, callback as EventListener);
+  },
+
+  deleteHistorySession: (meta: HistorySessionMeta) => {
+    window.__deleteHistorySession?.(meta);
   }
 };

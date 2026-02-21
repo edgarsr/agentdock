@@ -1,5 +1,7 @@
 package unified.llm.acp
 
+import com.agentclientprotocol.model.ContentBlock
+import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.jcef.JBCefBrowser
@@ -18,6 +20,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.add
 import org.cef.browser.CefBrowser
+import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
 
 private val log = Logger.getInstance(AcpDebugBridge::class.java)
@@ -40,6 +43,7 @@ class AcpDebugBridge(
     private var stopAgentQuery: JBCefJSQuery? = null
     private var respondPermissionQuery: JBCefJSQuery? = null
     private var readyQuery: JBCefJSQuery? = null
+    private var loadSessionQuery: JBCefJSQuery? = null
 
     private val promptJobs = ConcurrentHashMap<String, Job>()
 
@@ -50,6 +54,24 @@ class AcpDebugBridge(
     fun install() {
         service.setOnLogEntry { pushLogEntry(it) }
         service.setOnPermissionRequest { pushPermissionRequest(it) }
+        service.setOnSessionUpdate { chatId, update ->
+            when (update) {
+                is SessionUpdate.UserMessageChunk -> {
+                    val content = update.content
+                    if (content is ContentBlock.Text) {
+                        pushHistoryReplay(chatId, "user", content.text)
+                    }
+                }
+                is SessionUpdate.AgentMessageChunk -> {
+                    val content = update.content
+                    if (content is ContentBlock.Text) {
+                        pushHistoryReplay(chatId, "assistant", content.text)
+                    }
+                }
+                is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
+                else -> Unit
+            }
+        }
 
         readyQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
             addHandler {
@@ -196,7 +218,7 @@ class AcpDebugBridge(
                 JBCefJSQuery.Response("ok")
             }
         }
-
+        
         respondPermissionQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
             addHandler { payload ->
                 try {
@@ -210,6 +232,30 @@ class AcpDebugBridge(
                      }
                 } catch (e: Exception) {
                     log.error("Failed to parse permission response", e)
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        loadSessionQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                val (chatId, adapterId, sessionId, modelId, modeId) = parseLoadPayload(payload)
+                if (chatId != null && adapterId != null && sessionId != null) {
+                    scope.launch(Dispatchers.Default) {
+                        pushStatus(chatId, "initializing")
+                        try {
+                            withTimeout(START_AGENT_TIMEOUT_MS) {
+                                service.loadSession(chatId, adapterId, sessionId, modelId, modeId)
+                            }
+                            pushStatus(chatId, service.status(chatId).name.lowercase())
+                            pushSessionId(chatId, service.sessionId(chatId))
+                            pushMode(chatId, service.activeModeId(chatId))
+                        } catch (e: Exception) {
+                            log.error("[AcpDebugBridge] Load session failed for $chatId", e)
+                            pushStatus(chatId, "error")
+                            pushAgentText(chatId, "[Error: ${e.message ?: e.toString()}]")
+                        }
+                    }
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -253,6 +299,10 @@ class AcpDebugBridge(
             respondPermissionQuery?.inject("JSON.stringify({ requestId: requestId, decision: decision })") ?: "",
             "respondPermission"
         )
+        val loadSessionInject = decorateQueryInject(
+            loadSessionQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), sessionId: (sessionId || ''), modelId: (modelId || ''), modeId: (modeId || '') })") ?: "",
+            "loadSession"
+        )
         
         val script = """
             (function() {
@@ -292,6 +342,9 @@ class AcpDebugBridge(
                 window.__respondPermission = function(requestId, decision) {
                     try { $respondPermissionInject } catch (e) { console.error('[UnifiedLLM] respondPermission error', e); }
                 };
+                window.__loadHistorySession = function(chatId, adapterId, sessionId, modelId, modeId) {
+                    try { $loadSessionInject } catch (e) { console.error('[UnifiedLLM] loadHistorySession error', e); }
+                };
                 
                 // Try prime
                 try { window.__requestAdapters(); } catch (e) {}
@@ -313,6 +366,7 @@ class AcpDebugBridge(
             window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
             window.__respondPermission = window.__respondPermission || function(requestId, decision) {};
             window.__stopAgent = window.__stopAgent || function(chatId) {};
+            window.__onHistoryReplay = window.__onHistoryReplay || function(payload) {};
             
             window.__notifyReady = function() {
                 try { $readyInject } catch (e) { console.error('[UnifiedLLM] notifyReady error', e); }
@@ -324,7 +378,7 @@ class AcpDebugBridge(
     fun pushLogEntry(entry: AcpLogEntry) {
         // Global logs don't have chatId yet.
         val payload = """{"direction":"${entry.direction}","json":${escapeJsonString(entry.json)},"timestamp":${entry.timestampMillis}}"""
-        val escaped = payload.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+        val escaped = payload.escapeForJsString()
         val directionLabel = if (entry.direction == AcpLogEntry.Direction.SENT) "SENT" else "RECEIVED"
         val jsonEscaped = entry.json.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
         runOnEdt {
@@ -345,7 +399,7 @@ class AcpDebugBridge(
     }
 
     fun pushAgentText(chatId: String, text: String) {
-        val escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+        val escaped = text.escapeForJsString()
         val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
@@ -406,13 +460,25 @@ class AcpDebugBridge(
             })
         }
         val jsonString = Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObject)
-        val escaped = jsonString.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+        val escaped = jsonString.escapeForJsString()
 
         runOnEdt {
              browser.cefBrowser.executeJavaScript(
                 "if(window.__onPermissionRequest) window.__onPermissionRequest(JSON.parse('$escaped'));",
                 browser.cefBrowser.url, 0
             )           
+        }
+    }
+
+    fun pushHistoryReplay(chatId: String, role: String, text: String) {
+        val escapedText = text.escapeForJsString()
+        val escapedRole = role.replace("\\", "\\\\").replace("'", "\\'")
+        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
+        runOnEdt {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onHistoryReplay) window.__onHistoryReplay({ chatId: '$id', role: '$escapedRole', text: '$escapedText' });",
+                browser.cefBrowser.url, 0
+            )
         }
     }
 
@@ -439,7 +505,7 @@ class AcpDebugBridge(
                     val defaultModeId = escapeJsonStringValue(info.defaultModeId ?: "")
                     """{"id":"$id","displayName":"$displayName","isDefault":$isDefault,"defaultModelId":"$defaultModelId","models":$modelsJson,"defaultModeId":"$defaultModeId","modes":$modesJson}"""
                 }
-            val escaped = payload.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+            val escaped = payload.escapeForJsString()
             runOnEdt {
                 browser.cefBrowser.executeJavaScript(
                     "if(window.__onAdapters) window.__onAdapters(JSON.parse('$escaped'));",
@@ -494,5 +560,19 @@ class AcpDebugBridge(
              val text = obj["text"]?.jsonPrimitive?.content
              chatId to text
          } catch (_: Exception) { null to null }
+    }
+
+    private fun parseLoadPayload(payload: String?): List<String?> {
+        val raw = payload?.trim().orEmpty()
+        if (raw.isEmpty()) return listOf(null, null, null, null, null)
+        return try {
+            val obj = Json.parseToJsonElement(raw).jsonObject
+            val chatId = obj["chatId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            val adapterId = obj["adapterId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            val sessionId = obj["sessionId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            val modelId = obj["modelId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            val modeId = obj["modeId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            listOf(chatId, adapterId, sessionId, modelId, modeId)
+        } catch (_: Exception) { listOf(null, null, null, null, null) }
     }
 }

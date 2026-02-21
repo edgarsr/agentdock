@@ -3,7 +3,8 @@ import {
   Message, 
   AgentOption, 
   PermissionRequest, 
-  DropdownOption 
+  DropdownOption,
+  HistorySessionMeta
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 
@@ -15,7 +16,8 @@ function nextMessageId(suffix: string): string {
 export function useChatSession(
   chatId: string,
   availableAgents: AgentOption[],
-  initialAgentId?: string
+  initialAgentId?: string,
+  historySession?: HistorySessionMeta
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -32,6 +34,7 @@ export function useChatSession(
   const startedAgentIdRef = useRef<string>('');
   const startedModelIdRef = useRef<string>('');
   const startedModeIdRef = useRef<string>('');
+  const historyLoadRequestedRef = useRef<string | null>(null);
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId);
   const availableModels = selectedAgent?.models ?? [];
@@ -79,6 +82,22 @@ export function useChatSession(
       return next;
     });
   }, [availableAgents, initialAgentId]);
+  
+  useEffect(() => {
+    if (!historySession) return;
+    if (historySession.modelId) {
+      setSelectedModelByAgent((prev) => ({
+        ...prev,
+        [historySession.adapterName]: historySession.modelId as string
+      }));
+    }
+    if (historySession.modeId) {
+      setSelectedModeByAgent((prev) => ({
+        ...prev,
+        [historySession.adapterName]: historySession.modeId as string
+      }));
+    }
+  }, [historySession]);
 
   // Chat Event Listeners (Filtered by chatId)
   useEffect(() => {
@@ -188,18 +207,70 @@ export function useChatSession(
       setPermissionRequest(req);
     });
 
+    const unsubReplay = ACPBridge.onHistoryReplay((e) => {
+      if (e.detail.chatId !== chatId) return;
+      const role = e.detail.role;
+      const text = e.detail.text || '';
+      if (!text) return;
+
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (!lastMsg || lastMsg.role !== role) {
+          return [
+            ...prev,
+            {
+              id: nextMessageId(role),
+              role,
+              content: text,
+              timestamp: Date.now()
+            }
+          ];
+        }
+        return [
+          ...prev.slice(0, -1),
+          { ...lastMsg, content: `${lastMsg.content}${text}` }
+        ];
+      });
+    });
+
     return () => {
       unsubText();
       unsubStatus();
       unsubSessionId();
       unsubMode();
       unsubPermission();
+      unsubReplay();
     };
   }, [chatId]);
+
+  useEffect(() => {
+    if (!historySession) return;
+    if (!historySession.sessionId || !historySession.adapterName) return;
+    if (historyLoadRequestedRef.current === historySession.sessionId) return;
+    historyLoadRequestedRef.current = historySession.sessionId;
+
+    currentAgentMessageRef.current = '';
+    pendingMessageRef.current = null;
+    setMessages([]);
+    setStatus('initializing');
+
+    startedAgentIdRef.current = historySession.adapterName;
+    startedModelIdRef.current = historySession.modelId || '';
+    startedModeIdRef.current = historySession.modeId || '';
+
+    ACPBridge.loadHistorySession(
+      chatId,
+      historySession.adapterName,
+      historySession.sessionId,
+      historySession.modelId,
+      historySession.modeId
+    );
+  }, [chatId, historySession]);
 
   // Auto-start agent once selection is available
   useEffect(() => {
     if (!selectedAgentId || typeof window.__startAgent !== 'function') return;
+    if (historySession) return;
     if (status !== 'not started' && status !== 'error' && startedAgentIdRef.current === selectedAgentId) return;
 
     const modelId = selectedModelByAgent[selectedAgentId] || selectedAgent?.defaultModelId;
@@ -214,7 +285,7 @@ export function useChatSession(
     } catch (e) {
       console.warn('[useChatSession] Failed to auto-start agent:', e);
     }
-  }, [chatId, selectedAgentId, status, availableAgents]); // Re-run if status is reset to 'not started' or 'error'
+  }, [chatId, selectedAgentId, status, availableAgents, historySession]); // Re-run if status is reset to 'not started' or 'error'
 
   // Track model changes
   useEffect(() => {

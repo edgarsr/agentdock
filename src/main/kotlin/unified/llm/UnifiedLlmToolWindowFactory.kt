@@ -24,6 +24,7 @@ import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
 import unified.llm.acp.AcpClientService
 import unified.llm.acp.AcpDebugBridge
+import unified.llm.history.HistoryBridge
 import java.awt.BorderLayout
 import java.awt.Cursor
 import javax.swing.JLabel
@@ -31,6 +32,8 @@ import javax.swing.JPanel
 
 
 class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
+    private var debugBridge: AcpDebugBridge? = null
+    private var historyBridge: HistoryBridge? = null
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         if (!JBCefApp.isSupported()) {
@@ -44,8 +47,13 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
         val browser = JBCefBrowser()
         val service = AcpClientService(project)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        val bridge = AcpDebugBridge(browser, service, scope)
-        bridge.install()
+        
+        // Persist bridges as members to prevent garbage collection
+        debugBridge = AcpDebugBridge(browser, service, scope)
+        historyBridge = HistoryBridge(browser, project, scope)
+        
+        debugBridge?.install()
+        historyBridge?.install()
 
         // Create Header Actions
         val newChatAction = object : AnAction("New Chat", "Start a new chat session", AllIcons.General.Add) {
@@ -100,8 +108,9 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         });
                     """.trimIndent()
                     cefBrowser.executeJavaScript(cursorInjection, cefBrowser.url, 0)
-                    bridge.injectReadySignal(cefBrowser)
-                    bridge.injectDebugApi(cefBrowser)
+                    debugBridge?.injectReadySignal(cefBrowser)
+                    debugBridge?.injectDebugApi(cefBrowser)
+                    historyBridge?.injectApi(cefBrowser)
                 }
             }
         }, browser.cefBrowser)

@@ -1,5 +1,5 @@
 import { useChatSession } from '../../hooks/useChatSession';
-import { AgentOption } from '../../types/chat';
+import { AgentOption, HistorySessionMeta } from '../../types/chat';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import PermissionModal from './PermissionModal';
@@ -9,6 +9,7 @@ interface ChatSessionProps {
   initialAgentId?: string;
   chatId: string;
   availableAgents: AgentOption[];
+  historySession?: HistorySessionMeta;
   onAgentChangeRequest?: (agentId: string) => void;
 }
 
@@ -17,6 +18,7 @@ export default function ChatSessionView({
   initialAgentId, 
   chatId,
   availableAgents,
+  historySession,
   onAgentChangeRequest
 }: ChatSessionProps) {
   const {
@@ -38,7 +40,7 @@ export default function ChatSessionView({
     handleStop,
     handlePermissionDecision,
     hasSelectedAgent
-  } = useChatSession(chatId, availableAgents, initialAgentId);
+  } = useChatSession(chatId, availableAgents, initialAgentId, historySession);
 
   return (
     <div className="flex flex-col h-full relative">
