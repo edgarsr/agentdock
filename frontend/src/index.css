@@ -3,6 +3,33 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden !important; /* Force hide horizontal scrollbar */
+  }
+
+  /* Hide scrollbars for all elements but allow vertical scrolling where explicitly set */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 0px; /* Hide horizontal scrollbar */
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 20px;
+  }
+
   :root {
     /* Base Colors */
     --background: var(--ide-bg);

@@ -18,6 +18,8 @@ import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
 import com.agentclientprotocol.model.SessionId
 import com.agentclientprotocol.model.SessionUpdate
+import java.io.File
+import java.io.InputStream
 import com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION
 import com.agentclientprotocol.model.AcpMethod
 import com.agentclientprotocol.protocol.Protocol
@@ -59,7 +61,7 @@ data class PermissionRequest(
     val options: List<PermissionOption>
 )
 
-class AcpClientService(private val project: Project) {
+class AcpClientService(val project: Project) {
     @Volatile
     private var logCallback: ((AcpLogEntry) -> Unit)? = null
 
@@ -123,7 +125,11 @@ class AcpClientService(private val project: Project) {
     fun activeModeId(chatId: String): String? = sessions[chatId]?.activeModeIdRef?.get()
 
     fun getAvailableModels(adapterName: String? = null): List<AcpAdapterConfig.ModelInfo> {
-        return AcpAdapterPaths.getAdapterInfo(adapterName).models
+        val name = adapterName ?: AcpAdapterPaths.resolveAdapterName(null)
+        if (!AcpAgentSettings.isEnabled(name) || !AcpAdapterPaths.isDownloaded(name)) {
+            return emptyList()
+        }
+        return AcpAdapterPaths.getAdapterInfo(name).models
     }
 
     private inner class AgentContext(val chatId: String) {
@@ -176,6 +182,20 @@ class AcpClientService(private val project: Project) {
 
                 if (currentStatus != Status.NotStarted) {
                     context.stop()
+                }
+
+                if (!AcpAgentSettings.isEnabled(requestedAdapterName)) {
+                    val msg = "Agent '$requestedAdapterName' is disabled in settings"
+                    log.warn("[$chatId] $msg")
+                    context.statusRef.set(Status.Error)
+                    throw IllegalStateException(msg)
+                }
+                
+                if (!AcpAdapterPaths.isDownloaded(requestedAdapterName)) {
+                    val msg = "Agent '$requestedAdapterName' is not downloaded"
+                    log.warn("[$chatId] $msg")
+                    context.statusRef.set(Status.Error)
+                    throw IllegalStateException(msg)
                 }
 
                 context.statusRef.set(Status.Initializing)
@@ -476,6 +496,13 @@ class AcpClientService(private val project: Project) {
         context.stop()
     }
 
+    fun stopSharedProcess(adapterName: String) {
+        val shared = activeProcesses.remove(adapterName)
+        shared?.stop()
+        // Also stop any contexts using this process
+        sessions.values.filter { it.sharedProcess == shared }.forEach { it.stop() }
+    }
+
     fun shutdown() {
         scope.coroutineContext[Job]?.cancel()
         sessions.values.forEach { it.stop() }
@@ -529,7 +556,25 @@ class AcpClientService(private val project: Project) {
                 command.addAll(adapterInfo.args)
 
                 val pb = ProcessBuilder(command).directory(adapterRoot).redirectErrorStream(false)
-                pb.environment().putAll(System.getenv())
+                val env = pb.environment()
+                env.putAll(System.getenv())
+
+                // Add supporting tools to PATH if configured
+                for (tool in adapterInfo.supportingTools) {
+                    if (tool.addToPath) {
+                        val toolDirName = tool.targetDir ?: tool.id
+                        val toolDir = File(AcpAdapterPaths.getDependenciesDir(), toolDirName)
+                        if (toolDir.exists()) {
+                            val pathKey = if (System.getProperty("os.name").lowercase().contains("win")) "Path" else "PATH"
+                            // Case-insensitive lookup for Windows
+                            val actualKey = env.keys.find { it.equals(pathKey, ignoreCase = true) } ?: pathKey
+                            val currentPath = env[actualKey] ?: System.getenv(actualKey) ?: ""
+                            env[actualKey] = "${toolDir.absolutePath}${File.pathSeparator}$currentPath"
+                            log.info("Added ${tool.name} to PATH for ${adapterInfo.name}")
+                        }
+                    }
+                }
+
                 val proc = withContext(Dispatchers.IO) { pb.start() }
                 sharedProc.process = proc
 

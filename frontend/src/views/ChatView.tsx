@@ -30,7 +30,7 @@ export function ChatView() {
       if (cached) {
         const parsed = JSON.parse(cached) as AgentOption[];
         if (Array.isArray(parsed)) {
-          setAvailableAgents(parsed);
+          setAvailableAgents(parsed.filter(a => a.downloaded && a.enabled));
         }
       }
     } catch (e) {
@@ -42,7 +42,7 @@ export function ChatView() {
   useEffect(() => {
     return ACPBridge.onAdapters((e) => {
       const safeAdapters = Array.isArray(e.detail.adapters) ? e.detail.adapters : [];
-      setAvailableAgents(safeAdapters);
+      setAvailableAgents(safeAdapters.filter(a => a.downloaded && a.enabled));
       if (safeAdapters.length > 0) {
         try {
           localStorage.setItem('unified-llm.adapters', JSON.stringify(safeAdapters));
@@ -115,7 +115,7 @@ export function ChatView() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}

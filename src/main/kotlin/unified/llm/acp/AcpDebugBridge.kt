@@ -11,19 +11,49 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.encodeToString
+import java.io.File
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
 
 private val log = Logger.getInstance(AcpDebugBridge::class.java)
+
+@Serializable
+private data class AdapterToolPayload(val name: String, val path: String)
+
+@Serializable
+private data class AdapterModelPayload(val id: String, val displayName: String)
+
+@Serializable
+private data class AdapterModePayload(val id: String, val displayName: String)
+
+@Serializable
+private data class AdapterPayload(
+    val id: String,
+    val displayName: String,
+    val isDefault: Boolean,
+    val defaultModelId: String,
+    val models: List<AdapterModelPayload>,
+    val defaultModeId: String,
+    val modes: List<AdapterModePayload>,
+    val downloaded: Boolean,
+    val enabled: Boolean,
+    val downloadPath: String,
+    val authAuthenticated: Boolean,
+    val authPath: String,
+    val authenticating: Boolean,
+    val downloading: Boolean,
+    val downloadStatus: String,
+    val supportingTools: List<AdapterToolPayload>
+)
+
+private val adapterJson = Json { encodeDefaults = true }
 
 /**
  * Connects AcpClientService to the JCEF/React debug view.
@@ -44,8 +74,14 @@ class AcpDebugBridge(
     private var respondPermissionQuery: JBCefJSQuery? = null
     private var readyQuery: JBCefJSQuery? = null
     private var loadSessionQuery: JBCefJSQuery? = null
+    private var downloadAgentQuery: JBCefJSQuery? = null
+    private var deleteAgentQuery: JBCefJSQuery? = null
+    private var toggleAgentEnabledQuery: JBCefJSQuery? = null
+    private var loginAgentQuery: JBCefJSQuery? = null
+    private var logoutAgentQuery: JBCefJSQuery? = null
 
     private val promptJobs = ConcurrentHashMap<String, Job>()
+    private val downloadStatuses = ConcurrentHashMap<String, String>()
 
     companion object {
         const val START_AGENT_TIMEOUT_MS = 45_000L
@@ -83,11 +119,142 @@ class AcpDebugBridge(
             }
         }
 
+        downloadAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                val adapterId = parseIdOnlyPayload(payload)
+                if (adapterId != null) {
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            downloadStatuses[adapterId] = "Starting download..."
+                            pushAdapters()
+                            
+                            service.stopSharedProcess(adapterId)
+                            val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterId)
+                            val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.resourceName)
+                            
+                            val statusCallback = { status: String ->
+                                downloadStatuses[adapterId] = status
+                                pushAdapters()
+                            }
+                            
+                            var success = AcpAdapterPaths.downloadFromNpm(targetDir, adapterInfo, statusCallback) && 
+                                           AcpAdapterPaths.runNpmInstall(targetDir, statusCallback)
+                            
+                            // Download generic supporting tools
+                            if (success) {
+                                for (tool in adapterInfo.supportingTools) {
+                                    if (!AcpAdapterPaths.downloadSupportingTool(tool, statusCallback)) {
+                                        success = false
+                                        break
+                                    }
+                                }
+                            }
+                            
+                            if (success) {
+                                // Apply patches immediately after install
+                                AcpAdapterPaths.applyPatches(targetDir, adapterInfo, statusCallback)
+                                downloadStatuses.remove(adapterId)
+                                pushAdapters()
+                            } else {
+                                downloadStatuses[adapterId] = "Error: Download failed"
+                                pushAdapters()
+                                log.error("Manual download of $adapterId failed")
+                            }
+                        } catch (e: Exception) {
+                            downloadStatuses[adapterId] = "Error: ${e.message}"
+                            pushAdapters()
+                            log.error("Failed to download agent $adapterId", e)
+                        }
+                    }
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        deleteAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                val adapterId = parseIdOnlyPayload(payload)
+                if (adapterId != null) {
+                    scope.launch(Dispatchers.IO) {
+                        service.stopSharedProcess(adapterId)
+                        AcpAdapterPaths.deleteAdapter(adapterId)
+                        pushAdapters()
+                    }
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        toggleAgentEnabledQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                try {
+                    val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
+                    val adapterId = obj["adapterId"]?.jsonPrimitive?.content ?: ""
+                    val enabled = obj["enabled"]?.jsonPrimitive?.booleanOrNull ?: true
+                    if (adapterId.isNotEmpty()) {
+                        AcpAgentSettings.setEnabled(adapterId, enabled)
+                        pushAdapters()
+                    }
+                } catch (e: Exception) {
+                    log.error("Failed to toggle agent enablement", e)
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        loginAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                val adapterId = parseIdOnlyPayload(payload)
+                if (adapterId != null) {
+                    scope.launch(Dispatchers.Default) {
+                        try {
+                            AcpAuthService.incrementActive(adapterId)
+                            pushAdapters() // Show loading state immediately
+                            val projectPath = service.project.basePath
+                            AcpAuthService.login(adapterId, projectPath) {
+                                pushAdapters()
+                            }
+                        } finally {
+                            AcpAuthService.decrementActive(adapterId)
+                            pushAdapters() // Refresh UI after attempt
+                        }
+                    }
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        logoutAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { payload ->
+                val adapterId = parseIdOnlyPayload(payload)
+                if (adapterId != null) {
+                    scope.launch(Dispatchers.Default) {
+                        try {
+                            AcpAuthService.incrementActive(adapterId)
+                            pushAdapters() // Show loading state immediately
+                            AcpAuthService.logout(adapterId)
+                        } finally {
+                            AcpAuthService.decrementActive(adapterId)
+                            pushAdapters() // Refresh UI after attempt
+                        }
+                    }
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
         startAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
             addHandler { payload ->
                 val (chatId, adapterName, modelId) = parseStartPayload(payload)
                 if (chatId != null) {
                     scope.launch(Dispatchers.Default) {
+                        val authStatus = AcpAuthService.getAuthStatus(adapterName ?: "")
+                        if (!authStatus.authenticated) {
+                            pushStatus(chatId, "error")
+                            pushAgentText(chatId, "[Error: Agent is not authenticated. Please login in settings.]")
+                            return@launch
+                        }
+
                         pushStatus(chatId, "initializing")
                         try {
                             withTimeout(START_AGENT_TIMEOUT_MS) {
@@ -303,6 +470,26 @@ class AcpDebugBridge(
             loadSessionQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), sessionId: (sessionId || ''), modelId: (modelId || ''), modeId: (modeId || '') })") ?: "",
             "loadSession"
         )
+        val downloadAgentInject = decorateQueryInject(
+            downloadAgentQuery?.inject("adapterId") ?: "",
+            "downloadAgent"
+        )
+        val deleteAgentInject = decorateQueryInject(
+            deleteAgentQuery?.inject("adapterId") ?: "",
+            "deleteAgent"
+        )
+        val toggleAgentEnabledInject = decorateQueryInject(
+            toggleAgentEnabledQuery?.inject("JSON.stringify({ adapterId: adapterId, enabled: enabled })") ?: "",
+            "toggleAgentEnabled"
+        )
+        val loginAgentInject = decorateQueryInject(
+            loginAgentQuery?.inject("adapterId") ?: "",
+            "loginAgent"
+        )
+        val logoutAgentInject = decorateQueryInject(
+            logoutAgentQuery?.inject("adapterId") ?: "",
+            "logoutAgent"
+        )
         
         val script = """
             (function() {
@@ -345,6 +532,21 @@ class AcpDebugBridge(
                 window.__loadHistorySession = function(chatId, adapterId, sessionId, modelId, modeId) {
                     try { $loadSessionInject } catch (e) { console.error('[UnifiedLLM] loadHistorySession error', e); }
                 };
+                window.__downloadAgent = function(adapterId) {
+                    try { $downloadAgentInject } catch (e) { console.error('[UnifiedLLM] downloadAgent error', e); }
+                };
+                window.__deleteAgent = function(adapterId) {
+                    try { $deleteAgentInject } catch (e) { console.error('[UnifiedLLM] deleteAgent error', e); }
+                };
+                window.__toggleAgentEnabled = function(adapterId, enabled) {
+                    try { $toggleAgentEnabledInject } catch (e) { console.error('[UnifiedLLM] toggleAgentEnabled error', e); }
+                };
+                window.__loginAgent = function(adapterId) {
+                    try { $loginAgentInject } catch (e) { console.error('[UnifiedLLM] loginAgent error', e); }
+                };
+                window.__logoutAgent = function(adapterId) {
+                    try { $logoutAgentInject } catch (e) { console.error('[UnifiedLLM] logoutAgent error', e); }
+                };
                 
                 // Try prime
                 try { window.__requestAdapters(); } catch (e) {}
@@ -371,6 +573,11 @@ class AcpDebugBridge(
             window.__notifyReady = function() {
                 try { $readyInject } catch (e) { console.error('[UnifiedLLM] notifyReady error', e); }
             };
+            window.__downloadAgent = window.__downloadAgent || function(id) {};
+            window.__deleteAgent = window.__deleteAgent || function(id) {};
+            window.__toggleAgentEnabled = window.__toggleAgentEnabled || function(id, e) {};
+            window.__loginAgent = window.__loginAgent || function(id) {};
+            window.__logoutAgent = window.__logoutAgent || function(id) {};
         """.trimIndent()
         cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
     }
@@ -446,25 +653,11 @@ class AcpDebugBridge(
     }
 
     fun pushPermissionRequest(request: PermissionRequest) {
-        val jsonObject = buildJsonObject {
-            put("requestId", request.requestId)
-            put("chatId", request.chatId)
-            put("description", request.description)
-            put("options", buildJsonArray {
-                request.options.forEach { opt ->
-                    add(buildJsonObject {
-                        put("optionId", opt.optionId.toString())
-                        put("label", opt.toString())
-                    })
-                }
-            })
-        }
-        val jsonString = Json.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), jsonObject)
-        val escaped = jsonString.escapeForJsString()
-
+        // Simple JSON construction to avoid DSL issues if they persist
+        val escapedDec = request.description.escapeForJsString()
         runOnEdt {
              browser.cefBrowser.executeJavaScript(
-                "if(window.__onPermissionRequest) window.__onPermissionRequest(JSON.parse('$escaped'));",
+                "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: '${request.requestId}', chatId: '${request.chatId}', description: '$escapedDec' });",
                 browser.cefBrowser.url, 0
             )           
         }
@@ -487,24 +680,37 @@ class AcpDebugBridge(
             val defaultName = try { AcpAdapterConfig.getDefaultAdapterName() } catch (e: Exception) { "" }
             val unique = linkedMapOf<String, AcpAdapterConfig.AdapterInfo>()
             AcpAdapterConfig.getAllAdapters().values.forEach { info -> unique[info.name] = info }
-            val payload = unique.values.sortedBy { it.displayName.lowercase() }.joinToString(prefix = "[", postfix = "]") { info ->
-                    val id = escapeJsonStringValue(info.name)
-                    val displayName = escapeJsonStringValue(info.displayName)
-                    val isDefault = if (info.name == defaultName) "true" else "false"
-                    val defaultModelId = escapeJsonStringValue(info.defaultModelId ?: "")
-                    val modelsJson = info.models.joinToString(prefix = "[", postfix = "]") { model ->
-                        val modelId = escapeJsonStringValue(model.id)
-                        val modelDisplayName = escapeJsonStringValue(model.displayName)
-                        """{"id":"$modelId","displayName":"$modelDisplayName"}"""
+
+            val adapters = unique.values.sortedBy { it.displayName.lowercase() }.map { info ->
+                val downloaded = AcpAdapterPaths.isDownloaded(info.name)
+                val authStatus = AcpAuthService.getAuthStatus(info.name)
+                val dlStatus = downloadStatuses[info.name] ?: ""
+
+                AdapterPayload(
+                    id = info.name,
+                    displayName = info.displayName,
+                    isDefault = info.name == defaultName,
+                    defaultModelId = info.defaultModelId ?: "",
+                    models = info.models.map { AdapterModelPayload(it.id, it.displayName) },
+                    defaultModeId = info.defaultModeId ?: "",
+                    modes = info.modes.map { AdapterModePayload(it.id, it.displayName) },
+                    downloaded = downloaded,
+                    enabled = AcpAgentSettings.isEnabled(info.name),
+                    downloadPath = if (downloaded) AcpAdapterPaths.getDownloadPath(info.name) else "",
+                    authAuthenticated = authStatus.authenticated,
+                    authPath = authStatus.authPath ?: "",
+                    authenticating = AcpAuthService.isAuthenticating(info.name),
+                    downloading = dlStatus.isNotEmpty() && !dlStatus.startsWith("Error"),
+                    downloadStatus = dlStatus,
+                    supportingTools = info.supportingTools.map { tool ->
+                        val toolDirName = tool.targetDir ?: tool.id
+                        val toolDir = File(AcpAdapterPaths.getDependenciesDir(), toolDirName)
+                        AdapterToolPayload(tool.name, toolDir.absolutePath)
                     }
-                    val modesJson = info.modes.joinToString(prefix = "[", postfix = "]") { mode ->
-                        val modeId = escapeJsonStringValue(mode.id)
-                        val modeDisplayName = escapeJsonStringValue(mode.displayName)
-                        """{"id":"$modeId","displayName":"$modeDisplayName"}"""
-                    }
-                    val defaultModeId = escapeJsonStringValue(info.defaultModeId ?: "")
-                    """{"id":"$id","displayName":"$displayName","isDefault":$isDefault,"defaultModelId":"$defaultModelId","models":$modelsJson,"defaultModeId":"$defaultModeId","modes":$modesJson}"""
-                }
+                )
+            }
+
+            val payload = adapterJson.encodeToString(adapters)
             val escaped = payload.escapeForJsString()
             runOnEdt {
                 browser.cefBrowser.executeJavaScript(
@@ -526,7 +732,10 @@ class AcpDebugBridge(
     }
 
     private fun escapeJsonString(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
-    private fun escapeJsonStringValue(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+
+    private fun parseIdOnlyPayload(payload: String?): String? {
+        return payload?.trim()?.takeIf { it.isNotEmpty() }
+    }
 
     private fun parseStartPayload(payload: String?): Triple<String?, String?, String?> {
         val raw = payload?.trim().orEmpty()

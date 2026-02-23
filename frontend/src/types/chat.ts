@@ -30,6 +30,15 @@ export interface AgentOption {
   models?: ModelOption[];
   defaultModeId?: string;
   modes?: ModeOption[];
+  downloaded: boolean;
+  enabled: boolean;
+  downloadPath?: string;
+  downloading?: boolean;
+  downloadStatus?: string;
+  supportingTools?: { name: string; path: string }[];
+  authAuthenticated?: boolean;
+  authPath?: string;
+  authenticating?: boolean;
 }
 
 export interface PermissionRequest {
@@ -83,9 +92,14 @@ declare global {
     __respondPermission?: (requestId: string, decision: string) => void;
     __cancelPrompt?: (chatId: string) => void;
     __stopAgent?: (chatId: string) => void;
+    __downloadAgent?: (adapterId: string) => void;
+    __deleteAgent?: (adapterId: string) => void;
+    __toggleAgentEnabled?: (adapterId: string, enabled: boolean) => void;
     __requestHistoryList?: (projectPath?: string) => void;
     __deleteHistorySession?: (meta: any) => void;
     __loadHistorySession?: (chatId: string, adapterId: string, sessionId: string, modelId?: string, modeId?: string) => void;
+    __loginAgent?: (adapterId: string) => void;
+    __logoutAgent?: (adapterId: string) => void;
 
     // Callbacks (Backend -> Frontend)
     // Note: These are set by the frontend on window.

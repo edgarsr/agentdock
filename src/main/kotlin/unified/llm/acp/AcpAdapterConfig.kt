@@ -28,6 +28,31 @@ object AcpAdapterConfig {
     )
 
     @Serializable
+    data class AuthConfig(
+        val authPath: String? = null,
+        val authScript: String? = null,
+        val loginArgs: List<String> = emptyList(),
+        val logoutArgs: List<String> = emptyList(),
+        val statusArgs: List<String> = emptyList()
+    )
+
+    @Serializable
+    data class SupportingToolBinary(
+        val win: String? = null,
+        val unix: String? = null
+    )
+
+    @Serializable
+    data class SupportingTool(
+        val name: String,
+        val id: String = "", // Internal handle
+        val downloadUrl: String? = null,
+        val binaryName: SupportingToolBinary? = null,
+        val targetDir: String? = null,
+        val addToPath: Boolean = true
+    )
+
+    @Serializable
     data class AdapterInfo(
         val name: String = "", // Filled after parsing
         val resourceName: String? = null,
@@ -42,6 +67,7 @@ object AcpAdapterConfig {
         val args: List<String> = emptyList(),
         val patches: List<String> = emptyList(),
         val historyConfig: HistoryConfig? = null,
+        val authConfig: AuthConfig? = null,
         /**
          * How to handle model changes mid-session:
          * - "restart-resume": restart ACP process and resume the previous session (preserves history)
@@ -49,7 +75,8 @@ object AcpAdapterConfig {
          * - "in-session": call sess.setModel() without restarting (works if adapter supports it)
          * Default: "in-session"
          */
-        val modelChangeStrategy: String = "in-session"
+        val modelChangeStrategy: String = "in-session",
+        val supportingTools: List<SupportingTool> = emptyList()
     ) {
         // Helper to handle optional resourceName logic
         fun getEffectiveResourceName(): String = resourceName ?: name

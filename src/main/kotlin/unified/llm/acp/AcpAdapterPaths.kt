@@ -3,17 +3,16 @@ package unified.llm.acp
 import com.intellij.openapi.diagnostic.Logger
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.sync.withLock
 
 private val log = Logger.getInstance("unified.llm.acp.AcpAdapterPaths")
 
 /**
- * Adapters are downloaded from npm at runtime to ~/.unified-llm/adapters/<adapter-name>/.
- * On first run we download the adapter from npm and run npm install there;
- * node_modules is created on disk, so the adapter can run.
+ * Dependencies are downloaded from npm at runtime to ~/.unified-llm/dependencies/<dependency-name>/.
+ * On first run we download the dependency from npm and run npm install there;
+ * node_modules is created on disk, so the dependency can run.
  * 
- * Each adapter gets its own directory under ~/.unified-llm/adapters/ to allow multiple
- * adapters to coexist with their own dependencies.
+ * Each dependency gets its own directory under ~/.unified-llm/dependencies/ to allow multiple
+ * dependencies to coexist with their own dependencies.
  * 
  * The adapter is configured via acp-adapters.properties file with npmPackage and npmVersion.
  * System property "unified.llm.acp.adapter.name" can override the default adapter when
@@ -43,13 +42,13 @@ object AcpAdapterPaths {
     private val BASE_RUNTIME_DIR = File(System.getProperty("user.home"), ".unified-llm")
     
     /**
-     * Directory for adapters. Each adapter gets its own subdirectory.
+     * Directory for dependencies (adapters and CLI tools). Each dependency gets its own subdirectory.
      */
-    private val ADAPTERS_DIR = File(BASE_RUNTIME_DIR, "adapters")
+    private val DEPENDENCIES_DIR = File(BASE_RUNTIME_DIR, "dependencies")
     
     /**
      * Runtime directory for the current adapter.
-     * Format: ~/.unified-llm/adapters/<adapter-resource-name>/
+     * Format: ~/.unified-llm/dependencies/<adapter-resource-name>/
      */
     private val cachedRoots = ConcurrentHashMap<String, File>()
 
@@ -63,47 +62,68 @@ object AcpAdapterPaths {
     }
     
     /**
-     * Returns the adapters directory (~/.unified-llm/adapters).
+     * Returns the dependencies directory (~/.unified-llm/dependencies).
      */
-    fun getAdaptersDir(): File {
-        ADAPTERS_DIR.mkdirs()
-        return ADAPTERS_DIR
+    fun getDependenciesDir(): File {
+        DEPENDENCIES_DIR.mkdirs()
+        return DEPENDENCIES_DIR
     }
-    
-    private val adapterLocks = ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
 
     /**
-     * Returns the adapter root directory (dist/ + package.json + node_modules/).
-     * Downloads adapter from npm to ~/.unified-llm/adapters/<adapter-name>/ if needed and runs npm install.
+     * Returns the absolute path where the adapter is installed.
+     */
+    fun getDownloadPath(adapterName: String? = null): String {
+        val adapterInfo = getAdapterInfo(adapterName)
+        return File(DEPENDENCIES_DIR, adapterInfo.resourceName).absolutePath
+    }
+
+    /**
+     * Checks if the adapter is currently downloaded (dist, package.json, and node_modules exist).
+     */
+    fun isDownloaded(adapterName: String? = null): Boolean {
+        val adapterInfo = getAdapterInfo(adapterName)
+        val runtimeDir = File(DEPENDENCIES_DIR, adapterInfo.resourceName)
+        return runtimeDir.isDirectory && 
+               File(runtimeDir, "node_modules").isDirectory && 
+               File(runtimeDir, adapterInfo.launchPath).isFile
+    }
+
+    /**
+     * Deletes the adapter directory from disk.
+     */
+    fun deleteAdapter(adapterName: String? = null): Boolean {
+        val adapterInfo = getAdapterInfo(adapterName)
+        val runtimeDir = File(DEPENDENCIES_DIR, adapterInfo.resourceName)
+        val cacheKey = runtimeDir.absolutePath
+        
+        return try {
+            if (runtimeDir.exists()) {
+                runtimeDir.deleteRecursively()
+            }
+            cachedRoots.remove(cacheKey)
+            true
+        } catch (e: Exception) {
+            log.error("Failed to delete adapter at ${runtimeDir.absolutePath}", e)
+            false
+        }
+    }
+
+    /**
+     * Returns the adapter root directory.
+     * Re-applies patches if already downloaded.
+     * Does NOT download automatically anymore.
      */
     suspend fun getAdapterRoot(adapterName: String? = null): File? {
         val adapterInfo = getAdapterInfo(adapterName)
-        val runtimeDir = File(ADAPTERS_DIR, adapterInfo.resourceName)
+        val runtimeDir = File(DEPENDENCIES_DIR, adapterInfo.resourceName)
         val cacheKey = runtimeDir.absolutePath
         
-        // Fast path: already verified and in memory
-        cachedRoots[cacheKey]?.let { root ->
-            if (root.isDirectory && File(root, "node_modules").isDirectory && File(root, adapterInfo.launchPath).isFile) {
-                return root
-            }
+        if (isDownloaded(adapterName)) {
+            cachedRoots[cacheKey] = runtimeDir
+            return runtimeDir
         }
-
-        // Slow path: potential installation. Need a lock per adapter.
-        val adapterKey = adapterInfo.resourceName ?: "default"
-        val mutex = adapterLocks.computeIfAbsent(adapterKey) { kotlinx.coroutines.sync.Mutex() }
         
-        return mutex.withLock {
-            // Re-check after acquiring lock in case another thread finished it
-            cachedRoots[cacheKey]?.let { root ->
-                 if (root.isDirectory && File(root, "node_modules").isDirectory && File(root, adapterInfo.launchPath).isFile) {
-                     return@withLock root
-                 }
-            }
-
-            val root = ensureRuntimeDir(runtimeDir, adapterInfo)
-            if (root != null) cachedRoots[cacheKey] = root
-            root
-        }
+        return null
     }
 
     private fun ensureRuntimeDir(runtimeDir: File, adapterInfo: AcpAdapterConfig.AdapterInfo): File? {
@@ -122,8 +142,9 @@ object AcpAdapterPaths {
         }
     }
 
-    private fun applyPatches(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo) {
+    fun applyPatches(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo, statusCallback: ((String) -> Unit)? = null) {
         for (patchContent in adapterInfo.patches) {
+            statusCallback?.invoke("Applying patch...")
             // Use AcpPatchService to apply unified diff, target path is read from patch header
             val success = AcpPatchService.applyPatch(adapterRoot, patchContent)
             if (!success) {
@@ -132,13 +153,14 @@ object AcpAdapterPaths {
         }
     }
 
-    private fun downloadFromNpm(targetDir: File, adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean {
+    fun downloadFromNpm(targetDir: File, adapterInfo: AcpAdapterConfig.AdapterInfo, statusCallback: ((String) -> Unit)? = null): Boolean {
         return try {
             val npmPackage = adapterInfo.npmPackage
                 ?: throw IllegalStateException("Adapter '${adapterInfo.name}' missing npmPackage in configuration")
             val npmVersion = adapterInfo.npmVersion
                 ?: throw IllegalStateException("Adapter '${adapterInfo.name}' missing npmVersion in configuration")
             
+            statusCallback?.invoke("Downloading $npmPackage@$npmVersion via npm...")
             log.info("Downloading adapter $npmPackage@$npmVersion to ${targetDir.absolutePath}")
             
             // Create temporary directory for npm install
@@ -157,14 +179,23 @@ object AcpAdapterPaths {
                     .redirectErrorStream(true)
                     .start()
 
-                // Read stdout before waitFor() to avoid deadlock when buffer fills up
-                val output = installProc.inputStream.bufferedReader().readText()
+                // Read stdout to keep buffer clear and potentially report progress
+                installProc.inputStream.bufferedReader().use { reader ->
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        if (line!!.contains("added", ignoreCase = true) || line!!.contains("tarball", ignoreCase = true)) {
+                            statusCallback?.invoke("NPM: $line")
+                        }
+                    }
+                }
+
                 val installExitCode = installProc.waitFor()
                 if (installExitCode != 0) {
-                    log.error("npm install failed (exit $installExitCode): $output")
+                    log.error("npm install failed (exit $installExitCode)")
                     return false
                 }
                 
+                statusCallback?.invoke("Copying files to dependencies directory...")
                 // Copy adapter files from node_modules to target directory
                 val installedPackageDir = File(tempDir, "node_modules/$npmPackage")
                 if (!installedPackageDir.exists()) {
@@ -203,11 +234,141 @@ object AcpAdapterPaths {
             }
         } catch (e: Exception) {
             log.error("Failed to download adapter from npm", e)
+            return false
+        }
+    }
+
+    fun runNpmInstall(cwd: File, statusCallback: ((String) -> Unit)? = null): Boolean {
+        statusCallback?.invoke("Running local npm install (dependencies)...")
+        val npm = if (System.getProperty("os.name").lowercase().contains("win")) "npm.cmd" else "npm"
+        return try {
+            val proc = ProcessBuilder(npm, "install", "--ignore-scripts")
+                .directory(cwd)
+                .redirectErrorStream(true)
+                .start()
+            
+            proc.inputStream.bufferedReader().use { reader ->
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                   if (line!!.contains("added", ignoreCase = true) || line!!.contains("pkg", ignoreCase = true)) {
+                       statusCallback?.invoke("NPM: $line")
+                   }
+                }
+            }
+
+            val exitCode = proc.waitFor()
+            if (exitCode != 0) {
+                log.warn("npm install failed (exit $exitCode)")
+                return false
+            }
+            true
+        } catch (e: Exception) {
+            log.error("Failed to run npm install", e)
             false
         }
     }
 
-    private fun resolveAdapterName(adapterName: String?): String {
+    fun downloadSupportingTool(tool: AcpAdapterConfig.SupportingTool, statusCallback: ((String) -> Unit)? = null): Boolean {
+        val os = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+        
+        val targetDirName = tool.targetDir ?: tool.id
+        val targetDir = File(getDependenciesDir(), targetDirName)
+        targetDir.mkdirs()
+        
+        val (platform, ext) = when {
+            os.contains("win") -> "windows" to "zip"
+            os.contains("mac") -> "darwin" to "tar.gz"
+            else -> "linux" to "tar.gz"
+        }
+        
+        val resolvedArch = when {
+            arch.contains("aarch64") || arch.contains("arm64") -> "arm64"
+            else -> "x64"
+        }
+        
+        val rawUrl = tool.downloadUrl ?: return true // If no URL, nothing to download
+        val downloadUrl = rawUrl
+            .replace("{platform}", platform)
+            .replace("{arch}", resolvedArch)
+            .replace("{ext}", ext)
+            
+        val tempFile = File(targetDir, "tool-download.$ext")
+        
+        try {
+            statusCallback?.invoke("Downloading ${tool.name}...")
+            log.info("Downloading ${tool.name} from $downloadUrl")
+            
+            if (os.contains("win")) {
+                statusCallback?.invoke("Downloading package...")
+                val dlExitCode = ProcessBuilder("powershell", "-Command", "Invoke-WebRequest -Uri '$downloadUrl' -OutFile '${tempFile.absolutePath}'").start().waitFor()
+                if (dlExitCode != 0) {
+                    log.error("Download failed for ${tool.name} (exit $dlExitCode)")
+                    return false
+                }
+
+                statusCallback?.invoke("Extracting package...")
+                val extractExitCode = ProcessBuilder("powershell", "-Command", "Expand-Archive -Path '${tempFile.absolutePath}' -DestinationPath '${targetDir.absolutePath}' -Force").start().waitFor()
+                if (extractExitCode != 0) {
+                    log.error("Extraction failed for ${tool.name} (exit $extractExitCode)")
+                    return false
+                }
+
+                // Finalize directory structure if it extracted into a subdirectory
+                // (Common for Cursor CLI which puts everything in 'dist-package')
+                val distPackage = File(targetDir, "dist-package")
+                if (distPackage.exists()) {
+                    distPackage.listFiles()?.forEach { it.copyRecursively(File(targetDir, it.name), overwrite = true) }
+                    distPackage.deleteRecursively()
+                }
+            } else {
+                statusCallback?.invoke("Downloading and extracting package...")
+                val exitCode = ProcessBuilder("sh", "-c", "curl -fSL '$downloadUrl' | tar --strip-components=1 -xzf - -C '${targetDir.absolutePath}' || curl -fSL '$downloadUrl' | tar -xzf - -C '${targetDir.absolutePath}'").start().waitFor()
+                if (exitCode != 0) {
+                    log.error("Download/extraction failed for ${tool.name} (exit $exitCode)")
+                    return false
+                }
+
+                // Ensure binaries are executable
+                statusCallback?.invoke("Ensuring executables...")
+                targetDir.listFiles()?.filter { !it.isDirectory }?.forEach {
+                    it.setExecutable(true)
+                }
+            }
+            
+            // Handle aliases if binaryName is provided
+            tool.binaryName?.let { bin ->
+                val sourceName = if (os.contains("win")) bin.win else bin.unix
+                if (sourceName != null) {
+                    val sourceFile = File(targetDir, sourceName)
+                    if (sourceFile.exists()) {
+                        // Create Consistency binaries/aliases
+                        if (os.contains("win")) {
+                            sourceFile.copyTo(File(targetDir, "agent.exe"), overwrite = true)
+                            // Also copy associated .cmd if it exists
+                            val cmdName = sourceName.replace(".exe", ".cmd")
+                            File(targetDir, cmdName).takeIf { it.exists() }?.copyTo(File(targetDir, "agent.cmd"), overwrite = true)
+                        } else {
+                            val agentLink = File(targetDir, "agent")
+                            if (!agentLink.exists()) {
+                                ProcessBuilder("ln", "-s", sourceName, agentLink.absolutePath).start().waitFor()
+                            }
+                        }
+                    }
+                }
+            }
+            
+            tempFile.delete()
+            statusCallback?.invoke("${tool.name} installed successfully.")
+            return true
+        } catch (e: Exception) {
+            log.error("Failed to download ${tool.name}", e)
+            statusCallback?.invoke("Error: ${e.message}")
+            return false
+        }
+    }
+
+    fun resolveAdapterName(adapterName: String?): String {
         val explicit = adapterName?.trim().takeUnless { it.isNullOrEmpty() }
         if (explicit != null) return explicit
         val override = System.getProperty(ADAPTER_NAME_OVERRIDE_PROPERTY)?.trim()
@@ -219,30 +380,9 @@ object AcpAdapterPaths {
             throw IllegalStateException(
                 "ACP adapter not configured. " +
                     "Either set system property '$ADAPTER_NAME_OVERRIDE_PROPERTY' or " +
-                    "configure adapters in acp-adapters.properties file.",
+                    "configure adapters in acp-adapters.json file.",
                 e
             )
-        }
-    }
-
-    private fun runNpmInstall(cwd: File): Boolean {
-        val npm = if (System.getProperty("os.name").lowercase().contains("win")) "npm.cmd" else "npm"
-        return try {
-            val proc = ProcessBuilder(npm, "install", "--ignore-scripts")
-                .directory(cwd)
-                .redirectErrorStream(true)
-                .start()
-            // Read stdout before waitFor() to avoid deadlock when buffer fills up
-            val output = proc.inputStream.bufferedReader().readText()
-            val exitCode = proc.waitFor()
-            if (exitCode != 0) {
-                log.warn("npm install failed (exit $exitCode): $output")
-                return false
-            }
-            true
-        } catch (e: Exception) {
-            log.error("Failed to run npm install", e)
-            false
         }
     }
 }

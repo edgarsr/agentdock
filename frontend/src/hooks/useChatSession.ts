@@ -271,11 +271,25 @@ export function useChatSession(
   useEffect(() => {
     if (!selectedAgentId || typeof window.__startAgent !== 'function') return;
     if (historySession) return;
+    
+    // Only start if downloaded and authenticated
+    if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
+      if (status !== 'not started' && status !== 'error') {
+        setStatus('not started');
+      }
+      return;
+    }
+
     if (status !== 'not started' && status !== 'error' && startedAgentIdRef.current === selectedAgentId) return;
 
     const modelId = selectedModelByAgent[selectedAgentId] || selectedAgent?.defaultModelId;
     
     try {
+      if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
+        console.debug('[useChatSession] Skipping auto-start: not ready or not authenticated');
+        return;
+      }
+
       startedAgentIdRef.current = selectedAgentId;
       startedModelIdRef.current = modelId || '';
       startedModeIdRef.current = '';

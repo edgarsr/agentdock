@@ -78,8 +78,7 @@ export default function ChatSessionView({
            <div className="flex flex-col items-center gap-4 p-8 bg-surface border border-border shadow-2xl rounded-2xl max-w-sm text-center">
               <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
               <div>
-                <h3 className="text-lg font-bold text-foreground">Preparing Agent</h3>
-                <p className="text-sm text-foreground/60 mt-1">Downloading and initializing resources. This might take a moment.</p>
+                <h3 className="text-lg font-bold text-foreground">Connecting to agent</h3>
               </div>
            </div>
         </div>
