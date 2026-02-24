@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
+    "marked": "^17.0.3",
+    "marked-highlight": "^2.2.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
