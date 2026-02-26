@@ -1,9 +1,6 @@
 package unified.llm.acp
 
-import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.SessionUpdate
-import com.agentclientprotocol.model.ToolCallContent
-import com.agentclientprotocol.model.ToolCallLocation
+import com.agentclientprotocol.model.*
 import unified.llm.changes.AgentDiffViewer
 import unified.llm.changes.ChangesState
 import unified.llm.changes.ChangesStateService
@@ -21,12 +18,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import java.io.File
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
@@ -109,7 +103,7 @@ class AcpDebugBridge(
         service.setOnLogEntry { pushLogEntry(it) }
         // Each JS query below: frontend calls window.__* → JBCefJSQuery → addHandler → Kotlin logic → Response
         service.setOnPermissionRequest { pushPermissionRequest(it) }
-        service.setOnSessionUpdate { chatId, update, isReplay ->
+        service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
             when (update) {
                 is SessionUpdate.UserMessageChunk -> {
                     pushHistoryReplay(chatId, "user", update.content)
@@ -117,16 +111,16 @@ class AcpDebugBridge(
                 is SessionUpdate.AgentMessageChunk -> {
                     pushHistoryReplay(chatId, "assistant", update.content)
                 }
+                is SessionUpdate.AgentThoughtChunk -> {
+                    val content = update.content
+                    if (isReplay) {
+                        pushHistoryReplay(chatId, "assistant", content, isThought = true)
+                    } else if (content is ContentBlock.Text) {
+                        pushAgentThought(chatId, content.text)
+                    }
+                }
                 is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
-                is SessionUpdate.ToolCall -> {
-                    if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
-                    pushToolCall(chatId, update)
-                }
-                is SessionUpdate.ToolCallUpdate -> {
-                    if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
-                    pushToolCallUpdate(chatId, update)
-                }
-                else -> Unit
+                else -> {}
             }
         }
 
@@ -353,6 +347,7 @@ class AcpDebugBridge(
                             service.prompt(chatId, blocks).collect { event ->
                                 when (event) {
                                     is AcpEvent.AgentText -> pushAgentText(chatId, event.text)
+                                    is AcpEvent.AgentThought -> pushAgentThought(chatId, event.text)
                                     is AcpEvent.PromptDone -> pushStatus(chatId, "ready")
                                     is AcpEvent.Error -> {
                                         log.warn("[AcpDebugBridge] Prompt error: ${event.message}")
@@ -815,6 +810,7 @@ class AcpDebugBridge(
             // No-op stubs until injectDebugApi runs after __notifyReady()
             window.__onAcpLog = window.__onAcpLog || function(payload) {};
             window.__onAgentText = window.__onAgentText || function(chatId, text) {};
+            window.__onAgentThought = window.__onAgentThought || function(chatId, text) {};
             window.__onStatus = window.__onStatus || function(chatId, status) {};
             window.__onSessionId = window.__onSessionId || function(chatId, id) {};
             window.__onAdapters = window.__onAdapters || function(adapters) {};
@@ -825,6 +821,7 @@ class AcpDebugBridge(
             window.__onHistoryReplay = window.__onHistoryReplay || function(payload) {};
             window.__onToolCall = window.__onToolCall || function(chatId, payload) {};
             window.__onToolCallUpdate = window.__onToolCallUpdate || function(chatId, payload) {};
+            window.__onPlan = window.__onPlan || function(chatId, payload) {};
             window.__onUndoResult = window.__onUndoResult || function(chatId, result) {};
             window.__onChangesState = window.__onChangesState || function(chatId, state) {};
 
@@ -861,6 +858,19 @@ class AcpDebugBridge(
             )
         }
     }
+
+    fun pushAgentThought(chatId: String, text: String) {
+        val escaped = text.escapeForJsString()
+        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
+        runOnEdt {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onAgentThought) window.__onAgentThought('$id', '$escaped');",
+                browser.cefBrowser.url, 0
+            )
+        }
+    }
+
+
 
     fun pushStatus(chatId: String, status: String) {
         val escaped = status.replace("\\", "\\\\").replace("'", "\\'")
@@ -907,9 +917,15 @@ class AcpDebugBridge(
         }
     }
 
-    fun pushHistoryReplay(chatId: String, role: String, content: ContentBlock) {
+    fun pushHistoryReplay(chatId: String, role: String, content: ContentBlock, isThought: Boolean = false) {
         val payload = when (content) {
-            is ContentBlock.Text -> """{"type":"text","text":${escapeJsonString(content.text)}}"""
+            is ContentBlock.Text -> {
+                if (isThought) {
+                    """{"type":"thinking","text":${escapeJsonString(content.text)}}"""
+                } else {
+                    """{"type":"text","text":${escapeJsonString(content.text)}}"""
+                }
+            }
             is ContentBlock.Image -> """{"type":"image","data":"${content.data}","mimeType":"${content.mimeType}"}"""
             else -> null
         }
@@ -937,21 +953,6 @@ class AcpDebugBridge(
         }
     }
 
-    /**
-     * When the agent modifies files in a live (non-replay) tool call, remove those paths from
-     * processedFiles so they show again in Edits. Only called when isReplay == false.
-     */
-    private fun removeProcessedFilesForDiffs(chatId: String, content: List<ToolCallContent>?) {
-        val sessionId = service.sessionId(chatId) ?: return
-        val adapterName = service.activeAdapterName(chatId) ?: return
-        val diffs = content?.filterIsInstance<ToolCallContent.Diff>() ?: return
-        if (diffs.isEmpty()) return
-        val paths = diffs.map { it.path }
-        ChangesStateService.removeProcessedFiles(sessionId, adapterName, paths)
-        val state = ChangesStateService.loadState(sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
-        pushChangesState(chatId, state)
-    }
-
     fun pushChangesState(chatId: String, state: ChangesState) {
         val processedJson = state.processedFiles.joinToString(",") { escapeJsonString(it) }
         val payload = """{"sessionId":${escapeJsonString(state.sessionId)},"adapterName":${escapeJsonString(state.adapterName)},"baseToolCallIndex":${state.baseToolCallIndex},"processedFiles":[$processedJson]}"""
@@ -965,66 +966,7 @@ class AcpDebugBridge(
         }
     }
 
-    private fun buildToolCallPayload(
-        toolCallId: String,
-        title: String,
-        kind: String?,
-        status: String?,
-        content: List<ToolCallContent>?,
-        locations: List<ToolCallLocation>?
-    ): String? {
-        val diffs = content?.filterIsInstance<ToolCallContent.Diff>() ?: emptyList()
-        if (diffs.isEmpty()) return null
 
-        val diffsJson = diffs.joinToString(",") { diff ->
-            val oldTextPart = if (diff.oldText != null) escapeJsonString(diff.oldText!!) else "null"
-            """{"path":${escapeJsonString(diff.path)},"oldText":$oldTextPart,"newText":${escapeJsonString(diff.newText)}}"""
-        }
-        val locsJson = locations?.joinToString(",") { loc ->
-            val linePart = if (loc.line != null) ",\"line\":${loc.line}" else ""
-            """{"path":${escapeJsonString(loc.path)}$linePart}"""
-        } ?: ""
-        val kindPart = if (kind != null) ""","kind":${escapeJsonString(kind)}""" else ""
-        val statusPart = if (status != null) ""","status":${escapeJsonString(status)}""" else ""
-        return """{"toolCallId":${escapeJsonString(toolCallId)},"title":${escapeJsonString(title)}$kindPart$statusPart,"diffs":[$diffsJson],"locations":[$locsJson]}"""
-    }
-
-    fun pushToolCall(chatId: String, update: SessionUpdate.ToolCall) {
-        val payload = buildToolCallPayload(
-            update.toolCallId.value, update.title,
-            update.kind?.name?.lowercase(), update.status?.name?.lowercase(),
-            update.content, update.locations
-        ) ?: return
-        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
-        val escaped = payload.escapeForJsString()
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onToolCall) window.__onToolCall('$id', JSON.parse('$escaped'));",
-                browser.cefBrowser.url, 0
-            )
-        }
-    }
-
-    fun pushToolCallUpdate(chatId: String, update: SessionUpdate.ToolCallUpdate) {
-        val payload = buildToolCallPayload(
-            update.toolCallId.value, update.title ?: "",
-            update.kind?.name?.lowercase(), update.status?.name?.lowercase(),
-            update.content, update.locations
-        ) ?: run {
-            // No diffs, but still send status-only update so frontend can track completion/failure
-            val statusName = update.status?.name?.lowercase() ?: return
-            val kindPart = if (update.kind != null) ""","kind":${escapeJsonString(update.kind!!.name.lowercase())}""" else ""
-            """{"toolCallId":${escapeJsonString(update.toolCallId.value)},"title":${escapeJsonString(update.title ?: "")}$kindPart,"status":${escapeJsonString(statusName)},"diffs":[],"locations":[]}"""
-        }
-        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
-        val escaped = payload.escapeForJsString()
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onToolCallUpdate) window.__onToolCallUpdate('$id', JSON.parse('$escaped'));",
-                browser.cefBrowser.url, 0
-            )
-        }
-    }
 
     fun pushAdapters() {
         try {

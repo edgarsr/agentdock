@@ -50,6 +50,13 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val supported = JBCefApp.isSupported()
+                if (supported) {
+                    try {
+                        JBCefApp.getInstance()
+                    } catch (e: Exception) {
+                        log.warn("Failed to pre-initialize JCEF on background thread", e)
+                    }
+                }
                 
                 ApplicationManager.getApplication().invokeLater({
                     if (project.isDisposed || toolWindow.isDisposed) return@invokeLater

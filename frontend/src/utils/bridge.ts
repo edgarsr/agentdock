@@ -1,6 +1,7 @@
-import { AgentOption, PermissionRequest, HistorySessionMeta, HistoryReplayChunk, ToolCallEvent, UndoResultPayload, ChangesState } from '../types/chat';
+import { AgentOption, PermissionRequest, HistorySessionMeta, HistoryReplayChunk, UndoResultPayload, ChangesState } from '../types/chat';
 
 export interface AgentTextEvent { chatId: string; text: string; }
+export interface AgentThoughtEvent { chatId: string; text: string; }
 export interface StatusEvent { chatId: string; status: string; }
 export interface SessionIdEvent { chatId: string; sessionId: string; }
 export interface ModeEvent { chatId: string; modeId: string; }
@@ -8,12 +9,13 @@ export interface AdaptersEvent { adapters: AgentOption[]; }
 export interface PermissionRequestEvent { request: PermissionRequest; }
 export interface HistoryListEvent { list: HistorySessionMeta[]; }
 export interface HistoryReplayEvent extends HistoryReplayChunk {}
-export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 export interface UndoResultEvent { chatId: string; result: UndoResultPayload; }
 export interface ChangesStateEvent { chatId: string; state: ChangesState; }
 
+
 const EVENT_NAMES = {
   AGENT_TEXT: 'acp-agent-text',
+  AGENT_THOUGHT: 'acp-agent-thought',
   STATUS: 'acp-status',
   SESSION_ID: 'acp-session-id',
   MODE: 'acp-mode',
@@ -22,8 +24,6 @@ const EVENT_NAMES = {
   LOG: 'acp-log',
   HISTORY_LIST: 'history-list',
   HISTORY_REPLAY: 'history-replay',
-  TOOL_CALL: 'acp-tool-call',
-  TOOL_CALL_UPDATE: 'acp-tool-call-update',
   UNDO_RESULT: 'acp-undo-result',
   CHANGES_STATE: 'acp-changes-state'
 };
@@ -34,6 +34,10 @@ export const ACPBridge = {
 
     window.__onAgentText = (chatId, text) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.AGENT_TEXT, { detail: { chatId, text } }));
+    };
+
+    window.__onAgentThought = (chatId, text) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.AGENT_THOUGHT, { detail: { chatId, text } }));
     };
 
     window.__onStatus = (chatId, status) => {
@@ -69,13 +73,6 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.HISTORY_REPLAY, { detail: payload }));
     };
 
-    window.__onToolCall = (chatId, payload) => {
-      window.dispatchEvent(new CustomEvent(EVENT_NAMES.TOOL_CALL, { detail: { chatId, payload } }));
-    };
-
-    window.__onToolCallUpdate = (chatId, payload) => {
-      window.dispatchEvent(new CustomEvent(EVENT_NAMES.TOOL_CALL_UPDATE, { detail: { chatId, payload } }));
-    };
 
     window.__onUndoResult = (chatId, result) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.UNDO_RESULT, { detail: { chatId, result } }));
@@ -85,6 +82,8 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.CHANGES_STATE, { detail: { chatId, state } }));
     };
 
+
+
     // Notify ready
     if (window.__notifyReady) window.__notifyReady();
   },
@@ -93,6 +92,12 @@ export const ACPBridge = {
     window.addEventListener(EVENT_NAMES.AGENT_TEXT, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.AGENT_TEXT, callback as EventListener);
   },
+
+  onAgentThought: (callback: (e: CustomEvent<AgentThoughtEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.AGENT_THOUGHT, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.AGENT_THOUGHT, callback as EventListener);
+  },
+
 
   onStatus: (callback: (e: CustomEvent<StatusEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.STATUS, callback as EventListener);
@@ -146,15 +151,6 @@ export const ACPBridge = {
     window.__deleteHistorySession?.(meta);
   },
 
-  onToolCall: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
-    window.addEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
-    return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
-  },
-
-  onToolCallUpdate: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
-    window.addEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
-    return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
-  },
 
   onUndoResult: (callback: (e: CustomEvent<UndoResultEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.UNDO_RESULT, callback as EventListener);

@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  Message, 
-  AgentOption, 
-  PermissionRequest, 
+import {
+  Message,
+  AgentOption,
+  PermissionRequest,
   DropdownOption,
-  HistorySessionMeta
+  HistorySessionMeta,
+  RichContentBlock,
+  TextBlock,
+  ThinkingBlock
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 
@@ -14,10 +17,10 @@ function nextMessageId(suffix: string): string {
 }
 
 export function useChatSession(
-  chatId: string,
-  availableAgents: AgentOption[],
-  initialAgentId?: string,
-  historySession?: HistorySessionMeta
+    chatId: string,
+    availableAgents: AgentOption[],
+    initialAgentId?: string,
+    historySession?: HistorySessionMeta
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -30,25 +33,28 @@ export function useChatSession(
   const [attachments, setAttachments] = useState<{ id: string; data: string; mimeType: string }[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
 
-  const currentAgentMessageRef = useRef<string>('');
+  const currentBlocksRef = useRef<RichContentBlock[]>([]);
+  const currentTextAccumRef = useRef<string>('');
+  const currentThinkingAccumRef = useRef<string>('');
   const pendingMessageRef = useRef<string | null>(null);
   const pendingModeIdRef = useRef<string | null>(null);
   const startedAgentIdRef = useRef<string>('');
   const startedModelIdRef = useRef<string>('');
   const startedModeIdRef = useRef<string>('');
   const historyLoadRequestedRef = useRef<string | null>(null);
+  const statusRef = useRef<string>('not started');
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId);
   const availableModels = selectedAgent?.models ?? [];
   const availableModes = selectedAgent?.modes ?? [];
-  
+
   const selectedModelId = selectedAgent
-    ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.defaultModelId || availableModels[0]?.id || '')
-    : '';
-  
+      ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.defaultModelId || availableModels[0]?.id || '')
+      : '';
+
   const selectedModeId = selectedAgent
-    ? (selectedModeByAgent[selectedAgent.id] || selectedAgent.defaultModeId || availableModes[0]?.id || '')
-    : '';
+      ? (selectedModeByAgent[selectedAgent.id] || selectedAgent.defaultModeId || availableModes[0]?.id || '')
+      : '';
 
   const agentOptions: DropdownOption[] = availableAgents.map((agent) => ({ id: agent.id, label: agent.displayName }));
   const modelOptions: DropdownOption[] = availableModels.map((model) => ({ id: model.id, label: model.displayName }));
@@ -84,7 +90,7 @@ export function useChatSession(
       return next;
     });
   }, [availableAgents, initialAgentId]);
-  
+
   useEffect(() => {
     if (!historySession) return;
     if (historySession.modelId) {
@@ -106,28 +112,93 @@ export function useChatSession(
 
   // Chat Event Listeners (Filtered by chatId)
   useEffect(() => {
+    const updateAssistantMessage = (blocks: RichContentBlock[]) => {
+      // Use JSON deep clone to ensure React state detects all nested object mutations
+      const blocksClone: RichContentBlock[] = JSON.parse(JSON.stringify(blocks));
+
+      const textContent = blocksClone
+          .filter((b): b is TextBlock => b.type === 'text')
+          .map(b => b.text)
+          .join('');
+
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        // Searching backwards to find the last assistant message
+        for (let i = newMessages.length - 1; i >= 0; i--) {
+          if (newMessages[i].role === 'assistant') {
+            newMessages[i] = {
+              ...newMessages[i],
+              content: textContent,
+              contentBlocks: blocksClone,
+            };
+            return newMessages;
+          }
+        }
+        return prev;
+      });
+    };
+
+    const closeStreamingThinking = () => {
+      if (currentBlocksRef.current.length > 0) {
+        const lastBlock = currentBlocksRef.current[currentBlocksRef.current.length - 1];
+        if (lastBlock.type === 'thinking' && (lastBlock as ThinkingBlock).isStreaming) {
+          (lastBlock as ThinkingBlock).isStreaming = false;
+          (lastBlock as ThinkingBlock).endTime = Date.now();
+        }
+      }
+    };
+
+
+
     const unsubText = ACPBridge.onAgentText((e) => {
       if (e.detail.chatId !== chatId) return;
-      
-      const text = e.detail.text;
-      currentAgentMessageRef.current += text;
-      if (currentAgentMessageRef.current.trim()) {
-        setMessages((prev) => {
-          const lastMsg = prev[prev.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant') {
-            return [
-              ...prev.slice(0, -1),
-              { ...lastMsg, content: currentAgentMessageRef.current },
-            ];
-          }
-          return prev;
-        });
+
+      closeStreamingThinking();
+
+      const newText = e.detail.text;
+      currentTextAccumRef.current += newText;
+
+      const blocks = currentBlocksRef.current;
+      if (blocks.length > 0 && blocks[blocks.length - 1].type === 'text') {
+        (blocks[blocks.length - 1] as TextBlock).text += newText;
+      } else {
+        blocks.push({ type: 'text', text: newText });
       }
+
+      updateAssistantMessage(blocks);
     });
+
+    const unsubThought = ACPBridge.onAgentThought((e) => {
+      if (e.detail.chatId !== chatId) return;
+
+      const newThought = e.detail.text;
+      currentThinkingAccumRef.current += newThought;
+
+      const blocks = currentBlocksRef.current;
+      const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+      const isReplay = statusRef.current !== 'prompting';
+
+      if (lastBlock && lastBlock.type === 'thinking' && ((lastBlock as ThinkingBlock).isStreaming || isReplay)) {
+        (lastBlock as ThinkingBlock).text += newThought;
+      } else {
+        closeStreamingThinking();
+        blocks.push({ 
+          type: 'thinking', 
+          text: newThought, 
+          isStreaming: !isReplay, 
+          startTime: !isReplay ? Date.now() : undefined 
+        });
+        currentTextAccumRef.current = '';
+      }
+
+      updateAssistantMessage(blocks);
+    });
+
 
     const unsubStatus = ACPBridge.onStatus((e) => {
       if (e.detail.chatId !== chatId) return;
       const s = e.detail.status;
+      statusRef.current = s;
       setStatus(s);
 
       if (s === 'initializing') {
@@ -135,22 +206,8 @@ export function useChatSession(
       }
 
       if (s === 'ready') {
-        const accumulatedText = currentAgentMessageRef.current.trim();
-        if (accumulatedText) {
-          setMessages((prev) => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant') {
-              if (lastMsg.content !== accumulatedText) {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...lastMsg, content: accumulatedText },
-                ];
-              }
-            }
-            return prev;
-          });
-        }
-        currentAgentMessageRef.current = '';
+        closeStreamingThinking();
+
         if (!pendingMessageRef.current) {
           setIsSending(false);
         }
@@ -175,16 +232,20 @@ export function useChatSession(
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, userMessage]);
-        
-        currentAgentMessageRef.current = '';
+
+        currentBlocksRef.current = [];
+        currentTextAccumRef.current = '';
+        currentThinkingAccumRef.current = '';
+
         const assistantMessage: Message = {
-            id: nextMessageId('assistant'),
-            role: 'assistant',
-            content: '',
-            timestamp: Date.now(),
+          id: nextMessageId('assistant'),
+          role: 'assistant',
+          content: '',
+          contentBlocks: [],
+          timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, assistantMessage]);
-        
+
         try {
           // Note: In pending state we currently only support text
           window.__sendPrompt(chatId, JSON.stringify([{ type: 'text', text: messageToSend }]));
@@ -200,11 +261,13 @@ export function useChatSession(
       setAcpSessionId(e.detail.sessionId);
     });
 
+
+
     const unsubMode = ACPBridge.onMode((e) => {
       if (e.detail.chatId !== chatId) return;
       startedModeIdRef.current = e.detail.modeId;
     });
-    
+
     // Permission request — filter by chatId when available
     const unsubPermission = ACPBridge.onPermissionRequest((e) => {
       const req = e.detail.request as PermissionRequest;
@@ -214,43 +277,84 @@ export function useChatSession(
 
     const unsubReplay = ACPBridge.onHistoryReplay((e) => {
       if (e.detail.chatId !== chatId) return;
-      
+
       const { role, text, content } = e.detail;
-      const block = content || { type: 'text', text: text || '' };
+      const block = (content || { type: 'text', text: text || '' }) as RichContentBlock;
       if (block.type === 'text' && !block.text) return;
 
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1];
         if (!lastMsg || lastMsg.role !== role) {
-          return [
-            ...prev,
-            {
-              id: nextMessageId(role),
-              role,
-              content: block.type === 'text' ? block.text || '' : '',
-              blocks: [block],
-              timestamp: Date.now()
-            }
-          ];
+          const newMessage: Message = {
+            id: nextMessageId(role),
+            role,
+            content: block.type === 'text' ? block.text || '' : '',
+            blocks: [block],
+            timestamp: Date.now()
+          };
+          // Correct mapping from saved block to contentBlock natively.
+          if (role === 'assistant') {
+            newMessage.contentBlocks = [block as any];
+          }
+          return [...prev, newMessage];
         }
 
         // Handle block merging for text
         const newBlocks = [...(lastMsg.blocks || [])];
-        if (block.type === 'text' && newBlocks.length > 0 && newBlocks[newBlocks.length - 1].type === 'text') {
-           newBlocks[newBlocks.length - 1] = {
-             ...newBlocks[newBlocks.length - 1],
-             text: (newBlocks[newBlocks.length - 1].text || '') + (block.text || '')
-           };
+        const newRichBlocks = [...(lastMsg.contentBlocks || [])];
+
+        if (block.type === 'text') {
+          if (newBlocks.length > 0 && newBlocks[newBlocks.length - 1].type === 'text') {
+            newBlocks[newBlocks.length - 1] = {
+              ...newBlocks[newBlocks.length - 1],
+              text: ((newBlocks[newBlocks.length - 1] as TextBlock).text || '') + (block.text || '')
+            } as TextBlock;
+          } else {
+            newBlocks.push(block);
+          }
+
+          if (newRichBlocks.length > 0 && newRichBlocks[newRichBlocks.length - 1].type === 'text') {
+            newRichBlocks[newRichBlocks.length - 1] = {
+              ...newRichBlocks[newRichBlocks.length - 1],
+              text: (newRichBlocks[newRichBlocks.length - 1] as TextBlock).text + (block.text || '')
+            } as any;
+          } else {
+            newRichBlocks.push({ type: 'text', text: block.text || '' });
+          }
+        } else if (block.type === 'thinking') {
+          if (newBlocks.length > 0 && newBlocks[newBlocks.length - 1].type === 'thinking') {
+            const separator = ((newBlocks[newBlocks.length - 1] as ThinkingBlock).text || '').endsWith('\n') ? '\n' : '\n\n';
+            newBlocks[newBlocks.length - 1] = {
+              ...newBlocks[newBlocks.length - 1],
+              text: ((newBlocks[newBlocks.length - 1] as ThinkingBlock).text || '') + separator + (block.text || '')
+            } as ThinkingBlock;
+          } else {
+            newBlocks.push(block);
+          }
+
+          if (newRichBlocks.length > 0 && newRichBlocks[newRichBlocks.length - 1].type === 'thinking') {
+            const separator = (newRichBlocks[newRichBlocks.length - 1] as ThinkingBlock).text.endsWith('\n') ? '\n' : '\n\n';
+            newRichBlocks[newRichBlocks.length - 1] = {
+              ...newRichBlocks[newRichBlocks.length - 1],
+              text: (newRichBlocks[newRichBlocks.length - 1] as ThinkingBlock).text + separator + (block.text || '')
+            } as any;
+          } else {
+            newRichBlocks.push({ type: 'thinking', text: block.text || '', isStreaming: false });
+          }
         } else {
-           newBlocks.push(block);
+          newBlocks.push(block as any);
+          if (role === 'assistant') {
+            newRichBlocks.push(block as any);
+          }
         }
 
         return [
           ...prev.slice(0, -1),
-          { 
-            ...lastMsg, 
+          {
+            ...lastMsg,
             content: block.type === 'text' ? `${lastMsg.content}${block.text}` : lastMsg.content,
-            blocks: newBlocks
+            blocks: newBlocks,
+            contentBlocks: newRichBlocks
           }
         ];
       });
@@ -258,8 +362,10 @@ export function useChatSession(
 
     return () => {
       unsubText();
+      unsubThought();
       unsubStatus();
       unsubSessionId();
+
       unsubMode();
       unsubPermission();
       unsubReplay();
@@ -272,7 +378,9 @@ export function useChatSession(
     if (historyLoadRequestedRef.current === historySession.sessionId) return;
     historyLoadRequestedRef.current = historySession.sessionId;
 
-    currentAgentMessageRef.current = '';
+    currentBlocksRef.current = [];
+    currentTextAccumRef.current = '';
+    currentThinkingAccumRef.current = '';
     pendingMessageRef.current = null;
     setMessages([]);
     setStatus('initializing');
@@ -282,11 +390,11 @@ export function useChatSession(
     startedModeIdRef.current = historySession.modeId || '';
 
     ACPBridge.loadHistorySession(
-      chatId,
-      historySession.adapterName,
-      historySession.sessionId,
-      historySession.modelId,
-      historySession.modeId
+        chatId,
+        historySession.adapterName,
+        historySession.sessionId,
+        historySession.modelId,
+        historySession.modeId
     );
   }, [chatId, historySession]);
 
@@ -294,7 +402,7 @@ export function useChatSession(
   useEffect(() => {
     if (!selectedAgentId || typeof window.__startAgent !== 'function') return;
     if (historySession) return;
-    
+
     // Only start if downloaded and authenticated
     if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
       if (status !== 'not started' && status !== 'error') {
@@ -306,7 +414,7 @@ export function useChatSession(
     if (status !== 'not started' && status !== 'error' && startedAgentIdRef.current === selectedAgentId) return;
 
     const modelId = selectedModelByAgent[selectedAgentId] || selectedAgent?.defaultModelId;
-    
+
     try {
       if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
         return;
@@ -315,7 +423,11 @@ export function useChatSession(
       startedAgentIdRef.current = selectedAgentId;
       startedModelIdRef.current = modelId || '';
       startedModeIdRef.current = '';
-      
+
+      currentBlocksRef.current = [];
+      currentTextAccumRef.current = '';
+      currentThinkingAccumRef.current = '';
+
       window.__startAgent(chatId, selectedAgentId, modelId || undefined);
     } catch (e) {
       console.warn('[useChatSession] Failed to auto-start agent:', e);
@@ -327,11 +439,11 @@ export function useChatSession(
     if (!selectedAgentId || !selectedModelId) return;
     if (status !== 'ready') return;
     if (startedAgentIdRef.current !== selectedAgentId) return;
-    
+
     if (startedModelIdRef.current === selectedModelId) {
       return;
     }
-    
+
     if (typeof window.__setModel !== 'function') return;
     try {
       window.__setModel(chatId, selectedModelId);
@@ -346,11 +458,11 @@ export function useChatSession(
     if (!selectedAgentId || !selectedModeId) return;
     if (status !== 'ready') return;
     if (startedAgentIdRef.current !== selectedAgentId) return;
-    
+
     if (startedModeIdRef.current === selectedModeId) {
       return;
     }
-    
+
     if (typeof window.__setMode !== 'function') return;
     try {
       window.__setMode(chatId, selectedModeId);
@@ -365,7 +477,7 @@ export function useChatSession(
     if ((!text && attachments.length === 0) || isSending || status !== 'ready') return;
 
     if (typeof window.__sendPrompt !== 'function') return;
-    
+
     // Construct blocks by interleaving text and images
     const blocks: any[] = [];
     let currentText = inputValue;
@@ -374,7 +486,7 @@ export function useChatSession(
     // For now, to keep it clean and minimal as requested: 
     // we'll just append images at the end if no placeholders, 
     // or replace placeholders if they exist.
-    
+
     const usedAttachmentIds = new Set<string>();
     const placeholderRegex = /\[image-([a-z0-9-]+)\]/g;
     let lastIndex = 0;
@@ -383,7 +495,7 @@ export function useChatSession(
     while ((match = placeholderRegex.exec(currentText)) !== null) {
       const beforeText = currentText.substring(lastIndex, match.index);
       if (beforeText) blocks.push({ type: 'text', text: beforeText });
-      
+
       const attId = match[1];
       const att = attachments.find(a => a.id === attId);
       if (att) {
@@ -394,7 +506,7 @@ export function useChatSession(
       }
       lastIndex = placeholderRegex.lastIndex;
     }
-    
+
     const remainingText = currentText.substring(lastIndex);
     if (remainingText) blocks.push({ type: 'text', text: remainingText });
 
@@ -416,12 +528,15 @@ export function useChatSession(
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setAttachments([]);
-    currentAgentMessageRef.current = '';
-    
+    currentBlocksRef.current = [];
+    currentTextAccumRef.current = '';
+    currentThinkingAccumRef.current = '';
+
     const assistantMessage: Message = {
       id: nextMessageId('assistant'),
       role: 'assistant',
       content: '',
+      contentBlocks: [],
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, assistantMessage]);
@@ -445,23 +560,23 @@ export function useChatSession(
     if (!permissionRequest) return;
     try {
       if (window.__respondPermission) {
-         window.__respondPermission(permissionRequest.requestId, decision);
+        window.__respondPermission(permissionRequest.requestId, decision);
       }
       setPermissionRequest(null);
     } catch (e) {
       console.warn('[useChatSession] Failed to respond to permission:', e);
     }
   };
-  
+
   const handleModelChange = (modelId: string) => {
     setSelectedModelByAgent((prev) => (
-      selectedAgentId ? { ...prev, [selectedAgentId]: modelId } : prev
+        selectedAgentId ? { ...prev, [selectedAgentId]: modelId } : prev
     ));
   };
-  
+
   const handleModeChange = (modeId: string) => {
     setSelectedModeByAgent((prev) => (
-      selectedAgentId ? { ...prev, [selectedAgentId]: modeId } : prev
+        selectedAgentId ? { ...prev, [selectedAgentId]: modeId } : prev
     ));
   };
 

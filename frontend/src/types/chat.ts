@@ -5,11 +5,23 @@ export interface AcpLogEntryPayload {
   timestamp: number;
 }
 
+export type ContentBlockType = 'text' | 'thinking' | 'image';
+
+export interface TextBlock { type: 'text'; text: string; }
+export interface ThinkingBlock { type: 'thinking'; text: string; isStreaming?: boolean; startTime?: number; endTime?: number; }
+export interface ImageBlock { type: 'image'; data: string; mimeType: string; }
+
+
+export type RichContentBlock = TextBlock | ThinkingBlock | ImageBlock;
+
+
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  blocks?: { type: 'text' | 'image'; text?: string; data?: string; mimeType?: string }[];
+  contentBlocks?: RichContentBlock[];
+  blocks?: RichContentBlock[]; // Updated to use RichContentBlock[]
   timestamp: number;
 }
 
@@ -79,23 +91,9 @@ export interface HistoryReplayChunk {
   chatId: string;
   role: 'user' | 'assistant';
   text?: string;
-  content?: { type: 'text' | 'image'; text?: string; data?: string; mimeType?: string };
+  content?: { type: 'text' | 'image' | 'thinking'; text?: string; data?: string; mimeType?: string };
 }
 
-export interface ToolCallDiff {
-  path: string;
-  oldText: string | null;
-  newText: string;
-}
-
-export interface ToolCallEvent {
-  toolCallId: string;
-  title: string;
-  kind?: string;
-  status?: string;
-  diffs: ToolCallDiff[];
-  locations?: { path: string; line?: number }[];
-}
 
 export interface FileChangeSummary {
   filePath: string;
@@ -150,6 +148,7 @@ declare global {
     // Callbacks (Backend -> Frontend)
     __onAcpLog?: (payload: AcpLogEntryPayload) => void;
     __onAgentText?: (chatId: string, text: string) => void;
+    __onAgentThought?: (chatId: string, text: string) => void;
     __onStatus?: (chatId: string, status: string) => void;
     __onSessionId?: (chatId: string, id: string) => void;
     __onAdapters?: (adapters: AgentOption[]) => void;
@@ -157,8 +156,7 @@ declare global {
     __onPermissionRequest?: (request: PermissionRequest) => void;
     __onHistoryList?: (list: HistorySessionMeta[]) => void;
     __onHistoryReplay?: (payload: HistoryReplayChunk) => void;
-    __onToolCall?: (chatId: string, payload: ToolCallEvent) => void;
-    __onToolCallUpdate?: (chatId: string, payload: ToolCallEvent) => void;
+
     __onUndoResult?: (chatId: string, result: UndoResultPayload) => void;
     __onChangesState?: (chatId: string, state: ChangesState) => void;
   }

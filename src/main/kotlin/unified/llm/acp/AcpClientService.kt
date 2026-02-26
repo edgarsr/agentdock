@@ -7,17 +7,7 @@ import com.agentclientprotocol.client.ClientSession
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
-import com.agentclientprotocol.model.AcpCreatedSessionResponse
-import com.agentclientprotocol.model.ClientCapabilities
-import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.ModelId
-import com.agentclientprotocol.model.SessionModeId
-import com.agentclientprotocol.model.PermissionOption
-import com.agentclientprotocol.model.PermissionOptionId
-import com.agentclientprotocol.model.RequestPermissionOutcome
-import com.agentclientprotocol.model.RequestPermissionResponse
-import com.agentclientprotocol.model.SessionId
-import com.agentclientprotocol.model.SessionUpdate
+import com.agentclientprotocol.model.*
 import java.io.File
 import java.io.InputStream
 import com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION
@@ -44,7 +34,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.io.asSource
 import kotlinx.io.buffered
 import kotlinx.io.asSink
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.*
 import kotlinx.atomicfu.AtomicRef
 import kotlinx.collections.immutable.PersistentMap
 import java.io.ByteArrayOutputStream
@@ -81,9 +71,9 @@ class AcpClientService(val project: Project) {
     }
     
     @Volatile
-    private var sessionUpdateHandler: ((String, SessionUpdate, Boolean) -> Unit)? = null
+    private var sessionUpdateHandler: ((String, SessionUpdate, Boolean, JsonElement?) -> Unit)? = null
 
-    fun setOnSessionUpdate(handler: (String, SessionUpdate, Boolean) -> Unit) {
+    fun setOnSessionUpdate(handler: (String, SessionUpdate, Boolean, JsonElement?) -> Unit) {
         sessionUpdateHandler = handler
     }
 
@@ -141,6 +131,7 @@ class AcpClientService(val project: Project) {
         val activeAdapterNameRef = AtomicReference<String?>(null)
         val activeModelIdRef = AtomicReference<String?>(null)
         val activeModeIdRef = AtomicReference<String?>(null)
+        @Volatile var lastHistoryLoadTime: Long = System.currentTimeMillis()
         
         val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<RequestPermissionResponse>>()
 
@@ -155,6 +146,7 @@ class AcpClientService(val project: Project) {
             activeAdapterNameRef.set(null)
             activeModelIdRef.set(null)
             activeModeIdRef.set(null)
+            lastHistoryLoadTime = 0
             pendingRequests.values.forEach { 
                 it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled)) 
             }
@@ -217,7 +209,8 @@ class AcpClientService(val project: Project) {
                             sessionId: SessionId, 
                             sessionResponse: AcpCreatedSessionResponse
                         ): ClientSessionOperations {
-                            return this@AcpClientService.MinimalSessionOperations(chatId, context)
+                            context.sessionIdRef.compareAndSet(null, sessionId.value)
+                            return this@AcpClientService.SharedSessionOperations(sessionId.value)
                         }
                     }
 
@@ -292,6 +285,7 @@ class AcpClientService(val project: Project) {
                 }
 
                 context.statusRef.set(Status.Initializing)
+                context.lastHistoryLoadTime = System.currentTimeMillis()
 
                 try {
                     val sharedProc = activeProcesses.computeIfAbsent(requestedAdapterName) { SharedProcess(requestedAdapterName) }
@@ -308,7 +302,8 @@ class AcpClientService(val project: Project) {
                             sessionId: SessionId, 
                             sessionResponse: AcpCreatedSessionResponse
                         ): ClientSessionOperations {
-                            return this@AcpClientService.MinimalSessionOperations(chatId, context)
+                            context.sessionIdRef.compareAndSet(null, sessionId.value)
+                            return this@AcpClientService.SharedSessionOperations(sessionId.value)
                         }
                     }
 
@@ -463,10 +458,18 @@ class AcpClientService(val project: Project) {
                             if (content is ContentBlock.Text) {
                                 emit(AcpEvent.AgentText(content.text))
                             }
+                        } else if (update is SessionUpdate.AgentThoughtChunk) {
+                            val content = update.content
+                            if (content is ContentBlock.Text) {
+                                emit(AcpEvent.AgentThought(content.text))
+                            }
                         }
-                        // Forward ToolCall/ToolCallUpdate to bridge (isReplay = false: we are in Prompting)
-                        if (update is SessionUpdate.ToolCall || update is SessionUpdate.ToolCallUpdate) {
-                            sessionUpdateHandler?.invoke(chatId, update, false)
+                        // Forward ToolCall/ToolCallUpdate and Plan to bridge (isReplay = false: we are in Prompting)
+                        if (update is SessionUpdate.ToolCall || update is SessionUpdate.ToolCallUpdate || update.javaClass.simpleName == "Plan") {
+                            // Only pass _meta if the event type supports it. For now, we'll try to access it if possible 
+                            // or pass null if Event.SessionUpdateEvent doesn't have it.
+                            // Assuming Event.SessionUpdateEvent does NOT have _meta based on errors.
+                            sessionUpdateHandler?.invoke(chatId, update, false, null)
                         }
                     }
                     is Event.PromptResponseEvent -> {
@@ -607,7 +610,7 @@ class AcpClientService(val project: Project) {
                         sessionId: SessionId,
                         sessionResponse: AcpCreatedSessionResponse
                     ): ClientSessionOperations {
-                        return this@AcpClientService.MinimalSessionOperations("unknown", context)
+                        return this@AcpClientService.SharedSessionOperations(sessionId.value)
                     }
                 }
 
@@ -661,9 +664,8 @@ class AcpClientService(val project: Project) {
         }
     }
 
-    private inner class MinimalSessionOperations(
-        val chatId: String, 
-        val context: AgentContext
+    private inner class SharedSessionOperations(
+        val sessionId: String
     ) : ClientSessionOperations {
         override suspend fun requestPermissions(
             toolCall: SessionUpdate.ToolCallUpdate,
@@ -674,6 +676,9 @@ class AcpClientService(val project: Project) {
                 return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
             }
             
+            val matchingContexts = sessions.values.filter { it.sessionIdRef.get() == sessionId }
+            val primaryCtx = matchingContexts.firstOrNull() ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
+            
             val requestId = UUID.randomUUID().toString()
             val str = toolCall.toString()
             val title = Regex("title=([^,)]+)").find(str)?.groupValues?.get(1) ?: "Action"
@@ -681,13 +686,13 @@ class AcpClientService(val project: Project) {
             
             val request = PermissionRequest(
                 requestId, 
-                chatId, 
+                primaryCtx.chatId, 
                 "Action: $title\nType: $kind", 
                 permissions
             )
             
             val deferred = CompletableDeferred<RequestPermissionResponse>()
-            context.pendingRequests[requestId] = deferred
+            primaryCtx.pendingRequests[requestId] = deferred
             
             permissionRequestHandler?.invoke(request) ?: run { 
                 deferred.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled)) 
@@ -697,13 +702,20 @@ class AcpClientService(val project: Project) {
         }
 
         override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
-            if (notification is SessionUpdate.CurrentModeUpdate) {
-                context.activeModeIdRef.set(notification.currentModeId.value)
+            val matchingContexts = sessions.values.filter { it.sessionIdRef.get() == sessionId }
+            matchingContexts.forEach { context ->
+                if (notification is SessionUpdate.CurrentModeUpdate) {
+                    context.activeModeIdRef.set(notification.currentModeId.value)
+                }
+                val isReplay = context.statusRef.get() != Status.Prompting
+                
+                // If it's a replay event, only broadcast if the context recently initiated a history load
+                if (isReplay && System.currentTimeMillis() - context.lastHistoryLoadTime > 20000) {
+                    return@forEach
+                }
+                
+                sessionUpdateHandler?.invoke(context.chatId, notification, isReplay, _meta)
             }
-            // Replay updates are processed async after loadSession() returns (status already Ready).
-            // Only treat as live (remove from processedFiles) when we are in Prompting.
-            val isReplay = context.statusRef.get() != Status.Prompting
-            sessionUpdateHandler?.invoke(chatId, notification, isReplay)
         }
     }
 }
@@ -803,6 +815,7 @@ private class LineLoggingInputStream(
 
 sealed class AcpEvent {
     data class AgentText(val text: String) : AcpEvent()
+    data class AgentThought(val text: String) : AcpEvent()
     data class PromptDone(val stopReason: String) : AcpEvent()
     data class Error(val message: String) : AcpEvent()
 }

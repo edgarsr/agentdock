@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Message } from '../../types/chat';
 import { MarkdownMessage } from './MarkdownMessage';
+import { ContentBlockRenderer } from './blocks/ContentBlockRenderer';
 
 export default function MessageList({ 
   messages,
@@ -29,6 +30,16 @@ export default function MessageList({
   const renderContent = (message: Message) => {
     const isAssistant = message.role === 'assistant';
 
+    if (isAssistant && message.contentBlocks && message.contentBlocks.length > 0) {
+      return (
+        <div className="flex flex-col">
+          {message.contentBlocks.map((block, idx) => (
+            <ContentBlockRenderer key={idx} block={block} />
+          ))}
+        </div>
+      );
+    }
+
     if (message.blocks && message.blocks.length > 0) {
       return (
         <div className="space-y-2">
@@ -48,9 +59,9 @@ export default function MessageList({
               );
             }
             return isAssistant ? (
-              <MarkdownMessage key={idx} content={block.text || ''} />
+              <MarkdownMessage key={idx} content={(block as any).text || ''} />
             ) : (
-              <div key={idx} className="whitespace-pre-wrap">{block.text || ''}</div>
+              <div key={idx} className="whitespace-pre-wrap">{(block as any).text || ''}</div>
             );
           })}
         </div>
@@ -88,11 +99,11 @@ export default function MessageList({
         )}
 
         {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+          <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end mb-4' : 'justify-start mb-8'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
             <div className={`
-              rounded-lg p-4 
+              rounded-lg 
               ${message.role === 'user' 
-                ? 'max-w-[85%] bg-[var(--ide-editor-bg)] border border-[var(--ide-Borders-color)] ml-auto text-foreground shadow-sm' 
+                ? 'max-w-[85%] bg-[var(--ide-editor-bg)] p-4 border border-[var(--ide-Borders-color)] ml-auto text-foreground shadow-sm' 
                 : 'w-full text-foreground'
               }
             `}>
