@@ -294,6 +294,13 @@ class AcpClientService(val project: Project) {
                     ensureSharedProcessStarted(sharedProc, adapterInfo, context, chatId)
                     ensureAsyncSessionUpdates(sharedProc)
 
+                    // Set sessionIdRef BEFORE client.loadSession() so that the async
+                    // notification worker can match this context for the very first
+                    // replay notification. Without this, early chunks (including the
+                    // first user message) are lost because sessionIdRef is still null
+                    // when notify() runs.
+                    context.sessionIdRef.set(sessionId)
+
                     val client = sharedProc.client!!
                     val cwd = project.basePath ?: System.getProperty("user.dir")
                     
@@ -302,7 +309,7 @@ class AcpClientService(val project: Project) {
                             sessionId: SessionId, 
                             sessionResponse: AcpCreatedSessionResponse
                         ): ClientSessionOperations {
-                            context.sessionIdRef.compareAndSet(null, sessionId.value)
+                            // sessionIdRef is already set above
                             return this@AcpClientService.SharedSessionOperations(sessionId.value)
                         }
                     }
@@ -311,7 +318,6 @@ class AcpClientService(val project: Project) {
                     val sess = client.loadSession(SessionId(sessionId), params, factory)
 
                     context.session = sess
-                    context.sessionIdRef.set(sessionId)
 
                     context.activeAdapterNameRef.set(requestedAdapterName)
 
@@ -326,6 +332,11 @@ class AcpClientService(val project: Project) {
                     } else if (!preferredModelId.isNullOrBlank()) {
                         context.activeModelIdRef.set(preferredModelId.trim())
                     }
+
+                    // Drain the async notification queue BEFORE changing status.
+                    // While status is Initializing, notify() delivers replay chunks.
+                    // After this completes, ALL replay notifications have been dispatched.
+                    awaitPendingSessionUpdates(requestedAdapterName)
 
                     context.statusRef.set(Status.Ready)
                 } catch (e: Exception) {
@@ -520,6 +531,19 @@ class AcpClientService(val project: Project) {
         activeProcesses.clear()
     }
 
+    /**
+     * Wait for all queued session/update notifications to be processed.
+     * Because the worker runs on limitedParallelism(1), scheduling a new coroutine
+     * on the same scope will only execute after the worker suspends (queue drained).
+     */
+    suspend fun awaitPendingSessionUpdates(adapterName: String) {
+        val sharedProc = activeProcesses[adapterName] ?: return
+        val updateScope = sharedProc.sessionUpdateScope ?: return
+        val completed = CompletableDeferred<Unit>()
+        updateScope.launch { completed.complete(Unit) }
+        completed.await()
+    }
+
     private fun resolveModelToApply(
         pref: String?,
         available: List<AcpAdapterConfig.ModelInfo>,
@@ -709,8 +733,10 @@ class AcpClientService(val project: Project) {
                 }
                 val isReplay = context.statusRef.get() != Status.Prompting
                 
-                // If it's a replay event, only broadcast if the context recently initiated a history load
-                if (isReplay && System.currentTimeMillis() - context.lastHistoryLoadTime > 20000) {
+                // During replay, only deliver to contexts that are actively loading
+                // (Initializing status). This prevents duplicate content being pushed
+                // to tabs that already finished loading the same ACP session.
+                if (isReplay && context.statusRef.get() != Status.Initializing) {
                     return@forEach
                 }
                 

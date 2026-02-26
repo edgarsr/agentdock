@@ -26,7 +26,7 @@ import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
 import unified.llm.acp.AcpClientService
-import unified.llm.acp.AcpDebugBridge
+import unified.llm.acp.AcpBridge
 import unified.llm.history.HistoryBridge
 import java.awt.BorderLayout
 import java.awt.Cursor
@@ -36,7 +36,7 @@ import javax.swing.JPanel
 
 class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
     private val log = Logger.getInstance(UnifiedLlmToolWindowFactory::class.java)
-    private var debugBridge: AcpDebugBridge? = null
+    private var debugBridge: AcpBridge? = null
     private var historyBridge: HistoryBridge? = null
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -74,7 +74,7 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         val service = AcpClientService(project)
                         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
                         
-                        debugBridge = AcpDebugBridge(browser, service, scope)
+                        debugBridge = AcpBridge(browser, service, scope)
                         historyBridge = HistoryBridge(browser, project, scope)
                         
                         debugBridge?.install()

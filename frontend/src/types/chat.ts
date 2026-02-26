@@ -94,6 +94,16 @@ export interface HistoryReplayChunk {
   content?: { type: 'text' | 'image' | 'thinking'; text?: string; data?: string; mimeType?: string };
 }
 
+export interface ContentChunk {
+  chatId: string;
+  role: 'user' | 'assistant';
+  type: 'text' | 'thinking' | 'image';
+  text?: string;
+  data?: string;
+  mimeType?: string;
+  isReplay: boolean;
+}
+
 
 export interface FileChangeSummary {
   filePath: string;
@@ -147,15 +157,13 @@ declare global {
 
     // Callbacks (Backend -> Frontend)
     __onAcpLog?: (payload: AcpLogEntryPayload) => void;
-    __onAgentText?: (chatId: string, text: string) => void;
-    __onAgentThought?: (chatId: string, text: string) => void;
+    __onContentChunk?: (chunk: ContentChunk) => void;
     __onStatus?: (chatId: string, status: string) => void;
     __onSessionId?: (chatId: string, id: string) => void;
     __onAdapters?: (adapters: AgentOption[]) => void;
     __onMode?: (chatId: string, modeId: string) => void;
     __onPermissionRequest?: (request: PermissionRequest) => void;
     __onHistoryList?: (list: HistorySessionMeta[]) => void;
-    __onHistoryReplay?: (payload: HistoryReplayChunk) => void;
 
     __onUndoResult?: (chatId: string, result: UndoResultPayload) => void;
     __onChangesState?: (chatId: string, state: ChangesState) => void;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Message,
   AgentOption,
@@ -7,7 +7,8 @@ import {
   HistorySessionMeta,
   RichContentBlock,
   TextBlock,
-  ThinkingBlock
+  ThinkingBlock,
+  ContentChunk
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 
@@ -15,6 +16,127 @@ let messageCounter = 0;
 function nextMessageId(suffix: string): string {
   return `msg-${++messageCounter}-${Date.now()}-${suffix}`;
 }
+
+// ---------------------------------------------------------------------------
+// Unified chunk processing — THE SINGLE code path for both streaming and replay.
+// Each chunk is { role, type, text?, data?, mimeType?, isReplay }.
+// ---------------------------------------------------------------------------
+
+function getBlocks(msg: Message): RichContentBlock[] {
+  return msg.role === 'assistant'
+    ? [...(msg.contentBlocks || [])]
+    : [...(msg.blocks || [])];
+}
+
+function setBlocks(msg: Message, blocks: RichContentBlock[]): Message {
+  return msg.role === 'assistant'
+    ? { ...msg, contentBlocks: blocks }
+    : { ...msg, blocks: blocks };
+}
+
+function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
+  // Skip empty text/thinking chunks
+  if ((chunk.type === 'text' || chunk.type === 'thinking') && !chunk.text) return messages;
+
+  const newMessages = [...messages];
+  const lastMsg = newMessages.length > 0 ? newMessages[newMessages.length - 1] : null;
+
+  // ------ Create new message if role differs or no messages yet ------
+  if (!lastMsg || lastMsg.role !== chunk.role) {
+    const block = buildBlock(chunk);
+    const newMsg: Message = {
+      id: nextMessageId(chunk.role),
+      role: chunk.role,
+      content: chunk.type === 'text' ? (chunk.text || '') : '',
+      timestamp: Date.now()
+    };
+    if (chunk.role === 'assistant') {
+      newMsg.contentBlocks = [block];
+    } else {
+      newMsg.blocks = [block];
+    }
+    newMessages.push(newMsg);
+    return newMessages;
+  }
+
+  // ------ Same role — merge into existing message ------
+  const blocks = getBlocks(lastMsg);
+  const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+
+  if (chunk.type === 'text') {
+    // Close any streaming thinking block before text arrives
+    closeStreamingThinking(blocks);
+
+    if (lastBlock && lastBlock.type === 'text') {
+      blocks[blocks.length - 1] = { ...lastBlock, text: (lastBlock as TextBlock).text + (chunk.text || '') };
+    } else {
+      blocks.push({ type: 'text', text: chunk.text || '' });
+    }
+  } else if (chunk.type === 'thinking') {
+    if (lastBlock && lastBlock.type === 'thinking' &&
+        ((lastBlock as ThinkingBlock).isStreaming || chunk.isReplay)) {
+      // Merge into existing thinking block
+      const existing = (lastBlock as ThinkingBlock).text;
+      const separator = chunk.isReplay
+        ? (existing.endsWith('\n') ? '\n' : '\n\n')
+        : ''; // During streaming, backend sends small fragments — concatenate directly
+      blocks[blocks.length - 1] = { ...lastBlock, text: existing + separator + (chunk.text || '') };
+    } else {
+      // Close previous streaming thinking (if any), then start new thinking block
+      closeStreamingThinking(blocks);
+      blocks.push({
+        type: 'thinking',
+        text: chunk.text || '',
+        isStreaming: !chunk.isReplay,
+        startTime: !chunk.isReplay ? Date.now() : undefined
+      });
+    }
+  } else if (chunk.type === 'image') {
+    blocks.push({ type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any);
+  }
+
+  // Rebuild text content for the message (used as fallback / search)
+  const textContent = blocks
+    .filter((b): b is TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+
+  const updatedMsg = setBlocks({ ...lastMsg, content: textContent }, blocks);
+  newMessages[newMessages.length - 1] = updatedMsg;
+  return newMessages;
+}
+
+function buildBlock(chunk: ContentChunk): RichContentBlock {
+  switch (chunk.type) {
+    case 'thinking':
+      return { type: 'thinking', text: chunk.text || '', isStreaming: !chunk.isReplay };
+    case 'image':
+      return { type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any;
+    case 'text':
+    default:
+      return { type: 'text', text: chunk.text || '' };
+  }
+}
+
+function closeStreamingThinking(blocks: RichContentBlock[]) {
+  if (blocks.length > 0) {
+    const last = blocks[blocks.length - 1];
+    if (last.type === 'thinking' && (last as ThinkingBlock).isStreaming) {
+      blocks[blocks.length - 1] = { ...last, isStreaming: false, endTime: Date.now() };
+    }
+  }
+}
+
+// Apply a batch of chunks atomically — guarantees ordering and no lost updates.
+function applyChunks(messages: Message[], chunks: ContentChunk[]): Message[] {
+  let result = messages;
+  for (const chunk of chunks) {
+    result = applyOneChunk(result, chunk);
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 
 export function useChatSession(
     chatId: string,
@@ -33,9 +155,6 @@ export function useChatSession(
   const [attachments, setAttachments] = useState<{ id: string; data: string; mimeType: string }[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
 
-  const currentBlocksRef = useRef<RichContentBlock[]>([]);
-  const currentTextAccumRef = useRef<string>('');
-  const currentThinkingAccumRef = useRef<string>('');
   const pendingMessageRef = useRef<string | null>(null);
   const pendingModeIdRef = useRef<string | null>(null);
   const startedAgentIdRef = useRef<string>('');
@@ -43,6 +162,26 @@ export function useChatSession(
   const startedModeIdRef = useRef<string>('');
   const historyLoadRequestedRef = useRef<string | null>(null);
   const statusRef = useRef<string>('not started');
+
+  // Buffered chunk queue — chunks are collected here and flushed atomically
+  const chunkBufferRef = useRef<ContentChunk[]>([]);
+  const flushScheduledRef = useRef(false);
+
+  const flushChunks = useCallback(() => {
+    flushScheduledRef.current = false;
+    const chunks = chunkBufferRef.current;
+    if (chunks.length === 0) return;
+    chunkBufferRef.current = [];
+    setMessages(prev => applyChunks(prev, chunks));
+  }, []);
+
+  const enqueueChunk = useCallback((chunk: ContentChunk) => {
+    chunkBufferRef.current.push(chunk);
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true;
+      requestAnimationFrame(flushChunks);
+    }
+  }, [flushChunks]);
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId);
   const availableModels = selectedAgent?.models ?? [];
@@ -110,90 +249,17 @@ export function useChatSession(
     }
   }, [historySession]);
 
+  // =========================================================================
   // Chat Event Listeners (Filtered by chatId)
+  // =========================================================================
   useEffect(() => {
-    const updateAssistantMessage = (blocks: RichContentBlock[]) => {
-      // Use JSON deep clone to ensure React state detects all nested object mutations
-      const blocksClone: RichContentBlock[] = JSON.parse(JSON.stringify(blocks));
 
-      const textContent = blocksClone
-          .filter((b): b is TextBlock => b.type === 'text')
-          .map(b => b.text)
-          .join('');
-
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        // Searching backwards to find the last assistant message
-        for (let i = newMessages.length - 1; i >= 0; i--) {
-          if (newMessages[i].role === 'assistant') {
-            newMessages[i] = {
-              ...newMessages[i],
-              content: textContent,
-              contentBlocks: blocksClone,
-            };
-            return newMessages;
-          }
-        }
-        return prev;
-      });
-    };
-
-    const closeStreamingThinking = () => {
-      if (currentBlocksRef.current.length > 0) {
-        const lastBlock = currentBlocksRef.current[currentBlocksRef.current.length - 1];
-        if (lastBlock.type === 'thinking' && (lastBlock as ThinkingBlock).isStreaming) {
-          (lastBlock as ThinkingBlock).isStreaming = false;
-          (lastBlock as ThinkingBlock).endTime = Date.now();
-        }
-      }
-    };
-
-
-
-    const unsubText = ACPBridge.onAgentText((e) => {
-      if (e.detail.chatId !== chatId) return;
-
-      closeStreamingThinking();
-
-      const newText = e.detail.text;
-      currentTextAccumRef.current += newText;
-
-      const blocks = currentBlocksRef.current;
-      if (blocks.length > 0 && blocks[blocks.length - 1].type === 'text') {
-        (blocks[blocks.length - 1] as TextBlock).text += newText;
-      } else {
-        blocks.push({ type: 'text', text: newText });
-      }
-
-      updateAssistantMessage(blocks);
+    // --- UNIFIED content handler: one handler for both streaming and replay ---
+    const unsubContent = ACPBridge.onContentChunk((e) => {
+      const chunk = e.detail.chunk;
+      if (chunk.chatId !== chatId) return;
+      enqueueChunk(chunk);
     });
-
-    const unsubThought = ACPBridge.onAgentThought((e) => {
-      if (e.detail.chatId !== chatId) return;
-
-      const newThought = e.detail.text;
-      currentThinkingAccumRef.current += newThought;
-
-      const blocks = currentBlocksRef.current;
-      const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
-      const isReplay = statusRef.current !== 'prompting';
-
-      if (lastBlock && lastBlock.type === 'thinking' && ((lastBlock as ThinkingBlock).isStreaming || isReplay)) {
-        (lastBlock as ThinkingBlock).text += newThought;
-      } else {
-        closeStreamingThinking();
-        blocks.push({ 
-          type: 'thinking', 
-          text: newThought, 
-          isStreaming: !isReplay, 
-          startTime: !isReplay ? Date.now() : undefined 
-        });
-        currentTextAccumRef.current = '';
-      }
-
-      updateAssistantMessage(blocks);
-    });
-
 
     const unsubStatus = ACPBridge.onStatus((e) => {
       if (e.detail.chatId !== chatId) return;
@@ -206,7 +272,18 @@ export function useChatSession(
       }
 
       if (s === 'ready') {
-        closeStreamingThinking();
+        // Flush any remaining buffered chunks immediately before processing status
+        if (chunkBufferRef.current.length > 0) {
+          flushScheduledRef.current = false;
+          const chunks = chunkBufferRef.current;
+          chunkBufferRef.current = [];
+          setMessages(prev => {
+            let result = applyChunks(prev, chunks);
+            return closeAllStreamingThinking(result);
+          });
+        } else {
+          setMessages(prev => closeAllStreamingThinking(prev));
+        }
 
         if (!pendingMessageRef.current) {
           setIsSending(false);
@@ -233,9 +310,7 @@ export function useChatSession(
         };
         setMessages((prev) => [...prev, userMessage]);
 
-        currentBlocksRef.current = [];
-        currentTextAccumRef.current = '';
-        currentThinkingAccumRef.current = '';
+        chunkBufferRef.current = [];
 
         const assistantMessage: Message = {
           id: nextMessageId('assistant'),
@@ -247,7 +322,6 @@ export function useChatSession(
         setMessages((prev) => [...prev, assistantMessage]);
 
         try {
-          // Note: In pending state we currently only support text
           window.__sendPrompt(chatId, JSON.stringify([{ type: 'text', text: messageToSend }]));
         } catch (err) {
           console.warn('[useChatSession] Failed to send pending prompt:', err);
@@ -261,8 +335,6 @@ export function useChatSession(
       setAcpSessionId(e.detail.sessionId);
     });
 
-
-
     const unsubMode = ACPBridge.onMode((e) => {
       if (e.detail.chatId !== chatId) return;
       startedModeIdRef.current = e.detail.modeId;
@@ -275,102 +347,14 @@ export function useChatSession(
       setPermissionRequest(req);
     });
 
-    const unsubReplay = ACPBridge.onHistoryReplay((e) => {
-      if (e.detail.chatId !== chatId) return;
-
-      const { role, text, content } = e.detail;
-      const block = (content || { type: 'text', text: text || '' }) as RichContentBlock;
-      if (block.type === 'text' && !block.text) return;
-
-      setMessages((prev) => {
-        const lastMsg = prev[prev.length - 1];
-        if (!lastMsg || lastMsg.role !== role) {
-          const newMessage: Message = {
-            id: nextMessageId(role),
-            role,
-            content: block.type === 'text' ? block.text || '' : '',
-            blocks: [block],
-            timestamp: Date.now()
-          };
-          // Correct mapping from saved block to contentBlock natively.
-          if (role === 'assistant') {
-            newMessage.contentBlocks = [block as any];
-          }
-          return [...prev, newMessage];
-        }
-
-        // Handle block merging for text
-        const newBlocks = [...(lastMsg.blocks || [])];
-        const newRichBlocks = [...(lastMsg.contentBlocks || [])];
-
-        if (block.type === 'text') {
-          if (newBlocks.length > 0 && newBlocks[newBlocks.length - 1].type === 'text') {
-            newBlocks[newBlocks.length - 1] = {
-              ...newBlocks[newBlocks.length - 1],
-              text: ((newBlocks[newBlocks.length - 1] as TextBlock).text || '') + (block.text || '')
-            } as TextBlock;
-          } else {
-            newBlocks.push(block);
-          }
-
-          if (newRichBlocks.length > 0 && newRichBlocks[newRichBlocks.length - 1].type === 'text') {
-            newRichBlocks[newRichBlocks.length - 1] = {
-              ...newRichBlocks[newRichBlocks.length - 1],
-              text: (newRichBlocks[newRichBlocks.length - 1] as TextBlock).text + (block.text || '')
-            } as any;
-          } else {
-            newRichBlocks.push({ type: 'text', text: block.text || '' });
-          }
-        } else if (block.type === 'thinking') {
-          if (newBlocks.length > 0 && newBlocks[newBlocks.length - 1].type === 'thinking') {
-            const separator = ((newBlocks[newBlocks.length - 1] as ThinkingBlock).text || '').endsWith('\n') ? '\n' : '\n\n';
-            newBlocks[newBlocks.length - 1] = {
-              ...newBlocks[newBlocks.length - 1],
-              text: ((newBlocks[newBlocks.length - 1] as ThinkingBlock).text || '') + separator + (block.text || '')
-            } as ThinkingBlock;
-          } else {
-            newBlocks.push(block);
-          }
-
-          if (newRichBlocks.length > 0 && newRichBlocks[newRichBlocks.length - 1].type === 'thinking') {
-            const separator = (newRichBlocks[newRichBlocks.length - 1] as ThinkingBlock).text.endsWith('\n') ? '\n' : '\n\n';
-            newRichBlocks[newRichBlocks.length - 1] = {
-              ...newRichBlocks[newRichBlocks.length - 1],
-              text: (newRichBlocks[newRichBlocks.length - 1] as ThinkingBlock).text + separator + (block.text || '')
-            } as any;
-          } else {
-            newRichBlocks.push({ type: 'thinking', text: block.text || '', isStreaming: false });
-          }
-        } else {
-          newBlocks.push(block as any);
-          if (role === 'assistant') {
-            newRichBlocks.push(block as any);
-          }
-        }
-
-        return [
-          ...prev.slice(0, -1),
-          {
-            ...lastMsg,
-            content: block.type === 'text' ? `${lastMsg.content}${block.text}` : lastMsg.content,
-            blocks: newBlocks,
-            contentBlocks: newRichBlocks
-          }
-        ];
-      });
-    });
-
     return () => {
-      unsubText();
-      unsubThought();
+      unsubContent();
       unsubStatus();
       unsubSessionId();
-
       unsubMode();
       unsubPermission();
-      unsubReplay();
     };
-  }, [chatId]);
+  }, [chatId, enqueueChunk, flushChunks]);
 
   useEffect(() => {
     if (!historySession) return;
@@ -378,9 +362,7 @@ export function useChatSession(
     if (historyLoadRequestedRef.current === historySession.sessionId) return;
     historyLoadRequestedRef.current = historySession.sessionId;
 
-    currentBlocksRef.current = [];
-    currentTextAccumRef.current = '';
-    currentThinkingAccumRef.current = '';
+    chunkBufferRef.current = [];
     pendingMessageRef.current = null;
     setMessages([]);
     setStatus('initializing');
@@ -424,9 +406,7 @@ export function useChatSession(
       startedModelIdRef.current = modelId || '';
       startedModeIdRef.current = '';
 
-      currentBlocksRef.current = [];
-      currentTextAccumRef.current = '';
-      currentThinkingAccumRef.current = '';
+      chunkBufferRef.current = [];
 
       window.__startAgent(chatId, selectedAgentId, modelId || undefined);
     } catch (e) {
@@ -482,11 +462,6 @@ export function useChatSession(
     const blocks: any[] = [];
     let currentText = inputValue;
 
-    // Minimal interleaved logic: we find [image-ID] placeholders
-    // For now, to keep it clean and minimal as requested: 
-    // we'll just append images at the end if no placeholders, 
-    // or replace placeholders if they exist.
-
     const usedAttachmentIds = new Set<string>();
     const placeholderRegex = /\[image-([a-z0-9-]+)\]/g;
     let lastIndex = 0;
@@ -521,16 +496,14 @@ export function useChatSession(
     const userMessage: Message = {
       id: nextMessageId('user'),
       role: 'user',
-      content: text, // Keep original text for UI history
-      blocks: blocks, // Store the structured blocks for rich rendering
+      content: text,
+      blocks: blocks,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setAttachments([]);
-    currentBlocksRef.current = [];
-    currentTextAccumRef.current = '';
-    currentThinkingAccumRef.current = '';
+    chunkBufferRef.current = [];
 
     const assistantMessage: Message = {
       id: nextMessageId('assistant'),
@@ -605,4 +578,26 @@ export function useChatSession(
     acpSessionId,
     adapterName: selectedAgentId
   };
+}
+
+// Helper: close all streaming thinking blocks in the last assistant message
+function closeAllStreamingThinking(messages: Message[]): Message[] {
+  if (messages.length === 0) return messages;
+  const lastMsg = messages[messages.length - 1];
+  if (lastMsg.role !== 'assistant' || !lastMsg.contentBlocks) return messages;
+
+  let changed = false;
+  const blocks = lastMsg.contentBlocks.map(block => {
+    if (block.type === 'thinking' && (block as ThinkingBlock).isStreaming) {
+      changed = true;
+      return { ...block, isStreaming: false, endTime: Date.now() };
+    }
+    return block;
+  });
+
+  if (!changed) return messages;
+  return [
+    ...messages.slice(0, -1),
+    { ...lastMsg, contentBlocks: blocks }
+  ];
 }

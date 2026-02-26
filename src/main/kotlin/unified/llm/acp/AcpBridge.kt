@@ -26,7 +26,7 @@ import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
 
-private val log = Logger.getInstance(AcpDebugBridge::class.java)
+private val log = Logger.getInstance(AcpBridge::class.java)
 
 @Serializable
 private data class AdapterToolPayload(val name: String, val path: String)
@@ -60,10 +60,11 @@ private data class AdapterPayload(
 private val adapterJson = Json { encodeDefaults = true }
 
 /**
- * Connects AcpClientService to the JCEF/React debug view.
- * Handles: startAgent, sendPrompt (from frontend); pushes log entries, agent text, status (to frontend).
+ * Connects AcpClientService to the JCEF/React UI.
+ * Handles: startAgent, sendPrompt, loadSession (from frontend);
+ * pushes content chunks, status, adapters, permissions (to frontend).
  */
-class AcpDebugBridge(
+class AcpBridge(
     private val browser: JBCefBrowser,
     private val service: AcpClientService,
     private val scope: CoroutineScope
@@ -106,17 +107,20 @@ class AcpDebugBridge(
         service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
             when (update) {
                 is SessionUpdate.UserMessageChunk -> {
-                    pushHistoryReplay(chatId, "user", update.content)
+                    pushContentBlock(chatId, "user", update.content, isThought = false, isReplay = true)
                 }
                 is SessionUpdate.AgentMessageChunk -> {
-                    pushHistoryReplay(chatId, "assistant", update.content)
+                    if (isReplay) {
+                        pushContentBlock(chatId, "assistant", update.content, isThought = false, isReplay = true)
+                    }
+                    // During prompting, agent text arrives through the prompt flow — not here
                 }
                 is SessionUpdate.AgentThoughtChunk -> {
                     val content = update.content
                     if (isReplay) {
-                        pushHistoryReplay(chatId, "assistant", content, isThought = true)
+                        pushContentBlock(chatId, "assistant", content, isThought = true, isReplay = true)
                     } else if (content is ContentBlock.Text) {
-                        pushAgentThought(chatId, content.text)
+                        pushContentChunk(chatId, "assistant", "thinking", text = content.text, isReplay = false)
                     }
                 }
                 is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
@@ -266,7 +270,7 @@ class AcpDebugBridge(
                         val authStatus = AcpAuthService.getAuthStatus(adapterName ?: "")
                         if (!authStatus.authenticated) {
                             pushStatus(chatId, "error")
-                            pushAgentText(chatId, "[Error: Agent is not authenticated. Please login in settings.]")
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: Agent is not authenticated. Please login in settings.]", isReplay = false)
                             return@launch
                         }
 
@@ -279,9 +283,9 @@ class AcpDebugBridge(
                             pushSessionId(chatId, service.sessionId(chatId))
                             pushMode(chatId, service.activeModeId(chatId))
                         } catch (e: Exception) {
-                            log.error("[AcpDebugBridge] Start agent failed for $chatId", e)
+                            log.error("[AcpBridge] Start agent failed for $chatId", e)
                             pushStatus(chatId, "error")
-                            pushAgentText(chatId, "[Error: ${e.message ?: e.toString()}]")
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                         }
                     }
                 }
@@ -298,7 +302,7 @@ class AcpDebugBridge(
                     try {
                         val ok = service.setModel(chatId, modelId)
                         if (!ok) {
-                            pushAgentText(chatId, "[Error: Failed to set model '$modelId']")
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: Failed to set model '$modelId']", isReplay = false)
                         }
                     } finally {
                         pushStatus(chatId, service.status(chatId).name.lowercase())
@@ -317,7 +321,7 @@ class AcpDebugBridge(
                     try {
                         val ok = service.setMode(chatId, modeId)
                         if (!ok) {
-                            pushAgentText(chatId, "[Error: Failed to set mode '$modeId']")
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: Failed to set mode '$modeId']", isReplay = false)
                         }
                     } finally {
                         pushStatus(chatId, service.status(chatId).name.lowercase())
@@ -346,23 +350,23 @@ class AcpDebugBridge(
                         try {
                             service.prompt(chatId, blocks).collect { event ->
                                 when (event) {
-                                    is AcpEvent.AgentText -> pushAgentText(chatId, event.text)
-                                    is AcpEvent.AgentThought -> pushAgentThought(chatId, event.text)
+                                    is AcpEvent.AgentText -> pushContentChunk(chatId, "assistant", "text", text = event.text, isReplay = false)
+                                    is AcpEvent.AgentThought -> pushContentChunk(chatId, "assistant", "thinking", text = event.text, isReplay = false)
                                     is AcpEvent.PromptDone -> pushStatus(chatId, "ready")
                                     is AcpEvent.Error -> {
-                                        log.warn("[AcpDebugBridge] Prompt error: ${event.message}")
-                                        pushAgentText(chatId, "[Error: ${event.message}]")
+                                        log.warn("[AcpBridge] Prompt error: ${event.message}")
+                                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]", isReplay = false)
                                     }
                                 }
                             }
                         } catch (e: Exception) {
                             if (e is kotlinx.coroutines.CancellationException) {
-                                log.info("[AcpDebugBridge] Prompt cancelled for $chatId")
-                                pushAgentText(chatId, "[Cancelled]")
+                                log.info("[AcpBridge] Prompt cancelled for $chatId")
+                                pushContentChunk(chatId, "assistant", "text", text = "[Cancelled]", isReplay = false)
                                 pushStatus(chatId, "ready")
                             } else {
-                                log.error("[AcpDebugBridge] Send prompt failed", e)
-                                pushAgentText(chatId, "[Error: ${e.message ?: e.toString()}]")
+                                log.error("[AcpBridge] Send prompt failed", e)
+                                pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                                 pushStatus(chatId, service.status(chatId).name.lowercase())
                             }
                         } finally {
@@ -392,7 +396,7 @@ class AcpDebugBridge(
             addHandler { chatIdPayload ->
                 val chatId = chatIdPayload?.trim().orEmpty()
                 if (chatId.isNotEmpty()) {
-                    log.info("[AcpDebugBridge] stopAgent requested for $chatId")
+                    log.info("[AcpBridge] stopAgent requested for $chatId")
                     scope.launch(Dispatchers.Default) {
                         service.stopAgent(chatId)
                     }
@@ -429,13 +433,16 @@ class AcpDebugBridge(
                             withTimeout(START_AGENT_TIMEOUT_MS) {
                                 service.loadSession(chatId, adapterId, sessionId, modelId, modeId)
                             }
+                            // awaitPendingSessionUpdates is now called inside loadSession()
+                            // before status transitions to Ready, guaranteeing all replay
+                            // chunks have been dispatched.
                             pushStatus(chatId, service.status(chatId).name.lowercase())
                             pushSessionId(chatId, service.sessionId(chatId))
                             pushMode(chatId, service.activeModeId(chatId))
                         } catch (e: Exception) {
-                            log.error("[AcpDebugBridge] Load session failed for $chatId", e)
+                            log.error("[AcpBridge] Load session failed for $chatId", e)
                             pushStatus(chatId, "error")
-                            pushAgentText(chatId, "[Error: ${e.message ?: e.toString()}]")
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                         }
                     }
                 }
@@ -809,8 +816,7 @@ class AcpDebugBridge(
         val script = """
             // No-op stubs until injectDebugApi runs after __notifyReady()
             window.__onAcpLog = window.__onAcpLog || function(payload) {};
-            window.__onAgentText = window.__onAgentText || function(chatId, text) {};
-            window.__onAgentThought = window.__onAgentThought || function(chatId, text) {};
+            window.__onContentChunk = window.__onContentChunk || function(payload) {};
             window.__onStatus = window.__onStatus || function(chatId, status) {};
             window.__onSessionId = window.__onSessionId || function(chatId, id) {};
             window.__onAdapters = window.__onAdapters || function(adapters) {};
@@ -818,7 +824,6 @@ class AcpDebugBridge(
             window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
             window.__respondPermission = window.__respondPermission || function(requestId, decision) {};
             window.__stopAgent = window.__stopAgent || function(chatId) {};
-            window.__onHistoryReplay = window.__onHistoryReplay || function(payload) {};
             window.__onToolCall = window.__onToolCall || function(chatId, payload) {};
             window.__onToolCallUpdate = window.__onToolCallUpdate || function(chatId, payload) {};
             window.__onPlan = window.__onPlan || function(chatId, payload) {};
@@ -848,28 +853,42 @@ class AcpDebugBridge(
         }
     }
 
-    fun pushAgentText(chatId: String, text: String) {
-        val escaped = text.escapeForJsString()
-        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
+    /**
+     * Unified content delivery: ALL content (live streaming + history replay) goes
+     * through this single method → single __onContentChunk JS callback.
+     * The frontend processes every chunk with one and the same code path.
+     */
+    fun pushContentChunk(chatId: String, role: String, type: String, text: String? = null, data: String? = null, mimeType: String? = null, isReplay: Boolean = false) {
+        val parts = mutableListOf<String>()
+        parts.add("\"chatId\":${escapeJsonString(chatId)}")
+        parts.add("\"role\":${escapeJsonString(role)}")
+        parts.add("\"type\":${escapeJsonString(type)}")
+        if (text != null) parts.add("\"text\":${escapeJsonString(text)}")
+        if (data != null) parts.add("\"data\":${escapeJsonString(data)}")
+        if (mimeType != null) parts.add("\"mimeType\":${escapeJsonString(mimeType)}")
+        parts.add("\"isReplay\":$isReplay")
+        val json = "{${parts.joinToString(",")}}"
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAgentText) window.__onAgentText('$id', '$escaped');",
+                "if(window.__onContentChunk) window.__onContentChunk($json);",
                 browser.cefBrowser.url, 0
             )
         }
     }
 
-    fun pushAgentThought(chatId: String, text: String) {
-        val escaped = text.escapeForJsString()
-        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onAgentThought) window.__onAgentThought('$id', '$escaped');",
-                browser.cefBrowser.url, 0
-            )
+    /** Convenience: send a ContentBlock from the ACP SDK through the unified pipeline. */
+    private fun pushContentBlock(chatId: String, role: String, content: ContentBlock, isThought: Boolean, isReplay: Boolean) {
+        when (content) {
+            is ContentBlock.Text -> {
+                val type = if (isThought) "thinking" else "text"
+                pushContentChunk(chatId, role, type, text = content.text, isReplay = isReplay)
+            }
+            is ContentBlock.Image -> {
+                pushContentChunk(chatId, role, "image", data = content.data, mimeType = content.mimeType, isReplay = isReplay)
+            }
+            else -> {} // Unsupported content types silently ignored
         }
     }
-
 
 
     fun pushStatus(chatId: String, status: String) {
@@ -884,8 +903,8 @@ class AcpDebugBridge(
     }
 
     fun pushMode(chatId: String, modeId: String?) {
-        val value = modeId ?: ""
-        val escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        if (modeId == null) return
+        val escaped = modeId.replace("\\", "\\\\").replace("'", "\\'")
         val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
@@ -896,8 +915,8 @@ class AcpDebugBridge(
     }
 
     fun pushSessionId(chatId: String, sid: String?) {
-        val value = sid ?: ""
-        val escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        if (sid == null) return
+        val escaped = sid.replace("\\", "\\\\").replace("'", "\\'")
         val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
@@ -909,33 +928,10 @@ class AcpDebugBridge(
 
     fun pushPermissionRequest(request: PermissionRequest) {
         val escapedDec = request.description.escapeForJsString()
+        val escapedChatId = request.chatId.replace("\\", "\\\\").replace("'", "\\'")
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: '${request.requestId}', chatId: '${request.chatId}', description: '$escapedDec' });",
-                browser.cefBrowser.url, 0
-            )
-        }
-    }
-
-    fun pushHistoryReplay(chatId: String, role: String, content: ContentBlock, isThought: Boolean = false) {
-        val payload = when (content) {
-            is ContentBlock.Text -> {
-                if (isThought) {
-                    """{"type":"thinking","text":${escapeJsonString(content.text)}}"""
-                } else {
-                    """{"type":"text","text":${escapeJsonString(content.text)}}"""
-                }
-            }
-            is ContentBlock.Image -> """{"type":"image","data":"${content.data}","mimeType":"${content.mimeType}"}"""
-            else -> null
-        }
-        if (payload == null) return
-
-        val escapedRole = role.replace("\\", "\\\\").replace("'", "\\'")
-        val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onHistoryReplay) window.__onHistoryReplay({ chatId: '$id', role: '$escapedRole', content: $payload });",
+                "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: '${request.requestId}', chatId: '$escapedChatId', description: '$escapedDec' });",
                 browser.cefBrowser.url, 0
             )
         }
