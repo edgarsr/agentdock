@@ -7,12 +7,18 @@ import {
   HistorySessionMeta,
   RichContentBlock,
   TextBlock,
-  ThinkingBlock,
+  ExploringBlock,
+  ToolCallBlock,
+  ToolCallEntry,
   ContentChunk
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
+import { safeParseJson, buildToolCallEntry, extractResultTexts } from '../utils/toolCallUtils';
+
+const EXPLORING_KINDS = new Set(['read', 'fetch', 'search']);
 
 let messageCounter = 0;
+let thinkingCounter = 0;
 function nextMessageId(suffix: string): string {
   return `msg-${++messageCounter}-${Date.now()}-${suffix}`;
 }
@@ -29,9 +35,11 @@ function getBlocks(msg: Message): RichContentBlock[] {
 }
 
 function setBlocks(msg: Message, blocks: RichContentBlock[]): Message {
-  return msg.role === 'assistant'
-    ? { ...msg, contentBlocks: blocks }
-    : { ...msg, blocks: blocks };
+  if (msg.role === 'assistant') {
+    return { ...msg, contentBlocks: [...blocks] };
+  } else {
+    return { ...msg, blocks: [...blocks] };
+  }
 }
 
 function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
@@ -39,7 +47,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
   if ((chunk.type === 'text' || chunk.type === 'thinking') && !chunk.text) return messages;
 
   const newMessages = [...messages];
-  const lastMsg = newMessages.length > 0 ? newMessages[newMessages.length - 1] : null;
+  let lastMsg = newMessages.length > 0 ? { ...newMessages[newMessages.length - 1] } : null;
 
   // ------ Create new message if role differs or no messages yet ------
   if (!lastMsg || lastMsg.role !== chunk.role) {
@@ -64,8 +72,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
   const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
 
   if (chunk.type === 'text') {
-    // Close any streaming thinking block before text arrives
-    closeStreamingThinking(blocks);
+    closeStreamingExploring(blocks);
 
     if (lastBlock && lastBlock.type === 'text') {
       blocks[blocks.length - 1] = { ...lastBlock, text: (lastBlock as TextBlock).text + (chunk.text || '') };
@@ -73,56 +80,176 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
       blocks.push({ type: 'text', text: chunk.text || '' });
     }
   } else if (chunk.type === 'thinking') {
-    if (lastBlock && lastBlock.type === 'thinking' &&
-        ((lastBlock as ThinkingBlock).isStreaming || chunk.isReplay)) {
-      // Merge into existing thinking block
-      const existing = (lastBlock as ThinkingBlock).text;
-      const separator = chunk.isReplay
-        ? (existing.endsWith('\n') ? '\n' : '\n\n')
-        : ''; // During streaming, backend sends small fragments — concatenate directly
-      blocks[blocks.length - 1] = { ...lastBlock, text: existing + separator + (chunk.text || '') };
+    // Convert thinking to exploring entry
+    if (lastBlock && lastBlock.type === 'exploring' && (lastBlock.isStreaming || chunk.isReplay)) {
+      const exploring = lastBlock as ExploringBlock;
+      const prevEntries = [...exploring.entries];
+      const lastEntry = prevEntries[prevEntries.length - 1];
+
+      // If last entry is thinking, append to it
+      if (lastEntry && lastEntry.kind === 'thinking') {
+        const existingText = lastEntry.text || '';
+        const separator = chunk.isReplay ? (existingText.endsWith('\n') ? '\n' : '\n\n') : '';
+        prevEntries[prevEntries.length - 1] = {
+          ...lastEntry,
+          text: existingText + separator + (chunk.text || '')
+        };
+      } else {
+        // Add new thinking entry
+        prevEntries.push({
+          toolCallId: `thinking-${++thinkingCounter}`,
+          kind: 'thinking',
+          text: chunk.text || '',
+          rawJson: ''
+        });
+      }
+      blocks[blocks.length - 1] = { ...exploring, entries: prevEntries };
     } else {
-      // Close previous streaming thinking (if any), then start new thinking block
-      closeStreamingThinking(blocks);
+      // Create new exploring block with thinking entry
+      closeStreamingExploring(blocks);
       blocks.push({
-        type: 'thinking',
-        text: chunk.text || '',
+        type: 'exploring',
         isStreaming: !chunk.isReplay,
-        startTime: !chunk.isReplay ? Date.now() : undefined
+        isReplay: chunk.isReplay,
+        entries: [{
+          toolCallId: `thinking-${++thinkingCounter}`,
+          kind: 'thinking',
+          text: chunk.text || '',
+          rawJson: ''
+        }]
       });
     }
   } else if (chunk.type === 'image') {
     blocks.push({ type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any);
+  } else if (chunk.type === 'tool_call') {
+    handleToolCall(blocks, lastBlock, chunk);
+  } else if (chunk.type === 'tool_call_update') {
+    handleToolCallUpdate(blocks, chunk);
   }
 
-  // Rebuild text content for the message (used as fallback / search)
-  const textContent = blocks
-    .filter((b): b is TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('');
-
-  const updatedMsg = setBlocks({ ...lastMsg, content: textContent }, blocks);
-  newMessages[newMessages.length - 1] = updatedMsg;
+  // Final rebuild
+  const txt = blocks.filter((b): b is TextBlock => b.type === 'text').map(b => b.text).join('');
+  const finalMsg = setBlocks({ ...lastMsg, content: txt }, blocks);
+  newMessages[newMessages.length - 1] = finalMsg;
   return newMessages;
 }
 
 function buildBlock(chunk: ContentChunk): RichContentBlock {
   switch (chunk.type) {
     case 'thinking':
-      return { type: 'thinking', text: chunk.text || '', isStreaming: !chunk.isReplay };
+      return {
+        type: 'exploring',
+        isStreaming: !chunk.isReplay,
+        isReplay: chunk.isReplay,
+        entries: [{
+          toolCallId: `thinking-${++thinkingCounter}`,
+          kind: 'thinking',
+          text: chunk.text || '',
+          rawJson: ''
+        }]
+      };
     case 'image':
       return { type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any;
+    case 'tool_call': {
+      const entry = buildToolCallEntry(chunk);
+      if (!EXPLORING_KINDS.has(chunk.toolKind || '')) {
+        return { type: 'tool_call', entry } as ToolCallBlock;
+      }
+      return { type: 'exploring', isStreaming: !chunk.isReplay, isReplay: chunk.isReplay, entries: [entry] } as ExploringBlock;
+    }
     case 'text':
     default:
       return { type: 'text', text: chunk.text || '' };
   }
 }
 
-function closeStreamingThinking(blocks: RichContentBlock[]) {
+function closeStreamingExploring(blocks: RichContentBlock[]) {
   if (blocks.length > 0) {
     const last = blocks[blocks.length - 1];
-    if (last.type === 'thinking' && (last as ThinkingBlock).isStreaming) {
-      blocks[blocks.length - 1] = { ...last, isStreaming: false, endTime: Date.now() };
+    if (last.type === 'exploring' && (last as ExploringBlock).isStreaming) {
+      blocks[blocks.length - 1] = { ...last, isStreaming: false };
+    }
+  }
+}
+
+function handleToolCall(blocks: RichContentBlock[], lastBlock: RichContentBlock | null, chunk: ContentChunk) {
+  const entry = buildToolCallEntry(chunk);
+
+  if (!EXPLORING_KINDS.has(chunk.toolKind || '')) {
+    closeStreamingExploring(blocks);
+
+    const idx = blocks.findIndex(b => b.type === 'tool_call' && (b as ToolCallBlock).entry.toolCallId === entry.toolCallId);
+    if (idx >= 0) {
+      const existing = (blocks[idx] as ToolCallBlock).entry;
+      const merged: ToolCallEntry = {
+        ...existing,
+        ...entry,
+        locations: entry.locations || existing.locations,
+        content: entry.content || existing.content
+      };
+      blocks[idx] = { type: 'tool_call', entry: merged, isReplay: chunk.isReplay } as ToolCallBlock;
+    } else {
+      blocks.push({ type: 'tool_call', entry, isReplay: chunk.isReplay } as ToolCallBlock);
+    }
+  } else {
+    // Minor tool — group into exploring block
+    if (lastBlock && lastBlock.type === 'exploring' && ((lastBlock as ExploringBlock).isStreaming || chunk.isReplay)) {
+      const prevEntries = [...(lastBlock as ExploringBlock).entries];
+      const eIdx = prevEntries.findIndex(e => e.toolCallId === entry.toolCallId);
+      if (eIdx >= 0) {
+        prevEntries[eIdx] = entry;
+      } else {
+        prevEntries.push(entry);
+      }
+      blocks[blocks.length - 1] = { ...lastBlock, entries: prevEntries } as ExploringBlock;
+    } else {
+      closeStreamingExploring(blocks);
+      blocks.push({ type: 'exploring', isStreaming: !chunk.isReplay, isReplay: chunk.isReplay, entries: [entry] } as ExploringBlock);
+    }
+  }
+}
+
+function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
+  const tid = chunk.toolCallId;
+  if (!tid) return;
+
+  const json = safeParseJson(chunk.toolRawJson);
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+
+    if (b.type === 'tool_call' && b.entry.toolCallId === tid) {
+      const tb = b as ToolCallBlock;
+      const updatedEntry: ToolCallEntry = {
+        ...tb.entry,
+        status: json.status || tb.entry.status,
+        title: json.title || tb.entry.title,
+        locations: json.locations || tb.entry.locations,
+        content: json.content || json.diff || tb.entry.content
+      };
+
+      const resultText = extractResultTexts(json);
+      if (resultText) {
+        updatedEntry.result = updatedEntry.result ? updatedEntry.result + '\n\n' + resultText : resultText;
+      }
+
+      blocks[i] = { ...tb, entry: updatedEntry };
+      break;
+    }
+
+    if (b.type === 'exploring') {
+      const exp = b as ExploringBlock;
+      const idx = exp.entries.findIndex(e => e.toolCallId === tid);
+      if (idx >= 0) {
+        const e = { ...exp.entries[idx] };
+        if (json.status) e.status = json.status;
+        if (json.locations) e.locations = json.locations;
+        if (json.content || json.diff) e.content = json.content || json.diff;
+        const newEntries = [...exp.entries];
+        newEntries[idx] = e;
+        blocks[i] = { ...exp, entries: newEntries };
+        break;
+      }
     }
   }
 }
@@ -580,7 +707,7 @@ export function useChatSession(
   };
 }
 
-// Helper: close all streaming thinking blocks in the last assistant message
+// Helper: close all streaming exploring blocks in the last assistant message
 function closeAllStreamingThinking(messages: Message[]): Message[] {
   if (messages.length === 0) return messages;
   const lastMsg = messages[messages.length - 1];
@@ -588,9 +715,9 @@ function closeAllStreamingThinking(messages: Message[]): Message[] {
 
   let changed = false;
   const blocks = lastMsg.contentBlocks.map(block => {
-    if (block.type === 'thinking' && (block as ThinkingBlock).isStreaming) {
+    if (block.type === 'exploring' && (block as ExploringBlock).isStreaming) {
       changed = true;
-      return { ...block, isStreaming: false, endTime: Date.now() };
+      return { ...block, isStreaming: false };
     }
     return block;
   });

@@ -92,6 +92,7 @@ class AcpBridge(
     private var getChangesStateQuery: JBCefJSQuery? = null
     private var showDiffQuery: JBCefJSQuery? = null
     private var openFileQuery: JBCefJSQuery? = null
+    private var openUrlQuery: JBCefJSQuery? = null
 
     private val promptJobs = ConcurrentHashMap<String, Job>()
     private val downloadStatuses = ConcurrentHashMap<String, String>()
@@ -124,6 +125,14 @@ class AcpBridge(
                     }
                 }
                 is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
+                is SessionUpdate.ToolCall -> {
+                    val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                    pushToolCallChunk(chatId, json, isReplay)
+                }
+                is SessionUpdate.ToolCallUpdate -> {
+                    val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                    pushToolCallUpdateChunk(chatId, update.toolCallId.value, json, isReplay)
+                }
                 else -> {}
             }
         }
@@ -615,15 +624,46 @@ class AcpBridge(
                             try {
                                 val resolved = UndoFileHandler.resolveFilePath(service.project, filePath)
                                 val base = service.project.basePath ?: return@runOnEdt
-                                if (!File(resolved).canonicalPath.startsWith(File(base).canonicalPath)) return@runOnEdt
-                                val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(resolved))
+                                
+                                // Ensure relative paths are resolved against project base
+                                val resolvedFile = File(resolved)
+                                val finalFile = if (resolvedFile.isAbsolute) resolvedFile else File(base, resolved)
+                                
+                                val canonical = try { finalFile.canonicalPath } catch (_: Exception) { finalFile.path }
+                                val baseCanonical = try { File(base).canonicalPath } catch (_: Exception) { base }
+
+                                if (!canonical.lowercase().startsWith(baseCanonical.lowercase())) {
+                                    log.warn("[AcpBridge] openFile blocked: '$canonical' is outside project '$baseCanonical'")
+                                    return@runOnEdt
+                                }
+                                
+                                val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(canonical))
                                 if (vf != null && vf.exists()) {
-                                    FileEditorManager.getInstance(service.project).openFile(vf, true)
+                                    val line = obj["line"]?.jsonPrimitive?.intOrNull ?: -1
+                                    if (line >= 0) {
+                                        val descriptor = com.intellij.openapi.fileEditor.OpenFileDescriptor(service.project, vf, line, 0)
+                                        FileEditorManager.getInstance(service.project).openEditor(descriptor, true)
+                                    } else {
+                                        FileEditorManager.getInstance(service.project).openFile(vf, true)
+                                    }
                                 }
                             } catch (_: Exception) {}
                         }
                     }
                 } catch (_: Exception) {}
+                JBCefJSQuery.Response("ok")
+            }
+        }
+
+        openUrlQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler { url ->
+                if (!url.isNullOrBlank()) {
+                    runOnEdt {
+                        try {
+                            com.intellij.ide.BrowserUtil.browse(url)
+                        } catch (_: Exception) {}
+                    }
+                }
                 JBCefJSQuery.Response("ok")
             }
         }
@@ -723,6 +763,10 @@ class AcpBridge(
             openFileQuery?.inject("payload") ?: "",
             "openFile"
         )
+        val openUrlInject = decorateQueryInject(
+            openUrlQuery?.inject("url") ?: "",
+            "openUrl"
+        )
 
         val script = """
             (function() {
@@ -797,6 +841,9 @@ class AcpBridge(
                 };
                 window.__openFile = function(payload) {
                     try { $openFileInject } catch (e) { }
+                };
+                window.__openUrl = function(url) {
+                    try { $openUrlInject } catch (e) { }
                 };
 
                 // Try prime
@@ -887,6 +934,49 @@ class AcpBridge(
                 pushContentChunk(chatId, role, "image", data = content.data, mimeType = content.mimeType, isReplay = isReplay)
             }
             else -> {} // Unsupported content types silently ignored
+        }
+    }
+
+    fun pushToolCallChunk(chatId: String, rawJson: String, isReplay: Boolean = false) {
+        val parsed = try { Json.parseToJsonElement(rawJson).jsonObject } catch (_: Exception) { null }
+        val toolCallId = parsed?.get("toolCallId")?.jsonPrimitive?.contentOrNull ?: ""
+        val kind = parsed?.get("kind")?.jsonPrimitive?.contentOrNull ?: ""
+        val title = parsed?.get("title")?.jsonPrimitive?.contentOrNull ?: ""
+        val status = parsed?.get("status")?.jsonPrimitive?.contentOrNull ?: ""
+
+        val parts = mutableListOf<String>()
+        parts.add("\"chatId\":${escapeJsonString(chatId)}")
+        parts.add("\"role\":\"assistant\"")
+        parts.add("\"type\":\"tool_call\"")
+        parts.add("\"isReplay\":$isReplay")
+        parts.add("\"toolCallId\":${escapeJsonString(toolCallId)}")
+        parts.add("\"toolKind\":${escapeJsonString(kind)}")
+        parts.add("\"toolTitle\":${escapeJsonString(title)}")
+        parts.add("\"toolStatus\":${escapeJsonString(status)}")
+        parts.add("\"toolRawJson\":${escapeJsonString(rawJson)}")
+        val json = "{${parts.joinToString(",")}}"
+        runOnEdt {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onContentChunk) window.__onContentChunk($json);",
+                browser.cefBrowser.url, 0
+            )
+        }
+    }
+
+    fun pushToolCallUpdateChunk(chatId: String, toolCallId: String, rawJson: String, isReplay: Boolean = false) {
+        val parts = mutableListOf<String>()
+        parts.add("\"chatId\":${escapeJsonString(chatId)}")
+        parts.add("\"role\":\"assistant\"")
+        parts.add("\"type\":\"tool_call_update\"")
+        parts.add("\"isReplay\":$isReplay")
+        parts.add("\"toolCallId\":${escapeJsonString(toolCallId)}")
+        parts.add("\"toolRawJson\":${escapeJsonString(rawJson)}")
+        val json = "{${parts.joinToString(",")}}"
+        runOnEdt {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onContentChunk) window.__onContentChunk($json);",
+                browser.cefBrowser.url, 0
+            )
         }
     }
 

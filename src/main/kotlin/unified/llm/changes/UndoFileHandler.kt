@@ -176,7 +176,7 @@ object UndoFileHandler {
         return try {
             val canonical = File(filePath).canonicalPath
             val baseCanonical = File(projectBase).canonicalPath
-            canonical.startsWith(baseCanonical)
+            canonical.lowercase().startsWith(baseCanonical.lowercase())
         } catch (_: Exception) {
             false
         }

@@ -1,39 +1,7 @@
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
-
-// Modular highlight.js for smaller bundle size
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import typescript from 'highlight.js/lib/languages/typescript';
-import python from 'highlight.js/lib/languages/python';
-import kotlin from 'highlight.js/lib/languages/kotlin';
-import java from 'highlight.js/lib/languages/java';
-import php from 'highlight.js/lib/languages/php';
-import xml from 'highlight.js/lib/languages/xml'; // HTML/XML
-import css from 'highlight.js/lib/languages/css';
-import json from 'highlight.js/lib/languages/json';
-import bash from 'highlight.js/lib/languages/bash';
-import markdown from 'highlight.js/lib/languages/markdown';
-import yaml from 'highlight.js/lib/languages/yaml';
-import plaintext from 'highlight.js/lib/languages/plaintext';
-
-// Register essential languages
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('typescript', typescript);
-hljs.registerLanguage('python', python);
-hljs.registerLanguage('kotlin', kotlin);
-hljs.registerLanguage('java', java);
-hljs.registerLanguage('php', php);
-hljs.registerLanguage('html', xml);
-hljs.registerLanguage('xml', xml);
-hljs.registerLanguage('css', css);
-hljs.registerLanguage('json', json);
-hljs.registerLanguage('bash', bash);
-hljs.registerLanguage('sh', bash);
-hljs.registerLanguage('markdown', markdown);
-hljs.registerLanguage('yaml', yaml);
-hljs.registerLanguage('plaintext', plaintext);
+import hljs from '../../utils/highlight';
 
 // Configure marked with highlight.js integration
 marked.use(
@@ -77,6 +45,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
   return (
     <div 
       className="
+        my-4
         text-inherit leading-relaxed break-words
         [&_p]:mb-3 [&_p:last-child]:mb-0
         [&_h1]:text-[1.25em] [&_h1]:font-bold [&_h1]:mb-2 [&_h1]:mt-4

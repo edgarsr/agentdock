@@ -1,18 +1,28 @@
-
 export interface AcpLogEntryPayload {
   direction: 'SENT' | 'RECEIVED';
   json: string;
   timestamp: number;
 }
 
-export type ContentBlockType = 'text' | 'thinking' | 'image';
-
 export interface TextBlock { type: 'text'; text: string; }
-export interface ThinkingBlock { type: 'thinking'; text: string; isStreaming?: boolean; startTime?: number; endTime?: number; }
 export interface ImageBlock { type: 'image'; data: string; mimeType: string; }
 
+export interface ToolCallEntry {
+  toolCallId: string;
+  title?: string;
+  kind?: string;
+  status?: string;
+  result?: string;
+  rawJson: string;
+  content?: Record<string, string | undefined>[];
+  locations?: { path: string }[];
+  // For thinking entries
+  text?: string;
+}
+export interface ExploringBlock { type: 'exploring'; isStreaming: boolean; isReplay?: boolean; entries: ToolCallEntry[]; }
+export interface ToolCallBlock { type: 'tool_call'; entry: ToolCallEntry; isReplay?: boolean; }
 
-export type RichContentBlock = TextBlock | ThinkingBlock | ImageBlock;
+export type RichContentBlock = TextBlock | ImageBlock | ExploringBlock | ToolCallBlock;
 
 
 
@@ -87,21 +97,20 @@ export interface HistorySessionMeta {
   updatedAt: number;
 }
 
-export interface HistoryReplayChunk {
-  chatId: string;
-  role: 'user' | 'assistant';
-  text?: string;
-  content?: { type: 'text' | 'image' | 'thinking'; text?: string; data?: string; mimeType?: string };
-}
-
 export interface ContentChunk {
   chatId: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'thinking' | 'image';
+  type: 'text' | 'thinking' | 'image' | 'tool_call' | 'tool_call_update';
   text?: string;
   data?: string;
   mimeType?: string;
   isReplay: boolean;
+  // tool_call specific
+  toolCallId?: string;
+  toolKind?: string;
+  toolTitle?: string;
+  toolStatus?: string;
+  toolRawJson?: string;
 }
 
 
@@ -154,6 +163,7 @@ declare global {
     __getChangesState?: (payload: string) => void;
     __showDiff?: (payload: string) => void;
     __openFile?: (payload: string) => void;
+    __openUrl?: (url: string) => void;
 
     // Callbacks (Backend -> Frontend)
     __onAcpLog?: (payload: AcpLogEntryPayload) => void;
