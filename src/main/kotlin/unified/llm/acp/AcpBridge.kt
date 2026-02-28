@@ -402,6 +402,7 @@ class AcpBridge(
                 if (chatId.isNotEmpty()) {
                     scope.launch(Dispatchers.Default) {
                         service.cancel(chatId)
+                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
                         pushStatus(chatId, "ready")
                     }
                 }
