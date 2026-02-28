@@ -47,7 +47,7 @@ private val log = Logger.getInstance(AcpClientService::class.java)
 data class PermissionRequest(
     val requestId: String,
     val chatId: String,
-    val description: String,
+    val title: String,
     val options: List<PermissionOption>
 )
 
@@ -496,6 +496,10 @@ class AcpClientService(val project: Project) {
     suspend fun cancel(chatId: String) {
         val context = sessions[chatId] ?: return
         cancelWithContext(context)
+        context.pendingRequests.values.forEach { 
+            it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
+        }
+        context.pendingRequests.clear()
     }
 
     private suspend fun cancelWithContext(context: AgentContext) {
@@ -511,7 +515,7 @@ class AcpClientService(val project: Project) {
 
     suspend fun stopAgent(chatId: String) {
         val context = sessions[chatId] ?: return
-        cancelWithContext(context)
+        cancel(chatId)
         sessions.remove(chatId)
         context.stop()
     }
@@ -711,7 +715,7 @@ class AcpClientService(val project: Project) {
             val request = PermissionRequest(
                 requestId, 
                 primaryCtx.chatId, 
-                "Action: $title\nType: $kind", 
+                title, 
                 permissions
             )
             

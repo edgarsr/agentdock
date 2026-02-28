@@ -22,6 +22,8 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import java.io.File
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.Clip
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
@@ -990,6 +992,9 @@ class AcpBridge(
                 browser.cefBrowser.url, 0
             )
         }
+        if (status == "ready") {
+            playNotificationSound()
+        }
     }
 
     fun pushMode(chatId: String, modeId: String?) {
@@ -1017,13 +1022,35 @@ class AcpBridge(
     }
 
     fun pushPermissionRequest(request: PermissionRequest) {
-        val escapedDec = request.description.escapeForJsString()
+        val escapedTitle = request.title.escapeForJsString()
         val escapedChatId = request.chatId.replace("\\", "\\\\").replace("'", "\\'")
+        val optionsJson = request.options.joinToString(",") { opt ->
+            "{optionId: '${opt.optionId.value.escapeForJsString()}', label: '${opt.name.escapeForJsString()}'}"
+        }
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: '${request.requestId}', chatId: '$escapedChatId', description: '$escapedDec' });",
+                "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: '${request.requestId}', chatId: '$escapedChatId', title: '$escapedTitle', options: [$optionsJson] });",
                 browser.cefBrowser.url, 0
             )
+        }
+        playNotificationSound()
+    }
+
+    private fun playNotificationSound() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val resource = AcpBridge::class.java.getResource("/notification.wav")
+                if (resource != null) {
+                    val audioStream = AudioSystem.getAudioInputStream(resource)
+                    val clip = AudioSystem.getClip()
+                    clip.open(audioStream)
+                    clip.start()
+                } else {
+                    log.debug("Notification sound resource not found: /notification.wav")
+                }
+            } catch (e: Exception) {
+                log.warn("Failed to play notification sound", e)
+            }
         }
     }
 

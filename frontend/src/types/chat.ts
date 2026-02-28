@@ -67,7 +67,7 @@ export interface AgentOption {
 export interface PermissionRequest {
   requestId: string;
   chatId?: string;
-  description: string;
+  title: string;
   options: { optionId: string; label: string }[];
 }
 

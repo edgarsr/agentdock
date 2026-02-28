@@ -7,27 +7,39 @@ interface PermissionModalProps {
 
 export default function PermissionModal({ request, onRespond }: PermissionModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6">
-      <div className="bg-surface text-foreground border border-border p-5 rounded-lg shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-200">
-        <h3 className="font-bold mb-3 text-lg border-b border-border pb-2 flex items-center gap-2">
-          <span className="text-warning">&#9888;</span> Permission Required
-        </h3>
-        <div className="mb-6 text-sm leading-relaxed max-h-[60vh] overflow-y-auto whitespace-pre-wrap font-mono bg-background p-3 rounded border border-border">
-          {request.description}
-        </div>
-        <div className="flex justify-end gap-3 pt-2 border-t border-border">
-          <button
-            onClick={() => onRespond('deny')}
-            className="px-4 py-2 text-sm font-medium rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground transition-colors"
-          >
-            Deny
-          </button>
-          <button
-            onClick={() => onRespond(request.options[0]?.optionId || 'allow')}
-            className="px-4 py-2 text-sm font-medium rounded bg-primary hover:bg-primary/80 text-primary-foreground shadow-lg transition-colors"
-          >
-            Allow
-          </button>
+    <div className="absolute inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
+      <div className="bg-surface text-foreground border border-border rounded shadow-xl max-w-sm w-full animate-in zoom-in-95 duration-100 pointer-events-auto">
+        <div className="p-5">
+          <div className="flex gap-4 items-start mb-5">
+            <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-lg font-bold select-none">
+                ?
+            </div>
+            
+            <div className="flex-grow pt-0.5 min-w-0">
+              <div className="text-sm font-semibold mb-1">Permission Request</div>
+              <div className="max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                <p className="text-sm leading-normal opacity-90 whitespace-pre-wrap break-all">
+                  Action: <span className="font-mono break-words">{request.title}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-2">
+            {request.options.map((opt, idx) => (
+              <button
+                key={opt.optionId}
+                onClick={() => onRespond(opt.optionId)}
+                className={`px-4 py-1 text-sm rounded border transition-all ${
+                  idx === 0 
+                    ? "bg-primary text-primary-foreground border-primary-border" 
+                    : "bg-secondary text-secondary-foreground border-secondary-border shadow-sm hover:opacity-80"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

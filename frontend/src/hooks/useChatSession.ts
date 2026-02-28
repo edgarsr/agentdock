@@ -399,6 +399,7 @@ export function useChatSession(
       }
 
       if (s === 'ready') {
+        setPermissionRequest(null);
         // Flush any remaining buffered chunks immediately before processing status
         if (chunkBufferRef.current.length > 0) {
           flushScheduledRef.current = false;
@@ -653,6 +654,7 @@ export function useChatSession(
     if (typeof window.__cancelPrompt === 'function') {
       window.__cancelPrompt(chatId);
       setIsSending(false);
+      setPermissionRequest(null);
     }
   };
 
