@@ -13,7 +13,7 @@ export const ActivityTooltip: React.FC<Props> = ({ content, icon, children }) =>
         {icon}
         {/* Custom Tooltip */}
         <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-[100] pointer-events-none max-w-[calc(100%-24px)]">
-          <div className="bg-[#2b2d30] border border-[var(--ide-Borders-color)] text-[var(--ide-Label-foreground)] text-[11px] px-2 py-1 rounded shadow-xl whitespace-normal break-all ring-1 ring-black/20">
+          <div className="border border-[var(--ide-Borders-color)] text-[var(--ide-Label-foreground)] px-2 py-1 rounded shadow-xl whitespace-normal break-all ring-1 ring-black/20">
             {content}
           </div>
         </div>

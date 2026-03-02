@@ -69,17 +69,17 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
         <ActivityTooltip icon={icon} content={tooltipContent}>
           <span className="text-foreground/60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
           {hasError && (
-            <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 shadow-[0_0_4px_rgba(248,81,73,0.5)] ml-1" />
+            <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
           )}
         </ActivityTooltip>
       );
     }
     return (
-      <div className="flex items-center gap-1.5 text-[12px] py-0.5 min-w-0 w-full">
+      <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
         {icon}
         <span className="text-foreground/60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
         {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 shadow-[0_0_4px_rgba(248,81,73,0.5)]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
         )}
       </div>
     );
@@ -91,12 +91,12 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
     <ActivityTooltip icon={icon} content={tooltipContent}>
       <button
         onClick={() => onOpenUrl(url)}
-        className="text-[var(--ide-Label-foreground)] hover:text-[var(--ide-Link-foreground)] hover:underline transition-colors text-left font-normal text-[12px] truncate min-w-0 flex-1"
+        className="text-[var(--ide-Label-foreground)] hover:text-[var(--ide-Link-foreground)] hover:underline transition-colors text-left font-normal truncate min-w-0 flex-1"
       >
         {displayUrl}
       </button>
       {hasError && (
-        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 shadow-[0_0_4px_rgba(248,81,73,0.5)] ml-1" />
+        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
       )}
     </ActivityTooltip>
   );

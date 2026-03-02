@@ -7,39 +7,66 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
+        background: {
+          DEFAULT: 'var(--ide-Panel-background)',
+          secondary: 'var(--ide-background-secondary)'
+        },
+        foreground: {
+          DEFAULT: 'var(--ide-Label-foreground)',
+          secondary: 'var(--ide-Label-disabledForeground)'
+        },
         primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
-          border: 'var(--primary-border)',
+          DEFAULT: 'var(--ide-Button-default-startBackground)',
+          foreground: 'var(--ide-Button-default-foreground)',
+          border: 'var(--ide-Button-default-borderColor)',
         },
         secondary: {
-          DEFAULT: 'var(--secondary)',
-          foreground: 'var(--secondary-foreground)',
-          border: 'var(--secondary-border)',
+          DEFAULT: 'var(--ide-Button-startBackground)',
+          foreground: 'var(--ide-Button-foreground)',
+          border: 'var(--ide-Button-borderColor)',
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--accent-foreground)',
+          DEFAULT: 'var(--ide-List-selectionBackground)',
+          foreground: 'var(--ide-List-selectionForeground)',
         },
-        surface: {
-          DEFAULT: 'var(--surface)',
-          hover: 'var(--surface-hover)',
-        },
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
-        error: 'var(--error)',
-        warning: 'var(--warning)',
-        success: 'var(--success)',
+        border: 'var(--ide-Borders-color)',
+        input: 'var(--ide-TextField-background)',
         editor: {
-          bg: 'var(--editor-bg)',
-          fg: 'var(--editor-fg)',
+          bg: 'var(--ide-editor-bg)',
+          fg: 'var(--ide-editor-fg)',
+        },
+        success: '#57965c',
+        error: '#db5c5c',
+        warning: '#ba9752',
+        link: 'var(--ide-Hyperlink-linkColor)',
+        added: 'var(--ide-vcs-added)',
+        deleted: 'var(--ide-vcs-deleted)',
+        syntax: {
+          keyword: 'var(--ide-syntax-keyword)',
+          string: 'var(--ide-syntax-string)',
+          number: 'var(--ide-syntax-number)',
+          comment: 'var(--ide-syntax-comment)',
+          function: 'var(--ide-syntax-function)',
+          class: 'var(--ide-syntax-class)',
+          tag: 'var(--ide-syntax-tag)',
+          attr: 'var(--ide-syntax-attr)',
         }
       },
+      fontSize: {
+        'ide-h1': '1.75rem',
+        'ide-h2': '1.5rem',
+        'ide-h3': '1.25rem',
+        'ide-h4': '1.125rem',
+        'ide-regular': '1rem',
+        'ide-medium': '1.125rem',
+        'ide-small': '0.875rem',
+      },
       borderRadius: {
-        'ide': '3px',
+        'ide': '6px',
+      },
+      spacing: {
+        'ide-paragraph': 'var(--ide-paragraph-spacing)',
+        'ide-indent': 'var(--ide-list-indent)',
       }
     },
   },

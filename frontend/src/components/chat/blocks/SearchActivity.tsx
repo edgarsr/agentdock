@@ -29,7 +29,7 @@ export const SearchActivity: React.FC<Props> = ({ entry }) => {
     >
       <span className="text-foreground/60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
       {hasError && (
-        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 shadow-[0_0_4px_rgba(248,81,73,0.5)] ml-1" />
+        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
       )}
     </ActivityTooltip>
   );

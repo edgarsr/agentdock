@@ -91,13 +91,13 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
           <ClipboardList size={14} />
         </div>
         
-        <div className="flex-1 text-left text-[12px] font-medium truncate text-editor-fg opacity-90 pr-2">
+        <div className="flex-1 text-left font-medium truncate text-editor-fg opacity-90 pr-2">
           {renderHeaderText()}
         </div>
 
         <div className="flex-shrink-0 flex items-center gap-2">
           {hasFailed && (
-            <div className="w-2.5 h-2.5 rounded-full bg-error shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-error" />
           )}
           <div className={`transition-transform duration-200 text-editor-fg opacity-50 ${expanded ? 'rotate-90' : ''}`}>
             <ChevronRight size={14} />
@@ -116,7 +116,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
                 <div className="mt-0.5 flex-shrink-0">
                   {getStatusIcon(entry.status)}
                 </div>
-                <div className={`text-[12px] leading-relaxed ${entry.status === 'completed' ? 'opacity-50 line-through' : 'text-editor-fg opacity-90'}`}>
+                <div className={`leading-relaxed ${entry.status === 'completed' ? 'opacity-50 line-through' : 'text-editor-fg opacity-90'}`}>
                   {entry.content}
                 </div>
               </div>

@@ -30,7 +30,7 @@ export default function FileChangesPanel({
   if (fileChanges.length === 0) return null;
 
   return (
-    <div className="border-t border-border bg-surface">
+    <div className="border-t border-border bg-background-secondary">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2">
         <button
@@ -45,7 +45,7 @@ export default function FileChangesPanel({
             <polyline points="9 18 15 12 9 6" />
           </svg>
           <span>Edits</span>
-          <span className="text-xs text-muted">
+          <span className="text-xs text-foreground-secondary">
             {fileChanges.length} file{fileChanges.length !== 1 ? 's' : ''}
           </span>
           {totalAdditions > 0 && <span className="text-xs text-green-500">+{totalAdditions}</span>}
@@ -55,7 +55,7 @@ export default function FileChangesPanel({
         <div className="flex items-center gap-2">
           {confirmUndoAll ? (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-muted">Undo all?</span>
+              <span className="text-xs text-foreground-secondary">Undo all?</span>
               <button
                 type="button"
                 className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
@@ -65,7 +65,7 @@ export default function FileChangesPanel({
               </button>
               <button
                 type="button"
-                className="text-xs px-2 py-0.5 bg-surface-hover text-foreground rounded hover:bg-border transition-colors"
+                className="text-xs px-2 py-0.5 bg-background-secondary text-foreground rounded hover:bg-background transition-colors"
                 onClick={() => setConfirmUndoAll(false)}
               >
                 No
@@ -75,14 +75,14 @@ export default function FileChangesPanel({
             <>
               <button
                 type="button"
-                className="text-xs px-2 py-1 text-green-400 hover:text-green-300 hover:bg-surface-hover rounded transition-colors"
+                className="text-xs px-2 py-1 text-green-400 hover:text-green-300  rounded transition-colors"
                 onClick={onKeepAll}
               >
                 Keep All
               </button>
               <button
                 type="button"
-                className="text-xs px-2 py-1 text-red-400 hover:text-red-300 hover:bg-surface-hover rounded transition-colors"
+                className="text-xs px-2 py-1 text-red-400 hover:text-red-300  rounded transition-colors"
                 onClick={() => setConfirmUndoAll(true)}
               >
                 Undo All
@@ -98,7 +98,7 @@ export default function FileChangesPanel({
           {fileChanges.map((fc) => (
             <div
               key={fc.filePath}
-              className="flex items-center justify-between py-1 px-2 rounded hover:bg-surface-hover group text-sm"
+              className="flex items-center justify-between py-1 px-2 rounded  group text-sm"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`text-xs font-mono px-1 rounded ${
@@ -116,7 +116,7 @@ export default function FileChangesPanel({
                 </button>
                 <span className="flex-shrink-0 text-xs">
                   {fc.additions > 0 && <span className="text-green-500">+{fc.additions}</span>}
-                  {fc.additions > 0 && fc.deletions > 0 && <span className="text-muted"> </span>}
+                  {fc.additions > 0 && fc.deletions > 0 && <span className="text-foreground-secondary"> </span>}
                   {fc.deletions > 0 && <span className="text-red-500">-{fc.deletions}</span>}
                 </span>
               </div>
@@ -124,7 +124,7 @@ export default function FileChangesPanel({
                 {onShowDiff && (
                   <button
                     type="button"
-                    className="text-xs px-2 py-0.5 text-muted-foreground hover:text-accent hover:bg-surface-hover rounded transition-colors"
+                    className="text-xs px-2 py-0.5 text-foreground-secondary hover:text-accent  rounded transition-colors"
                     onClick={() => onShowDiff(fc)}
                     title="View diff (agent changes)"
                   >

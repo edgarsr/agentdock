@@ -3,22 +3,95 @@
 @tailwind utilities;
 
 @layer base {
+
   html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden !important; /* Force hide horizontal scrollbar */
+    overflow-x: hidden;
+    background-color: var(--ide-Panel-background);
+    color: var(--ide-Panel-foreground);
+    font-size: var(--ide-font-size);
+    font-family: var(--ide-font-family);
   }
 
-  /* Hide scrollbars for all elements but allow vertical scrolling where explicitly set */
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  h4 {
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  small {
+    font-size: 0.875rem;
+  }
+
+  button:focus {
+    outline: none;
+    border: none;
+  }
+
+  input, select, textarea {
+    background: var(--ide-TextField-background);
+    color: var(--ide-TextField-foreground);
+    border: 1px solid var(--ide-TextField-borderColor);
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5rem;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--ide-TextField-focusedBorderColor);
+    outline: none;
+  }
+
+  input::selection, textarea::selection {
+    background: var(--ide-TextField-selectionBackground);
+    color: var(--ide-TextField-selectionForeground);
+  }
+  table td, table th {
+    border: 1px solid var(--ide-Table-gridColor);
+    padding: 0.5rem;
+  }
+
+  pre, code {
+    background: var(--ide-editor-bg);
+    font-family: var(--ide-code-font-family);
+    font-size: var(--ide-code-font-size);
+  }
+
+  ul, ol {
+    list-style-position: outside;
+    margin-left: 1rem;
+    padding-left: var(--ide-list-indent);
+    margin-top: var(--ide-paragraph-spacing);
+    margin-bottom: var(--ide-paragraph-spacing);
+  }
+
+  li {
+    margin: calc(var(--ide-paragraph-spacing) * 0.3) 0;
+  }
+
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--ide-Borders-color) transparent;
   }
-  
+
   *::-webkit-scrollbar {
     width: 6px;
-    height: 0px; /* Hide horizontal scrollbar */
   }
 
   *::-webkit-scrollbar-track {
@@ -26,43 +99,7 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: var(--border);
+    background-color: var(--ide-Borders-color);
     border-radius: 20px;
-  }
-
-  :root {
-    /* Base Colors */
-    --background: var(--ide-bg);
-    --foreground: var(--ide-fg);
-    
-    /* Surfaces */
-    --surface: var(--ide-Panel-background);
-    --surface-hover: var(--ide-List-hoverBackground);
-    
-    /* Primary (Action) */
-    --primary: var(--ide-Button-default-startBackground);
-    --primary-foreground: var(--ide-Button-default-foreground);
-    --primary-border: var(--ide-Button-default-borderColor);
-    
-    /* Secondary (Passive/Neutral) */
-    --secondary: var(--ide-Button-startBackground);
-    --secondary-foreground: var(--ide-Button-foreground);
-    --secondary-border: var(--ide-Button-borderColor);
-    
-    /* Selection / Accents */
-    --accent: var(--ide-List-selectionBackground);
-    --accent-foreground: var(--ide-List-selectionForeground);
-    
-    /* Status & Feedback */
-    --border: var(--ide-Borders-color);
-    --input: var(--ide-TextField-background);
-    --ring: var(--ide-Button-default-focusColor);
-    --error: #f85149;
-    --warning: var(--ide-Notification-warningForeground, #ffb000);
-    --success: #1ea446;
-    
-    /* Editor Styles */
-    --editor-bg: var(--ide-editor-bg);
-    --editor-fg: var(--ide-editor-fg);
   }
 }

@@ -1,0 +1,196 @@
+/* Syntax highlighting - reusable for any code blocks */
+.syntax-highlighted {
+    /* Keywords & Built-ins */
+    & .hljs-keyword { color: var(--ide-syntax-keyword); }
+    & .hljs-built_in { color: var(--ide-syntax-keyword); }
+    & .hljs-type { color: var(--ide-syntax-class); }
+    & .hljs-literal { color: var(--ide-syntax-keyword); }
+
+    /* Strings & Characters */
+    & .hljs-string { color: var(--ide-syntax-string); }
+    & .hljs-char { color: var(--ide-syntax-string); }
+    & .hljs-subst { color: var(--ide-syntax-string); }
+    & .hljs-regexp { color: var(--ide-syntax-string); }
+
+    /* Numbers & Values */
+    & .hljs-number { color: var(--ide-syntax-number); }
+    & .hljs-symbol { color: var(--ide-syntax-number); }
+
+    /* Comments & Docs */
+    & .hljs-comment { color: var(--ide-syntax-comment); }
+    & .hljs-doctag { color: var(--ide-syntax-comment); font-weight: bold; }
+    & .hljs-quote { color: var(--ide-syntax-comment); }
+
+    /* Functions & Methods */
+    & .hljs-function { color: var(--ide-syntax-function); }
+    & .hljs-title { color: var(--ide-syntax-function); }
+    & .hljs-title-function { color: var(--ide-syntax-function); }
+    & .hljs-title-function-invoke { color: var(--ide-syntax-function); }
+    & .hljs-params { color: var(--ide-fg); }
+
+    /* Classes & Types */
+    & .hljs-class { color: var(--ide-syntax-class); }
+    & .hljs-title-class { color: var(--ide-syntax-class); }
+    & .hljs-title-class-inherited { color: var(--ide-syntax-class); }
+
+    /* Variables */
+    & .hljs-variable { color: var(--ide-fg); }
+    & .hljs-variable-language { color: var(--ide-syntax-keyword); }
+    & .hljs-variable-constant { color: var(--ide-syntax-number); }
+    & .hljs-property { color: var(--ide-fg); }
+
+    /* HTML/XML Tags & Attributes */
+    & .hljs-tag { color: var(--ide-syntax-tag); }
+    & .hljs-name { color: var(--ide-syntax-tag); }
+    & .hljs-attr { color: var(--ide-syntax-attr); }
+    & .hljs-attribute { color: var(--ide-syntax-attr); }
+
+    /* CSS Selectors */
+    & .hljs-selector-tag { color: var(--ide-syntax-tag); }
+    & .hljs-selector-id { color: var(--ide-syntax-attr); }
+    & .hljs-selector-class { color: var(--ide-syntax-class); }
+    & .hljs-selector-attr { color: var(--ide-syntax-attr); }
+    & .hljs-selector-pseudo { color: var(--ide-syntax-keyword); }
+
+    /* Meta & Annotations */
+    & .hljs-meta { color: var(--ide-syntax-comment); }
+    & .hljs-meta-prompt { color: var(--ide-syntax-keyword); }
+
+    /* Operators & Punctuation */
+    & .hljs-operator { color: var(--ide-fg); }
+    & .hljs-punctuation { color: var(--ide-fg); }
+
+    /* Markup (Markdown, etc.) */
+    & .hljs-section { color: var(--ide-syntax-function); font-weight: bold; }
+    & .hljs-bullet { color: var(--ide-syntax-keyword); }
+    & .hljs-emphasis { font-style: italic; }
+    & .hljs-strong { font-weight: bold; }
+    & .hljs-link { color: var(--ide-syntax-function); text-decoration: underline; }
+    & .hljs-code { color: var(--ide-syntax-string); }
+    & .hljs-formula { color: var(--ide-syntax-number); }
+
+    /* Templates */
+    & .hljs-template-tag { color: var(--ide-syntax-keyword); }
+    & .hljs-template-variable { color: var(--ide-syntax-string); }
+
+    /* Diff */
+    & .hljs-addition { background-color: rgba(30, 164, 70, 0.2); }
+    & .hljs-deletion { background-color: rgba(248, 81, 73, 0.2); }
+}
+
+/* Markdown content rendering */
+.markdown-body {
+    @apply my-4 text-inherit leading-relaxed break-words;
+
+    & p {
+        margin-bottom: var(--ide-paragraph-spacing);
+    }
+
+    & p:last-child {
+        @apply mb-0;
+    }
+
+    & h1 {
+        @apply text-ide-h1 font-bold mb-2 mt-4;
+    }
+
+    & h2 {
+        @apply text-ide-h2 font-semibold mb-2 mt-3;
+    }
+
+    & ul {
+        @apply list-disc;
+        list-style-position: outside;
+        padding-left: calc(var(--ide-list-indent) * 2);
+        margin-bottom: var(--ide-paragraph-spacing);
+    }
+
+    & ol {
+        @apply list-decimal;
+        list-style-position: outside;
+        padding-left: calc(var(--ide-list-indent) * 2);
+        margin-bottom: var(--ide-paragraph-spacing);
+    }
+
+    & code {
+        @apply px-1 rounded;
+        background-color: var(--ide-List-hoverBackground);
+    }
+
+    & pre {
+        @apply border border-border rounded-md p-3 my-3 overflow-x-auto;
+        background-color: var(--editor-bg);
+    }
+
+    & pre code {
+        @apply bg-transparent p-0 rounded-none;
+    }
+
+    & blockquote {
+        @apply border-l-4 border-primary pl-4 italic my-3;
+    }
+
+    & table {
+        @apply w-full border-collapse my-4;
+    }
+
+    & th {
+        @apply border border-border p-2 font-bold text-left;
+        background-color: var(--ide-List-hoverBackground);
+    }
+
+    & td {
+        @apply border border-border p-2 align-top;
+    }
+
+    /* Syntax highlighting within markdown */
+    & .hljs-keyword { color: var(--ide-syntax-keyword); }
+    & .hljs-built_in { color: var(--ide-syntax-keyword); }
+    & .hljs-type { color: var(--ide-syntax-class); }
+    & .hljs-literal { color: var(--ide-syntax-keyword); }
+    & .hljs-string { color: var(--ide-syntax-string); }
+    & .hljs-char { color: var(--ide-syntax-string); }
+    & .hljs-subst { color: var(--ide-syntax-string); }
+    & .hljs-regexp { color: var(--ide-syntax-string); }
+    & .hljs-number { color: var(--ide-syntax-number); }
+    & .hljs-symbol { color: var(--ide-syntax-number); }
+    & .hljs-comment { color: var(--ide-syntax-comment); }
+    & .hljs-doctag { color: var(--ide-syntax-comment); font-weight: bold; }
+    & .hljs-quote { color: var(--ide-syntax-comment); }
+    & .hljs-function { color: var(--ide-syntax-function); }
+    & .hljs-title { color: var(--ide-syntax-function); }
+    & .hljs-title-function { color: var(--ide-syntax-function); }
+    & .hljs-title-function-invoke { color: var(--ide-syntax-function); }
+    & .hljs-params { color: var(--ide-fg); }
+    & .hljs-class { color: var(--ide-syntax-class); }
+    & .hljs-title-class { color: var(--ide-syntax-class); }
+    & .hljs-title-class-inherited { color: var(--ide-syntax-class); }
+    & .hljs-variable { color: var(--ide-fg); }
+    & .hljs-variable-language { color: var(--ide-syntax-keyword); }
+    & .hljs-variable-constant { color: var(--ide-syntax-number); }
+    & .hljs-property { color: var(--ide-fg); }
+    & .hljs-tag { color: var(--ide-syntax-tag); }
+    & .hljs-name { color: var(--ide-syntax-tag); }
+    & .hljs-attr { color: var(--ide-syntax-attr); }
+    & .hljs-attribute { color: var(--ide-syntax-attr); }
+    & .hljs-selector-tag { color: var(--ide-syntax-tag); }
+    & .hljs-selector-id { color: var(--ide-syntax-attr); }
+    & .hljs-selector-class { color: var(--ide-syntax-class); }
+    & .hljs-selector-attr { color: var(--ide-syntax-attr); }
+    & .hljs-selector-pseudo { color: var(--ide-syntax-keyword); }
+    & .hljs-meta { color: var(--ide-syntax-comment); }
+    & .hljs-meta-prompt { color: var(--ide-syntax-keyword); }
+    & .hljs-operator { color: var(--ide-fg); }
+    & .hljs-punctuation { color: var(--ide-fg); }
+    & .hljs-section { color: var(--ide-syntax-function); font-weight: bold; }
+    & .hljs-bullet { color: var(--ide-syntax-keyword); }
+    & .hljs-emphasis { font-style: italic; }
+    & .hljs-strong { font-weight: bold; }
+    & .hljs-link { color: var(--ide-syntax-function); text-decoration: underline; }
+    & .hljs-code { color: var(--ide-syntax-string); }
+    & .hljs-formula { color: var(--ide-syntax-number); }
+    & .hljs-template-tag { color: var(--ide-syntax-keyword); }
+    & .hljs-template-variable { color: var(--ide-syntax-string); }
+    & .hljs-addition { background-color: rgba(30, 164, 70, 0.2); }
+    & .hljs-deletion { background-color: rgba(248, 81, 73, 0.2); }
+}

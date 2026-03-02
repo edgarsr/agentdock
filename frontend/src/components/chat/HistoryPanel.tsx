@@ -57,7 +57,7 @@ export default function HistoryPanel({ onClose, availableAgents, onOpenSession }
           <button
             onClick={refreshHistory}
             disabled={isLoading}
-            className={`p-1 hover:bg-surface-hover rounded transition-colors text-foreground/60 hover:text-foreground ${isLoading ? 'animate-spin opacity-50' : ''}`}
+            className={`p-1  rounded transition-colors text-foreground/60 hover:text-foreground ${isLoading ? 'animate-spin opacity-50' : ''}`}
             title="Refresh History"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -66,7 +66,7 @@ export default function HistoryPanel({ onClose, availableAgents, onOpenSession }
           </button>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-surface-hover rounded transition-colors text-foreground/60 hover:text-foreground"
+            className="p-1  rounded transition-colors text-foreground/60 hover:text-foreground"
             title="Close History Panel"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,11 +93,11 @@ export default function HistoryPanel({ onClose, availableAgents, onOpenSession }
               <button
                 type="button"
                 onClick={() => onOpenSession(item)}
-                className="w-full text-left p-4 rounded-lg bg-surface border border-border hover:border-primary/40 hover:bg-surface-hover transition-colors"
+                className="w-full text-left p-4 rounded-lg bg-background-secondary border border-border hover:border-primary/40  transition-colors"
               >
                 <div className="font-semibold text-sm truncate pr-8">{item.title}</div>
                 <div className="text-xs text-foreground/60 mt-1 flex items-center gap-2">
-                  <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase text-[10px] tracking-wider font-bold">
+                  <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
                     {adapterDisplay.get(item.adapterName) || item.adapterName}
                   </span>
                   {item.modelId ? <span>{item.modelId}</span> : null}

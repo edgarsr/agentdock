@@ -14,7 +14,7 @@ const BrainIcon = ({ size = 13 }: { size?: number }) => (
 
 export const ThinkingActivity: React.FC<Props> = ({ entry }) => {
   return (
-    <div className="flex items-start gap-1.5 text-[12px] py-1 min-w-0 w-full">
+    <div className="flex items-start gap-1.5 py-1 min-w-0 w-full">
       <div className="flex-shrink-0 text-[var(--ide-Label-foreground)] opacity-60 mt-0.5">
         <BrainIcon size={13} />
       </div>

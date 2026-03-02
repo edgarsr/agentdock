@@ -8,7 +8,7 @@ interface PermissionModalProps {
 export default function PermissionModal({ request, onRespond }: PermissionModalProps) {
   return (
     <div className="absolute inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none">
-      <div className="bg-surface text-foreground border border-border rounded shadow-xl max-w-sm w-full animate-in zoom-in-95 duration-100 pointer-events-auto">
+      <div className="bg-background-secondary text-foreground border border-border rounded shadow-xl max-w-sm w-full animate-in zoom-in-95 duration-100 pointer-events-auto">
         <div className="p-5">
           <div className="flex gap-4 items-start mb-5">
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-lg font-bold select-none">

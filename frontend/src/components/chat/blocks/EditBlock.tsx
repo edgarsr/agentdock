@@ -5,6 +5,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import hljs, { getLanguageFromPath } from '../../../utils/highlight';
 import { parseToolStatus } from '../../../utils/toolCallUtils';
 import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
+import '../../../styles/markdown.css';
 
 interface Props {
   block: ToolCallBlock;
@@ -104,19 +105,19 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <span
             onClick={(e) => { e.stopPropagation(); handleOpenFile(); }}
-            className="text-[12px] font-mono truncate text-editor-fg opacity-90 hover:underline cursor-pointer"
+            className="font-mono truncate text-editor-fg opacity-90 hover:underline cursor-pointer"
           >
             {fileName}
           </span>
           {diffData && (
             <div className="flex items-center gap-1.5 ml-1 flex-shrink-0">
               {diffData.additions > 0 && (
-                <span className="text-[12px] font-bold text-success flex items-center">
+                <span className="font-bold text-success flex items-center">
                   <Plus size={11} className="mr-0.5" />{diffData.additions}
                 </span>
               )}
               {diffData.deletions > 0 && (
-                <span className="text-[12px] font-bold text-error flex items-center">
+                <span className="font-bold text-error flex items-center">
                   <Minus size={11} className="mr-0.5" />{diffData.deletions}
                 </span>
               )}
@@ -126,7 +127,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         <div className="flex-shrink-0 flex items-center gap-2">
           {(isPending || isError) && (
             <div
-              className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)] ${
+              className={`w-2.5 h-2.5 rounded-full ${
                 isPending ? 'bg-orange-500 animate-pulse' : 'bg-error'
               }`}
             />
@@ -144,24 +145,13 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         <div className="overflow-hidden">
           {diffData && (
             <div className="bg-editor-bg max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-              <div className="
-                font-mono text-[11px] leading-relaxed py-2
-                [&_.hljs-keyword]:text-[var(--ide-syntax-keyword)]
-                [&_.hljs-string]:text-[var(--ide-syntax-string)]
-                [&_.hljs-number]:text-[var(--ide-syntax-number)]
-                [&_.hljs-comment]:text-[var(--ide-syntax-comment)]
-                [&_.hljs-function]:text-[var(--ide-syntax-function)]
-                [&_.hljs-title]:text-[var(--ide-syntax-function)]
-                [&_.hljs-class]:text-[var(--ide-syntax-class)]
-                [&_.hljs-tag]:text-[var(--ide-syntax-tag)]
-                [&_.hljs-attr]:text-[var(--ide-syntax-attr)]
-              ">
+              <div className="syntax-highlighted font-mono leading-relaxed py-2">
                 {diffData.lines.map((line, i) => (
                   <div
                     key={i}
                     className={`flex w-full group ${
-                      line.type === 'added' ? 'bg-[rgba(30,164,70,0.10)]' :
-                      line.type === 'removed' ? 'bg-[rgba(248,81,73,0.10)]' :
+                      line.type === 'added' ? '' :
+                      line.type === 'removed' ? '' :
                       'hover:bg-secondary/30'
                     }`}
                   >
@@ -185,7 +175,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
 
           {!diffData && (
             <div className="p-4 bg-editor-bg text-center">
-              <span className="text-[12px] opacity-40 italic">
+              <span className="opacity-40 italic">
                 {isFinished ? 'No diff information available.' : 'Calculating diff...'}
               </span>
             </div>

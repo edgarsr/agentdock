@@ -85,7 +85,7 @@ export const ExploringBlock: React.FC<Props> = ({ block }) => {
     <div className="w-full min-w-0 max-w-full overflow-hidden">
       <button
         onClick={() => setIsExpanded(v => !v)}
-        className="flex items-center gap-1.5 py-1 text-[13px] text-[var(--ide-Label-foreground)] hover:text-foreground transition-colors opacity-80 hover:opacity-100 font-medium max-w-full focus:outline-none"
+        className="flex items-center gap-1.5 py-1 text-[var(--ide-Label-foreground)] hover:text-foreground transition-colors opacity-80 hover:opacity-100 font-medium max-w-full focus:outline-none"
       >
         <span className="truncate">{label}</span>
         <span className={`transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`}>

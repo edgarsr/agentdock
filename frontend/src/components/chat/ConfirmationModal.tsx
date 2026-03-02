@@ -12,7 +12,7 @@ export default function ConfirmationModal({ isOpen, title, message, onConfirm, o
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-sm bg-surface border border-border rounded-lg shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-sm bg-background-secondary border border-border rounded-lg shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-border">
@@ -25,10 +25,10 @@ export default function ConfirmationModal({ isOpen, title, message, onConfirm, o
           </p>
         </div>
         
-        <div className="px-5 py-4 bg-surface-hover/30 flex justify-end gap-3">
+        <div className="px-5 py-4 bg-background-secondary/30 flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-1.5 text-xs font-medium rounded border border-border hover:bg-surface-hover transition-colors text-foreground/70 hover:text-foreground"
+            className="px-4 py-1.5 text-xs font-medium rounded border border-border  transition-colors text-foreground/70 hover:text-foreground"
           >
             Cancel
           </button>

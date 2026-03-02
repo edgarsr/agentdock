@@ -1,138 +1,123 @@
 import { } from 'react';
 
-const ColorTile = ({ name, variable, tailwindName }: { name: string, variable: string, tailwindName?: string }) => (
-  <div className="flex items-center gap-3 p-2 bg-[var(--ide-Panel-background)] border border-[var(--ide-Borders-color)] rounded-lg group hover:border-foreground/20 transition-colors">
-    <div 
-      className="w-10 h-10 rounded shadow-inner border border-[var(--ide-Borders-color)] flex-shrink-0" 
-      style={{ backgroundColor: `var(${variable})` }}
-    />
-    <div className="flex flex-col min-w-0">
-      <span className="text-[10px] font-mono opacity-40 uppercase truncate" title={name}>{name}</span>
-      <span className="text-xs font-mono font-medium truncate select-all" title={variable}>{variable}</span>
-      {tailwindName && (
-        <span className="text-[9px] font-bold text-blue-500/70 uppercase tracking-tighter mt-0.5">.{tailwindName}</span>
-      )}
-    </div>
-  </div>
-);
-
 export function DesignSystemView() {
-  // These map directly to the --* variables in index.css (Screenshot mapping)
-  const mappedColors = [
-    { name: 'Background', var: '--background', tailwind: 'bg-background' },
-    { name: 'Foreground', var: '--foreground', tailwind: 'text-foreground' },
-    { name: 'Surface (Panel)', var: '--surface', tailwind: 'bg-surface' },
-    { name: 'Surface Hover', var: '--surface-hover', tailwind: 'bg-surface-hover' },
-    { name: 'Primary BG', var: '--primary', tailwind: 'bg-primary' },
-    { name: 'Primary FG', var: '--primary-foreground', tailwind: 'text-primary-foreground' },
-    { name: 'Primary Border', var: '--primary-border', tailwind: 'border-primary-border' },
-    { name: 'Secondary BG', var: '--secondary', tailwind: 'bg-secondary' },
-    { name: 'Secondary FG', var: '--secondary-foreground', tailwind: 'text-secondary-foreground' },
-    { name: 'Secondary Border', var: '--secondary-border', tailwind: 'border-secondary-border' },
-    { name: 'Accent BG', var: '--accent', tailwind: 'bg-accent' },
-    { name: 'Accent FG', var: '--accent-foreground', tailwind: 'text-accent-foreground' },
-    { name: 'Border', var: '--border', tailwind: 'border-border' },
-    { name: 'Input BG', var: '--input', tailwind: 'bg-input' },
-    { name: 'Ring/Focus', var: '--ring', tailwind: 'ring-ring' },
-    { name: 'Error', var: '--error', tailwind: 'text-error' },
-    { name: 'Warning', var: '--warning', tailwind: 'text-warning' },
-    { name: 'Success', var: '--success', tailwind: 'text-success' },
-    { name: 'Editor BG', var: '--editor-bg', tailwind: 'bg-editor-bg' },
-    { name: 'Editor FG', var: '--editor-fg', tailwind: 'text-editor-fg' },
-  ];
+    return (
+        <div className="h-full overflow-y-auto bg-background text-foreground p-6 space-y-8">
+            {/* Colors */}
+            <section className="space-y-4">
+                <h2 className="text-sm font-bold opacity-40">COLORS</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <ColorTile tw="bg-background" var="--ide-Panel-background" />
+                    <ColorTile tw="bg-background-secondary" var="--ide-background-secondary" />
+                    <ColorTile tw="bg-primary" var="--ide-Button-default-startBackground" />
+                    <ColorTile tw="bg-secondary" var="--ide-Button-startBackground" />
+                    <ColorTile tw="bg-accent" var="--ide-List-selectionBackground" />
+                    <ColorTile tw="bg-input" var="--ide-TextField-background" />
+                    <ColorTile tw="bg-editor-bg" var="--ide-editor-bg" />
 
-  const fullUiKeys = [
-    'Panel-background', 'Panel-foreground',
-    'Label-background', 'Label-foreground', 'Label-disabledForeground', 'Label-infoForeground',
-    'Borders-color', 'Borders-ContrastBorderColor', 'Separator-separatorColor',
-    'Button-default-startBackground', 'Button-default-endBackground', 'Button-default-foreground',
-    'Button-default-borderColor', 'Button-default-focusColor',
-    'Button-startBackground', 'Button-endBackground', 'Button-foreground', 'Button-borderColor',
-    'TextField-background', 'TextField-foreground', 'TextField-borderColor',
-    'List-background', 'List-foreground', 'List-selectionBackground', 'List-selectionForeground', 'List-hoverBackground',
-    'Tree-background', 'Tree-selectionBackground', 'Tree-hoverBackground',
-    'Toolbar-background', 'Toolbar-hoverBackground',
-    'Notification-errorForeground', 'Notification-warningForeground',
-    'ProgressBar-passedColor', 'ProgressBar-failedColor',
-    'Tests-passedColor', 'Tests-failedColor', 'Tests-errorColor',
-    'ScrollBar-trackColor', 'ScrollBar-thumbColor',
-    'ToolTip-background', 'ToolTip-foreground'
-  ];
+                    <ColorTile tw="text-foreground" var="--ide-Label-foreground" isText />
+                    <ColorTile tw="text-foreground-secondary" var="--ide-Label-disabledForeground" isText />
+                    <ColorTile tw="text-primary-foreground" var="--ide-Button-default-foreground" isText />
+                    <ColorTile tw="text-secondary-foreground" var="--ide-Button-foreground" isText />
+                    <ColorTile tw="text-accent-foreground" var="--ide-List-selectionForeground" isText />
+                    <ColorTile tw="text-editor-fg" var="--ide-editor-fg" isText />
+                    <ColorTile tw="text-success" var="#57965c" isText />
+                    <ColorTile tw="text-error" var="#db5c5c" isText />
+                    <ColorTile tw="text-warning" var="#ba9752" isText />
+                    <ColorTile tw="text-link" var="--ide-Hyperlink-linkColor" isText />
+                    <ColorTile tw="text-added" var="--ide-vcs-added" isText />
+                    <ColorTile tw="text-deleted" var="--ide-vcs-deleted" isText />
 
-  return (
-    <div className="h-full overflow-y-auto bg-[var(--ide-bg)] text-[var(--ide-fg)] selection:bg-[var(--ide-List-selectionBackground)] selection:text-[var(--ide-List-selectionForeground)] animate-in fade-in duration-500">
-      <div className="p-6">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--ide-Label-foreground)]">Design System 2.0</h1>
-          <p className="opacity-70 mt-1">
-            IntelliJ Theme Integration and Semantic Mapping.
-          </p>
-        </header>
-        
-        <section className="space-y-12">
-          {/* Main Screenshot Semantic Mapping */}
-          <div className="space-y-4">
-            <h2 className="text-xs font-semibold uppercase tracking-widest opacity-40 flex items-center gap-2">
-              <span className="w-8 h-[1px] bg-foreground/20"></span> Semantic Mapping (from Screenshot)
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {mappedColors.map(c => (
-                <ColorTile key={c.var} name={c.name} variable={c.var} tailwindName={c.tailwind} />
-              ))}
-            </div>
-          </div>
-
-          {/* Component Library Preview */}
-          <div className="space-y-4">
-            <h2 className="text-xs font-semibold uppercase tracking-widest opacity-40 flex items-center gap-2">
-              <span className="w-8 h-[1px] bg-foreground/20"></span> Component Library Preview
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-surface border border-border rounded shadow-sm">
-                <h3 className="font-medium mb-3">Buttons & Actions</h3>
-                <div className="flex flex-wrap gap-3">
-                  <button className="px-4 py-1.5 bg-primary text-primary-foreground border border-primary-border rounded hover:opacity-90 transition-all active:scale-[0.95]">
-                    Primary Action
-                  </button>
-                  <button className="px-4 py-1.5 bg-secondary text-secondary-foreground border border-secondary-border rounded hover:bg-surface-hover transition-all">
-                    Secondary
-                  </button>
-                  <button className="px-4 py-1.5 text-error border border-error/30 rounded hover:bg-error/5 transition-all">
-                    Dangerous
-                  </button>
+                    <ColorTile tw="border-border" var="--ide-Borders-color" />
+                    <ColorTile tw="border-primary-border" var="--ide-Button-default-borderColor" />
+                    <ColorTile tw="border-secondary-border" var="--ide-Button-borderColor" />
                 </div>
-              </div>
-              
-              <div className="p-4 bg-editor-bg border border-border rounded shadow-sm">
-                <h3 className="font-medium mb-3 text-editor-fg">Editor Concept</h3>
-                <div className="font-mono text-xs space-y-1.5 opacity-90">
-                  <p><span className="text-[var(--ide-syntax-keyword)]">const</span> config = {'{'}</p>
-                  <p className="ml-4"><span className="text-[var(--ide-syntax-attr)]">theme</span>: <span className="text-[var(--ide-syntax-string)]">"IntelliJ"</span>,</p>
-                  <p className="ml-4"><span className="text-[var(--ide-syntax-attr)]">active</span>: <span className="text-[var(--ide-syntax-keyword)]">true</span></p>
-                  <p>{'}'};</p>
+            </section>
+
+            {/* Syntax */}
+            <section className="space-y-4">
+                <h2 className="text-sm font-bold opacity-40">SYNTAX</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <ColorTile tw="text-syntax-keyword" var="--ide-syntax-keyword" isText />
+                    <ColorTile tw="text-syntax-string" var="--ide-syntax-string" isText />
+                    <ColorTile tw="text-syntax-number" var="--ide-syntax-number" isText />
+                    <ColorTile tw="text-syntax-comment" var="--ide-syntax-comment" isText />
+                    <ColorTile tw="text-syntax-function" var="--ide-syntax-function" isText />
+                    <ColorTile tw="text-syntax-class" var="--ide-syntax-class" isText />
+                    <ColorTile tw="text-syntax-tag" var="--ide-syntax-tag" isText />
+                    <ColorTile tw="text-syntax-attr" var="--ide-syntax-attr" isText />
                 </div>
-              </div>
-            </div>
-          </div>
+            </section>
 
-          {/* Raw UI Keys (Full List) */}
-          <div className="space-y-4">
-            <h2 className="text-xs font-semibold uppercase tracking-widest opacity-40 flex items-center gap-2">
-              <span className="w-8 h-[1px] bg-foreground/20"></span> All Available Raw UI Keys
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {fullUiKeys.map(key => (
-                <ColorTile key={key} name={key.replace(/-/g, '.')} variable={`--ide-${key}`} />
-              ))}
-            </div>
-          </div>
-        </section>
+            {/* Typography */}
+            <section className="space-y-4">
+                <h2 className="text-sm font-bold opacity-40">TYPOGRAPHY</h2>
+                <div className="space-y-2">
+                    <TypeRow tw="text-ide-h1" sample="Heading 1" />
+                    <TypeRow tw="text-ide-h2" sample="Heading 2" />
+                    <TypeRow tw="text-ide-h3" sample="Heading 3" />
+                    <TypeRow tw="text-ide-h4" sample="Heading 4" />
+                    <TypeRow tw="text-ide-regular" sample="Regular" />
+                    <TypeRow tw="text-ide-medium" sample="Medium" />
+                    <TypeRow tw="text-ide-small" sample="Small" />
+                </div>
+            </section>
 
-        <footer className="mt-16 pt-6 border-t border-border/20 flex justify-between items-center text-[10px] uppercase tracking-tighter opacity-30">
-          <span>Unified LLM Design System</span>
-          <span>Mapping: index.css</span>
-        </footer>
-      </div>
-    </div>
-  );
+            {/* Spacing */}
+            <section className="space-y-4">
+                <h2 className="text-sm font-bold opacity-40">SPACING</h2>
+                <div className="space-y-2">
+                    <SpaceRow tw="space-y-ide-paragraph" var="--ide-paragraph-spacing" />
+                    <SpaceRow tw="pl-ide-indent" var="--ide-list-indent" />
+                </div>
+            </section>
+
+            {/* Border */}
+            <section className="space-y-4">
+                <h2 className="text-sm font-bold opacity-40">BORDER RADIUS</h2>
+                <div className="flex items-center gap-3 p-3 bg-background-secondary border border-border">
+                    <div className="w-16 h-16 bg-primary rounded-ide"></div>
+                    <code className="text-xs">rounded-ide</code>
+                    <code className="text-xs opacity-50">6px</code>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function ColorTile({ tw, var: cssVar, isText }: { tw: string; var: string; isText?: boolean }) {
+    const colorValue = cssVar.startsWith('#') ? cssVar : `var(${cssVar})`;
+    return (
+        <div className="p-3 bg-background-secondary border border-border space-y-2">
+            <div
+                className="w-full h-20 border border-border"
+                style={{
+                    [isText ? 'color' : 'backgroundColor']: colorValue,
+                    ...(isText && { backgroundColor: 'var(--ide-Panel-background)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' })
+                }}
+            >
+                {isText && 'Aa'}
+            </div>
+            <code className="text-xs block truncate">{tw}</code>
+            <code className="text-xs block truncate opacity-40">{cssVar}</code>
+        </div>
+    );
+}
+
+function TypeRow({ tw, sample }: { tw: string; sample: string }) {
+    return (
+        <div className="flex items-baseline gap-3 p-2 bg-background-secondary border border-border">
+            <code className="text-xs w-32 flex-shrink-0">{tw}</code>
+            <span className={tw}>{sample}</span>
+        </div>
+    );
+}
+
+function SpaceRow({ tw, var: cssVar }: { tw: string; var: string }) {
+    return (
+        <div className="flex items-center gap-3 p-2 bg-background-secondary border border-border">
+            <code className="text-xs w-40 flex-shrink-0">{tw}</code>
+            <code className="text-xs opacity-50">{cssVar}</code>
+        </div>
+    );
 }

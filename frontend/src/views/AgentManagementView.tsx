@@ -82,7 +82,7 @@ export function AgentManagementView() {
               return (
                 <article 
                   key={agent.id} 
-                  className="bg-surface border border-border/40 rounded-xl p-5 shadow-sm space-y-6"
+                  className="bg-background-secondary border border-border/40 rounded-xl p-5 shadow-sm space-y-6"
                 >
                   {/* Title & Toggle */}
                   <div className="flex justify-between items-start gap-4">
@@ -90,12 +90,12 @@ export function AgentManagementView() {
                       <div className="flex items-center gap-2">
                         <h3 className="font-bold text-lg truncate">{agent.displayName}</h3>
                         {agent.isDefault && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">
+                          <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">
                             Default
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] font-mono text-muted-foreground opacity-50">
+                      <div className="font-mono text-foreground-secondary opacity-50">
                         {agent.id}
                       </div>
                     </div>
@@ -103,7 +103,7 @@ export function AgentManagementView() {
                     <button
                         onClick={() => handleToggleEnabled(agent.id, agent.enabled)}
                         disabled={isInstalling || isDeleting}
-                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-95 ${agent.enabled ? 'bg-primary' : 'bg-muted'} ${isInstalling || isDeleting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-95 ${agent.enabled ? 'bg-primary' : 'bg-background-secondary'} ${isInstalling || isDeleting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${agent.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
@@ -112,7 +112,7 @@ export function AgentManagementView() {
                   {/* Installation Section */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-muted-foreground/50">Installation</span>
+                        <span className="font-bold text-foreground-secondary/50">Installation</span>
                         {agent.downloaded && !isInstalling && (
                             <button
                                 onClick={() => handleDelete(agent.id)}
@@ -127,12 +127,12 @@ export function AgentManagementView() {
                     {agent.downloaded ? (
                         <div className="bg-black/5 rounded border border-border/10 p-3 space-y-2">
                             {/* Main download path */}
-                            <div className="text-[11px] font-mono opacity-60 break-all leading-tight">
+                            <div className="font-mono opacity-60 break-all leading-tight">
                                 {agent.downloadPath}
                             </div>
                             {/* Supporting tools paths */}
                             {agent.supportingTools?.map((tool, idx) => (
-                                <div key={`tool-${idx}`} className="text-[11px] font-mono opacity-60 break-all leading-tight">
+                                <div key={`tool-${idx}`} className="font-mono opacity-60 break-all leading-tight">
                                     {tool.path}
                                 </div>
                             ))}
@@ -142,13 +142,13 @@ export function AgentManagementView() {
                             {isInstalling ? (
                                 <div className="flex items-center gap-3 py-2 text-primary font-bold">
                                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    <span className="text-[11px]">Installing...</span>
-                                    <span className="text-[10px] text-muted-foreground font-normal italic truncate opacity-60">{agent.downloadStatus}</span>
+                                    <span>Installing...</span>
+                                    <span className="text-foreground-secondary font-normal italic truncate opacity-60">{agent.downloadStatus}</span>
                                 </div>
                             ) : (
                                 <>
                                     {agent.downloadStatus?.startsWith('Error') && (
-                                        <div className="text-[11px] text-red-500/80 py-1">{agent.downloadStatus}</div>
+                                        <div className="text-red-500/80 py-1">{agent.downloadStatus}</div>
                                     )}
                                     <button
                                         onClick={() => handleDownload(agent.id)}
@@ -166,10 +166,10 @@ export function AgentManagementView() {
                   {agent.downloaded && (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-muted-foreground/50">Authentication</span>
+                            <span className="font-bold text-foreground-secondary/50">Authentication</span>
                             <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${agent.authAuthenticated ? 'bg-green-500' : 'bg-red-500'}`} />
-                                <span className={`text-[11px] font-bold ${agent.authAuthenticated ? 'text-green-500/80' : 'text-red-500/80'}`}>
+                                <span className={`font-bold ${agent.authAuthenticated ? 'text-green-500/80' : 'text-red-500/80'}`}>
                                     {agent.authAuthenticated ? 'Authenticated' : 'Unauthorized'}
                                 </span>
                             </div>
@@ -178,7 +178,7 @@ export function AgentManagementView() {
                         {/* Auth Key Path - Separate Box, Only if Authenticated */}
                         {agent.authAuthenticated && agent.authPath && (
                             <div className="bg-black/5 rounded border border-border/10 p-3">
-                                <div className="text-[11px] font-mono opacity-60 break-all leading-tight">
+                                <div className="font-mono opacity-60 break-all leading-tight">
                                     {agent.authPath}
                                 </div>
                             </div>
@@ -192,7 +192,7 @@ export function AgentManagementView() {
                             disabled={agent.authenticating}
                             className={`px-4 py-2 rounded text-xs font-bold transition-all focus:outline-none ${
                                 agent.authAuthenticated
-                                    ? 'bg-muted/20 text-foreground border border-border/50 hover:bg-muted/40 focus:ring-2 focus:ring-muted active:scale-95'
+                                    ? 'bg-background-secondary/20 text-foreground border border-border/50 hover:bg-background-secondary/40 focus:ring-2 focus:ring-muted active:scale-95'
                                     : 'bg-primary text-primary-foreground shadow-sm hover:opacity-90 focus:ring-2 focus:ring-primary/50 active:scale-95'
                             } ${agent.authenticating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                         >

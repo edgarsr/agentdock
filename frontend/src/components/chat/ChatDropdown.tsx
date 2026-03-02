@@ -42,7 +42,7 @@ export default function ChatDropdown({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-1.5 py-1 px-2 rounded hover:bg-surface-hover text-[13px] text-foreground/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
+        className="flex items-center gap-1.5 py-1 px-2 rounded  text-foreground/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed group"
       >
         <span className="truncate max-w-[150px]">{selectedLabel}</span>
         <svg
@@ -63,12 +63,12 @@ export default function ChatDropdown({
 
       {open && !disabled && (
         <div
-          className={`absolute z-50 min-w-[220px] rounded-md border border-border bg-surface shadow-xl overflow-hidden py-1 ${
+          className={`absolute z-50 min-w-[220px] rounded-md border border-border bg-background-secondary shadow-xl overflow-hidden py-1 ${
             direction === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 left-0'
           }`}
         >
           {header && (
-            <div className="px-3 py-1.5 text-[11px] font-medium text-foreground/40 border-b border-border/50 text-center uppercase tracking-wider">
+            <div className="px-3 py-1.5 font-medium text-foreground/40 border-b border-border/50 text-center uppercase tracking-wider">
               {header}
             </div>
           )}
@@ -82,7 +82,7 @@ export default function ChatDropdown({
                     onChange(option.id);
                     setOpen(false);
                   }}
-                  className={`flex items-center w-full px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-surface-hover group ${
+                  className={`flex items-center w-full px-3 py-1.5 text-left transition-colors  group ${
                     option.id === value ? 'bg-accent text-foreground font-medium' : 'text-foreground/80'
                   }`}
                 >
@@ -97,7 +97,7 @@ export default function ChatDropdown({
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-[13px] text-foreground/40 italic text-center">
+              <div className="px-3 py-2 text-foreground/40 italic text-center">
                 {placeholder}
               </div>
             )}

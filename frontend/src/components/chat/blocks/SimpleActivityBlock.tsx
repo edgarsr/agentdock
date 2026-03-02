@@ -36,13 +36,13 @@ export const SimpleActivityBlock: React.FC<Props> = ({ block }) => {
         <div className="flex-shrink-0 text-editor-fg opacity-70 relative top-[-1px]">
           {kind === 'delete' ? <TrashIcon size={14} /> : <MoveIcon size={14} />}
         </div>
-        <div className="flex-1 text-left text-[12px] font-mono truncate text-editor-fg opacity-90 pr-2">
+        <div className="flex-1 text-left font-mono truncate text-editor-fg opacity-90 pr-2">
           {title}
         </div>
         <div className="flex-shrink-0">
           {(isPending || isError) && (
             <div
-              className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)] ${
+              className={`w-2.5 h-2.5 rounded-full ${
                 isPending ? 'bg-orange-500 animate-pulse' : 'bg-error'
               }`}
             />

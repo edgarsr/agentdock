@@ -38,7 +38,7 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block }) => {
             <div className="flex-shrink-0 text-editor-fg opacity-70">
               <Wrench size={14} />
             </div>
-            <div className="flex-1 text-left text-[12px] font-mono truncate text-editor-fg opacity-90 pr-2">
+            <div className="flex-1 text-left font-mono truncate text-editor-fg opacity-90 pr-2">
               {block.entry.title || block.entry.kind}
             </div>
           </div>
