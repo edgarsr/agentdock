@@ -163,58 +163,60 @@ export default function ChatSessionView({
         agentName={adapterDisplayName}
       />
 
-      <FileChangesPanel
-        fileChanges={fileChanges}
-        totalAdditions={totalAdditions}
-        totalDeletions={totalDeletions}
-        onUndoFile={handleUndoFile}
-        onUndoAllFiles={handleUndoAllFiles}
-        onKeepFile={handleKeepFile}
-        onKeepAll={handleKeepAll}
-        onOpenFile={handleOpenFile}
-        onShowDiff={handleShowDiff}
-      />
-
-      {/* Resize Handle / Divider */}
-      <div 
-        onMouseDown={startResizing}
-        className="h-[12px] -my-[6px] w-full cursor-row-resize relative z-10 group select-none"
-      >
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-border transition-colors group-hover:bg-accent" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-[2px] bg-border group-hover:bg-accent rounded-full transition-all" />
-      </div>
-
-      <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
-        <ChatInput
-          chatId={chatId}
-          inputValue={inputValue}
-          onInputChange={setInputValue}
-          onSend={handleSend}
-          onStop={handleStop}
-          isSending={isSending}
-          
-          agentOptions={agentOptions}
-          selectedAgentId={selectedAgentId}
-          onAgentChange={(id) => {
-            if (onAgentChangeRequest && id !== selectedAgentId) {
-              onAgentChangeRequest(id);
-            }
-          }}
-          
-          selectedModelId={selectedModelId}
-          onModelChange={handleModelChange}
-          
-          modeOptions={modeOptions}
-          selectedModeId={selectedModeId}
-          onModeChange={handleModeChange}
-          
-          hasSelectedAgent={hasSelectedAgent}
-          attachments={attachments}
-          onAttachmentsChange={setAttachments}
-          onImageClick={setSelectedImage}
-          onHeightChange={setContentHeight}
-          customHeight={inputHeight}
+      <div className="flex flex-col shrink-0 relative z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.15)] bg-background">
+        <FileChangesPanel
+          fileChanges={fileChanges}
+          totalAdditions={totalAdditions}
+          totalDeletions={totalDeletions}
+          onUndoFile={handleUndoFile}
+          onUndoAllFiles={handleUndoAllFiles}
+          onKeepFile={handleKeepFile}
+          onKeepAll={handleKeepAll}
+          onOpenFile={handleOpenFile}
+          onShowDiff={handleShowDiff}
         />
+
+        {/* Resize Handle / Divider */}
+        <div 
+          onMouseDown={startResizing}
+          className="h-[12px] -my-[6px] w-full cursor-row-resize relative z-10 group select-none"
+        >
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-border transition-colors group-hover:bg-accent" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-[2px] bg-border group-hover:bg-accent rounded-full transition-all" />
+        </div>
+
+        <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
+          <ChatInput
+            chatId={chatId}
+            inputValue={inputValue}
+            onInputChange={setInputValue}
+            onSend={handleSend}
+            onStop={handleStop}
+            isSending={isSending}
+            
+            agentOptions={agentOptions}
+            selectedAgentId={selectedAgentId}
+            onAgentChange={(id) => {
+              if (onAgentChangeRequest && id !== selectedAgentId) {
+                onAgentChangeRequest(id);
+              }
+            }}
+            
+            selectedModelId={selectedModelId}
+            onModelChange={handleModelChange}
+            
+            modeOptions={modeOptions}
+            selectedModeId={selectedModeId}
+            onModeChange={handleModeChange}
+            
+            hasSelectedAgent={hasSelectedAgent}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            onImageClick={setSelectedImage}
+            onHeightChange={setContentHeight}
+            customHeight={inputHeight}
+          />
+        </div>
       </div>
 
       {permissionRequest && isActive && (

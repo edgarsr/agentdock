@@ -15,7 +15,7 @@ const INITIAL_SESSION_ID = nextId('ses');
 
 export function ChatView() {
   const [tabs, setTabs] = useState<ChatTab[]>([
-    { id: INITIAL_TAB_ID, title: 'New Chat', sessionId: INITIAL_SESSION_ID }
+    { id: INITIAL_TAB_ID, title: 'Untitled', sessionId: INITIAL_SESSION_ID }
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(INITIAL_TAB_ID);
   const [showHistory, setShowHistory] = useState<boolean>(false);
@@ -57,7 +57,7 @@ export function ChatView() {
     const newId = nextId('tab');
     const newSessionId = nextId('ses');
     const agent = agentId ? availableAgents.find(a => a.id === agentId) : undefined;
-    const title = agent ? agent.displayName : 'New Chat';
+    const title = 'Untitled';
     setTabs((prev) => [...prev, { id: newId, title, sessionId: newSessionId, agentId }]);
     setActiveTabId(newId);
     setShowHistory(false);
@@ -79,7 +79,7 @@ export function ChatView() {
     if (newTabs.length === 0) {
       const freshId = nextId('tab');
       const freshSessionId = nextId('ses');
-      setTabs([{ id: freshId, title: 'New Chat', sessionId: freshSessionId }]);
+      setTabs([{ id: freshId, title: 'Untitled', sessionId: freshSessionId }]);
       setActiveTabId(freshId);
       return;
     }
@@ -99,7 +99,7 @@ export function ChatView() {
   const handleOpenHistory = (item: HistorySessionMeta) => {
     const newId = nextId('tab');
     const newSessionId = nextId('ses');
-    const title = item.title || 'History Chat';
+    const title = item.title || 'Untitled';
     setTabs((prev) => [
       ...prev,
       {
