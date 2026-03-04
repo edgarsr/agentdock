@@ -135,6 +135,21 @@ export interface ContentChunk {
 }
 
 
+export interface ToolCallDiff {
+  path: string;
+  oldText: string | null;
+  newText: string;
+}
+
+export interface ToolCallEvent {
+  toolCallId: string;
+  title: string;
+  kind?: string;
+  status?: string;
+  diffs: ToolCallDiff[];
+  locations?: { path: string; line?: number }[];
+}
+
 export interface FileChangeSummary {
   filePath: string;
   fileName: string;

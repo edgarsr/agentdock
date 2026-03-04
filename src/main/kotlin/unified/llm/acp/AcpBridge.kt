@@ -130,10 +130,12 @@ class AcpBridge(
                 }
                 is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
                 is SessionUpdate.ToolCall -> {
+                    if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
                     val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                     pushToolCallChunk(chatId, json, isReplay)
                 }
                 is SessionUpdate.ToolCallUpdate -> {
+                    if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
                     val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                     pushToolCallUpdateChunk(chatId, update.toolCallId.value, json, isReplay)
                 }
@@ -1221,7 +1223,20 @@ class AcpBridge(
         }
     }
 
-
+    /**
+     * When the agent modifies files in a live (non-replay) tool call, remove those paths from
+     * processedFiles so they show again in Edits. Only called when isReplay == false.
+     */
+    private fun removeProcessedFilesForDiffs(chatId: String, content: List<ToolCallContent>?) {
+        val sessionId = service.sessionId(chatId) ?: return
+        val adNameValue = service.activeAdapterName(chatId) ?: return
+        val diffs = content?.filterIsInstance<ToolCallContent.Diff>() ?: return
+        if (diffs.isEmpty()) return
+        val paths = diffs.map { it.path }
+        ChangesStateService.removeProcessedFiles(sessionId, adNameValue, paths)
+        val state = ChangesStateService.loadState(sessionId, adNameValue) ?: ChangesState(sessionId, adNameValue)
+        pushChangesState(chatId, state)
+    }
 
     fun pushAdapters() {
         try {

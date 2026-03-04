@@ -15,6 +15,7 @@ import {
 import ChatDropdown from './ChatDropdown';
 import { DropdownOption } from '../../types/chat';
 import AttachmentBar from './input/AttachmentBar';
+import { Tooltip } from './shared/Tooltip';
 
 // Sub-components & Plugins
 import { ChatInputActionsContext } from './input/ChatInputActionsContext';
@@ -206,17 +207,22 @@ export default function ChatInput({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleSendMode}
-                className="text-[10px] text-foreground/40 hover:text-foreground/80 transition-colors uppercase font-medium tracking-wide outline-none relative group px-1"
+              <Tooltip 
+                content={
+                  <div className="normal-case tracking-normal text-left">
+                    <div className="font-semibold mb-1">Send mode</div>
+                    <div>Click to toggle between sending on Enter or Ctrl+Enter.</div>
+                  </div>
+                }
               >
-                {sendMode === 'enter' ? 'Enter' : 'Ctrl+Enter'}
-                <div className="absolute bottom-full mb-2 right-0 hidden group-hover:block w-max max-w-[200px] bg-background-secondary border border-border text-foreground text-xs p-2 rounded shadow-xl whitespace-normal normal-case tracking-normal text-left z-50">
-                  <div className="font-semibold mb-1">Send mode</div>
-                  <div>Click to toggle between sending on Enter or Ctrl+Enter.</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={toggleSendMode}
+                  className="text-[10px] text-foreground/40 hover:text-foreground/80 transition-colors uppercase font-medium tracking-wide outline-none relative px-1"
+                >
+                  {sendMode === 'enter' ? 'Enter' : 'Ctrl+Enter'}
+                </button>
+              </Tooltip>
 
               <div className="flex items-center ml-1">
                 {isSending ? (

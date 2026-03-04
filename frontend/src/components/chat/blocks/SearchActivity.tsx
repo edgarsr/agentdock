@@ -1,6 +1,6 @@
 import React from 'react';
 import { ToolCallEntry } from '../../../types/chat';
-import { ActivityTooltip } from './ActivityTooltip';
+import { Tooltip } from '../shared/Tooltip';
 
 interface Props {
   entry: ToolCallEntry;
@@ -19,18 +19,18 @@ export const SearchActivity: React.FC<Props> = ({ entry }) => {
   const hasError = status === 'error' || status === 'failed';
 
   return (
-    <ActivityTooltip
-      icon={
-        <span className="">
+    <Tooltip content={<span>Search: {cleanTitle}</span>}>
+      <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
+        <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
           <SearchIcon size={13} />
+        </div>
+        <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">
+          {cleanTitle || entry.kind}
         </span>
-      }
-      content={<span>Search: {cleanTitle}</span>}
-    >
-      <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
-      {hasError && (
-        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
-      )}
-    </ActivityTooltip>
+        {hasError && (
+          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
+        )}
+      </div>
+    </Tooltip>
   );
 };

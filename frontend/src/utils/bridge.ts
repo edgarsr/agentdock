@@ -1,4 +1,4 @@
-import { AgentOption, PermissionRequest, HistorySessionMeta, UndoResultPayload, ChangesState, ContentChunk } from '../types/chat';
+import { AgentOption, PermissionRequest, HistorySessionMeta, UndoResultPayload, ChangesState, ContentChunk, ToolCallEvent } from '../types/chat';
 
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
@@ -9,6 +9,7 @@ export interface PermissionRequestEvent { request: PermissionRequest; }
 export interface HistoryListEvent { list: HistorySessionMeta[]; }
 export interface UndoResultEvent { chatId: string; result: UndoResultPayload; }
 export interface ChangesStateEvent { chatId: string; state: ChangesState; }
+export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 
 
 const EVENT_NAMES = {
@@ -22,7 +23,9 @@ const EVENT_NAMES = {
   HISTORY_LIST: 'history-list',
   UNDO_RESULT: 'acp-undo-result',
   CHANGES_STATE: 'acp-changes-state',
-  ATTACHMENTS_ADDED: 'acp-attachments-added'
+  ATTACHMENTS_ADDED: 'acp-attachments-added',
+  TOOL_CALL: 'acp-tool-call',
+  TOOL_CALL_UPDATE: 'acp-tool-call-update'
 };
 
 export const ACPBridge = {
@@ -31,6 +34,41 @@ export const ACPBridge = {
 
     window.__onContentChunk = (chunk) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.CONTENT_CHUNK, { detail: { chunk } }));
+
+      // Also dispatch tool_call / tool_call_update events for useFileChanges
+      if (chunk.type === 'tool_call' || chunk.type === 'tool_call_update') {
+        try {
+          const raw = chunk.toolRawJson ? JSON.parse(chunk.toolRawJson) : {};
+          // diffs come from ToolCallContent.Diff entries serialized as { type: 'diff', path, oldText, newText }
+          const diffs = Array.isArray(raw.content)
+            ? raw.content
+                .filter((c: any) => c.type === 'diff' || (c.path !== undefined && c.newText !== undefined))
+                .map((c: any) => ({ path: c.path, oldText: c.oldText ?? null, newText: c.newText ?? '' }))
+            : (Array.isArray(raw.diffs) ? raw.diffs : []);
+          if (diffs.length > 0) {
+            const payload: ToolCallEvent = {
+              toolCallId: chunk.toolCallId || raw.toolCallId || '',
+              title: chunk.toolTitle || raw.title || '',
+              kind: chunk.toolKind || raw.kind,
+              status: chunk.toolStatus || raw.status,
+              diffs,
+              locations: raw.locations,
+            };
+            const eventName = chunk.type === 'tool_call' ? EVENT_NAMES.TOOL_CALL : EVENT_NAMES.TOOL_CALL_UPDATE;
+            window.dispatchEvent(new CustomEvent(eventName, { detail: { chatId: chunk.chatId, payload } }));
+          } else if (chunk.type === 'tool_call_update' && (chunk.toolCallId || raw.toolCallId) && (chunk.toolStatus || raw.status)) {
+            // Status-only update (no diffs) — e.g. denied permission or error
+            const payload: ToolCallEvent = {
+              toolCallId: chunk.toolCallId || raw.toolCallId || '',
+              title: chunk.toolTitle || raw.title || '',
+              kind: chunk.toolKind || raw.kind,
+              status: chunk.toolStatus || raw.status,
+              diffs: [],
+            };
+            window.dispatchEvent(new CustomEvent(EVENT_NAMES.TOOL_CALL_UPDATE, { detail: { chatId: chunk.chatId, payload } }));
+          }
+        } catch (_) { /* ignore parse errors */ }
+      }
     };
 
     window.__onStatus = (chatId, status) => {
@@ -142,6 +180,16 @@ export const ACPBridge = {
   onChangesState: (callback: (e: CustomEvent<ChangesStateEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.CHANGES_STATE, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.CHANGES_STATE, callback as EventListener);
+  },
+
+  onToolCall: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
+  },
+
+  onToolCallUpdate: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
   },
 
   onAttachmentsAdded: (callback: (e: CustomEvent<{ chatId: string; files: any[] }>) => void) => {

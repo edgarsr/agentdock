@@ -1,6 +1,6 @@
 import React from 'react';
 import { ToolCallEntry } from '../../../types/chat';
-import { ActivityTooltip } from './ActivityTooltip';
+import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
 
 interface Props {
@@ -58,23 +58,21 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
     : '';
 
   return (
-    <ActivityTooltip
-      icon={
-        <span className="">
+    <Tooltip content={<span>Read {location.path}{lineRange}</span>}>
+      <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
+        <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
           <FileIcon size={13} />
-        </span>
-      }
-      content={<span>Read {location.path}{lineRange}</span>}
-    >
-      <button
-        onClick={() => onOpenFile(location.path, startLine || undefined)}
-        className="text-[var(--ide-Link-foreground)] hover:underline text-left truncate"
-      >
-        {fileName}{lineRange}
-      </button>
-      {hasError && (
-        <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
-      )}
-    </ActivityTooltip>
+        </div>
+        <button
+          onClick={() => onOpenFile(location.path, startLine || undefined)}
+          className="text-[var(--ide-Link-foreground)] hover:underline text-left truncate min-w-0 flex-1"
+        >
+          {fileName}{lineRange}
+        </button>
+        {hasError && (
+          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
+        )}
+      </div>
+    </Tooltip>
   );
 };
