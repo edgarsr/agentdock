@@ -22,8 +22,14 @@ function computeDiffStats(oldString: string, newString: string): { additions: nu
   return { additions, deletions };
 }
 
-/** Tool call statuses that indicate the operation was not applied */
-const FAILED_STATUSES = new Set(['error', 'cancelled', 'failed', 'denied']);
+/**
+ * Tool call statuses that confirm the operation was successfully applied.
+ * Only events with one of these statuses are shown in the FileChangesPanel.
+ * This whitelist approach ensures that:
+ *  - Events with no status yet (undefined/empty, i.e. awaiting permission) are hidden
+ *  - Events that were denied / cancelled / failed are also hidden
+ */
+const APPLIED_STATUSES = new Set(['success', 'completed']);
 
 /**
  * Check if two file paths refer to the same file.
@@ -146,8 +152,9 @@ export function useFileChanges(
     const eventsToProcess = toolCallEvents.slice(baseToolCallIndex);
 
     for (const event of eventsToProcess) {
-      // Skip tool calls that failed / were denied
-      if (event.status && FAILED_STATUSES.has(event.status)) continue;
+      // Only show tool calls that have been explicitly confirmed as applied.
+      // Events with no status yet (awaiting permission) or failed/denied events are excluded.
+      if (!event.status || !APPLIED_STATUSES.has(event.status)) continue;
 
       for (const diff of event.diffs) {
         const filePath = diff.path;

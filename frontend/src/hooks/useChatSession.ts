@@ -316,6 +316,7 @@ export function useChatSession(
   const [inputValue, setInputValue] = useState('');
   const [status, setStatus] = useState<string>('not started');
   const [isSending, setIsSending] = useState(false);
+  const [isHistoryReplaying, setIsHistoryReplaying] = useState(!!historySession);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(initialAgentId || '');
   const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({});
   const [selectedModeByAgent, setSelectedModeByAgent] = useState<Record<string, string>>({});
@@ -450,7 +451,7 @@ export function useChatSession(
         const durationSeconds = startTimeRef.current ? (endTime - startTimeRef.current) / 1000 : undefined;
         startTimeRef.current = null;
 
-        setPermissionRequest(null);
+        // setPermissionRequest(null); - Handled manually or by new requests. Clearing on 'ready' creates race conditions with tool execution pauses.
         // Flush any remaining buffered chunks immediately before processing status
         if (chunkBufferRef.current.length > 0) {
           flushScheduledRef.current = false;
@@ -494,6 +495,7 @@ export function useChatSession(
 
         if (!pendingBlocksRef.current) {
           setIsSending(false);
+          setIsHistoryReplaying(false);
         }
       }
 
@@ -559,7 +561,8 @@ export function useChatSession(
     pendingBlocksRef.current = null;
     setMessages([]);
     setStatus('initializing');
-    setIsSending(true); // Replay is a special case of "sending"
+    setIsSending(true);
+    setIsHistoryReplaying(true);
 
     startedAgentIdRef.current = historySession.adapterName;
     startedModelIdRef.current = historySession.modelId || '';
@@ -728,6 +731,7 @@ export function useChatSession(
     try {
       startTimeRef.current = Date.now();
       window.__sendPrompt(chatId, JSON.stringify(blocks));
+      setPermissionRequest(null);
     } catch (e) {
       console.warn('[useChatSession] Failed to send prompt:', e);
       setIsSending(false);
@@ -772,6 +776,7 @@ export function useChatSession(
     setInputValue,
     status,
     isSending,
+    isHistoryReplaying,
     selectedAgentId,
     setSelectedAgentId,
     agentOptions,

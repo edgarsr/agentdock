@@ -144,21 +144,21 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
       >
         <div className="overflow-hidden">
           {diffData && (
-            <div className="bg-editor-bg max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-              <div className="syntax-highlighted font-mono leading-relaxed py-2">
+            <div className="bg-editor-bg max-h-[400px] overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+              <div className="syntax-highlighted font-mono leading-relaxed py-2 min-w-max inline-block w-full">
                 {diffData.lines.map((line, i) => (
                   <div
                     key={i}
                     className={`flex w-full group ${
-                      line.type === 'added' ? '' :
-                      line.type === 'removed' ? '' :
-                      'hover:bg-secondary opacity-30'
+                      line.type === 'added' ? 'bg-added-bg' :
+                      line.type === 'removed' ? 'bg-deleted-bg' :
+                      'hover:bg-secondary'
                     }`}
                   >
-                    <div className={`w-5 flex-shrink-0 flex justify-center opacity-60 select-none py-0.5 font-bold ${
+                    <div className={`w-5 flex-shrink-0 flex justify-center select-none py-0.5 font-bold ${
                       line.type === 'added' ? 'text-success' :
                       line.type === 'removed' ? 'text-error' :
-                      'text-editor-fg opacity-20'
+                      'text-editor-fg'
                     }`}>
                       {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
                     </div>

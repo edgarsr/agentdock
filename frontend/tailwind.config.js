@@ -39,8 +39,14 @@ export default {
         error: '#db5c5c',
         warning: '#ba9752',
         link: 'var(--ide-Hyperlink-linkColor)',
-        added: 'var(--ide-vcs-added)',
-        deleted: 'var(--ide-vcs-deleted)',
+        added: {
+          DEFAULT: 'var(--ide-vcs-added)',
+          bg: 'color-mix(in srgb, var(--ide-vcs-added), transparent 70%)'
+        },
+        deleted: {
+          DEFAULT: 'var(--ide-vcs-deleted)',
+          bg: 'color-mix(in srgb, var(--ide-vcs-deleted), transparent 70%)'
+        },
         syntax: {
           keyword: 'var(--ide-syntax-keyword)',
           string: 'var(--ide-syntax-string)',

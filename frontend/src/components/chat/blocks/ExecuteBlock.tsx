@@ -1,11 +1,11 @@
 import React from 'react';
 import { ToolCallBlock } from '../../../types/chat';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, SquareTerminal } from 'lucide-react';
 import { parseToolStatus } from '../../../utils/toolCallUtils';
 import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
 
 const TerminalIcon = () => (
-  <span className="font-mono font-bold leading-none select-none relative top-[-1px]">$</span>
+  <SquareTerminal size={16} className="text-primary" />
 );
 
 interface Props {
@@ -52,6 +52,10 @@ export const ExecuteBlock: React.FC<Props> = ({ block }) => {
         <div className="overflow-hidden">
           <div className="p-3 bg-editor-bg max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
             <pre className="font-mono whitespace-pre-wrap break-all leading-relaxed text-editor-fg min-h-[0.5rem]">
+              <div className="mb-1 text-editor-fg opacity-100 font-bold">
+                <span className="opacity-50 mr-2 select-none">$</span>
+                {command}
+              </div>
               {block.entry.result ? (
                 String(block.entry.result)
               ) : (

@@ -56,7 +56,6 @@ export function ChatView() {
   const handleNewTab = (agentId?: string) => {
     const newId = nextId('tab');
     const newSessionId = nextId('ses');
-    const agent = agentId ? availableAgents.find(a => a.id === agentId) : undefined;
     const title = 'Untitled';
     setTabs((prev) => [...prev, { id: newId, title, sessionId: newSessionId, agentId }]);
     setActiveTabId(newId);
@@ -142,7 +141,6 @@ export function ChatView() {
               className={`absolute inset-0 w-full h-full bg-background ${isVisible ? 'z-10 visible' : 'z-0 invisible'}`}
             >
                <ChatSessionView 
-                  isActive={isTabActive && !showHistory} 
                   initialAgentId={tab.agentId}
                   chatId={tab.sessionId}
                   historySession={tab.historySession}

@@ -74,15 +74,16 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300
       {visible && createPortal(
         <div 
           ref={tooltipRef}
-          className="fixed z-[9999] pointer-events-none -translate-y-full mb-1 animate-in fade-in zoom-in-95 duration-400 ease-out"
+          className="fixed z-[9999] pointer-events-none"
           style={{ 
             left: coords.x, 
             top: coords.y,
-            transform: `translateX(calc(-50% + ${offset}px))`,
-            maxWidth: 'calc(100vw - 24px)'
+            transform: `translate(calc(-50% + ${offset}px), calc(-100% - 6px))`,
+            maxWidth: 'calc(100vw - 24px)',
+            animation: 'tooltip-in 150ms ease-out forwards',
           }}
         >
-          <div className="bg-background-secondary border border-border text-foreground text-xs px-2 py-1 rounded-sm whitespace-normal break-all">
+          <div className="bg-background border border-border text-foreground text-xs px-2 py-1 rounded-sm whitespace-normal break-all shadow-md">
             {content}
           </div>
         </div>,

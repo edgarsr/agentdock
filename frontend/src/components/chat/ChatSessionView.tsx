@@ -4,11 +4,10 @@ import { useFileChanges } from '../../hooks/useFileChanges';
 import { AgentOption, FileChangeSummary, HistorySessionMeta } from '../../types/chat';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
-import PermissionModal from './PermissionModal';
+import PermissionBar from './PermissionBar';
 import FileChangesPanel from './FileChangesPanel';
 
 interface ChatSessionProps {
-  isActive: boolean;
   initialAgentId?: string;
   chatId: string;
   availableAgents: AgentOption[];
@@ -17,7 +16,6 @@ interface ChatSessionProps {
 }
 
 export default function ChatSessionView({ 
-  isActive, 
   initialAgentId, 
   chatId,
   availableAgents,
@@ -30,6 +28,7 @@ export default function ChatSessionView({
     setInputValue,
     status,
     isSending,
+    isHistoryReplaying,
     agentOptions,
     selectedAgentId,
     selectedModelId,
@@ -48,6 +47,9 @@ export default function ChatSessionView({
     adapterName,
     adapterDisplayName
   } = useChatSession(chatId, availableAgents, initialAgentId, historySession);
+
+  // Tracks if the history jump has been performed and verified by the UI
+  const [isRevealed, setIsRevealed] = useState(false);
 
   const {
     fileChanges,
@@ -154,14 +156,27 @@ export default function ChatSessionView({
   }, [stopResizing]);
 
   return (
-    <div className="flex flex-col h-full relative">
-      <MessageList 
-        messages={messages} 
-        onImageClick={setSelectedImage} 
-        isSending={isSending}
-        status={status}
-        agentName={adapterDisplayName}
-      />
+    <div className="flex flex-col h-full relative overflow-hidden bg-background">
+      {/* Message List Area with Scoped Overlay */}
+      <div className="flex-1 flex flex-col min-h-0 relative">
+        {(isHistoryReplaying || (!!historySession && !isRevealed)) && (
+          <div className="absolute inset-0 z-50 bg-background flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-foreground-secondary border-t-transparent rounded-full animate-spin opacity-50" />
+          </div>
+        )}
+        
+        <div className={`flex-1 flex flex-col min-h-0 ${(isHistoryReplaying || (!!historySession && !isRevealed)) ? 'invisible' : 'visible'}`}>
+          <MessageList 
+            messages={messages} 
+            onImageClick={setSelectedImage} 
+            isSending={isSending}
+            status={status}
+            agentName={adapterDisplayName}
+            isHistoryReplaying={isHistoryReplaying}
+            onReadyToReveal={() => setIsRevealed(true)}
+          />
+        </div>
+      </div>
 
       <div className="flex flex-col shrink-0 relative z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.15)] bg-background">
         <FileChangesPanel
@@ -175,6 +190,13 @@ export default function ChatSessionView({
           onOpenFile={handleOpenFile}
           onShowDiff={handleShowDiff}
         />
+
+        {permissionRequest && (
+          <PermissionBar
+            request={permissionRequest}
+            onRespond={handlePermissionDecision}
+          />
+        )}
 
         {/* Resize Handle / Divider */}
         <div 
@@ -218,13 +240,6 @@ export default function ChatSessionView({
           />
         </div>
       </div>
-
-      {permissionRequest && isActive && (
-        <PermissionModal 
-          request={permissionRequest} 
-          onRespond={handlePermissionDecision} 
-        />
-      )}
 
       {/* Full-size Image Overlay */}
       {selectedImage && (
