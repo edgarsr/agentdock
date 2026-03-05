@@ -48,9 +48,6 @@ export default function ChatSessionView({
     adapterDisplayName
   } = useChatSession(chatId, availableAgents, initialAgentId, historySession);
 
-  // Tracks if the history jump has been performed and verified by the UI
-  const [isRevealed, setIsRevealed] = useState(false);
-
   const {
     fileChanges,
     totalAdditions,
@@ -159,13 +156,8 @@ export default function ChatSessionView({
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
       {/* Message List Area with Scoped Overlay */}
       <div className="flex-1 flex flex-col min-h-0 relative">
-        {(isHistoryReplaying || (!!historySession && !isRevealed)) && (
-          <div className="absolute inset-0 z-50 bg-background flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-foreground-secondary border-t-transparent rounded-full animate-spin opacity-50" />
-          </div>
-        )}
-        
-        <div className={`flex-1 flex flex-col min-h-0 ${(isHistoryReplaying || (!!historySession && !isRevealed)) ? 'invisible' : 'visible'}`}>
+
+        <div className={`flex-1 flex flex-col min-h-0`}>
           <MessageList 
             messages={messages} 
             onImageClick={setSelectedImage} 
@@ -173,7 +165,6 @@ export default function ChatSessionView({
             status={status}
             agentName={adapterDisplayName}
             isHistoryReplaying={isHistoryReplaying}
-            onReadyToReveal={() => setIsRevealed(true)}
           />
         </div>
       </div>

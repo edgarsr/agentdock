@@ -64,7 +64,7 @@ export function ChatLoadingIndicator({ status, agentName }: ChatLoadingIndicator
       
       <div className="flex items-center">
         <span>
-          {isInitializing && `Connecting to ${agentName || 'agent'}...`}
+          {isInitializing && `Connect to ${agentName || 'agent'}...`}
         </span>
         
         {!isInitializing && (
