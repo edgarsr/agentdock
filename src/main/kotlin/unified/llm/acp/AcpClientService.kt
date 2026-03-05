@@ -16,7 +16,6 @@ import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.rpc.JsonRpcNotification
 import com.agentclientprotocol.rpc.MethodName
 import com.agentclientprotocol.transport.StdioTransport
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -41,8 +40,6 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.UUID
-
-private val log = Logger.getInstance(AcpClientService::class.java)
 
 data class PermissionRequest(
     val requestId: String,
@@ -180,14 +177,12 @@ class AcpClientService(val project: Project) {
 
                 if (!AcpAgentSettings.isEnabled(requestedAdapterName)) {
                     val msg = "Agent '$requestedAdapterName' is disabled in settings"
-                    log.warn("[$chatId] $msg")
                     context.statusRef.set(Status.Error)
                     throw IllegalStateException(msg)
                 }
                 
                 if (!AcpAdapterPaths.isDownloaded(requestedAdapterName)) {
                     val msg = "Agent '$requestedAdapterName' is not downloaded"
-                    log.warn("[$chatId] $msg")
                     context.statusRef.set(Status.Error)
                     throw IllegalStateException(msg)
                 }
@@ -219,7 +214,6 @@ class AcpClientService(val project: Project) {
                         try {
                             client.resumeSession(SessionId(resumeSessionId), params, factory)
                         } catch (e: Exception) {
-                            log.warn("[$chatId] Resume session failed for $resumeSessionId, falling back to new session", e)
                             client.newSession(params, factory)
                         }
                     } else {
@@ -234,9 +228,7 @@ class AcpClientService(val project: Project) {
                         try {
                             sess.setModel(ModelId(selectedModelId))
                             context.activeModelIdRef.set(selectedModelId)
-                            log.info("[$chatId] Startup model set to $selectedModelId")
                         } catch (e: Exception) {
-                            log.warn("[$chatId] Failed to set startup model to $selectedModelId", e)
                         }
                     }
 
@@ -245,9 +237,7 @@ class AcpClientService(val project: Project) {
                         try {
                             sess.setMode(SessionModeId(defaultModeId))
                             context.activeModeIdRef.set(defaultModeId)
-                            log.info("[$chatId] Startup mode set to $defaultModeId")
                         } catch (e: Exception) {
-                            log.warn("[$chatId] Failed to set startup mode to $defaultModeId", e)
                         }
                     }
 
@@ -255,7 +245,6 @@ class AcpClientService(val project: Project) {
                     context.statusRef.set(Status.Ready)
 
                 } catch (e: Exception) {
-                    log.error("Failed to start/attach to agent for $chatId", e)
                     context.stop()
                     context.statusRef.set(Status.Error)
                     throw e
@@ -340,7 +329,6 @@ class AcpClientService(val project: Project) {
 
                     context.statusRef.set(Status.Ready)
                 } catch (e: Exception) {
-                    log.error("Failed to load session for $chatId", e)
                     context.stop()
                     context.statusRef.set(Status.Error)
                     throw e
@@ -355,7 +343,6 @@ class AcpClientService(val project: Project) {
         val trimmedModelId = modelId.trim()
         val currentModelId = context.activeModelIdRef.get()
         if (currentModelId == trimmedModelId) {
-            log.debug("[$chatId] setModel: already in model $trimmedModelId, skipping")
             return true
         }
 
@@ -380,16 +367,13 @@ class AcpClientService(val project: Project) {
                 }
             }
             "in-session" -> {
-                val sess = context.session ?: return false
                 try {
                     withContext(Dispatchers.IO) { 
                         sess.setModel(ModelId(trimmedModelId)) 
                     }
                     context.activeModelIdRef.set(trimmedModelId)
-                    log.info("[$chatId] Model changed to $trimmedModelId (in-session)")
                     true
                 } catch (e: Exception) {
-                    log.warn("[$chatId] Failed to set model", e)
                     false
                 }
             }
@@ -418,10 +402,8 @@ class AcpClientService(val project: Project) {
                 sess.setMode(SessionModeId(trimmedModeId)) 
             }
             context.activeModeIdRef.set(trimmedModeId)
-            log.info("[$chatId] Mode changed to $trimmedModeId")
             true
         } catch (e: Exception) {
-            log.warn("[$chatId] Failed to set mode", e)
             false
         }
     }
@@ -501,13 +483,10 @@ class AcpClientService(val project: Project) {
     }
 
     private suspend fun cancelWithContext(context: AgentContext) {
-        // Wait for lock to ensure we don't cancel a session while it's being swapped
         val sess = context.lifecycleMutex.withLock { context.session } ?: return
         try {
             sess.cancel()
-            log.info("[${context.chatId}] session/cancel sent")
         } catch (e: Exception) {
-            log.warn("[${context.chatId}] Failed to cancel", e)
         }
     }
 
@@ -579,7 +558,6 @@ class AcpClientService(val project: Project) {
                     sharedProc.stop()
                 }
 
-                log.info("[$chatId] Starting shared process for $requestedAdapterName")
                 val adapterRoot = AcpAdapterPaths.getAdapterRoot(requestedAdapterName)
                     ?: throw IllegalStateException("ACP adapter directory not found: $requestedAdapterName")
 
@@ -605,7 +583,6 @@ class AcpClientService(val project: Project) {
                             val actualKey = env.keys.find { it.equals(pathKey, ignoreCase = true) } ?: pathKey
                             val currentPath = env[actualKey] ?: System.getenv(actualKey) ?: ""
                             env[actualKey] = "${toolDir.absolutePath}${File.pathSeparator}$currentPath"
-                            log.info("Added ${tool.name} to PATH for ${adapterInfo.name}")
                         }
                     }
                 }
@@ -615,7 +592,7 @@ class AcpClientService(val project: Project) {
 
                 Thread {
                     proc.errorStream.bufferedReader().useLines { lines ->
-                        lines.forEach { line -> log.warn("[Shared:${requestedAdapterName} stderr] $line") }
+                        lines.forEach { line -> }
                     }
                 }.apply { isDaemon = true; start() }
 
@@ -670,7 +647,6 @@ class AcpClientService(val project: Project) {
                     try {
                         original(notification)
                     } catch (e: Exception) {
-                        log.warn("Async session/update handler failed", e)
                     }
                 }
             }
@@ -679,14 +655,12 @@ class AcpClientService(val project: Project) {
                 if (!result.isSuccess) {
                     updateScope.launch {
                         runCatching { queue.send(notification) }
-                            .onFailure { log.warn("Failed to enqueue session/update notification", it) }
                     }
                 }
             }
             handlers.value = handlers.value.put(methodName, wrapped)
             sharedProc.sessionUpdateWrapped = true
         } catch (e: Exception) {
-            log.warn("Failed to wrap session/update notifications", e)
         }
     }
 

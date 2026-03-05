@@ -1,13 +1,6 @@
 package unified.llm.acp
 
 import com.agentclientprotocol.model.*
-import unified.llm.changes.AgentDiffViewer
-import unified.llm.changes.ChangesState
-import unified.llm.changes.ChangesStateService
-import unified.llm.changes.UndoFileHandler
-import unified.llm.changes.UndoOperation
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.jcef.JBCefBrowser
@@ -27,8 +20,6 @@ import javax.sound.sampled.Clip
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
-
-private val log = Logger.getInstance(AcpBridge::class.java)
 
 @Serializable
 private data class AdapterToolPayload(val name: String, val path: String)
@@ -142,9 +133,8 @@ class AcpBridge(
                 else -> {
                     if (isPlanUpdate(update, _meta)) {
                         pushPlanChunk(chatId, update, isReplay, _meta)
-                    } else {
-                        log.debug("[$chatId] Unknown session update received: ${update.javaClass.simpleName}")
-                    }
+                } else {
+                }
                 }
             }
         }
@@ -198,12 +188,10 @@ class AcpBridge(
                             } else {
                                 downloadStatuses[adapterId] = "Error: Download failed"
                                 pushAdapters()
-                                log.error("Manual download of $adapterId failed")
                             }
                         } catch (e: Exception) {
                             downloadStatuses[adapterId] = "Error: ${e.message}"
                             pushAdapters()
-                            log.error("Failed to download agent $adapterId", e)
                         }
                     }
                 }
@@ -236,7 +224,6 @@ class AcpBridge(
                         pushAdapters()
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to toggle agent enablement", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -304,7 +291,6 @@ class AcpBridge(
                             pushSessionId(chatId, service.sessionId(chatId))
                             pushMode(chatId, service.activeModeId(chatId))
                         } catch (e: Exception) {
-                            log.error("[AcpBridge] Start agent failed for $chatId", e)
                             pushStatus(chatId, "error")
                             pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                         }
@@ -375,18 +361,15 @@ class AcpBridge(
                                     is AcpEvent.AgentThought -> pushContentChunk(chatId, "assistant", "thinking", text = event.text, isReplay = false)
                                     is AcpEvent.PromptDone -> pushStatus(chatId, "ready")
                                     is AcpEvent.Error -> {
-                                        log.warn("[AcpBridge] Prompt error: ${event.message}")
                                         pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]", isReplay = false)
                                     }
                                 }
                             }
                         } catch (e: Exception) {
                             if (e is kotlinx.coroutines.CancellationException) {
-                                log.info("[AcpBridge] Prompt cancelled for $chatId")
                                 pushContentChunk(chatId, "assistant", "text", text = "[Cancelled]", isReplay = false)
                                 pushStatus(chatId, "ready")
                             } else {
-                                log.error("[AcpBridge] Send prompt failed", e)
                                 pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                                 pushStatus(chatId, service.status(chatId).name.lowercase())
                             }
@@ -418,7 +401,6 @@ class AcpBridge(
             addHandler { chatIdPayload ->
                 val chatId = chatIdPayload?.trim().orEmpty()
                 if (chatId.isNotEmpty()) {
-                    log.info("[AcpBridge] stopAgent requested for $chatId")
                     scope.launch(Dispatchers.Default) {
                         service.stopAgent(chatId)
                     }
@@ -439,7 +421,6 @@ class AcpBridge(
                         }
                      }
                 } catch (e: Exception) {
-                    log.error("Failed to parse permission response", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -462,7 +443,6 @@ class AcpBridge(
                             pushSessionId(chatId, service.sessionId(chatId))
                             pushMode(chatId, service.activeModeId(chatId))
                         } catch (e: Exception) {
-                            log.error("[AcpBridge] Load session failed for $chatId", e)
                             pushStatus(chatId, "error")
                             pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                         }
@@ -495,7 +475,6 @@ class AcpBridge(
                         }
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to parse undo file payload", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -527,7 +506,6 @@ class AcpBridge(
                         }
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to parse undo all files payload", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -544,7 +522,6 @@ class AcpBridge(
                         ChangesStateService.addProcessedFile(sessionId, adapterName, filePath)
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to process file", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -561,7 +538,6 @@ class AcpBridge(
                         ChangesStateService.setBaseIndex(sessionId, adapterName, toolCallIndex)
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to keep all", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -578,7 +554,6 @@ class AcpBridge(
                         ChangesStateService.removeProcessedFiles(sessionId, adapterName, filePaths)
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to remove processed files", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -596,7 +571,6 @@ class AcpBridge(
                         pushChangesState(chatId, state)
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to get changes state", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -621,7 +595,6 @@ class AcpBridge(
                         }
                     }
                 } catch (e: Exception) {
-                    log.error("Failed to show agent diff", e)
                 }
                 JBCefJSQuery.Response("ok")
             }
@@ -646,7 +619,6 @@ class AcpBridge(
                                 val baseCanonical = try { File(base).canonicalPath } catch (_: Exception) { base }
 
                                 if (!canonical.lowercase().startsWith(baseCanonical.lowercase())) {
-                                    log.warn("[AcpBridge] openFile blocked: '$canonical' is outside project '$baseCanonical'")
                                     return@runOnEdt
                                 }
                                 
@@ -1100,12 +1072,10 @@ class AcpBridge(
         val entries = try {
             extractPlanEntries(plan, _meta)
         } catch (e: Exception) {
-            log.warn("[$chatId] Failed to extract plan entries", e)
             null
         }
 
         if (entries == null || entries.isEmpty()) {
-            log.info("[$chatId] Plan update skipped: no entries found.")
             return
         }
 
@@ -1184,16 +1154,14 @@ class AcpBridge(
         scope.launch(Dispatchers.IO) {
             try {
                 val resource = AcpBridge::class.java.getResource("/notification.wav")
-                if (resource != null) {
-                    val audioStream = AudioSystem.getAudioInputStream(resource)
-                    val clip = AudioSystem.getClip()
-                    clip.open(audioStream)
-                    clip.start()
-                } else {
-                    log.debug("Notification sound resource not found: /notification.wav")
+                if (resource == null) {
+                    return@launch
                 }
+                val audioStream = AudioSystem.getAudioInputStream(resource)
+                val clip = AudioSystem.getClip()
+                clip.open(audioStream)
+                clip.start()
             } catch (e: Exception) {
-                log.warn("Failed to play notification sound", e)
             }
         }
     }
@@ -1259,7 +1227,6 @@ class AcpBridge(
                             "data:image/svg+xml;base64,$b64"
                         } else ""
                     } catch (e: Exception) {
-                        log.warn("Failed to read icon at $path", e)
                         ""
                     }
                 } ?: ""
@@ -1298,7 +1265,6 @@ class AcpBridge(
                 )
             }
         } catch (e: Exception) {
-            log.error("Failed to push adapters to frontend", e)
         }
     }
 

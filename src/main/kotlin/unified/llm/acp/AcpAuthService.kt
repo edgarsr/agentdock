@@ -1,14 +1,11 @@
 package unified.llm.acp
 
-import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
-
-private val log = Logger.getInstance("unified.llm.acp.AcpAuthService")
 
 object AcpAuthService {
 
@@ -97,7 +94,6 @@ object AcpAuthService {
                     return AuthStatus(isAuthenticated, method = "command")
                 }
             } catch (e: Exception) {
-                log.warn("Status command failed for $adapterName: ${e.message}")
             }
         }
 
@@ -247,7 +243,6 @@ object AcpAuthService {
                     }
 
                     if (proc == null) {
-                        log.warn("Could not find a supported terminal emulator on Linux")
                         val cmdBase = if (useNode) listOf(nodeExe, scriptToRun) else listOf(scriptToRun)
                         val cmdInput = cmdBase.toMutableList()
                         cmdInput.addAll(loginArgs)
@@ -276,7 +271,6 @@ object AcpAuthService {
                 }
 
                 if (process != null && !process.isAlive) {
-                    log.info("Terminal process for $adapterName terminated.")
                     break
                 }
                 
@@ -284,7 +278,6 @@ object AcpAuthService {
             }
             false
         } catch (e: Exception) {
-            log.warn("Login process failed or was interrupted for $adapterName: ${e.message}")
             false
         } finally {
             invalidateAuthCache(adapterName)
@@ -323,7 +316,6 @@ object AcpAuthService {
                             val proc = pb.start()
                             proc.waitFor(10, TimeUnit.SECONDS)
                         } catch (e: Exception) {
-                            log.warn("Logout command failed for $adapterName, will delete auth file as fallback: ${e.message}")
                         }
                     }
                 }
@@ -336,7 +328,6 @@ object AcpAuthService {
                 val file = File(resolved)
                 if (file.exists()) {
                     file.delete()
-                    log.info("Deleted auth file for $adapterName")
                 }
             }
             true

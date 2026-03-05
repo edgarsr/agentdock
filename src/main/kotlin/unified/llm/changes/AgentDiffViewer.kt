@@ -3,15 +3,12 @@ package unified.llm.changes
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import java.io.File
 import java.nio.charset.StandardCharsets
-
-private val log = Logger.getInstance(AgentDiffViewer::class.java)
 
 /**
  * Shows a read-only diff of what the agent changed: left = before agent, right = after agent.
@@ -87,7 +84,6 @@ object AgentDiffViewer {
             val request = SimpleDiffRequest("Agent changes: $fileName", leftContent, rightContent, leftTitle, rightTitle)
             DiffManager.getInstance().showDiff(project, request)
         } catch (e: Exception) {
-            log.error("Failed to show agent diff for $filePath", e)
         }
     }
 }

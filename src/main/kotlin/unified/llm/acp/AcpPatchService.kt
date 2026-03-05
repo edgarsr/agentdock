@@ -2,11 +2,9 @@ package unified.llm.acp
 
 import com.github.difflib.DiffUtils
 import com.github.difflib.UnifiedDiffUtils
-import com.intellij.openapi.diagnostic.Logger
 import java.io.File
 
 object AcpPatchService {
-    private val log = Logger.getInstance(AcpPatchService::class.java)
 
     /**
      * Applies a unified diff patch to a target directory.
@@ -45,13 +43,11 @@ object AcpPatchService {
         }
 
         if (targetPath == null) {
-            log.warn("Could not determine target file from patch header in ${adapterRoot.name}. Content starts with: ${patchLines.take(3)}")
             return false
         }
 
         val targetFile = File(adapterRoot, targetPath)
         if (!targetFile.exists()) {
-             log.warn("Patch target file not found: ${targetFile.absolutePath} (path from header: $targetPath)")
              return false
         }
 
@@ -76,7 +72,6 @@ object AcpPatchService {
             val patch = UnifiedDiffUtils.parseUnifiedDiff(patchLines)
             
             if (patch.deltas.isEmpty()) {
-                log.warn("No deltas found in patch for ${targetFile.name}")
                 return false
             }
 
@@ -96,20 +91,17 @@ object AcpPatchService {
                     currentText = currentText.replaceFirst(sourceBlock, targetBlock)
                     modified = true
                 } else {
-                    log.warn("Failed to apply a hunk in ${targetFile.name}: Context not found.")
                     return false
                 }
             }
             
             if (modified) {
                  targetFile.writeText(currentText)
-                 log.info("Successfully applied patch to ${targetFile.name}")
                  return true
             }
             
             return true 
         } catch (e: Exception) {
-            log.warn("Failed to apply patch to ${targetFile.name}: ${e.message}")
             return false
         }
     }

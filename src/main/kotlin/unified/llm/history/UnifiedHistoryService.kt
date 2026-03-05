@@ -1,6 +1,5 @@
 package unified.llm.history
 
-import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -9,8 +8,6 @@ import java.io.File
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
-
-private val log = Logger.getInstance(UnifiedHistoryService::class.java)
 
 @Serializable
 data class SessionMeta(
@@ -128,7 +125,6 @@ object UnifiedHistoryService {
         val cleanProjectPath = projectPath?.takeIf { it.isNotBlank() && it != "undefined" && it != "null" } ?: ""
 
         val adapters = runCatching { AcpAdapterConfig.getAllAdapters() }.getOrElse {
-            log.warn("Failed to read adapters config", it)
             return@withContext emptyList()
         }
 
@@ -150,13 +146,8 @@ object UnifiedHistoryService {
     }
     suspend fun deleteSession(meta: SessionMeta): Boolean = withContext(Dispatchers.IO) {
         try {
-            log.info("Deleting session '${meta.sessionId}' from adapter '${meta.adapterName}'")
-            
-            // 1. Delete main session file
-            val mainFile = File(meta.filePath)
             if (mainFile.exists()) {
                 mainFile.delete()
-                log.debug("Deleted main session file: ${meta.filePath}")
             }
 
             // 2. Cleanup associated directories/files from cleanupTemplates
@@ -170,12 +161,10 @@ object UnifiedHistoryService {
                     } else {
                         fileToDelete.delete()
                     }
-                    log.debug("Cleaned up: $resolvedPath")
                 }
             }
             true
         } catch (e: Exception) {
-            log.warn("Failed to delete session '${meta.sessionId}'", e)
             false
         }
     }

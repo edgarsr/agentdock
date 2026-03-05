@@ -1,12 +1,9 @@
 package unified.llm.acp
 
-import com.intellij.openapi.diagnostic.Logger
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-
-private val log = Logger.getInstance("unified.llm.acp.AcpAgentSettings")
 
 /**
  * Manages persistent settings for ACP agents, such as whether they are enabled.
@@ -44,7 +41,6 @@ object AcpAgentSettings {
         return try {
             json.decodeFromString<SettingsData>(settingsFile.readText())
         } catch (e: Exception) {
-            log.warn("Failed to load agent settings, using defaults", e)
             SettingsData()
         }
     }
@@ -54,7 +50,6 @@ object AcpAgentSettings {
             settingsFile.parentFile.mkdirs()
             settingsFile.writeText(json.encodeToString(currentSettings))
         } catch (e: Exception) {
-            log.error("Failed to save agent settings", e)
         }
     }
 }

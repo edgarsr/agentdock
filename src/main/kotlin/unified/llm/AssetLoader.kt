@@ -1,14 +1,11 @@
 package unified.llm
 
-import com.intellij.openapi.diagnostic.Logger
 import java.nio.charset.StandardCharsets
 
 /**
  * Handles reading and preparing frontend resources (HTML, CSS, JS).
  */
 object AssetLoader {
-
-    private val log = Logger.getInstance(AssetLoader::class.java)
 
     fun loadAndInlineAssets(resourceClass: Class<*>): String {
         return try {
@@ -57,9 +54,8 @@ object AssetLoader {
 
             html.replace("</head>", "$injection</head>")
         } catch (e: Exception) {
-            log.warn("Failed to load plugin UI", e)
             "<html><body style='background:#1e1e1e;color:white;padding:20px;'>" +
-                "<h2>Error loading UI</h2><p>Failed to load plugin UI. Check the IDE log for details.</p></body></html>"
+                "<h2>Error loading UI</h2><p>Failed to load plugin UI.</p></body></html>"
         }
     }
 

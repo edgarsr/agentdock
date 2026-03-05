@@ -1,10 +1,7 @@
 package unified.llm.acp
 
-import com.intellij.openapi.diagnostic.Logger
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-
-private val log = Logger.getInstance("unified.llm.acp.AcpAdapterPaths")
 
 /**
  * Dependencies are downloaded from npm at runtime to ~/.unified-llm/dependencies/<dependency-name>/.
@@ -31,7 +28,6 @@ object AcpAdapterPaths {
         return try {
             AcpAdapterConfig.getAdapterInfo(resolvedName)
         } catch (e: Exception) {
-            log.error("Failed to resolve adapter '$resolvedName' from configuration", e)
             throw IllegalStateException("ACP adapter '$resolvedName' not found in configuration.", e)
         }
     }
@@ -102,8 +98,8 @@ object AcpAdapterPaths {
             }
             cachedRoots.remove(cacheKey)
             true
+            true
         } catch (e: Exception) {
-            log.error("Failed to delete adapter at ${runtimeDir.absolutePath}", e)
             false
         }
     }
@@ -147,9 +143,6 @@ object AcpAdapterPaths {
             statusCallback?.invoke("Applying patch...")
             // Use AcpPatchService to apply unified diff, target path is read from patch header
             val success = AcpPatchService.applyPatch(adapterRoot, patchContent)
-            if (!success) {
-                log.warn("Failed to apply patch from configuration")
-            }
         }
     }
 
@@ -161,7 +154,6 @@ object AcpAdapterPaths {
                 ?: throw IllegalStateException("Adapter '${adapterInfo.name}' missing npmVersion in configuration")
             
             statusCallback?.invoke("Downloading $npmPackage@$npmVersion via npm...")
-            log.info("Downloading adapter $npmPackage@$npmVersion to ${targetDir.absolutePath}")
             
             // Create temporary directory for npm install
             val tempDir = File(System.getProperty("java.io.tmpdir"), "unified-llm-adapter-${System.currentTimeMillis()}")
@@ -191,7 +183,6 @@ object AcpAdapterPaths {
 
                 val installExitCode = installProc.waitFor()
                 if (installExitCode != 0) {
-                    log.error("npm install failed (exit $installExitCode)")
                     return false
                 }
                 
@@ -199,7 +190,6 @@ object AcpAdapterPaths {
                 // Copy adapter files from node_modules to target directory
                 val installedPackageDir = File(tempDir, "node_modules/$npmPackage")
                 if (!installedPackageDir.exists()) {
-                    log.error("Adapter package not found at ${installedPackageDir.absolutePath}")
                     return false
                 }
                 
@@ -208,7 +198,6 @@ object AcpAdapterPaths {
                 if (distDir.exists() && distDir.isDirectory) {
                     distDir.copyRecursively(File(targetDir, "dist"), overwrite = true)
                 } else {
-                    log.error("Adapter dist directory not found")
                     return false
                 }
                 
@@ -222,18 +211,15 @@ object AcpAdapterPaths {
                     packageLockJson.copyTo(File(targetDir, "package-lock.json"), overwrite = true)
                 }
                 
-                log.info("Adapter downloaded successfully")
                 true
             } finally {
                 // Cleanup temporary directory
                 try {
                     tempDir.deleteRecursively()
                 } catch (e: Exception) {
-                    log.warn("Failed to cleanup temp directory: ${tempDir.absolutePath}", e)
                 }
             }
         } catch (e: Exception) {
-            log.error("Failed to download adapter from npm", e)
             return false
         }
     }
@@ -258,12 +244,10 @@ object AcpAdapterPaths {
 
             val exitCode = proc.waitFor()
             if (exitCode != 0) {
-                log.warn("npm install failed (exit $exitCode)")
                 return false
             }
             true
         } catch (e: Exception) {
-            log.error("Failed to run npm install", e)
             false
         }
     }
@@ -297,20 +281,17 @@ object AcpAdapterPaths {
         
         try {
             statusCallback?.invoke("Downloading ${tool.name}...")
-            log.info("Downloading ${tool.name} from $downloadUrl")
             
             if (os.contains("win")) {
                 statusCallback?.invoke("Downloading package...")
                 val dlExitCode = ProcessBuilder("powershell", "-Command", "Invoke-WebRequest -Uri '$downloadUrl' -OutFile '${tempFile.absolutePath}'").start().waitFor()
                 if (dlExitCode != 0) {
-                    log.error("Download failed for ${tool.name} (exit $dlExitCode)")
                     return false
                 }
 
                 statusCallback?.invoke("Extracting package...")
                 val extractExitCode = ProcessBuilder("powershell", "-Command", "Expand-Archive -Path '${tempFile.absolutePath}' -DestinationPath '${targetDir.absolutePath}' -Force").start().waitFor()
                 if (extractExitCode != 0) {
-                    log.error("Extraction failed for ${tool.name} (exit $extractExitCode)")
                     return false
                 }
 
@@ -325,7 +306,6 @@ object AcpAdapterPaths {
                 statusCallback?.invoke("Downloading and extracting package...")
                 val exitCode = ProcessBuilder("sh", "-c", "curl -fSL '$downloadUrl' | tar --strip-components=1 -xzf - -C '${targetDir.absolutePath}' || curl -fSL '$downloadUrl' | tar -xzf - -C '${targetDir.absolutePath}'").start().waitFor()
                 if (exitCode != 0) {
-                    log.error("Download/extraction failed for ${tool.name} (exit $exitCode)")
                     return false
                 }
 
@@ -362,7 +342,6 @@ object AcpAdapterPaths {
             statusCallback?.invoke("${tool.name} installed successfully.")
             return true
         } catch (e: Exception) {
-            log.error("Failed to download ${tool.name}", e)
             statusCallback?.invoke("Error: ${e.message}")
             return false
         }
@@ -376,7 +355,6 @@ object AcpAdapterPaths {
         return try {
             AcpAdapterConfig.getDefaultAdapterName()
         } catch (e: Exception) {
-            log.error("Failed to load adapter configuration", e)
             throw IllegalStateException(
                 "ACP adapter not configured. " +
                     "Either set system property '$ADAPTER_NAME_OVERRIDE_PROPERTY' or " +

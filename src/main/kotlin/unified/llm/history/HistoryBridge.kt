@@ -1,7 +1,6 @@
 package unified.llm.history
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
@@ -12,8 +11,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
-
-private val log = Logger.getInstance(HistoryBridge::class.java)
 
 private val permissiveJson = Json {
     ignoreUnknownKeys = true
@@ -53,7 +50,6 @@ class HistoryBridge(
                 scope.launch(Dispatchers.Default) {
                     try {
                         val meta = permissiveJson.decodeFromString<SessionMeta>(payload)
-                        log.debug("Deleting session: ${meta.sessionId}")
                         val success = UnifiedHistoryService.deleteSession(meta)
 
                         if (success) {
@@ -64,7 +60,6 @@ class HistoryBridge(
                         }
                     } catch (e: Exception) {
                         sendJsError("Error during deletion: ${e.message}")
-                        log.error("History delete bridge error", e)
                     }
                 }
                 JBCefJSQuery.Response("ok")

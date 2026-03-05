@@ -13,7 +13,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
@@ -35,7 +34,6 @@ import javax.swing.JPanel
 
 
 class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
-    private val log = Logger.getInstance(UnifiedLlmToolWindowFactory::class.java)
     private var debugBridge: AcpBridge? = null
     private var historyBridge: HistoryBridge? = null
 
@@ -62,7 +60,6 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                     try {
                         JBCefApp.getInstance()
                     } catch (e: Exception) {
-                        log.warn("Failed to pre-initialize JCEF on background thread", e)
                     }
                 }
                 
@@ -205,14 +202,12 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         rootPanel.repaint()
 
                     } catch (e: Exception) {
-                        log.error("Failed to initialize JCEF browser", e)
                         rootPanel.removeAll()
                         rootPanel.add(JLabel("Error initializing browser: ${e.message}"), BorderLayout.CENTER)
                         rootPanel.revalidate()
                     }
                 }, com.intellij.openapi.application.ModalityState.any())
             } catch (e: Exception) {
-                log.error("Background JCEF support check failed", e)
             }
         }
     }
