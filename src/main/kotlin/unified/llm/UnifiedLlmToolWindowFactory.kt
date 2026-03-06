@@ -1,11 +1,6 @@
 package unified.llm
 
-import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.LafManagerListener
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -95,22 +90,6 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         debugBridge?.install()
                         historyBridge?.install()
 
-                        // Create Header Actions
-                        val newChatAction = object : AnAction("AI Chat", "Open AI chat", AllIcons.General.Balloon) {
-                            override fun actionPerformed(e: AnActionEvent) {
-                                browser.cefBrowser.executeJavaScript("if(window.setView) window.setView('chat')", browser.cefBrowser.url, 0)
-                            }
-                        }
-                        val agentManagementAction = object : AnAction("ACP Agents", "Manage ACP agents", AllIcons.Nodes.Plugin) {
-                            override fun actionPerformed(e: AnActionEvent) {
-                                browser.cefBrowser.executeJavaScript("if(window.setView) window.setView('management')", browser.cefBrowser.url, 0)
-                            }
-                        }
-                        val designSystemAction = object : AnAction("Design System", "View design system demo", AllIcons.Actions.Colors) {
-                            override fun actionPerformed(e: AnActionEvent) {
-                                browser.cefBrowser.executeJavaScript("if(window.setView) window.setView('demo')", browser.cefBrowser.url, 0)
-                            }
-                        }
 
                         // Solve JCEF cursor: pointer not working issue on Windows
                         val cursorQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase)
@@ -197,13 +176,6 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                             }
                         })
 
-                        val actionGroup = DefaultActionGroup().apply {
-                            add(newChatAction)
-                            add(agentManagementAction)
-                            add(designSystemAction)
-                        }
-                        content.setActions(actionGroup, ActionPlaces.TOOLWINDOW_TITLE, null)
-                        toolWindow.setTitleActions(listOf(newChatAction, agentManagementAction, designSystemAction))
 
                         // Swap placeholder with real browser
                         rootPanel.removeAll()

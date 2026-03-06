@@ -13,6 +13,9 @@ interface ChatSessionProps {
   availableAgents: AgentOption[];
   historySession?: HistorySessionMeta;
   isActive?: boolean;
+  onAssistantActivity?: (chatId: string) => void;
+  onAtBottomChange?: (chatId: string, isAtBottom: boolean) => void;
+  onPermissionRequestChange?: (chatId: string, hasPendingPermission: boolean) => void;
   onAgentChangeRequest?: (agentId: string) => void;
 }
 
@@ -22,6 +25,9 @@ export default function ChatSessionView({
   availableAgents,
   historySession,
   isActive = false,
+  onAssistantActivity,
+  onAtBottomChange,
+  onPermissionRequestChange,
   onAgentChangeRequest
 }: ChatSessionProps) {
   const {
@@ -156,6 +162,36 @@ export default function ChatSessionView({
     };
   }, [stopResizing]);
 
+  const handleAtBottomChange = useCallback((isAtBottom: boolean) => {
+    onAtBottomChange?.(chatId, isAtBottom);
+  }, [chatId, onAtBottomChange]);
+
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+
+    // Mark unread only when agent finishes the response, not during streaming/thinking.
+    if (prev === 'ready' || status !== 'ready' || isHistoryReplaying || messages.length === 0 || !!permissionRequest) return;
+
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant') return;
+    const hasFinalText = (last.content?.trim().length || 0) > 0;
+    if (!hasFinalText) return;
+
+    onAssistantActivity?.(chatId);
+  }, [status, isHistoryReplaying, messages, onAssistantActivity, chatId, permissionRequest]);
+
+  useEffect(() => {
+    onPermissionRequestChange?.(chatId, !!permissionRequest);
+  }, [chatId, permissionRequest, onPermissionRequestChange]);
+
+  useEffect(() => {
+    return () => {
+      onPermissionRequestChange?.(chatId, false);
+    };
+  }, [chatId, onPermissionRequestChange]);
+
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
       {/* Message List Area with Scoped Overlay */}
@@ -165,6 +201,7 @@ export default function ChatSessionView({
           <MessageList 
             messages={messages} 
             onImageClick={setSelectedImage} 
+            onAtBottomChange={handleAtBottomChange}
             isSending={isSending}
             status={status}
             agentName={adapterDisplayName}

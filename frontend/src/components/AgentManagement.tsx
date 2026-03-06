@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AgentOption } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
-import ConfirmationModal from '../components/chat/ConfirmationModal';
+import ConfirmationModal from './ConfirmationModal';
 
 export function AgentManagementView() {
   const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -10,8 +10,6 @@ export function AgentManagementView() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
-    ACPBridge.initialize();
-    
     const cached = localStorage.getItem('unified-llm.adapters');
     if (cached) {
       try {

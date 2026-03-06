@@ -15,8 +15,11 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import java.io.File
+import java.io.BufferedInputStream
+import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.Clip
+import javax.sound.sampled.LineEvent
 import org.cef.browser.CefBrowser
 import unified.llm.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
@@ -97,6 +100,7 @@ class AcpBridge(
     private var attachFileQuery: JBCefJSQuery? = null
 
     private val promptJobs = ConcurrentHashMap<String, Job>()
+    private val lastStatusByChatId = ConcurrentHashMap<String, String>()
     private val downloadStatuses = ConcurrentHashMap<String, String>()
 
     companion object {
@@ -1106,6 +1110,7 @@ class AcpBridge(
 
 
     fun pushStatus(chatId: String, status: String) {
+        val previousStatus = lastStatusByChatId.put(chatId, status)
         val escaped = status.replace("\\", "\\\\").replace("'", "\\'")
         val id = chatId.replace("\\", "\\\\").replace("'", "\\'")
         runOnEdt {
@@ -1114,8 +1119,8 @@ class AcpBridge(
                 browser.cefBrowser.url, 0
             )
         }
-        if (status == "ready") {
-            playNotificationSound()
+        if (previousStatus == "prompting" && status == "ready") {
+            playResponseCompleteSound()
         }
     }
 
@@ -1155,20 +1160,56 @@ class AcpBridge(
                 browser.cefBrowser.url, 0
             )
         }
-        playNotificationSound()
+        playPermissionRequestSound()
     }
 
-    private fun playNotificationSound() {
+    private fun playResponseCompleteSound() {
+        playSound("/sounds/notification.wav")
+    }
+
+    private fun playPermissionRequestSound() {
+        playSound("/sounds/request.wav")
+    }
+
+    private fun playSound(resourcePath: String) {
         scope.launch(Dispatchers.IO) {
             try {
-                val resource = AcpBridge::class.java.getResource("/notification.wav")
-                if (resource == null) {
+                val resourceStream = AcpBridge::class.java.getResourceAsStream(resourcePath)
+                if (resourceStream == null) {
                     return@launch
                 }
-                val audioStream = AudioSystem.getAudioInputStream(resource)
-                val clip = AudioSystem.getClip()
-                clip.open(audioStream)
-                clip.start()
+                BufferedInputStream(resourceStream).use { bufferedStream ->
+                    AudioSystem.getAudioInputStream(bufferedStream).use { sourceStream ->
+                        val sourceFormat = sourceStream.format
+                        val decodedFormat = AudioFormat(
+                            AudioFormat.Encoding.PCM_SIGNED,
+                            sourceFormat.sampleRate,
+                            16,
+                            sourceFormat.channels,
+                            sourceFormat.channels * 2,
+                            sourceFormat.sampleRate,
+                            false
+                        )
+
+                        val playableStream =
+                            if (sourceFormat.encoding == AudioFormat.Encoding.PCM_SIGNED && sourceFormat.sampleSizeInBits == 16) {
+                                sourceStream
+                            } else {
+                                AudioSystem.getAudioInputStream(decodedFormat, sourceStream)
+                            }
+
+                        playableStream.use { audioStream ->
+                            val clip = AudioSystem.getClip()
+                            clip.addLineListener { event ->
+                                if (event.type == LineEvent.Type.STOP) {
+                                    clip.close()
+                                }
+                            }
+                            clip.open(audioStream)
+                            clip.start()
+                        }
+                    }
+                }
             } catch (e: Exception) {
             }
         }

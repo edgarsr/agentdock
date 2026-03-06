@@ -8,6 +8,7 @@ import { ChatLoadingIndicator } from './ChatLoadingIndicator';
 interface MessageListProps {
   messages: Message[];
   onImageClick: (src: string) => void;
+  onAtBottomChange?: (isAtBottom: boolean) => void;
   isSending?: boolean;
   status?: string;
   agentName?: string;
@@ -18,6 +19,7 @@ interface MessageListProps {
 function MessageList({ 
   messages,
   onImageClick,
+  onAtBottomChange,
   isSending,
   status,
   agentName,
@@ -27,6 +29,7 @@ function MessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const lastAtBottomRef = useRef(true);
   const prevIsReplaying = useRef(isHistoryReplaying);
   const prevIsSending = useRef(isSending);
 
@@ -108,6 +111,10 @@ function MessageList({
     const threshold = 150;
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     shouldAutoScroll.current = isAtBottom;
+    if (lastAtBottomRef.current !== isAtBottom) {
+      lastAtBottomRef.current = isAtBottom;
+      onAtBottomChange?.(isAtBottom);
+    }
   };
 
   const handleExpand = () => {
@@ -150,11 +157,24 @@ function MessageList({
     else if (!isHistoryReplaying && shouldAutoScroll.current && messagesEndRef.current) {
       container.style.scrollBehavior = 'smooth';
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      if (!lastAtBottomRef.current) {
+        lastAtBottomRef.current = true;
+        onAtBottomChange?.(true);
+      }
     }
 
     prevIsReplaying.current = isHistoryReplaying;
     prevIsSending.current = isSending;
   }, [messages, isHistoryReplaying, isSending]);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const threshold = 150;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    lastAtBottomRef.current = isAtBottom;
+    onAtBottomChange?.(isAtBottom);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 relative">

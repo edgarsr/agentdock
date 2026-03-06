@@ -94,8 +94,17 @@ export interface DropdownOption {
   subOptions?: DropdownOption[];
 }
 
+export interface TabUiFlags {
+  unread: boolean;
+  atBottom: boolean;
+  warning: boolean;
+}
+
+export type TabType = 'chat' | 'management' | 'design' | 'history';
+
 export interface ChatTab {
   id: string;
+  type: TabType;
   title: string;
   sessionId: string; // Creates linkage to backend session
   agentId?: string; // If pre-selected

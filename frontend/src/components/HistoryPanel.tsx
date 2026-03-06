@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ACPBridge } from '../../utils/bridge';
-import type { AgentOption, HistorySessionMeta } from '../../types/chat';
+import { ACPBridge } from '../utils/bridge';
+import type { AgentOption, HistorySessionMeta } from '../types/chat';
 import ConfirmationModal from './ConfirmationModal';
 
 interface HistoryPanelProps {
-  onClose: () => void;
   availableAgents: AgentOption[];
   onOpenSession: (session: HistorySessionMeta) => void;
 }
 
-export default function HistoryPanel({ onClose, availableAgents, onOpenSession }: HistoryPanelProps) {
+export default function HistoryPanel({ availableAgents, onOpenSession }: HistoryPanelProps) {
   const [historyList, setHistoryList] = useState<HistorySessionMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionToDelete, setSessionToDelete] = useState<HistorySessionMeta | null>(null);
@@ -53,28 +52,16 @@ export default function HistoryPanel({ onClose, availableAgents, onOpenSession }
     <div className="flex flex-col h-full bg-background text-foreground z-10 w-full">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold tracking-wide uppercase text-foreground opacity-80">Chat History</h2>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={refreshHistory}
-            disabled={isLoading}
-            className={`p-1  rounded transition-colors text-foreground opacity-60 hover:text-foreground ${isLoading ? 'animate-spin opacity-50' : ''}`}
-            title="Refresh History"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 5M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-5"/>
-            </svg>
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1  rounded transition-colors text-foreground opacity-60 hover:text-foreground"
-            title="Close History Panel"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
+        <button
+          onClick={refreshHistory}
+          disabled={isLoading}
+          className={`p-1  rounded transition-colors text-foreground opacity-60 hover:text-foreground ${isLoading ? 'animate-spin opacity-50' : ''}`}
+          title="Refresh History"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 5M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-5"/>
+          </svg>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto w-full p-4 space-y-2">
