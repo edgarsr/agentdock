@@ -1,9 +1,9 @@
 package unified.llm.acp
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.io.InputStreamReader
 
 /**
  * Configuration for ACP adapters.
@@ -13,54 +13,56 @@ import java.io.InputStreamReader
 object AcpAdapterConfig {
 
     @Serializable
-    data class ModeInfo(val id: String, val displayName: String)
+    data class ModeInfo(val id: String, val name: String)
 
     @Serializable
-    data class ModelInfo(val id: String, val displayName: String)
+    data class ModelInfo(val modelId: String, val name: String)
 
     @Serializable
     data class HistoryConfig(
         val parserStrategy: String,
-        val pathTemplate: String,
-        val resumeArgName: String? = null,
-        val cleanupTemplates: List<String> = emptyList(),
-        val metadataExtraction: Map<String, String> = emptyMap()
+        val pathTemplate: String
     )
 
     @Serializable
     data class AuthConfig(
         val authPath: String? = null,
         val authScript: String? = null,
+        val command: List<String> = emptyList(),
         val loginArgs: List<String> = emptyList(),
         val logoutArgs: List<String> = emptyList(),
         val statusArgs: List<String> = emptyList()
     )
 
     @Serializable
-    data class SupportingToolBinary(
+    data class PlatformBinary(
         val win: String? = null,
         val unix: String? = null
     )
 
     @Serializable
-    data class SupportingTool(
-        val name: String,
-        val id: String = "", // Internal handle
+    enum class DistributionType {
+        @SerialName("npm") NPM,
+        @SerialName("archive") ARCHIVE
+    }
+
+    @Serializable
+    data class Distribution(
+        val type: DistributionType,
+        val version: String,
+        val packageName: String? = null,
         val downloadUrl: String? = null,
-        val binaryName: SupportingToolBinary? = null,
-        val targetDir: String? = null,
-        val addToPath: Boolean = true
+        val binaryName: PlatformBinary? = null,
+        val extractSubdir: String? = null
     )
 
     @Serializable
     data class AdapterInfo(
-        val name: String = "", // Filled after parsing
-        val resourceName: String? = null,
-        val displayName: String,
+        val id: String = "", // Filled after parsing
+        val name: String,
         val iconPath: String? = null,
-        val npmPackage: String? = null,
-        val npmVersion: String? = null,
-        val launchPath: String,
+        val distribution: Distribution,
+        val launchPath: String = "",
         val defaultModelId: String? = null,
         val models: List<ModelInfo> = emptyList(),
         val defaultModeId: String? = null,
@@ -76,16 +78,13 @@ object AcpAdapterConfig {
          * - "in-session": call sess.setModel() without restarting (works if adapter supports it)
          * Default: "in-session"
          */
-        val modelChangeStrategy: String = "in-session",
-        val supportingTools: List<SupportingTool> = emptyList()
+        val modelChangeStrategy: String = "in-session"
     ) {
-        // Helper to handle optional resourceName logic
-        fun getEffectiveResourceName(): String = resourceName ?: name
+        fun getConfiguredVersion(): String = distribution.version
     }
 
     @Serializable
     private data class ConfigRoot(
-        val defaultAdapter: String,
         val adapters: Map<String, AdapterInfo>
     )
 
@@ -97,28 +96,17 @@ object AcpAdapterConfig {
         isLenient = true
     }
 
-    private val loadedConfig: Pair<String, Map<String, AdapterInfo>> by lazy { parseConfig() }
-
-    fun getDefaultAdapterName(): String = loadedConfig.first
+    private val loadedConfig: Map<String, AdapterInfo> by lazy { parseConfig() }
 
     fun getAdapterInfo(name: String): AdapterInfo {
-        return loadedConfig.second[name] ?: throw IllegalStateException(
-            "Adapter '$name' not found. Available: ${loadedConfig.second.keys.joinToString(", ")}"
+        return loadedConfig[name] ?: throw IllegalStateException(
+            "Adapter '$name' not found. Available: ${loadedConfig.keys.joinToString(", ")}"
         )
     }
 
-    fun getAllAdapters(): Map<String, AdapterInfo> = loadedConfig.second
+    fun getAllAdapters(): Map<String, AdapterInfo> = loadedConfig
 
-    fun getDefaultAdapterResourceName(): String {
-        val name = getDefaultAdapterName()
-        return getAdapterInfo(name).getEffectiveResourceName()
-    }
-
-    fun getDefaultModelId(): String? {
-        return getAdapterInfo(getDefaultAdapterName()).defaultModelId
-    }
-
-    private fun parseConfig(): Pair<String, Map<String, AdapterInfo>> {
+    private fun parseConfig(): Map<String, AdapterInfo> {
         val content = readResource(CONFIG_FILE)
         val root = json.decodeFromString<ConfigRoot>(content)
         
@@ -126,15 +114,11 @@ object AcpAdapterConfig {
             // Resolve external patch files
             val strings = info.patches.map { p -> resolveContent(p) }
 
-            // Ensure name is set and resourceName defaults to name if null
-            info.copy(
-                name = key,
-                resourceName = info.resourceName ?: key,
-                patches = strings
-            )
+            // Ensure name is set
+            info.copy(id = key, patches = strings)
         }
         
-        return root.defaultAdapter to processedAdapters
+        return processedAdapters
     }
 
     private fun resolveContent(text: String): String {

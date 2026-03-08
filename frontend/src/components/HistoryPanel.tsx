@@ -29,7 +29,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
 
   const adapterDisplay = useMemo(() => {
     const map = new Map<string, string>();
-    availableAgents.forEach((a) => map.set(a.id, a.displayName));
+    availableAgents.forEach((a) => map.set(a.id, a.name));
     return map;
   }, [availableAgents]);
 

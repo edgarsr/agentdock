@@ -164,7 +164,7 @@ class AcpClientService(val project: Project) {
         withContext(Dispatchers.IO) {
             context.lifecycleMutex.withLock {
                 val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
-                val requestedAdapterName = adapterInfo.name
+                val requestedAdapterName = adapterInfo.id
                 val currentStatus = context.statusRef.get()
 
                 if (currentStatus == Status.Ready && context.activeAdapterNameRef.get() == requestedAdapterName && resumeSessionId == null && !forceRestart) {
@@ -193,7 +193,7 @@ class AcpClientService(val project: Project) {
                     val sharedProc = activeProcesses.computeIfAbsent(requestedAdapterName) { SharedProcess(requestedAdapterName) }
                     context.sharedProcess = sharedProc
 
-                    ensureSharedProcessStarted(sharedProc, adapterInfo, context, chatId, forceRestart)
+                    ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
                     ensureAsyncSessionUpdates(sharedProc)
 
                     val client = sharedProc.client!!
@@ -266,7 +266,7 @@ class AcpClientService(val project: Project) {
         withContext(Dispatchers.IO) {
             context.lifecycleMutex.withLock {
                 val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
-                val requestedAdapterName = adapterInfo.name
+                val requestedAdapterName = adapterInfo.id
                 val currentStatus = context.statusRef.get()
 
                 if (currentStatus != Status.NotStarted) {
@@ -280,7 +280,7 @@ class AcpClientService(val project: Project) {
                     val sharedProc = activeProcesses.computeIfAbsent(requestedAdapterName) { SharedProcess(requestedAdapterName) }
                     context.sharedProcess = sharedProc
 
-                    ensureSharedProcessStarted(sharedProc, adapterInfo, context, chatId)
+                    ensureSharedProcessStarted(sharedProc, adapterInfo)
                     ensureAsyncSessionUpdates(sharedProc)
 
                     // Set sessionIdRef BEFORE client.loadSession() so that the async
@@ -446,23 +446,7 @@ class AcpClientService(val project: Project) {
             sess.prompt(blocks).collect { event ->
                 when (event) {
                     is Event.SessionUpdateEvent -> {
-                        val update = event.update
-                        if (update is SessionUpdate.AgentMessageChunk) {
-                            val content = update.content
-                            if (content is ContentBlock.Text) {
-                                emit(AcpEvent.AgentText(content.text))
-                            }
-                        } else if (update is SessionUpdate.AgentThoughtChunk) {
-                            val content = update.content
-                            if (content is ContentBlock.Text) {
-                                emit(AcpEvent.AgentThought(content.text))
-                            }
-                        }
-                        // Forward everything else to bridge (ToolCall, ToolCallUpdate, Plan, etc.)
-                        val isHandled = update is SessionUpdate.AgentMessageChunk || update is SessionUpdate.AgentThoughtChunk
-                        if (!isHandled) {
-                            sessionUpdateHandler?.invoke(chatId, update, false, null)
-                        }
+                        sessionUpdateHandler?.invoke(chatId, event.update, false, null)
                     }
                     is Event.PromptResponseEvent -> {
                         emit(AcpEvent.PromptDone(event.response.stopReason.toString()))
@@ -532,7 +516,7 @@ class AcpClientService(val project: Project) {
         default: String?
     ): String? {
         val p = pref?.trim().takeUnless { it.isNullOrEmpty() }
-        if (p != null && (available.isEmpty() || available.any { it.id == p })) {
+        if (p != null && (available.isEmpty() || available.any { it.modelId == p })) {
             return p
         }
         return default
@@ -543,14 +527,13 @@ class AcpClientService(val project: Project) {
      * If the process is already running and healthy, does nothing.
      * Otherwise, starts a new process and initializes the ACP client.
      */
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
     private suspend fun ensureSharedProcessStarted(
         sharedProc: SharedProcess,
         adapterInfo: AcpAdapterConfig.AdapterInfo,
-        context: AgentContext,
-        chatId: String,
         forceRestart: Boolean = false
     ) {
-        val requestedAdapterName = adapterInfo.name
+        val requestedAdapterName = adapterInfo.id
         sharedProc.mutex.withLock {
             val needsRestart = sharedProc.process == null || !sharedProc.process!!.isAlive ||
                 forceRestart || sharedProc.client == null || !sharedProc.isInitialized
@@ -562,31 +545,16 @@ class AcpClientService(val project: Project) {
                 val adapterRoot = AcpAdapterPaths.getAdapterRoot(requestedAdapterName)
                     ?: throw IllegalStateException("ACP adapter directory not found: $requestedAdapterName")
 
-                val launchFile = java.io.File(adapterRoot, adapterInfo.launchPath)
-                if (!launchFile.isFile) throw IllegalStateException("Missing launch path: ${adapterInfo.launchPath}")
+                val launchFile = AcpAdapterPaths.resolveLaunchFile(adapterRoot, adapterInfo)
+                    ?: throw IllegalStateException("Missing launch target for adapter: ${adapterInfo.id}")
+                if (!launchFile.isFile) throw IllegalStateException("Missing launch target: ${launchFile.absolutePath}")
 
-                val nodeCmd = if (System.getProperty("os.name").lowercase().contains("win")) "node.exe" else "node"
-                val command = mutableListOf(nodeCmd, adapterInfo.launchPath)
+                val command = AcpAdapterPaths.buildLaunchCommand(adapterRoot, adapterInfo).toMutableList()
                 command.addAll(adapterInfo.args)
 
                 val pb = ProcessBuilder(command).directory(adapterRoot).redirectErrorStream(false)
                 val env = pb.environment()
                 env.putAll(System.getenv())
-
-                // Add supporting tools to PATH if configured
-                for (tool in adapterInfo.supportingTools) {
-                    if (tool.addToPath) {
-                        val toolDirName = tool.targetDir ?: tool.id
-                        val toolDir = File(AcpAdapterPaths.getDependenciesDir(), toolDirName)
-                        if (toolDir.exists()) {
-                            val pathKey = if (System.getProperty("os.name").lowercase().contains("win")) "Path" else "PATH"
-                            // Case-insensitive lookup for Windows
-                            val actualKey = env.keys.find { it.equals(pathKey, ignoreCase = true) } ?: pathKey
-                            val currentPath = env[actualKey] ?: System.getenv(actualKey) ?: ""
-                            env[actualKey] = "${toolDir.absolutePath}${File.pathSeparator}$currentPath"
-                        }
-                    }
-                }
 
                 val proc = withContext(Dispatchers.IO) { pb.start() }
                 sharedProc.process = proc
@@ -608,15 +576,6 @@ class AcpClientService(val project: Project) {
                 val transport = StdioTransport(scope, Dispatchers.IO, input, output)
                 val prot = Protocol(scope, transport)
                 sharedProc.protocol = prot
-
-                val clientsFactory = object : ClientOperationsFactory {
-                    override suspend fun createClientOperations(
-                        sessionId: SessionId,
-                        sessionResponse: AcpCreatedSessionResponse
-                    ): ClientSessionOperations {
-                        return this@AcpClientService.SharedSessionOperations(sessionId.value)
-                    }
-                }
 
                 val c = Client(prot)
                 sharedProc.client = c
@@ -680,15 +639,21 @@ class AcpClientService(val project: Project) {
             val matchingContexts = sessions.values.filter { it.sessionIdRef.get() == sessionId }
             val primaryCtx = matchingContexts.firstOrNull() ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
             
+            // Push the tool call as a SessionUpdate so the frontend creates
+            // the tool-call block before the permission dialog appears.
+            // During live prompting the SDK may not emit a separate
+            // SessionUpdate.ToolCall before calling requestPermissions.
+            sessionUpdateHandler?.invoke(primaryCtx.chatId, toolCall, false, _meta)
+
             val requestId = UUID.randomUUID().toString()
             val str = toolCall.toString()
             val title = Regex("title=([^,)]+)").find(str)?.groupValues?.get(1) ?: "Action"
             val kind = Regex("kind=([^,)]+)").find(str)?.groupValues?.get(1) ?: "OTHER"
-            
+
             val request = PermissionRequest(
-                requestId, 
-                primaryCtx.chatId, 
-                title, 
+                requestId,
+                primaryCtx.chatId,
+                title,
                 permissions
             )
             
@@ -708,16 +673,22 @@ class AcpClientService(val project: Project) {
                 if (notification is SessionUpdate.CurrentModeUpdate) {
                     context.activeModeIdRef.set(notification.currentModeId.value)
                 }
-                val isReplay = context.statusRef.get() != Status.Prompting
-                
+
+                // During prompting, session updates are delivered through the prompt
+                // flow collector (Event.SessionUpdateEvent). Skip delivery here to
+                // avoid duplicate content chunks in the frontend.
+                if (context.statusRef.get() == Status.Prompting) {
+                    return@forEach
+                }
+
                 // During replay, only deliver to contexts that are actively loading
                 // (Initializing status). This prevents duplicate content being pushed
                 // to tabs that already finished loading the same ACP session.
-                if (isReplay && context.statusRef.get() != Status.Initializing) {
+                if (context.statusRef.get() != Status.Initializing) {
                     return@forEach
                 }
-                
-                sessionUpdateHandler?.invoke(context.chatId, notification, isReplay, _meta)
+
+                sessionUpdateHandler?.invoke(context.chatId, notification, true, _meta)
             }
         }
     }
@@ -769,50 +740,55 @@ private class LineLoggingOutputStream(
 private class LineLoggingInputStream(
     delegate: java.io.InputStream, 
     private val onLine: (String) -> Unit
-) : java.io.FilterInputStream(delegate) {
-    private val buffer = ByteArrayOutputStream()
+) : java.io.InputStream() {
+    private val input = delegate
+    private var currentChunk = ByteArray(0)
+    private var currentIndex = 0
 
     override fun read(): Int { 
-        val b = super.read()
-        if (b == -1) {
-            flushRemainder() 
-        } else {
-            appendInternal(b)
-        }
-        return b 
+        if (!ensureChunk()) return -1
+        return currentChunk[currentIndex++].toInt() and 0xff
     }
 
     override fun read(b: ByteArray, off: Int, len: Int): Int { 
-        val r = super.read(b, off, len)
-        if (r == -1) {
-            flushRemainder() 
-        } else {
-            for (i in off until (off + r).coerceAtMost(b.size)) {
-                appendInternal(b[i].toInt() and 0xff)
+        if (!ensureChunk()) return -1
+        val available = currentChunk.size - currentIndex
+        val count = minOf(len, available)
+        System.arraycopy(currentChunk, currentIndex, b, off, count)
+        currentIndex += count
+        return count
+    }
+
+    override fun close() {
+        input.close()
+    }
+
+    private fun ensureChunk(): Boolean {
+        if (currentIndex < currentChunk.size) return true
+
+        while (true) {
+            val rawLine = readRawLine() ?: return false
+            val line = rawLine.removeSuffix("\r")
+            if (line.isNotBlank()) {
+                onLine(line)
             }
-        }
-        return r 
-    }
-
-    private fun appendInternal(b: Int) { 
-        if (b == '\n'.code) {
-            flushInternal() 
-        } else {
-            buffer.write(b) 
+            currentChunk = (line + "\n").toByteArray(Charsets.UTF_8)
+            currentIndex = 0
+            return true
         }
     }
 
-    private fun flushInternal() { 
-        val line = buffer.toString(Charsets.UTF_8).removeSuffix("\r")
-        buffer.reset()
-        if (line.isNotBlank()) {
-            onLine(line) 
-        }
-    }
-
-    private fun flushRemainder() {
-        if (buffer.size() > 0) {
-            flushInternal()
+    private fun readRawLine(): String? {
+        val buffer = ByteArrayOutputStream()
+        while (true) {
+            val next = input.read()
+            if (next == -1) {
+                return if (buffer.size() == 0) null else buffer.toString(Charsets.UTF_8)
+            }
+            if (next == '\n'.code) {
+                return buffer.toString(Charsets.UTF_8)
+            }
+            buffer.write(next)
         }
     }
 }

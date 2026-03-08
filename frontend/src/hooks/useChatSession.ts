@@ -11,10 +11,18 @@ import {
   ExploringBlock,
   ToolCallBlock,
   ToolCallEntry,
-  ContentChunk
+  ContentChunk,
+  isAgentRunnable
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
-import { safeParseJson, buildToolCallEntry, extractResultTexts } from '../utils/toolCallUtils';
+import { safeParseJson, buildToolCallEntry, extractResultTexts, appendToolOutput, truncateToolOutput } from '../utils/toolCallUtils';
+
+function selectPreferredAgentId(agents: AgentOption[], preferredId?: string): string {
+  if (preferredId && agents.some((agent) => agent.id === preferredId && isAgentRunnable(agent))) {
+    return preferredId;
+  }
+  return agents.find(isAgentRunnable)?.id || '';
+}
 
 function isExploringChunk(chunk: ContentChunk): boolean {
   const kind = chunk.toolKind || '';
@@ -262,8 +270,13 @@ function handleToolCall(blocks: RichContentBlock[], lastBlock: RichContentBlock 
       const merged: ToolCallEntry = {
         ...existing,
         ...entry,
+        title: entry.title || existing.title,
+        kind: entry.kind || existing.kind,
+        status: entry.status || existing.status,
+        rawJson: entry.rawJson || existing.rawJson,
         locations: entry.locations || existing.locations,
-        content: entry.content || existing.content
+        content: entry.content || existing.content,
+        result: entry.result || existing.result
       };
       blocks[idx] = { type: 'tool_call', entry: merged, isReplay: chunk.isReplay } as ToolCallBlock;
     } else {
@@ -292,6 +305,10 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
   if (!tid) return;
 
   const json = safeParseJson(chunk.toolRawJson);
+  const nextTitle = chunk.toolTitle || json.title;
+  const nextKind = chunk.toolKind || json.kind;
+  const nextStatus = chunk.toolStatus || json.status;
+  const nextContent = json.content || json.diff;
 
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i];
@@ -300,19 +317,22 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
       const tb = b as ToolCallBlock;
       const updatedEntry: ToolCallEntry = {
         ...tb.entry,
-        status: json.status || tb.entry.status,
-        title: json.title || tb.entry.title,
+        status: nextStatus || tb.entry.status,
+        title: nextTitle || tb.entry.title,
+        kind: nextKind || tb.entry.kind,
+        rawJson: chunk.toolRawJson || tb.entry.rawJson,
         locations: json.locations || tb.entry.locations,
-        content: json.content || json.diff || tb.entry.content
+        content: nextContent || tb.entry.content
       };
 
       const resultText = extractResultTexts(json);
       if (resultText) {
-        updatedEntry.result = updatedEntry.result ? updatedEntry.result + '\n\n' + resultText : resultText;
+        const merged = appendToolOutput(updatedEntry.result, resultText);
+        updatedEntry.result = merged.text;
       }
 
       blocks[i] = { ...tb, entry: updatedEntry };
-      break;
+      return;
     }
 
     if (b.type === 'exploring') {
@@ -320,14 +340,46 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
       const idx = exp.entries.findIndex(e => e.toolCallId === tid);
       if (idx >= 0) {
         const e = { ...exp.entries[idx] };
-        if (json.status) e.status = json.status;
+        if (nextStatus) e.status = nextStatus;
+        if (nextTitle) e.title = nextTitle;
+        if (nextKind) e.kind = nextKind;
+        if (chunk.toolRawJson) e.rawJson = chunk.toolRawJson;
         if (json.locations) e.locations = json.locations;
-        if (json.content || json.diff) e.content = json.content || json.diff;
+        if (nextContent) e.content = nextContent;
+        const resultText = extractResultTexts(json);
+        if (resultText) {
+          const merged = appendToolOutput(e.result, resultText);
+          e.result = merged.text;
+        }
         const newEntries = [...exp.entries];
         newEntries[idx] = e;
         blocks[i] = { ...exp, entries: newEntries };
-        break;
+        return;
       }
+    }
+  }
+
+  // No existing block found — create one from the update data.
+  // This handles the case where the initial ToolCall event was not
+  // delivered (e.g. it only arrived via requestPermissions, not session/update).
+  const entry = buildToolCallEntry(chunk);
+  const resultText = extractResultTexts(json);
+  if (resultText) {
+    const merged = truncateToolOutput(resultText);
+    entry.result = merged.text;
+  }
+  if (!isExploringChunk(chunk)) {
+    closeStreamingExploring(blocks);
+    blocks.push({ type: 'tool_call', entry, isReplay: chunk.isReplay } as ToolCallBlock);
+  } else {
+    const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+    if (lastBlock && lastBlock.type === 'exploring' && ((lastBlock as ExploringBlock).isStreaming || chunk.isReplay)) {
+      const prevEntries = [...(lastBlock as ExploringBlock).entries];
+      prevEntries.push(entry);
+      blocks[blocks.length - 1] = { ...lastBlock, entries: prevEntries } as ExploringBlock;
+    } else {
+      closeStreamingExploring(blocks);
+      blocks.push({ type: 'exploring', isStreaming: !chunk.isReplay, isReplay: chunk.isReplay, entries: [entry] } as ExploringBlock);
     }
   }
 }
@@ -394,38 +446,37 @@ export function useChatSession(
   const availableModes = selectedAgent?.modes ?? [];
 
   const selectedModelId = selectedAgent
-      ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.defaultModelId || availableModels[0]?.id || '')
+      ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.defaultModelId || availableModels[0]?.modelId || '')
       : '';
 
   const selectedModeId = selectedAgent
       ? (selectedModeByAgent[selectedAgent.id] || selectedAgent.defaultModeId || availableModes[0]?.id || '')
       : '';
 
-  const adapterDisplayName = selectedAgent?.displayName || '';
+  const adapterDisplayName = selectedAgent?.name || '';
 
   const agentOptions: DropdownOption[] = availableAgents.map((agent) => ({ 
     id: agent.id, 
-    label: agent.displayName,
+    label: agent.name,
     iconPath: agent.iconPath,
-    subOptions: agent.models?.map(m => ({ id: m.id, label: m.displayName }))
+    subOptions: agent.models?.map(m => ({ id: m.modelId, label: m.name }))
   }));
-  const modeOptions: DropdownOption[] = availableModes.map((mode) => ({ id: mode.id, label: mode.displayName }));
+  const modeOptions: DropdownOption[] = availableModes.map((mode) => ({ id: mode.id, label: mode.name }));
 
   // Sync selection when agents list changes (passed from parent)
   useEffect(() => {
     if (availableAgents.length === 0) return;
 
     setSelectedAgentId((prev) => {
-      if (prev && availableAgents.some((a) => a.id === prev)) return prev;
-      if (initialAgentId && availableAgents.some((a) => a.id === initialAgentId)) return initialAgentId;
-      return availableAgents.find((a) => a.isDefault)?.id || availableAgents[0]?.id || '';
+      if (prev && availableAgents.some((a) => a.id === prev && isAgentRunnable(a))) return prev;
+      return selectPreferredAgentId(availableAgents, initialAgentId);
     });
 
     setSelectedModelByAgent((prev) => {
       const next: Record<string, string> = { ...prev };
       availableAgents.forEach((agent) => {
         if (next[agent.id]) return;
-        const defaultModel = agent.defaultModelId || agent.models?.[0]?.id || '';
+        const defaultModel = agent.defaultModelId || agent.models?.[0]?.modelId || '';
         if (defaultModel) next[agent.id] = defaultModel;
       });
       return next;
@@ -619,8 +670,8 @@ export function useChatSession(
     if (!selectedAgentId || typeof window.__startAgent !== 'function') return;
     if (historySession) return;
 
-    // Only start if downloaded and authenticated
-    if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
+    // Only start if downloaded and, when managed by the plugin, authenticated.
+    if (!selectedAgent?.downloaded || (selectedAgent.hasAuthentication && !selectedAgent?.authAuthenticated)) {
       if (status !== 'not started' && status !== 'error') {
         setStatus('not started');
       }
@@ -632,10 +683,6 @@ export function useChatSession(
     const modelId = selectedModelByAgent[selectedAgentId] || selectedAgent?.defaultModelId;
 
     try {
-      if (!selectedAgent?.downloaded || !selectedAgent?.authAuthenticated) {
-        return;
-      }
-
       startedAgentIdRef.current = selectedAgentId;
       startedModelIdRef.current = modelId || '';
       startedModeIdRef.current = '';
@@ -849,7 +896,7 @@ export function useChatSession(
     setAttachments,
     acpSessionId,
     adapterName: selectedAgentId,
-    adapterDisplayName: selectedAgent?.displayName || '',
+    adapterDisplayName: selectedAgent?.name || '',
     adapterIconPath: selectedAgent?.iconPath || ''
   };
 }

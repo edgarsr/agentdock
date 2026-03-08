@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { AgentOption, ChatTab, TabUiFlags } from '../types/chat';
+import { AgentOption, ChatTab, TabUiFlags, isAgentRunnable } from '../types/chat';
 
 interface TabBarProps {
   tabs: ChatTab[];
@@ -19,7 +19,7 @@ interface TabBarProps {
 const getAgentIcon = (agentId: string | undefined, agents: AgentOption[]) => {
   let agent = agents.find(a => a.id === agentId);
   if (!agent && agents.length > 0) {
-    agent = agents.find(a => a.isDefault) || agents[0];
+    agent = agents.find(isAgentRunnable) || agents[0];
   }
   if (agent && agent.iconPath) {
     if (agent.iconPath.startsWith('<svg')) {
@@ -94,6 +94,7 @@ export default function TabBar({
   const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLDivElement>(null);
+  const runnableAgents = agents.filter(isAgentRunnable);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -245,8 +246,8 @@ export default function TabBar({
                 <div className="px-3 py-1.5 text-xs font-semibold text-foreground/50 uppercase tracking-wider">
                   New Chat
                 </div>
-                {agents.length > 0 ? (
-                  agents.map((agent) => (
+                {runnableAgents.length > 0 ? (
+                  runnableAgents.map((agent) => (
                     <button
                       key={agent.id}
                       onClick={() => {
@@ -258,11 +259,11 @@ export default function TabBar({
                       <span className="mr-2 flex items-center justify-center opacity-70 group-hover:opacity-100">
                         {getAgentIcon(agent.id, agents)}
                       </span>
-                      <span className="flex-1 min-w-0 truncate">{agent.displayName}</span>
+                      <span className="flex-1 min-w-0 truncate">{agent.name}</span>
                     </button>
                   ))
                 ) : (
-                  <div className="px-3 py-2 text-xs text-foreground/50 italic text-center">No agents found</div>
+                  <div className="px-3 py-2 text-xs text-foreground/50 italic text-center">No available agents</div>
                 )}
               </div>
             </div>

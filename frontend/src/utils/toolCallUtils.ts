@@ -48,3 +48,19 @@ export function extractResultTexts(json: Record<string, any>): string | undefine
   }
   return texts.length > 0 ? texts.join('\n\n') : undefined;
 }
+
+const MAX_TOOL_OUTPUT_CHARS = 20000;
+
+export function truncateToolOutput(text: string, maxChars: number = MAX_TOOL_OUTPUT_CHARS): { text: string; truncated: boolean; originalLength: number } {
+  const originalLength = text.length;
+  if (originalLength <= maxChars) return { text, truncated: false, originalLength };
+  const head = text.slice(0, maxChars);
+  const omitted = originalLength - maxChars;
+  const suffix = `\n\n[Output truncated to ${maxChars} chars; ${omitted} chars omitted]`;
+  return { text: head + suffix, truncated: true, originalLength };
+}
+
+export function appendToolOutput(prev: string | undefined, next: string, maxChars: number = MAX_TOOL_OUTPUT_CHARS): { text: string; truncated: boolean; originalLength: number } {
+  const combined = prev ? `${prev}\n\n${next}` : next;
+  return truncateToolOutput(combined, maxChars);
+}

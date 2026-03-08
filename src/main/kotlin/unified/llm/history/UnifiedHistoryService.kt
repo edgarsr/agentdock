@@ -18,7 +18,6 @@ data class SessionMeta(
     val projectPath: String,
     val title: String,
     val filePath: String,
-    val customVariables: Map<String, String>? = null,
     val createdAt: Long = Instant.now().toEpochMilli(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )
@@ -29,12 +28,7 @@ object UnifiedHistoryService {
         return md.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
-    private fun hashMd5(value: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        return md.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
-    }
-
-    fun resolvePathTemplate(template: String, projectPath: String?, sessionId: String? = null, customVars: Map<String, String>? = null): String {
+    fun resolvePathTemplate(template: String, projectPath: String?, sessionId: String? = null): String {
         val home = System.getProperty("user.home")
         val canonicalProject = projectPath?.takeIf { it.isNotBlank() }?.let {
             runCatching { File(it).canonicalPath }.getOrDefault(it)
@@ -49,21 +43,14 @@ object UnifiedHistoryService {
         
         val slug = projectForHash.replace(Regex("[^a-zA-Z0-9]"), "-")
         val hashSha256 = hashSha256(projectForHash)
-        val hashMd5 = hashMd5(projectForHash)
 
         var result = template
             .replace("~", home)
             .replace("{projectPathSlug}", slug)
             .replace("{projectHashSha256}", hashSha256)
-            .replace("{projectHashMd5}", hashMd5)
             .replace("{slug}", slug)
             .replace("{hash}", hashSha256)
             .replace("{sessionId}", sessionId ?: "")
-
-        // Apply custom variables
-        customVars?.forEach { (key, value) ->
-            result = result.replace("{$key}", value)
-        }
 
         return result
             .replace("/", File.separator)
@@ -135,7 +122,7 @@ object UnifiedHistoryService {
             val resolved = resolvePathTemplate(historyConfig.pathTemplate, cleanProjectPath)
             val files = findMatchingFiles(resolved)
             files.forEach { file ->
-                val meta = runCatching { parser.parseMeta(file, adapter, cleanProjectPath) }.getOrNull()
+                val meta = runCatching { parser.parseMeta(file, adapter, historyConfig, cleanProjectPath) }.getOrNull()
                 if (meta != null) result.add(meta)
             }
         }
@@ -149,20 +136,6 @@ object UnifiedHistoryService {
             val mainFile = File(meta.filePath)
             if (mainFile.exists()) {
                 mainFile.delete()
-            }
-
-            // 2. Cleanup associated directories/files from cleanupTemplates
-            val adapter = runCatching { AcpAdapterConfig.getAdapterInfo(meta.adapterName) }.getOrNull()
-            adapter?.historyConfig?.cleanupTemplates?.forEach { template ->
-                val resolvedPath = resolvePathTemplate(template, meta.projectPath, meta.sessionId, meta.customVariables)
-                val fileToDelete = File(resolvedPath)
-                if (fileToDelete.exists()) {
-                    if (fileToDelete.isDirectory) {
-                        fileToDelete.deleteRecursively()
-                    } else {
-                        fileToDelete.delete()
-                    }
-                }
             }
             true
         } catch (e: Exception) {

@@ -32,20 +32,16 @@ import unified.llm.changes.UndoOperation
 
 
 @Serializable
-private data class AdapterToolPayload(val name: String, val path: String)
+private data class AdapterModelPayload(val modelId: String, val name: String)
 
 @Serializable
-private data class AdapterModelPayload(val id: String, val displayName: String)
-
-@Serializable
-private data class AdapterModePayload(val id: String, val displayName: String)
+private data class AdapterModePayload(val id: String, val name: String)
 
 @Serializable
 private data class AdapterPayload(
     val id: String,
-    val displayName: String,
+    val name: String,
     val iconPath: String,
-    val isDefault: Boolean,
     val defaultModelId: String,
     val models: List<AdapterModelPayload>,
     val defaultModeId: String,
@@ -53,12 +49,12 @@ private data class AdapterPayload(
     val downloaded: Boolean,
     val enabled: Boolean,
     val downloadPath: String,
+    val hasAuthentication: Boolean,
     val authAuthenticated: Boolean,
     val authPath: String,
     val authenticating: Boolean,
     val downloading: Boolean,
-    val downloadStatus: String,
-    val supportingTools: List<AdapterToolPayload>
+    val downloadStatus: String
 )
 
 private val adapterJson = Json { encodeDefaults = true }
@@ -114,21 +110,17 @@ class AcpBridge(
         service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
             when (update) {
                 is SessionUpdate.UserMessageChunk -> {
-                    pushContentBlock(chatId, "user", update.content, isThought = false, isReplay = true)
+                    // During live prompting the frontend already adds the user message,
+                    // so only push the echo during replay to reconstruct the conversation.
+                    if (isReplay) {
+                        pushContentBlock(chatId, "user", update.content, isThought = false, isReplay = true)
+                    }
                 }
                 is SessionUpdate.AgentMessageChunk -> {
-                    if (isReplay) {
-                        pushContentBlock(chatId, "assistant", update.content, isThought = false, isReplay = true)
-                    }
-                    // During prompting, agent text arrives through the prompt flow — not here
+                    pushContentBlock(chatId, "assistant", update.content, isThought = false, isReplay = isReplay)
                 }
                 is SessionUpdate.AgentThoughtChunk -> {
-                    val content = update.content
-                    if (isReplay) {
-                        pushContentBlock(chatId, "assistant", content, isThought = true, isReplay = true)
-                    } else if (content is ContentBlock.Text) {
-                        pushContentChunk(chatId, "assistant", "thinking", text = content.text, isReplay = false)
-                    }
+                    pushContentBlock(chatId, "assistant", update.content, isThought = true, isReplay = isReplay)
                 }
                 is SessionUpdate.CurrentModeUpdate -> pushMode(chatId, update.currentModeId.value)
                 is SessionUpdate.ToolCall -> {
@@ -171,29 +163,16 @@ class AcpBridge(
                             
                             service.stopSharedProcess(adapterId)
                             val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterId)
-                            val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.resourceName)
+                            val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id)
                             
                             val statusCallback = { status: String ->
                                 downloadStatuses[adapterId] = status
                                 pushAdapters()
                             }
                             
-                            var success = AcpAdapterPaths.downloadFromNpm(targetDir, adapterInfo, statusCallback) && 
-                                           AcpAdapterPaths.runNpmInstall(targetDir, statusCallback)
-                            
-                            // Download generic supporting tools
-                            if (success) {
-                                for (tool in adapterInfo.supportingTools) {
-                                    if (!AcpAdapterPaths.downloadSupportingTool(tool, statusCallback)) {
-                                        success = false
-                                        break
-                                    }
-                                }
-                            }
+                            val success = AcpAdapterPaths.installAdapterRuntime(targetDir, adapterInfo, statusCallback)
                             
                             if (success) {
-                                // Apply patches immediately after install
-                                AcpAdapterPaths.applyPatches(targetDir, adapterInfo, statusCallback)
                                 downloadStatuses.remove(adapterId)
                                 pushAdapters()
                             } else {
@@ -368,22 +347,19 @@ class AcpBridge(
                         try {
                             service.prompt(chatId, blocks).collect { event ->
                                 when (event) {
-                                    is AcpEvent.AgentText -> pushContentChunk(chatId, "assistant", "text", text = event.text, isReplay = false)
-                                    is AcpEvent.AgentThought -> pushContentChunk(chatId, "assistant", "thinking", text = event.text, isReplay = false)
+                                    is AcpEvent.AgentText -> Unit
+                                    is AcpEvent.AgentThought -> Unit
                                     is AcpEvent.PromptDone -> pushStatus(chatId, "ready")
                                     is AcpEvent.Error -> {
                                         pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]", isReplay = false)
                                     }
                                 }
                             }
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
                         } catch (e: Exception) {
-                            if (e is kotlinx.coroutines.CancellationException) {
-                                pushContentChunk(chatId, "assistant", "text", text = "[Cancelled]", isReplay = false)
-                                pushStatus(chatId, "ready")
-                            } else {
-                                pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
-                                pushStatus(chatId, service.status(chatId).name.lowercase())
-                            }
+                            pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
+                            pushStatus(chatId, service.status(chatId).name.lowercase())
                         } finally {
                             promptJobs.remove(chatId)
                         }
@@ -1264,14 +1240,13 @@ class AcpBridge(
 
     fun pushAdapters() {
         try {
-            val defaultName = try { AcpAdapterConfig.getDefaultAdapterName() } catch (e: Exception) { "" }
             val unique = linkedMapOf<String, AcpAdapterConfig.AdapterInfo>()
-            AcpAdapterConfig.getAllAdapters().values.forEach { info -> unique[info.name] = info }
+            AcpAdapterConfig.getAllAdapters().values.forEach { info -> unique[info.id] = info }
 
-            val adapters = unique.values.sortedBy { it.displayName.lowercase() }.map { info ->
-                val downloaded = AcpAdapterPaths.isDownloaded(info.name)
-                val authStatus = AcpAuthService.getAuthStatus(info.name)
-                val dlStatus = downloadStatuses[info.name] ?: ""
+            val adapters = unique.values.sortedBy { it.name.lowercase() }.map { info ->
+                val downloaded = AcpAdapterPaths.isDownloaded(info.id)
+                val authStatus = AcpAuthService.getAuthStatus(info.id)
+                val dlStatus = downloadStatuses[info.id] ?: ""
 
                 // Inline SVG icons as base64 so they load correctly in JCEF
                 val iconBase64 = info.iconPath?.let { path ->
@@ -1288,27 +1263,22 @@ class AcpBridge(
                 } ?: ""
 
                 AdapterPayload(
-                    id = info.name,
-                    displayName = info.displayName,
+                    id = info.id,
+                    name = info.name,
                     iconPath = iconBase64,
-                    isDefault = info.name == defaultName,
                     defaultModelId = info.defaultModelId ?: "",
-                    models = info.models.map { AdapterModelPayload(it.id, it.displayName) },
+                    models = info.models.map { AdapterModelPayload(it.modelId, it.name) },
                     defaultModeId = info.defaultModeId ?: "",
-                    modes = info.modes.map { AdapterModePayload(it.id, it.displayName) },
+                    modes = info.modes.map { AdapterModePayload(it.id, it.name) },
                     downloaded = downloaded,
-                    enabled = AcpAgentSettings.isEnabled(info.name),
-                    downloadPath = if (downloaded) AcpAdapterPaths.getDownloadPath(info.name) else "",
+                    enabled = AcpAgentSettings.isEnabled(info.id),
+                    downloadPath = if (downloaded) AcpAdapterPaths.getDownloadPath(info.id) else "",
+                    hasAuthentication = info.authConfig != null,
                     authAuthenticated = authStatus.authenticated,
                     authPath = authStatus.authPath ?: "",
-                    authenticating = AcpAuthService.isAuthenticating(info.name),
+                    authenticating = AcpAuthService.isAuthenticating(info.id),
                     downloading = dlStatus.isNotEmpty() && !dlStatus.startsWith("Error"),
-                    downloadStatus = dlStatus,
-                    supportingTools = info.supportingTools.map { tool ->
-                        val toolDirName = tool.targetDir ?: tool.id
-                        val toolDir = File(AcpAdapterPaths.getDependenciesDir(), toolDirName)
-                        AdapterToolPayload(tool.name, toolDir.absolutePath)
-                    }
+                    downloadStatus = dlStatus
                 )
             }
 

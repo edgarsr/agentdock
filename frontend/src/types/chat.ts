@@ -72,20 +72,19 @@ export interface Message {
 }
 
 export interface ModelOption {
-  id: string;
-  displayName: string;
+  modelId: string;
+  name: string;
 }
 
 export interface ModeOption {
   id: string;
-  displayName: string;
+  name: string;
 }
 
 export interface AgentOption {
   id: string;
-  displayName: string;
+  name: string;
   iconPath?: string;
-  isDefault: boolean;
   defaultModelId?: string;
   models?: ModelOption[];
   defaultModeId?: string;
@@ -95,10 +94,14 @@ export interface AgentOption {
   downloadPath?: string;
   downloading?: boolean;
   downloadStatus?: string;
-  supportingTools?: { name: string; path: string }[];
+  hasAuthentication?: boolean;
   authAuthenticated?: boolean;
   authPath?: string;
   authenticating?: boolean;
+}
+
+export function isAgentRunnable(agent: AgentOption): boolean {
+  return agent.downloaded && agent.enabled && (!agent.hasAuthentication || !!agent.authAuthenticated);
 }
 
 export interface PermissionRequest {
@@ -140,7 +143,6 @@ export interface HistorySessionMeta {
   projectPath: string;
   title: string;
   filePath: string;
-  customVariables?: Record<string, string>;
   createdAt: number;
   updatedAt: number;
 }

@@ -80,20 +80,15 @@ export function AgentManagementView() {
               return (
                 <article 
                   key={agent.id} 
-                  className="bg-background-secondary border border-border opacity-40 rounded-xl p-5 shadow-sm space-y-6"
+                  className="bg-background-secondary border border-border rounded-xl p-5 shadow-sm space-y-6"
                 >
                   {/* Title & Toggle */}
                   <div className="flex justify-between items-start gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg truncate">{agent.displayName}</h3>
-                        {agent.isDefault && (
-                          <span className="px-1.5 py-0.5 rounded bg-accent opacity-10 text-accent font-medium">
-                            Default
-                          </span>
-                        )}
+                        <h3 className="font-bold text-lg truncate">{agent.name}</h3>
                       </div>
-                      <div className="font-mono text-foreground-secondary opacity-50">
+                      <div className="font-mono text-foreground-secondary">
                         {agent.id}
                       </div>
                     </div>
@@ -101,7 +96,7 @@ export function AgentManagementView() {
                     <button
                         onClick={() => handleToggleEnabled(agent.id, agent.enabled)}
                         disabled={isInstalling || isDeleting}
-                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-95 ${agent.enabled ? 'bg-primary' : 'bg-background-secondary'} ${isInstalling || isDeleting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-95 ${agent.enabled ? 'bg-primary' : 'bg-background-secondary'} ${isInstalling || isDeleting ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                     >
                         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${agent.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
@@ -110,12 +105,12 @@ export function AgentManagementView() {
                   {/* Installation Section */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <span className="font-bold text-foreground-secondary opacity-50">Installation</span>
+                        <span className="font-bold text-foreground-secondary">Installation</span>
                         {agent.downloaded && !isInstalling && (
                             <button
                                 onClick={() => handleDelete(agent.id)}
                                 disabled={isDeleting}
-                                className="text-xs font-bold px-3 py-1 bg-red-500/5 text-red-500/80 border border-red-500/10 rounded hover:bg-red-500 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-red-500/50 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                                className="text-xs font-bold px-3 py-1 bg-red-500/5 text-red-500/80 border border-red-500/10 rounded hover:bg-red-500 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-red-500/50 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100"
                             >
                                 {isDeleting ? 'Deleting...' : 'Uninstall'}
                             </button>
@@ -123,17 +118,10 @@ export function AgentManagementView() {
                     </div>
 
                     {agent.downloaded ? (
-                        <div className="bg-black opacity-5 rounded border border-border opacity-10 p-3 space-y-2">
-                            {/* Main download path */}
-                            <div className="font-mono opacity-60 break-all leading-tight">
+                        <div className="bg-black rounded border border-border p-3 space-y-2">
+                            <div className="font-mono break-all leading-tight">
                                 {agent.downloadPath}
                             </div>
-                            {/* Supporting tools paths */}
-                            {agent.supportingTools?.map((tool, idx) => (
-                                <div key={`tool-${idx}`} className="font-mono opacity-60 break-all leading-tight">
-                                    {tool.path}
-                                </div>
-                            ))}
                         </div>
                     ) : (
                         <div className="flex flex-col gap-2">
@@ -141,7 +129,7 @@ export function AgentManagementView() {
                                 <div className="flex items-center gap-3 py-2 text-primary font-bold">
                                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                     <span>Installing...</span>
-                                    <span className="text-foreground-secondary font-normal italic truncate opacity-60">{agent.downloadStatus}</span>
+                                    <span className="text-foreground-secondary font-normal italic truncate">{agent.downloadStatus}</span>
                                 </div>
                             ) : (
                                 <>
@@ -150,7 +138,7 @@ export function AgentManagementView() {
                                     )}
                                     <button
                                         onClick={() => handleDownload(agent.id)}
-                                        className="w-fit px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 active:scale-95 cursor-pointer"
+                                        className="w-fit px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 active:scale-95 cursor-pointer"
                                     >
                                         {agent.downloadStatus?.startsWith('Error') ? 'Retry Install' : 'Install Adapter'}
                                     </button>
@@ -161,10 +149,10 @@ export function AgentManagementView() {
                   </div>
 
                   {/* Authentication Section */}
-                  {agent.downloaded && (
+                  {agent.downloaded && agent.hasAuthentication && (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="font-bold text-foreground-secondary opacity-50">Authentication</span>
+                            <span className="font-bold text-foreground-secondary">Authentication</span>
                             <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${agent.authAuthenticated ? 'bg-green-500' : 'bg-red-500'}`} />
                                 <span className={`font-bold ${agent.authAuthenticated ? 'text-green-500/80' : 'text-red-500/80'}`}>
@@ -175,8 +163,8 @@ export function AgentManagementView() {
 
                         {/* Auth Key Path - Separate Box, Only if Authenticated */}
                         {agent.authAuthenticated && agent.authPath && (
-                            <div className="bg-black opacity-5 rounded border border-border opacity-10 p-3">
-                                <div className="font-mono opacity-60 break-all leading-tight">
+                            <div className="bg-black rounded border border-border p-3">
+                                <div className="font-mono break-all leading-tight">
                                     {agent.authPath}
                                 </div>
                             </div>
@@ -190,9 +178,9 @@ export function AgentManagementView() {
                             disabled={agent.authenticating}
                             className={`px-4 py-2 rounded text-xs font-bold transition-all focus:outline-none ${
                                 agent.authAuthenticated
-                                    ? 'bg-background-secondary opacity-20 text-foreground border border-border opacity-50 hover:bg-background-secondary opacity-40 focus:ring-2 focus:ring-muted active:scale-95'
-                                    : 'bg-primary text-primary-foreground shadow-sm hover:opacity-90 focus:ring-2 focus:ring-primary/50 active:scale-95'
-                            } ${agent.authenticating ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                                    ? 'bg-background-secondary text-foreground border border-border hover:bg-background-secondary focus:ring-2 focus:ring-muted active:scale-95'
+                                    : 'bg-primary text-primary-foreground shadow-sm focus:ring-2 focus:ring-primary/50 active:scale-95'
+                            } ${agent.authenticating ? 'cursor-wait' : 'cursor-pointer'}`}
                         >
                             {agent.authenticating ? '...' : (agent.authAuthenticated ? 'Logout' : 'Login')}
                         </button>
@@ -208,7 +196,7 @@ export function AgentManagementView() {
       <ConfirmationModal
         isOpen={confirmDeleteId !== null}
         title="Confirm Deletion"
-        message={`Delete local files for ${agents.find(a => a.id === confirmDeleteId)?.displayName || ''}?`}
+        message={`Delete local files for ${agents.find(a => a.id === confirmDeleteId)?.name || ''}?`}
         onConfirm={performDelete}
         onCancel={() => setConfirmDeleteId(null)}
       />
