@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { FileText, History, Network, Palette, Settings } from 'lucide-react';
 import { AgentOption, ChatTab, TabUiFlags, isAgentRunnable } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 
@@ -16,6 +17,7 @@ interface TabBarProps {
   onOpenManagement: () => void;
   onOpenDesignSystem: () => void;
   onOpenMcp: () => void;
+  onOpenSystemInstructions: () => void;
 }
 
 const getAgentIcon = (agentId: string | undefined, agents: AgentOption[]) => {
@@ -44,44 +46,17 @@ const getAgentIcon = (agentId: string | undefined, agents: AgentOption[]) => {
 };
 
 /** Icon for the management tab in the tab bar */
-const ManagementTabIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground/70 flex-shrink-0">
-    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-    <circle cx="12" cy="12" r="3"></circle>
-  </svg>
-);
+const ManagementTabIcon = () => <Settings size={14} className="text-foreground/70 flex-shrink-0" />;
 
 /** Icon for the design system tab in the tab bar */
-const DesignTabIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground/70 flex-shrink-0">
-    <circle cx="13.5" cy="6.5" r="2.5"></circle>
-    <circle cx="6.5" cy="13.5" r="2.5"></circle>
-    <circle cx="17.5" cy="17.5" r="2.5"></circle>
-    <path d="M13.5 9C13.5 15 6.5 15 6.5 11"></path>
-    <path d="M9 13.5c6 0 6 7 2 7"></path>
-  </svg>
-);
+const DesignTabIcon = () => <Palette size={14} className="text-foreground/70 flex-shrink-0" />;
 
 /** Icon for the MCP servers tab in the tab bar */
-const McpTabIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground/70 flex-shrink-0">
-    <path d="M12 22v-5"></path>
-    <path d="M9 8V2"></path>
-    <path d="M15 8V2"></path>
-    <path d="M18 8h.01"></path>
-    <path d="M6 8h.01"></path>
-    <path d="M13 22h-2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1z"></path>
-    <path d="M18 8a6 6 0 0 1-12 0"></path>
-  </svg>
-);
+const McpTabIcon = () => <Network size={14} className="text-foreground/70 flex-shrink-0" />;
 
 /** Icon for the history tab in the tab bar */
-const HistoryTabIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground/70 flex-shrink-0">
-    <circle cx="12" cy="12" r="10"></circle>
-    <polyline points="12 6 12 12 16 14"></polyline>
-  </svg>
-);
+const HistoryTabIcon = () => <History size={14} className="text-foreground/70 flex-shrink-0" />;
+const SystemInstructionsTabIcon = () => <FileText size={14} className="text-foreground/70 flex-shrink-0" />;
 
 /** Get the icon for a tab based on its type */
 const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {
@@ -89,6 +64,7 @@ const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {
   if (tab.type === 'design') return <DesignTabIcon />;
   if (tab.type === 'history') return <HistoryTabIcon />;
   if (tab.type === 'mcp') return <McpTabIcon />;
+  if (tab.type === 'system-instructions') return <SystemInstructionsTabIcon />;
   return getAgentIcon(tab.agentId, agents);
 };
 
@@ -105,7 +81,8 @@ export default function TabBar({
   onOpenHistory,
   onOpenManagement,
   onOpenDesignSystem,
-  onOpenMcp
+  onOpenMcp,
+  onOpenSystemInstructions
 }: TabBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
@@ -316,10 +293,7 @@ export default function TabBar({
           className="flex items-center justify-center w-[28px] h-[24px] rounded text-foreground/60 hover:text-foreground hover:bg-background-secondary transition-colors"
           title="History"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
+          <History size={14} />
         </button>
 
         {/* Hamburger Menu */}
@@ -349,6 +323,18 @@ export default function TabBar({
                   <ManagementTabIcon />
                 </span>
                 <span>Service Providers</span>
+              </button>
+              <button
+                onClick={() => {
+                  onOpenSystemInstructions();
+                  setHamburgerMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors group"
+              >
+                <span className="mr-2 flex items-center justify-center opacity-70 group-hover:opacity-100">
+                  <SystemInstructionsTabIcon />
+                </span>
+                <span>System Instructions</span>
               </button>
               <button
                 onClick={() => {

@@ -146,7 +146,7 @@ export interface TabUiFlags {
   warning: boolean;
 }
 
-export type TabType = 'chat' | 'management' | 'design' | 'history' | 'mcp';
+export type TabType = 'chat' | 'management' | 'design' | 'history' | 'mcp' | 'system-instructions';
 
 export interface ChatTab {
   id: string;
@@ -347,6 +347,9 @@ declare global {
     __searchFiles?: (query: string) => void;
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;
+    __onSystemInstructions?: (instructions: unknown) => void;
+    __loadSystemInstructions?: () => void;
+    __saveSystemInstructions?: (json: string) => void;
   }
 }
 

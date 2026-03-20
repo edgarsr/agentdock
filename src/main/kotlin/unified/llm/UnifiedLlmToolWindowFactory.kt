@@ -26,6 +26,7 @@ import unified.llm.acp.injectReadySignal
 import unified.llm.acp.shutdown
 import unified.llm.history.HistoryBridge
 import unified.llm.mcp.McpBridge
+import unified.llm.systeminstructions.SystemInstructionsBridge
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import unified.llm.utils.toProjectRelativePath
@@ -44,6 +45,7 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
     private var debugBridge: AcpBridge? = null
     private var historyBridge: HistoryBridge? = null
     private var mcpBridge: McpBridge? = null
+    private var systemInstructionsBridge: SystemInstructionsBridge? = null
 
     companion object {
         // --- DEVELOPMENT TOGGLE ---
@@ -183,10 +185,12 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         debugBridge = AcpBridge(browser, service, scope)
                         historyBridge = HistoryBridge(browser, project, scope)
                         mcpBridge = McpBridge(browser, scope)
+                        systemInstructionsBridge = SystemInstructionsBridge(browser, scope)
 
                         debugBridge?.install()
                         historyBridge?.install()
                         mcpBridge?.install()
+                        systemInstructionsBridge?.install()
 
 
                         // Solve JCEF cursor: pointer not working issue on Windows
@@ -268,6 +272,7 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                                     debugBridge?.injectDebugApi(cefBrowser)
                                     historyBridge?.injectApi(cefBrowser)
                                     mcpBridge?.injectApi(cefBrowser)
+                                    systemInstructionsBridge?.injectApi(cefBrowser)
                                 }
                             }
                         }, browser.cefBrowser)

@@ -14,6 +14,7 @@ import {
   AvailableCommand,
 } from '../types/chat';
 import { McpServerConfig } from '../types/mcp';
+import { SystemInstruction } from '../types/systemInstructions';
 
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
@@ -30,10 +31,12 @@ export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 export interface ConversationTranscriptSavedEvent { payload: ConversationTranscriptSavedPayload; }
 
 export interface McpServersEvent { servers: McpServerConfig[]; }
+export interface SystemInstructionsEvent { instructions: SystemInstruction[]; }
 
 const EVENT_NAMES = {
   CONTENT_CHUNK: 'acp-content-chunk',
   MCP_SERVERS: 'mcp-servers',
+  SYSTEM_INSTRUCTIONS: 'system-instructions',
   STATUS: 'acp-status',
   SESSION_ID: 'acp-session-id',
   MODE: 'acp-mode',
@@ -172,6 +175,10 @@ export const ACPBridge = {
 
     window.__onMcpServers = (servers) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.MCP_SERVERS, { detail: { servers } }));
+    };
+
+    window.__onSystemInstructions = (instructions) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.SYSTEM_INSTRUCTIONS, { detail: { instructions } }));
     };
 
     window.__onFilesResult = (filesJson) => {
@@ -363,5 +370,18 @@ export const ACPBridge = {
   onMcpServers: (callback: (e: CustomEvent<McpServersEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.MCP_SERVERS, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.MCP_SERVERS, callback as EventListener);
+  },
+
+  loadSystemInstructions: () => {
+    window.__loadSystemInstructions?.();
+  },
+
+  saveSystemInstructions: (instructions: SystemInstruction[]) => {
+    window.__saveSystemInstructions?.(JSON.stringify(instructions));
+  },
+
+  onSystemInstructions: (callback: (e: CustomEvent<SystemInstructionsEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.SYSTEM_INSTRUCTIONS, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.SYSTEM_INSTRUCTIONS, callback as EventListener);
   },
 };

@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import unified.llm.history.SessionMeta
 import unified.llm.mcp.McpConfigStore
 import unified.llm.mcp.McpServerConfig
+import unified.llm.systeminstructions.SystemInstructionsStore
 
 private fun buildMcpServers(): List<McpServer> =
     McpConfigStore.loadEnabled().mapNotNull { it.toSdkMcpServer() }
@@ -116,6 +117,9 @@ internal suspend fun AcpClientService.startAgent(
 
                 context.session = sess
                 context.sessionIdRef.set(sess.sessionId.value)
+                if (resumeSessionId != null && sess.sessionId.value == resumeSessionId) {
+                    systemInstructionsInjectedSessionIds.add(sess.sessionId.value)
+                }
 
                 val selectedModelId = resolveModelToApply(
                     preferredModelId,
@@ -283,6 +287,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
 
     context.sessionIdRef.set(sess.sessionId.value)
     replayOwnerBySessionId[sess.sessionId.value] = context.chatId
+    systemInstructionsInjectedSessionIds.add(sess.sessionId.value)
 
     if (keepLoadedSessionActive) {
         context.session = sess
@@ -398,8 +403,21 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     context.statusRef.set(AcpClientService.Status.Prompting)
     var stopReason: String? = null
     val activeAdapterName = context.activeAdapterNameRef.get()
+    val sessionId = context.sessionIdRef.get()
+    val isFirstPrompt = !sessionId.isNullOrBlank() && systemInstructionsInjectedSessionIds.add(sessionId)
+    val promptBlocks = if (isFirstPrompt) {
+        val injectedBlock = SystemInstructionsStore.buildInitialPromptBlock()
+        if (injectedBlock != null) {
+            listOf(injectedBlock) + blocks
+        } else {
+            systemInstructionsInjectedSessionIds.remove(sessionId)
+            blocks
+        }
+    } else {
+        blocks
+    }
     try {
-        sess.prompt(blocks).collect { event ->
+        sess.prompt(promptBlocks).collect { event ->
             when (event) {
                 is Event.SessionUpdateEvent -> {
                     sessionUpdateHandler?.invoke(chatId, event.update, false, null)

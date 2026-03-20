@@ -7,6 +7,7 @@ import HistoryPanel from './components/HistoryPanel';
 import { AgentManagementView } from './components/AgentManagement';
 import { DesignSystemView } from './components/DesignSystem';
 import { McpServersView } from './components/McpServersView';
+import { SystemInstructionsView } from './components/SystemInstructionsView';
 import ConfirmationModal from './components/ConfirmationModal';
 
 let tabCounter = 0;
@@ -397,6 +398,7 @@ function App() {
         onOpenManagement={() => openSingletonTab('management', 'Service Providers')}
         onOpenDesignSystem={() => openSingletonTab('design', 'Design System')}
         onOpenMcp={() => openSingletonTab('mcp', 'MCP Servers')}
+        onOpenSystemInstructions={() => openSingletonTab('system-instructions', 'System Instructions')}
       />
 
       <div className="flex-1 relative min-h-0">
@@ -431,6 +433,7 @@ function App() {
                 <HistoryPanel availableAgents={availableAgents} onOpenSession={handleOpenHistory} />
               )}
               {tab.type === 'mcp' && <McpServersView />}
+              {tab.type === 'system-instructions' && <SystemInstructionsView />}
             </div>
           );
         })}

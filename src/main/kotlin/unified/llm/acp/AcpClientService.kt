@@ -153,6 +153,7 @@ class AcpClientService private constructor(val project: Project) {
     internal val adapterInitializationErrors = ConcurrentHashMap<String, String>()
     internal val adapterRuntimeMetadataMap = ConcurrentHashMap<String, AdapterRuntimeMetadata>()
     internal val availableCommandsByAdapter = ConcurrentHashMap<String, List<AvailableCommandPayload>>()
+    internal val systemInstructionsInjectedSessionIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     fun status(chatId: String): Status = sessions[chatId]?.statusRef?.get() ?: Status.NotStarted
     fun sessionId(chatId: String): String? = sessions[chatId]?.sessionIdRef?.get()
@@ -240,6 +241,7 @@ class AcpClientService private constructor(val project: Project) {
             session = null
             sharedProcess = null
             statusRef.set(Status.NotStarted)
+            sessionIdRef.get()?.let { systemInstructionsInjectedSessionIds.remove(it) }
             sessionIdRef.set(null)
             activeAdapterNameRef.set(null)
             activeModelIdRef.set(null)
