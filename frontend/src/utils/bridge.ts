@@ -12,6 +12,10 @@ import {
   ContinueConversationPayload,
   ConversationTranscriptSavedPayload,
   AvailableCommand,
+  AudioTranscriptionFeatureState,
+  AudioTranscriptionResultPayload,
+  AudioRecordingStatePayload,
+  AudioTranscriptionSettings,
 } from '../types/chat';
 import { McpServerConfig } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
@@ -34,6 +38,10 @@ export interface ConversationTranscriptSavedEvent { payload: ConversationTranscr
 export interface McpServersEvent { servers: McpServerConfig[]; }
 export interface PromptLibraryEvent { items: PromptLibraryItem[]; }
 export interface SystemInstructionsEvent { instructions: SystemInstruction[]; }
+export interface AudioTranscriptionFeatureEvent { state: AudioTranscriptionFeatureState; }
+export interface AudioTranscriptionResultEvent { payload: AudioTranscriptionResultPayload; }
+export interface AudioRecordingStateEvent { payload: AudioRecordingStatePayload; }
+export interface AudioTranscriptionSettingsEvent { settings: AudioTranscriptionSettings; }
 
 const EVENT_NAMES = {
   CONTENT_CHUNK: 'acp-content-chunk',
@@ -56,14 +64,24 @@ const EVENT_NAMES = {
   TOOL_CALL: 'acp-tool-call',
   TOOL_CALL_UPDATE: 'acp-tool-call-update',
   CONVERSATION_TRANSCRIPT_SAVED: 'conversation-transcript-saved',
+  AUDIO_TRANSCRIPTION_FEATURE: 'audio-transcription-feature',
+  AUDIO_TRANSCRIPTION_RESULT: 'audio-transcription-result',
+  AUDIO_RECORDING_STATE: 'audio-recording-state',
+  AUDIO_TRANSCRIPTION_SETTINGS: 'audio-transcription-settings',
 };
 
-let transcriptRequestCounter = 0;
+let saveTranscriptCounter = 0;
+let audioTranscriptionCounter = 0;
 const availableCommandsByAdapter = new Map<string, AvailableCommand[]>();
 
-function nextTranscriptRequestId(): string {
-  transcriptRequestCounter += 1;
-  return `transcript-${transcriptRequestCounter}-${Date.now()}`;
+function nextSaveTranscriptRequestId(): string {
+  saveTranscriptCounter += 1;
+  return `transcript-${saveTranscriptCounter}-${Date.now()}`;
+}
+
+function nextAudioTranscriptionRequestId(): string {
+  audioTranscriptionCounter += 1;
+  return `audio-transcription-${audioTranscriptionCounter}-${Date.now()}`;
 }
 
 export const ACPBridge = {
@@ -188,6 +206,22 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.SYSTEM_INSTRUCTIONS, { detail: { instructions } }));
     };
 
+    window.__onAudioTranscriptionFeature = (state) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.AUDIO_TRANSCRIPTION_FEATURE, { detail: { state } }));
+    };
+
+    window.__onAudioTranscriptionResult = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.AUDIO_TRANSCRIPTION_RESULT, { detail: { payload } }));
+    };
+
+    window.__onAudioRecordingState = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.AUDIO_RECORDING_STATE, { detail: { payload } }));
+    };
+
+    window.__onAudioTranscriptionSettings = (settings) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.AUDIO_TRANSCRIPTION_SETTINGS, { detail: { settings } }));
+    };
+
     window.__onFilesResult = (filesJson) => {
       let files = [];
       try {
@@ -297,7 +331,7 @@ export const ACPBridge = {
         return;
       }
 
-      const requestId = nextTranscriptRequestId();
+      const requestId = nextSaveTranscriptRequestId();
       const cleanup = ACPBridge.onConversationTranscriptSaved((e) => {
         const payload = e.detail.payload;
         if (payload.requestId !== requestId) return;
@@ -403,5 +437,116 @@ export const ACPBridge = {
   onSystemInstructions: (callback: (e: CustomEvent<SystemInstructionsEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.SYSTEM_INSTRUCTIONS, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.SYSTEM_INSTRUCTIONS, callback as EventListener);
+  },
+
+  loadAudioTranscriptionFeature: () => {
+    window.__loadAudioTranscriptionFeature?.();
+  },
+
+  installAudioTranscriptionFeature: () => {
+    window.__installAudioTranscriptionFeature?.();
+  },
+
+  uninstallAudioTranscriptionFeature: () => {
+    window.__uninstallAudioTranscriptionFeature?.();
+  },
+
+  onAudioTranscriptionFeature: (callback: (e: CustomEvent<AudioTranscriptionFeatureEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_FEATURE, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_FEATURE, callback as EventListener);
+  },
+
+  transcribeAudioInput: (audioBase64: string): Promise<AudioTranscriptionResultPayload> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window.__transcribeAudioInput !== 'function') {
+        reject(new Error('Audio transcription bridge is not available.'));
+        return;
+      }
+
+      const requestId = nextAudioTranscriptionRequestId();
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Audio transcription timed out.'));
+      }, 120_000);
+      const cleanup = ACPBridge.onAudioTranscriptionResult((e) => {
+        const payload = e.detail.payload;
+        if (payload.requestId !== requestId) return;
+        clearTimeout(timeout);
+        cleanup();
+        if (payload.success) {
+          resolve(payload);
+        } else {
+          reject(new Error(payload.error || 'Audio transcription failed.'));
+        }
+      });
+
+      try {
+        window.__transcribeAudioInput(JSON.stringify({ requestId, audioBase64 }));
+      } catch (error) {
+        clearTimeout(timeout);
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  },
+
+  onAudioTranscriptionResult: (callback: (e: CustomEvent<AudioTranscriptionResultEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_RESULT, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_RESULT, callback as EventListener);
+  },
+
+  startAudioRecording: () => {
+    window.__startAudioRecording?.();
+  },
+
+  stopAudioRecording: (requestId: string): Promise<AudioTranscriptionResultPayload> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window.__stopAudioRecording !== 'function') {
+        reject(new Error('Audio recording bridge is not available.'));
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Audio transcription timed out.'));
+      }, 120_000);
+      const cleanup = ACPBridge.onAudioTranscriptionResult((e) => {
+        const payload = e.detail.payload;
+        if (payload.requestId !== requestId) return;
+        clearTimeout(timeout);
+        cleanup();
+        if (payload.success) {
+          resolve(payload);
+        } else {
+          reject(new Error(payload.error || 'Audio transcription failed.'));
+        }
+      });
+
+      try {
+        window.__stopAudioRecording(JSON.stringify({ requestId }));
+      } catch (error) {
+        clearTimeout(timeout);
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  },
+
+  onAudioRecordingState: (callback: (e: CustomEvent<AudioRecordingStateEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.AUDIO_RECORDING_STATE, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.AUDIO_RECORDING_STATE, callback as EventListener);
+  },
+
+  loadAudioTranscriptionSettings: () => {
+    window.__loadAudioTranscriptionSettings?.();
+  },
+
+  saveAudioTranscriptionSettings: (settings: AudioTranscriptionSettings) => {
+    window.__saveAudioTranscriptionSettings?.(JSON.stringify(settings));
+  },
+
+  onAudioTranscriptionSettings: (callback: (e: CustomEvent<AudioTranscriptionSettingsEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_SETTINGS, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.AUDIO_TRANSCRIPTION_SETTINGS, callback as EventListener);
   },
 };

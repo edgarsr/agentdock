@@ -11,9 +11,16 @@ import {
   $isRangeSelection,
   LexicalEditor,
 } from 'lexical';
+import { LoaderCircle, Mic, Square } from 'lucide-react';
 
 import ChatDropdown from './ChatDropdown';
-import { AvailableCommand, ChatAttachment, DropdownOption } from '../../types/chat';
+import {
+  AudioRecordingStatePayload,
+  AudioTranscriptionFeatureState,
+  AvailableCommand,
+  ChatAttachment,
+  DropdownOption,
+} from '../../types/chat';
 import { PromptLibraryItem } from '../../types/promptLibrary';
 import AttachmentBar from './input/AttachmentBar';
 import { Tooltip } from './shared/Tooltip';
@@ -26,11 +33,20 @@ import { buildAgentSlashItems, buildPromptLibrarySlashItems } from './input/slas
 import FileMentionMenu from './input/FileMentionMenu';
 import { useFileMentions } from '../../hooks/useFileMentions';
 
-// Sub-components & Plugins
 import { ChatInputActionsContext } from './input/ChatInputActionsContext';
 import { ImageNode, $createImageNode } from './input/ImageNode';
 import { CodeReferenceNode } from './input/CodeReferenceNode';
-import { AttachmentsSyncPlugin, PasteLogPlugin, KeyboardPlugin, AutoHeightPlugin, ClickToFocusPlugin, ClearEditorPlugin, InlineAttachmentBackspacePlugin, ExternalCodeReferencePlugin, RegisterEditorPlugin } from './input/ChatInputPlugins';
+import {
+  AttachmentsSyncPlugin,
+  PasteLogPlugin,
+  KeyboardPlugin,
+  AutoHeightPlugin,
+  ClickToFocusPlugin,
+  ClearEditorPlugin,
+  InlineAttachmentBackspacePlugin,
+  ExternalCodeReferencePlugin,
+  RegisterEditorPlugin,
+} from './input/ChatInputPlugins';
 import { ContextUsageIndicator } from './shared/ContextUsageIndicator';
 
 interface ChatInputProps {
@@ -42,20 +58,16 @@ interface ChatInputProps {
   onSend: () => void;
   onStop: () => void;
   isSending: boolean;
-  
   agentOptions: DropdownOption[];
   selectedAgentId: string;
   onAgentChange: (id: string) => void;
   selectedModelId: string;
   onModelChange: (id: string, targetAgentId?: string) => void;
-
   modeOptions: DropdownOption[];
   selectedModeId: string;
   onModeChange: (id: string) => void;
-
   hasSelectedAgent: boolean;
   availableCommands: AvailableCommand[];
-  
   attachments: ChatAttachment[];
   onAttachmentsChange: (items: ChatAttachment[]) => void;
   onImageClick: (src: string) => void;
@@ -65,6 +77,16 @@ interface ChatInputProps {
   isActive?: boolean;
 }
 
+const emptyTranscriptionFeature: AudioTranscriptionFeatureState = {
+  id: 'whisper-transcription',
+  title: 'Whisper',
+  installed: false,
+  installing: false,
+  supported: false,
+  status: 'Loading',
+  detail: '',
+  installPath: '',
+};
 
 export default function ChatInput({
   conversationId,
@@ -98,12 +120,33 @@ export default function ChatInput({
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
+  const transcriptionRequestCounterRef = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [promptLibraryItems, setPromptLibraryItems] = useState<PromptLibraryItem[]>([]);
+  const [transcriptionFeature, setTranscriptionFeature] = useState<AudioTranscriptionFeatureState>(emptyTranscriptionFeature);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   useEffect(() => {
     const cleanup = ACPBridge.onPromptLibrary((e) => setPromptLibraryItems(e.detail.items));
     ACPBridge.loadPromptLibrary();
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const cleanup = ACPBridge.onAudioTranscriptionFeature((e) => setTranscriptionFeature(e.detail.state));
+    ACPBridge.loadAudioTranscriptionFeature();
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const cleanup = ACPBridge.onAudioRecordingState((e) => {
+      const payload: AudioRecordingStatePayload = e.detail.payload;
+      setIsRecording(payload.recording);
+      if (payload.error) {
+        console.error('[ChatInput] Audio recording error:', payload.error);
+      }
+    });
     return cleanup;
   }, []);
 
@@ -154,7 +197,7 @@ export default function ChatInput({
       const id = Math.random().toString(36).substring(2, 9);
       const newAtt = { id, name: file.name || 'pasted-image.png', data: base64, mimeType: file.type, isInline: true };
       onAttachmentsChange([...attachments, newAtt]);
-      
+
       editor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
@@ -221,6 +264,62 @@ export default function ChatInput({
      }
   }, [handleFileMentionsKeyDownCapture, handleKeyDownCapture, isFileMenuOpen, isSlashMenuOpen]);
 
+  const insertTranscript = useCallback((text: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText) return;
+
+    const editor = lexicalEditorRef.current;
+    if (!editor) {
+      const fallback = inputValue.trim() ? `${inputValue.trimEnd()} ${normalizedText}` : normalizedText;
+      onInputChange(fallback);
+      return;
+    }
+
+    let nextText = normalizedText;
+    editor.update(() => {
+      const root = $getRoot();
+      const existingText = root.getTextContent();
+      const prefix = existingText.trim().length > 0 && !existingText.endsWith(' ') && !existingText.endsWith('\n') ? ' ' : '';
+      root.selectEnd();
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        selection.insertText(`${prefix}${normalizedText}`);
+      }
+      nextText = root.getTextContent();
+    });
+    onInputChange(nextText);
+  }, [inputValue, onInputChange]);
+
+  const handleVoiceInput = useCallback(async () => {
+    if (isTranscribing) return;
+
+    if (isRecording) {
+      setIsTranscribing(true);
+      try {
+        transcriptionRequestCounterRef.current += 1;
+        const requestId = `audio-recording-${conversationId}-${transcriptionRequestCounterRef.current}-${Date.now()}`;
+        const result = await ACPBridge.stopAudioRecording(requestId);
+        insertTranscript(result.text || '');
+      } catch (error) {
+        console.error('[ChatInput] Voice transcription failed:', error);
+      } finally {
+        setIsRecording(false);
+        setIsTranscribing(false);
+      }
+      return;
+    }
+
+    try {
+      ACPBridge.startAudioRecording();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('[ChatInput] Unable to start audio capture:', error);
+      setIsRecording(false);
+    }
+  }, [conversationId, insertTranscript, isRecording, isTranscribing]);
+
+  const showVoiceButton = transcriptionFeature.installed;
+
   return (
     <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-4 pt-2">
       <div className="mx-auto h-full max-w-4xl flex flex-col">
@@ -232,8 +331,7 @@ export default function ChatInput({
             onImageClick={onImageClick}
           />
 
-          {/* Lexical Editor */}
-          <div 
+          <div
             ref={editorContainerRef}
             onKeyDownCapture={combinedHandleKeyDownCapture}
             className={`relative flex min-h-0 flex-1 cursor-text flex-col overflow-y-auto rounded-t-ide bg-background-secondary transition-colors ${isDragOver ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : ''}`}
@@ -242,8 +340,8 @@ export default function ChatInput({
               <LexicalComposer initialConfig={initialConfig}>
                 <RichTextPlugin
                   contentEditable={
-                    <ContentEditable 
-                      className="outline-none p-3 text-ide-regular text-foreground placeholder:text-foreground/30" 
+                    <ContentEditable
+                      className="outline-none p-3 text-ide-regular text-foreground placeholder:text-foreground/30"
                       spellCheck={false}
                     />
                   }
@@ -280,7 +378,6 @@ export default function ChatInput({
             </ChatInputActionsContext.Provider>
           </div>
 
-          {/* Bottom Bar Controls */}
           <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-background-secondary/50 rounded-b-ide">
             <div className="flex items-center gap-1">
               <button
@@ -319,16 +416,38 @@ export default function ChatInput({
                   onChange={onModeChange}
                 />
               )}
-              
+
               {selectedAgentId && (
                 <ChatUsageIndicator agentId={selectedAgentId} modelId={selectedModelId} />
               )}
-              
+
               <ContextUsageIndicator used={contextTokensUsed} size={contextWindowSize} />
             </div>
 
             <div className="flex items-center gap-2">
-              <Tooltip 
+              {showVoiceButton && (
+                <button
+                  type="button"
+                  onClick={handleVoiceInput}
+                  disabled={isSending || isTranscribing}
+                  className={`p-1.5 rounded transition-all outline-none disabled:opacity-40 ${
+                    isRecording
+                      ? 'text-error hover:bg-error/10'
+                      : 'text-foreground/60 hover:text-foreground hover:bg-background'
+                  }`}
+                  title={isRecording ? 'Stop voice input' : 'Start voice input'}
+                >
+                  {isTranscribing ? (
+                    <LoaderCircle size={16} className="animate-spin" />
+                  ) : isRecording ? (
+                    <Square size={16} />
+                  ) : (
+                    <Mic size={16} />
+                  )}
+                </button>
+              )}
+
+              <Tooltip
                 content={
                   <div className="normal-case tracking-normal text-left">
                     <div className="font-semibold mb-1">Send mode</div>

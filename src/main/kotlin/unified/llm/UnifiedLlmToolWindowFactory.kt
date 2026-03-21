@@ -27,6 +27,7 @@ import unified.llm.acp.shutdown
 import unified.llm.history.HistoryBridge
 import unified.llm.mcp.McpBridge
 import unified.llm.promptlibrary.PromptLibraryBridge
+import unified.llm.settings.SettingsBridge
 import unified.llm.systeminstructions.SystemInstructionsBridge
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -48,6 +49,7 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
     private var mcpBridge: McpBridge? = null
     private var systemInstructionsBridge: SystemInstructionsBridge? = null
     private var promptLibraryBridge: PromptLibraryBridge? = null
+    private var settingsBridge: SettingsBridge? = null
 
     companion object {
         // --- DEVELOPMENT TOGGLE ---
@@ -189,12 +191,14 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                         mcpBridge = McpBridge(browser, scope)
                         systemInstructionsBridge = SystemInstructionsBridge(browser, scope)
                         promptLibraryBridge = PromptLibraryBridge(browser, scope)
+                        settingsBridge = SettingsBridge(browser, scope)
 
                         debugBridge?.install()
                         historyBridge?.install()
                         mcpBridge?.install()
                         systemInstructionsBridge?.install()
                         promptLibraryBridge?.install()
+                        settingsBridge?.install()
 
 
                         // Solve JCEF cursor: pointer not working issue on Windows
@@ -278,6 +282,7 @@ class UnifiedLlmToolWindowFactory : ToolWindowFactory, DumbAware {
                                     mcpBridge?.injectApi(cefBrowser)
                                     systemInstructionsBridge?.injectApi(cefBrowser)
                                     promptLibraryBridge?.injectApi(cefBrowser)
+                                    settingsBridge?.injectApi(cefBrowser)
                                 }
                             }
                         }, browser.cefBrowser)

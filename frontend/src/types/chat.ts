@@ -286,6 +286,33 @@ export interface ConversationTranscriptSavedPayload {
   error?: string;
 }
 
+export interface AudioTranscriptionFeatureState {
+  id: string;
+  title: string;
+  installed: boolean;
+  installing: boolean;
+  supported: boolean;
+  status: string;
+  detail: string;
+  installPath: string;
+}
+
+export interface AudioTranscriptionResultPayload {
+  requestId: string;
+  success: boolean;
+  text?: string;
+  error?: string;
+}
+
+export interface AudioRecordingStatePayload {
+  recording: boolean;
+  error?: string;
+}
+
+export interface AudioTranscriptionSettings {
+  language: string;
+}
+
 declare global {
   interface Window {
     // Actions (Frontend -> Backend)
@@ -353,6 +380,18 @@ declare global {
     __onSystemInstructions?: (instructions: unknown) => void;
     __loadSystemInstructions?: () => void;
     __saveSystemInstructions?: (json: string) => void;
+    __loadAudioTranscriptionFeature?: () => void;
+    __installAudioTranscriptionFeature?: () => void;
+    __uninstallAudioTranscriptionFeature?: () => void;
+    __onAudioTranscriptionFeature?: (state: AudioTranscriptionFeatureState) => void;
+    __transcribeAudioInput?: (payload: string) => void;
+    __onAudioTranscriptionResult?: (payload: AudioTranscriptionResultPayload) => void;
+    __startAudioRecording?: () => void;
+    __stopAudioRecording?: (payload: string) => void;
+    __onAudioRecordingState?: (payload: AudioRecordingStatePayload) => void;
+    __loadAudioTranscriptionSettings?: () => void;
+    __saveAudioTranscriptionSettings?: (payload: string) => void;
+    __onAudioTranscriptionSettings?: (settings: AudioTranscriptionSettings) => void;
   }
 }
 
