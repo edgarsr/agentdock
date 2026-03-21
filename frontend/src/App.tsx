@@ -9,6 +9,7 @@ import { DesignSystemView } from './components/DesignSystem';
 import { McpServersView } from './components/McpServersView';
 import { PromptLibraryView } from './components/PromptLibraryView';
 import { SystemInstructionsView } from './components/SystemInstructionsView';
+import { SettingsView } from './components/SettingsView';
 import ConfirmationModal from './components/ConfirmationModal';
 
 let tabCounter = 0;
@@ -401,6 +402,7 @@ function App() {
         onOpenMcp={() => openSingletonTab('mcp', 'MCP Servers')}
         onOpenPromptLibrary={() => openSingletonTab('prompt-library', 'Prompt Library')}
         onOpenSystemInstructions={() => openSingletonTab('system-instructions', 'System Instructions')}
+        onOpenSettings={() => openSingletonTab('settings', 'Settings')}
       />
 
       <div className="flex-1 relative min-h-0">
@@ -437,6 +439,7 @@ function App() {
               {tab.type === 'mcp' && <McpServersView />}
               {tab.type === 'prompt-library' && <PromptLibraryView />}
               {tab.type === 'system-instructions' && <SystemInstructionsView />}
+              {tab.type === 'settings' && <SettingsView />}
             </div>
           );
         })}

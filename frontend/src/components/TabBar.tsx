@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bookmark, FileText, History, Network, Palette, Settings } from 'lucide-react';
+import { Bookmark, FileText, History, Network, Palette, Settings, SlidersHorizontal } from 'lucide-react';
 import { AgentOption, ChatTab, TabUiFlags, isAgentRunnable } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 
@@ -19,6 +19,7 @@ interface TabBarProps {
   onOpenMcp: () => void;
   onOpenPromptLibrary: () => void;
   onOpenSystemInstructions: () => void;
+  onOpenSettings: () => void;
 }
 
 const getAgentIcon = (agentId: string | undefined, agents: AgentOption[]) => {
@@ -59,6 +60,7 @@ const McpTabIcon = () => <Network size={14} className="text-foreground/70 flex-s
 const HistoryTabIcon = () => <History size={14} className="text-foreground/70 flex-shrink-0" />;
 const PromptLibraryTabIcon = () => <Bookmark size={14} className="text-foreground/70 flex-shrink-0" />;
 const SystemInstructionsTabIcon = () => <FileText size={14} className="text-foreground/70 flex-shrink-0" />;
+const SettingsTabIcon = () => <SlidersHorizontal size={14} className="text-foreground/70 flex-shrink-0" />;
 
 /** Get the icon for a tab based on its type */
 const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {
@@ -68,6 +70,7 @@ const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {
   if (tab.type === 'mcp') return <McpTabIcon />;
   if (tab.type === 'prompt-library') return <PromptLibraryTabIcon />;
   if (tab.type === 'system-instructions') return <SystemInstructionsTabIcon />;
+  if (tab.type === 'settings') return <SettingsTabIcon />;
   return getAgentIcon(tab.agentId, agents);
 };
 
@@ -86,7 +89,8 @@ export default function TabBar({
   onOpenDesignSystem,
   onOpenMcp,
   onOpenPromptLibrary,
-  onOpenSystemInstructions
+  onOpenSystemInstructions,
+  onOpenSettings
 }: TabBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
@@ -316,6 +320,18 @@ export default function TabBar({
 
           {hamburgerMenuOpen && (
             <div className="absolute top-full right-0 mt-1 w-[200px] bg-background-secondary border border-border rounded-md shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+              <button
+                onClick={() => {
+                  onOpenSettings();
+                  setHamburgerMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors group"
+              >
+                <span className="mr-2 flex items-center justify-center opacity-70 group-hover:opacity-100">
+                  <SettingsTabIcon />
+                </span>
+                <span>Settings</span>
+              </button>
               <button
                 onClick={() => {
                   onOpenManagement();
