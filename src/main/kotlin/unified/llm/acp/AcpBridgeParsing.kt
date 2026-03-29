@@ -175,6 +175,14 @@ internal data class SerializedContentBlock(
     val mimeType: String? = null
 )
 
+internal fun contentBlockHasVisibleOutput(content: ContentBlock, textType: String = "text"): Boolean {
+    val serialized = serializeContentBlock(content, textType) ?: return false
+    return when (serialized.type) {
+        "text", "thinking" -> !serialized.text.isNullOrBlank()
+        else -> true
+    }
+}
+
 internal fun serializeContentBlock(content: ContentBlock, textType: String = "text"): SerializedContentBlock? {
     return when (content) {
         is ContentBlock.Text -> SerializedContentBlock(type = textType, text = content.text)

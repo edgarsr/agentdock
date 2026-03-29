@@ -407,23 +407,30 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientSer
         val original = handlers.value[methodName] ?: return
         val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
         sharedProc.sessionUpdateScope = updateScope
-        val queue = Channel<JsonRpcNotification>(Channel.UNLIMITED)
+        val queue = Channel<QueuedSessionUpdate>(Channel.UNLIMITED)
         sharedProc.sessionUpdateQueue = queue
         sharedProc.sessionUpdateWorker = updateScope.launch {
-            for (notification in queue) {
-                try {
-                    original(notification)
-                } catch (_: Exception) {}
+            for (entry in queue) {
+                when (entry) {
+                    is QueuedSessionUpdate.Notification -> {
+                        try {
+                            original(entry.notification)
+                        } catch (_: Exception) {}
+                    }
+                    is QueuedSessionUpdate.Barrier -> {
+                        entry.completed.complete(Unit)
+                    }
+                }
             }
         }
         val wrapped: suspend (JsonRpcNotification) -> Unit = { notification ->
             extractAvailableCommands(notification.params)?.let { commands ->
                 updateAvailableCommands(sharedProc.adapterName, commands)
             }
-            val result = queue.trySend(notification)
+            val result = queue.trySend(QueuedSessionUpdate.Notification(notification))
             if (!result.isSuccess) {
                 updateScope.launch {
-                    runCatching { queue.send(notification) }
+                    runCatching { queue.send(QueuedSessionUpdate.Notification(notification)) }
                         .onFailure { }
                 }
             }

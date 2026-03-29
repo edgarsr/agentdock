@@ -102,9 +102,7 @@ private class JsonArrayParser : HistoryParser {
                 ?: firstMessage?.stringOrNull("content")
                 ?: firstMessage?.get("content")?.jsonArray?.firstOrNull()?.jsonObject?.stringOrNull("text")
         )
-        val updatedAt = parseTimestamp(root.stringOrNull("updatedAt"))
-            ?: parseTimestamp(root.stringOrNull("lastUpdated"))
-            ?: file.lastModified()
+        val updatedAt = file.lastModified()
         val createdAt = parseTimestamp(root.stringOrNull("createdAt"))
             ?: parseTimestamp(root.stringOrNull("startTime"))
             ?: updatedAt
@@ -171,7 +169,7 @@ private class JsonObjectParser : HistoryParser {
         val root = runCatching { historyJson.parseToJsonElement(file.readText()).jsonObject }.getOrNull() ?: return emptyList()
         val sessionId = root.stringOrNull("sessionId") ?: root.stringOrNull("id") ?: file.nameWithoutExtension
         val title = fallbackTitle(root.stringOrNull("title") ?: root["metadata"]?.jsonObject?.stringOrNull("name"))
-        val updatedAt = root.stringOrNull("updatedAt")?.toLongOrNull() ?: file.lastModified()
+        val updatedAt = file.lastModified()
 
         return listOf(SessionMeta(
             sessionId = sessionId,
@@ -197,7 +195,6 @@ private class JsonlEventStreamParser : HistoryParser {
         val expectedProjectPath = canonicalizePath(projectPath)
         var sessionId: String? = null
         var createdAt: Long? = null
-        var updatedAt: Long? = null
         var title: String? = null
         var sessionProjectPath: String? = null
 
@@ -214,8 +211,6 @@ private class JsonlEventStreamParser : HistoryParser {
                             ?: createdAt
                         sessionProjectPath = canonicalizePath(element.stringAtPath("payload.cwd"))
                     }
-
-                    updatedAt = parseTimestamp(element.stringAtPath("timestamp")) ?: updatedAt
 
                     if (title.isNullOrBlank()
                         && type == "event_msg"
@@ -239,7 +234,7 @@ private class JsonlEventStreamParser : HistoryParser {
             title = fallbackTitle(title),
             filePath = file.absolutePath,
             createdAt = createdAt ?: file.lastModified(),
-            updatedAt = updatedAt ?: file.lastModified()
+            updatedAt = file.lastModified()
         ))
     }
 }
@@ -327,10 +322,10 @@ private class SessionIndexParser : HistoryParser {
             val sessionId = entry.stringOrNull("sessionId")?.trim().orEmpty()
             val fullPath = readableSourcePath(entry.stringOrNull("fullPath"))
             if (sessionId.isBlank() || fullPath.isBlank()) return@mapNotNull null
-            if (!File(fullPath).isFile) return@mapNotNull null
+            val sourceFile = File(fullPath)
+            if (!sourceFile.isFile) return@mapNotNull null
 
-            val updatedAt = parseTimestamp(entry.stringOrNull("modified"))
-                ?: file.lastModified()
+            val updatedAt = sourceFile.lastModified()
             val createdAt = parseTimestamp(entry.stringOrNull("created")) ?: updatedAt
             val title = fallbackTitle(entry.stringOrNull("firstPrompt"))
 

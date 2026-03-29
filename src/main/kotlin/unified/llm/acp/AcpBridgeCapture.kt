@@ -26,7 +26,7 @@ internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonO
     val adapterName = service.activeAdapterName(chatId).orEmpty()
     if (projectPath.isBlank() || sessionId.isBlank() || adapterName.isBlank()) return null
     val captureId = "prompt-${System.nanoTime()}"
-    livePromptCaptures[chatId] = LivePromptCapture(
+    val capture = LivePromptCapture(
         captureId = captureId,
         projectPath = projectPath,
         conversationId = chatId,
@@ -40,40 +40,89 @@ internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonO
             modeId = service.activeModeId(chatId)
         )
     )
+    livePromptCaptures.put(chatId, capture)?.let { previous ->
+        synchronized(previous) {
+            previous.closed = true
+        }
+    }
     return captureId
 }
 
 internal fun AcpBridge.appendLivePromptTextEvent(chatId: String, text: String, expectedCaptureId: String? = null) {
     val capture = livePromptCaptures[chatId] ?: return
     if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return
-    capture.events.add(buildStoredContentChunk("assistant", "text", text = text))
+    synchronized(capture) {
+        if (capture.closed) return
+        capture.events.add(buildStoredContentChunk("assistant", "text", text = text))
+    }
+}
+
+internal fun AcpBridge.markLivePromptVisibleAssistantOutput(chatId: String, expectedCaptureId: String? = null) {
+    val capture = livePromptCaptures[chatId] ?: return
+    if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return
+    synchronized(capture) {
+        if (capture.closed) return
+        capture.hasVisibleAssistantOutput = true
+    }
+}
+
+internal fun AcpBridge.ensureLivePromptNoResponseFallback(
+    chatId: String,
+    fallbackText: String,
+    expectedCaptureId: String? = null
+): Boolean {
+    val capture = livePromptCaptures[chatId] ?: return false
+    if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return false
+    return synchronized(capture) {
+        if (capture.closed) return false
+        if (capture.hasVisibleAssistantOutput) return false
+        capture.events.add(buildStoredContentChunk("assistant", "text", text = fallbackText))
+        capture.hasVisibleAssistantOutput = true
+        true
+    }
 }
 
 internal fun AcpBridge.flushLivePromptCapture(chatId: String, expectedCaptureId: String? = null): ConversationAssistantMetadata? {
     val capture = livePromptCaptures[chatId] ?: return null
     if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return null
-    livePromptCaptures.remove(chatId)
-    if (capture.blocks.isEmpty() && capture.events.isEmpty()) return null
-    val durationSeconds = ((System.currentTimeMillis() - capture.startedAtMillis).coerceAtLeast(0L)) / 1000.0
-    val assistantMeta = capture.assistantMeta?.copy(
-        promptStartedAtMillis = capture.startedAtMillis,
+    val snapshot = synchronized(capture) {
+        if (capture.closed) return null
+        capture.closed = true
+        LivePromptCaptureSnapshot(
+            projectPath = capture.projectPath,
+            conversationId = capture.conversationId,
+            sessionId = capture.sessionId,
+            adapterName = capture.adapterName,
+            blocks = capture.blocks,
+            events = capture.events.toList(),
+            startedAtMillis = capture.startedAtMillis,
+            assistantMeta = capture.assistantMeta,
+            contextTokensUsed = capture.contextTokensUsed,
+            contextWindowSize = capture.contextWindowSize
+        )
+    }
+    livePromptCaptures.remove(chatId, capture)
+    if (snapshot.blocks.isEmpty() && snapshot.events.isEmpty()) return null
+    val durationSeconds = ((System.currentTimeMillis() - snapshot.startedAtMillis).coerceAtLeast(0L)) / 1000.0
+    val assistantMeta = snapshot.assistantMeta?.copy(
+        promptStartedAtMillis = snapshot.startedAtMillis,
         durationSeconds = durationSeconds,
-        contextTokensUsed = capture.contextTokensUsed,
-        contextWindowSize = capture.contextWindowSize
+        contextTokensUsed = snapshot.contextTokensUsed,
+        contextWindowSize = snapshot.contextWindowSize
     ) ?: buildAssistantMetadata(
-        adapterName = capture.adapterName,
-        promptStartedAtMillis = capture.startedAtMillis,
+        adapterName = snapshot.adapterName,
+        promptStartedAtMillis = snapshot.startedAtMillis,
         durationSeconds = durationSeconds,
-        contextTokensUsed = capture.contextTokensUsed,
-        contextWindowSize = capture.contextWindowSize
+        contextTokensUsed = snapshot.contextTokensUsed,
+        contextWindowSize = snapshot.contextWindowSize
     )
     UnifiedHistoryService.appendConversationPrompt(
-        projectPath = capture.projectPath,
-        conversationId = capture.conversationId,
-        sessionId = capture.sessionId,
-        adapterName = capture.adapterName,
-        blocks = capture.blocks,
-        events = capture.events,
+        projectPath = snapshot.projectPath,
+        conversationId = snapshot.conversationId,
+        sessionId = snapshot.sessionId,
+        adapterName = snapshot.adapterName,
+        blocks = snapshot.blocks,
+        events = snapshot.events,
         assistantMeta = assistantMeta
     )
     return assistantMeta
@@ -181,7 +230,10 @@ internal fun AcpBridge.recordStoredEvent(
     }
 
     val capture = livePromptCaptures[chatId] ?: return
-    capture.events.add(event)
+    synchronized(capture) {
+        if (capture.closed) return
+        capture.events.add(event)
+    }
 }
 
 internal fun AcpBridge.getOrCreateReplaySession(
@@ -340,6 +392,19 @@ internal fun AcpBridge.truncateStoredToolRawJson(rawJson: String, maxChars: Int 
     return rawJson.take(maxChars) + "\n\n[Stored history truncated; $omitted chars omitted]"
 }
 
+private data class LivePromptCaptureSnapshot(
+    val projectPath: String,
+    val conversationId: String,
+    val sessionId: String,
+    val adapterName: String,
+    val blocks: List<JsonObject>,
+    val events: List<JsonObject>,
+    val startedAtMillis: Long,
+    val assistantMeta: ConversationAssistantMetadata?,
+    val contextTokensUsed: Long?,
+    val contextWindowSize: Long?
+)
+
 internal fun AcpBridge.buildStoredPlanChunk(plan: SessionUpdate, meta: JsonElement?): JsonObject? {
     val entries = extractPlanEntries(plan, meta) ?: return null
     if (entries.isEmpty()) return null
@@ -360,7 +425,7 @@ internal fun AcpBridge.replayStoredConversation(chatId: String, data: unified.ll
                 dispatchStoredContentChunk(chatId, event)
             }
             prompt.assistantMeta?.let { meta ->
-                pushAssistantMetaChunk(chatId, meta, isReplay = true)
+                pushPromptDoneChunk(chatId, meta, outcome = "success", isReplay = true)
             }
         }
     }

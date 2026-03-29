@@ -109,6 +109,7 @@ export default function ChatSessionView({
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const lastReportedSessionStateRef = useRef('');
+  const permissionRequestChangeRef = useRef(onPermissionRequestChange);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -189,25 +190,60 @@ export default function ChatSessionView({
     onAtBottomChange?.(isAtBottom);
   }, [onAtBottomChange]);
 
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = status;
+  const prevIsSendingRef = useRef(isSending);
+  const pendingAssistantActivityRef = useRef(false);
+  const lastNotifiedAssistantKeyRef = useRef('');
 
-    // Mark unread only when agent finishes the response, not during streaming/thinking.
-    if (prev === 'ready' || status !== 'ready' || isHistoryReplaying || messages.length === 0 || !!permissionRequest) return;
+  useEffect(() => {
+    const prev = prevIsSendingRef.current;
+    prevIsSendingRef.current = isSending;
+
+    // Mark unread only after the assistant actually stops producing output.
+    if (!prev || isSending || isHistoryReplaying || messages.length === 0) return;
 
     const last = messages[messages.length - 1];
     if (last.role !== 'assistant') return;
     const hasFinalText = (last.content?.trim().length || 0) > 0;
     if (!hasFinalText) return;
 
+    const assistantKey = `${last.id}:${last.content?.length || 0}`;
+    if (permissionRequest) {
+      pendingAssistantActivityRef.current = true;
+      lastNotifiedAssistantKeyRef.current = assistantKey;
+      return;
+    }
+
+    if (lastNotifiedAssistantKeyRef.current === assistantKey) return;
+    lastNotifiedAssistantKeyRef.current = assistantKey;
     onAssistantActivity?.();
-  }, [status, isHistoryReplaying, messages, onAssistantActivity, permissionRequest]);
+  }, [isSending, isHistoryReplaying, messages, onAssistantActivity, permissionRequest]);
+
+  useEffect(() => {
+    if (permissionRequest || !pendingAssistantActivityRef.current || isSending || isHistoryReplaying || messages.length === 0) return;
+
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant') {
+      pendingAssistantActivityRef.current = false;
+      return;
+    }
+
+    const hasFinalText = (last.content?.trim().length || 0) > 0;
+    if (!hasFinalText) {
+      pendingAssistantActivityRef.current = false;
+      return;
+    }
+
+    pendingAssistantActivityRef.current = false;
+    onAssistantActivity?.();
+  }, [permissionRequest, isSending, isHistoryReplaying, messages, onAssistantActivity]);
 
   useEffect(() => {
     onPermissionRequestChange?.(!!permissionRequest);
   }, [permissionRequest, onPermissionRequestChange]);
+
+  useEffect(() => {
+    permissionRequestChangeRef.current = onPermissionRequestChange;
+  }, [onPermissionRequestChange]);
 
   useEffect(() => {
     const fingerprint = `${acpSessionId}|${adapterName}`;
@@ -221,9 +257,9 @@ export default function ChatSessionView({
 
   useEffect(() => {
     return () => {
-      onPermissionRequestChange?.(false);
+      permissionRequestChangeRef.current?.(false);
     };
-  }, [onPermissionRequestChange]);
+  }, []);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">

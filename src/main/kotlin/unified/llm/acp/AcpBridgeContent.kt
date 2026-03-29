@@ -122,8 +122,11 @@ internal fun AcpBridge.recordUsageUpdate(
     }
 
     val capture = livePromptCaptures[chatId] ?: return
-    if (used != null) capture.contextTokensUsed = used
-    if (size != null) capture.contextWindowSize = size
+    synchronized(capture) {
+        if (capture.closed) return
+        if (used != null) capture.contextTokensUsed = used
+        if (size != null) capture.contextWindowSize = size
+    }
 }
 
 internal fun AcpBridge.extractUsageUpdate(update: SessionUpdate, meta: JsonElement?): Pair<Long?, Long?>? {
@@ -322,17 +325,19 @@ internal fun AcpBridge.removeProcessedFilesForDiffs(chatId: String, content: Lis
     pushChangesState(chatId, state, true)
 }
 
-internal fun AcpBridge.pushAssistantMetaChunk(
+internal fun AcpBridge.pushPromptDoneChunk(
     chatId: String,
     metadata: ConversationAssistantMetadata,
+    outcome: String,
     isReplay: Boolean = false
 ) {
     val replaySeq = nextReplaySeq(chatId, isReplay)
     val parts = mutableListOf<String>()
     parts.add("\"chatId\":${escapeJsonString(chatId)}")
     parts.add("\"role\":\"assistant\"")
-    parts.add("\"type\":\"assistant_meta\"")
+    parts.add("\"type\":\"prompt_done\"")
     parts.add("\"isReplay\":$isReplay")
+    parts.add("\"promptOutcome\":${escapeJsonString(outcome)}")
     metadata.agentId?.let { parts.add("\"agentId\":${escapeJsonString(it)}") }
     metadata.agentName?.let { parts.add("\"agentName\":${escapeJsonString(it)}") }
     metadata.modelId?.let { parts.add("\"modelId\":${escapeJsonString(it)}") }

@@ -419,9 +419,10 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     val sess = context.lifecycleMutex.withLock {
         val s = context.session
         if (s == null) {
-            emit(AcpEvent.Error("No session for $chatId; start agent first"))
+            emit(AcpEvent.Error("No active agent session. Please click the agent dropdown at the top to restart the agent."))
             return@flow
         }
+
         s
     }
 
@@ -456,8 +457,11 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
             awaitPendingSessionUpdates(activeAdapterName)
         }
         stopReason?.let { emit(AcpEvent.PromptDone(it)) }
+
     } finally {
-        context.statusRef.set(AcpClientService.Status.Ready)
+        if (context.statusRef.get() == AcpClientService.Status.Prompting) {
+            context.statusRef.set(AcpClientService.Status.Ready)
+        }
     }
 }
 
@@ -567,15 +571,10 @@ internal fun AcpClientService.shutdown() {
     )
 }
 
-/**
- * Wait for all queued session/update notifications to be processed.
- * Because the worker runs on limitedParallelism(1), scheduling a new coroutine
- * on the same scope will only execute after the worker suspends (queue drained).
- */
 internal suspend fun AcpClientService.awaitPendingSessionUpdates(adapterName: String) {
     val sharedProc = activeProcesses[processKey(adapterName)] ?: return
-    val updateScope = sharedProc.sessionUpdateScope ?: return
+    val queue = sharedProc.sessionUpdateQueue ?: return
     val completed = CompletableDeferred<Unit>()
-    updateScope.launch { completed.complete(Unit) }
+    queue.send(QueuedSessionUpdate.Barrier(completed))
     completed.await()
 }

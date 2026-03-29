@@ -113,7 +113,7 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var isInitialized: Boolean = false
         @Volatile var sessionUpdateWrapped: Boolean = false
         @Volatile var sessionUpdateScope: CoroutineScope? = null
-        @Volatile var sessionUpdateQueue: Channel<JsonRpcNotification>? = null
+        @Volatile var sessionUpdateQueue: Channel<QueuedSessionUpdate>? = null
         @Volatile var sessionUpdateWorker: Job? = null
 
         fun stop() {
@@ -363,4 +363,9 @@ class AcpClientService private constructor(val project: Project) {
         }
     }
 
+}
+
+internal sealed interface QueuedSessionUpdate {
+    data class Notification(val notification: JsonRpcNotification) : QueuedSessionUpdate
+    data class Barrier(val completed: CompletableDeferred<Unit>) : QueuedSessionUpdate
 }

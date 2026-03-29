@@ -45,12 +45,18 @@ internal fun AcpBridge.installServiceCallbacks() {
             is SessionUpdate.AgentMessageChunk -> {
                 recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = false, isReplay = isReplay)
                 if (!captureOnlyReplay) {
+                    if (!isReplay && contentBlockHasVisibleOutput(update.content)) {
+                        markLivePromptVisibleAssistantOutput(chatId)
+                    }
                     pushContentBlock(chatId, "assistant", update.content, isThought = false, isReplay = isReplay)
                 }
             }
             is SessionUpdate.AgentThoughtChunk -> {
                 recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = true, isReplay = isReplay)
                 if (!captureOnlyReplay) {
+                    if (!isReplay && contentBlockHasVisibleOutput(update.content, textType = "thinking")) {
+                        markLivePromptVisibleAssistantOutput(chatId)
+                    }
                     pushContentBlock(chatId, "assistant", update.content, isThought = true, isReplay = isReplay)
                 }
             }
@@ -70,6 +76,9 @@ internal fun AcpBridge.installServiceCallbacks() {
                     isReplay
                 )
                 if (!captureOnlyReplay) {
+                    if (!isReplay) {
+                        markLivePromptVisibleAssistantOutput(chatId)
+                    }
                     pushToolCallChunk(chatId, json, isReplay)
                 }
             }
@@ -84,6 +93,9 @@ internal fun AcpBridge.installServiceCallbacks() {
                     isReplay
                 )
                 if (!captureOnlyReplay) {
+                    if (!isReplay) {
+                        markLivePromptVisibleAssistantOutput(chatId)
+                    }
                     pushToolCallUpdateChunk(chatId, update.toolCallId.value, json, isReplay)
                 }
             }
@@ -94,6 +106,9 @@ internal fun AcpBridge.installServiceCallbacks() {
                 } else if (isPlanUpdate(update, _meta)) {
                     buildStoredPlanChunk(update, _meta)?.let { recordStoredEvent(chatId, sessionId, adapterName, it, isReplay) }
                     if (!captureOnlyReplay) {
+                        if (!isReplay && extractPlanEntries(update, _meta)?.isNotEmpty() == true) {
+                            markLivePromptVisibleAssistantOutput(chatId)
+                        }
                         pushPlanChunk(chatId, update, isReplay, _meta)
                     }
                 }

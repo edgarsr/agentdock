@@ -197,7 +197,7 @@ export interface HistorySessionMeta {
 export interface ContentChunk {
   chatId: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'tool_call' | 'tool_call_update' | 'plan' | 'assistant_meta';
+  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
   text?: string;
   data?: string;
   path?: string;
@@ -253,6 +253,7 @@ export interface ConversationAssistantMetadata {
   durationSeconds?: number;
   contextTokensUsed?: number;
   contextWindowSize?: number;
+  promptOutcome?: 'success' | 'error' | 'cancelled';
 }
 
 export interface ReplayPromptEntry {

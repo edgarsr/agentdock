@@ -17,9 +17,6 @@ function nextId(prefix: string): string {
   return `${prefix}-${++tabCounter}-${Date.now()}`;
 }
 
-const INITIAL_TAB_ID = nextId('tab');
-const INITIAL_CONVERSATION_ID = nextId('conv');
-
 const DEFAULT_TAB_UI: TabUiFlags = { unread: false, atBottom: true, warning: false };
 
 interface TabSessionState {
@@ -40,10 +37,8 @@ interface PendingConversationContinuation {
 }
 
 function App() {
-  const [tabs, setTabs] = useState<ChatTab[]>([
-    { id: INITIAL_TAB_ID, type: 'chat', title: 'Untitled', conversationId: INITIAL_CONVERSATION_ID }
-  ]);
-  const [activeTabId, setActiveTabId] = useState<string>(INITIAL_TAB_ID);
+  const [tabs, setTabs] = useState<ChatTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('');
   const [availableAgents, setAvailableAgents] = useState<AgentOption[]>([]);
   const [tabUi, setTabUi] = useState<Record<string, TabUiFlags>>({});
   const [tabSessionState, setTabSessionState] = useState<Record<string, TabSessionState>>({});
@@ -383,20 +378,42 @@ function App() {
   }, [canUserSeeResponse]);
 
   const handleAtBottomChange = useCallback((tabId: string, isAtBottom: boolean) => {
-    setTabUi(prev => ({ ...prev, [tabId]: { ...prev[tabId], atBottom: isAtBottom } }));
-    if (isAtBottom && canUserSeeResponse(tabId)) {
-      setTabUi(prev => prev[tabId]?.unread ? { ...prev, [tabId]: { ...prev[tabId], unread: false } } : prev);
-    }
-  }, [canUserSeeResponse]);
+    setTabUi(prev => {
+      const current = prev[tabId] ?? DEFAULT_TAB_UI;
+      const shouldClearUnread = isAtBottom && tabId === activeTabIdRef.current && current.unread;
+      const next = {
+        ...current,
+        atBottom: isAtBottom,
+        unread: shouldClearUnread ? false : current.unread,
+      };
+
+      if (
+        current.atBottom === next.atBottom &&
+        current.unread === next.unread &&
+        current.warning === next.warning
+      ) {
+        return prev;
+      }
+
+      return { ...prev, [tabId]: next };
+    });
+  }, []);
 
   const handlePermissionRequestChange = useCallback((tabId: string, hasPendingPermission: boolean) => {
     pendingPermissionRef.current[tabId] = hasPendingPermission;
     setTabUi(prev => {
       const current = prev[tabId];
       if (!current) return prev;
-      const needsUpdate = current.unread || current.warning !== hasPendingPermission;
+      const needsUpdate = current.warning !== hasPendingPermission;
       if (!needsUpdate) return prev;
-      return { ...prev, [tabId]: { ...current, unread: false, warning: hasPendingPermission } };
+      return {
+        ...prev,
+        [tabId]: {
+          ...current,
+          unread: hasPendingPermission ? false : current.unread,
+          warning: hasPendingPermission
+        }
+      };
     });
   }, []);
 

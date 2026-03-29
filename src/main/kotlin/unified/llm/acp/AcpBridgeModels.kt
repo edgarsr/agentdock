@@ -103,6 +103,8 @@ internal data class LivePromptCapture(
     val blocks: List<JsonObject>,
     val startedAtMillis: Long,
     val assistantMeta: ConversationAssistantMetadata?,
+    @Volatile var closed: Boolean = false,
+    var hasVisibleAssistantOutput: Boolean = false,
     var contextTokensUsed: Long? = null,
     var contextWindowSize: Long? = null,
     val events: MutableList<JsonObject> = mutableListOf()

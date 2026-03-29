@@ -109,23 +109,35 @@ internal fun AcpBridge.installConversationQueries() {
                         service.prompt(chatId, blocks).collect { event ->
                             when (event) {
                                 is AcpEvent.PromptDone -> {
-                                    flushLivePromptCapture(chatId, captureId)?.let { pushAssistantMetaChunk(chatId, it) }
+                                    val fallbackText = "[The AI agent ended the turn without providing a response.]"
+                                    if (ensureLivePromptNoResponseFallback(chatId, fallbackText, captureId)) {
+                                        pushContentChunk(chatId, "assistant", "text", text = fallbackText, isReplay = false)
+                                    }
+                                    flushLivePromptCapture(chatId, captureId)?.let {
+                                        pushPromptDoneChunk(chatId, it, outcome = "success")
+                                    }
                                     pushStatus(chatId, "ready")
                                 }
                                 is AcpEvent.Error -> {
                                     pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]", isReplay = false)
                                     appendLivePromptTextEvent(chatId, "[Error: ${event.message}]", captureId)
-                                    flushLivePromptCapture(chatId, captureId)?.let { pushAssistantMetaChunk(chatId, it) }
+                                    flushLivePromptCapture(chatId, captureId)?.let {
+                                        pushPromptDoneChunk(chatId, it, outcome = "error")
+                                    }
+                                    pushStatus(chatId, "error")
                                 }
                             }
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
+                        pushStatus(chatId, "ready")
                         throw e
                     } catch (e: Exception) {
                         pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
                         appendLivePromptTextEvent(chatId, "[Error: ${e.message ?: e.toString()}]", captureId)
-                        flushLivePromptCapture(chatId, captureId)?.let { pushAssistantMetaChunk(chatId, it) }
-                        pushStatus(chatId, service.status(chatId).name.lowercase())
+                        flushLivePromptCapture(chatId, captureId)?.let {
+                            pushPromptDoneChunk(chatId, it, outcome = "error")
+                        }
+                        pushStatus(chatId, "error")
                     } finally {
                         promptJobs.remove(chatId)
                     }
@@ -140,11 +152,14 @@ internal fun AcpBridge.installConversationQueries() {
         addHandler { chatIdPayload ->
             val chatId = chatIdPayload?.trim().orEmpty()
             if (chatId.isNotEmpty()) {
+                promptJobs[chatId]?.cancel()
                 scope.launch(Dispatchers.Default) {
                     service.cancel(chatId)
                     pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
                     appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
-                    flushLivePromptCapture(chatId)?.let { pushAssistantMetaChunk(chatId, it) }
+                    flushLivePromptCapture(chatId)?.let {
+                        pushPromptDoneChunk(chatId, it, outcome = "cancelled")
+                    }
                     pushStatus(chatId, "ready")
                 }
             }

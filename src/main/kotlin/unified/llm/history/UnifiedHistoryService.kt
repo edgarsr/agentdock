@@ -1018,6 +1018,14 @@ object UnifiedHistoryService {
             .distinctBy { "${it.adapterName}:${it.sessionId}" }
     }
 
+    private fun resolveSyncedUpdatedAt(currentUpdatedAt: Long, discoveredUpdatedAt: Long): Long {
+        return when {
+            currentUpdatedAt > 0L && discoveredUpdatedAt > 0L -> maxOf(currentUpdatedAt, discoveredUpdatedAt)
+            currentUpdatedAt > 0L -> currentUpdatedAt
+            else -> discoveredUpdatedAt
+        }
+    }
+
     private fun syncProjectIndex(projectPath: String): List<HistoryConversationIndexEntry> {
         if (projectPath.isBlank()) return emptyList()
 
@@ -1039,7 +1047,7 @@ object UnifiedHistoryService {
                 if (!keptKeys.add(key)) return@mapNotNull null
                 val syncedSession = session.copy(
                     createdAt = if (session.createdAt > 0) minOf(session.createdAt, meta.createdAt) else meta.createdAt,
-                    updatedAt = meta.updatedAt,
+                    updatedAt = resolveSyncedUpdatedAt(session.updatedAt, meta.updatedAt),
                     sourceFilePath = meta.filePath.takeIf { it.isNotBlank() } ?: session.sourceFilePath
                 )
                 if (syncedSession != session) {
@@ -1203,7 +1211,7 @@ object UnifiedHistoryService {
                 title = title,
                 filePath = sessionMeta?.filePath?.takeIf { it.isNotBlank() } ?: session.sourceFilePath.orEmpty(),
                 createdAt = sessionMeta?.createdAt ?: session.createdAt,
-                updatedAt = sessionMeta?.updatedAt ?: session.updatedAt,
+                updatedAt = resolveSyncedUpdatedAt(session.updatedAt, sessionMeta?.updatedAt ?: 0L),
                 allAdapterNames = conversation.sessions.map { it.adapterName }.distinct()
             )
         }

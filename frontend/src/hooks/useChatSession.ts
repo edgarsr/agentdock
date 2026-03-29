@@ -145,13 +145,13 @@ function setBlocks(msg: Message, blocks: RichContentBlock[]): Message {
   }
 }
 
-function applyAssistantMetadata(messages: Message[], chunk: ContentChunk): Message[] {
+function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role !== 'assistant') continue;
 
     const next = [...messages];
-    next[i] = {
+    const finalizedMessage: Message = {
       ...message,
       agentId: chunk.agentId ?? message.agentId,
       agentName: chunk.agentName ?? message.agentName,
@@ -163,6 +163,7 @@ function applyAssistantMetadata(messages: Message[], chunk: ContentChunk): Messa
       contextWindowSize: chunk.contextWindowSize ?? message.contextWindowSize,
       metaComplete: true,
     };
+    next[i] = finalizedMessage;
     return next;
   }
 
@@ -170,8 +171,8 @@ function applyAssistantMetadata(messages: Message[], chunk: ContentChunk): Messa
 }
 
 function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
-  if (chunk.type === 'assistant_meta') {
-    return applyAssistantMetadata(messages, chunk);
+  if (chunk.type === 'prompt_done') {
+    return applyPromptDone(messages, chunk);
   }
 
   const displayText = (chunk.type === 'text' || chunk.type === 'thinking')
@@ -462,8 +463,6 @@ function applyChunks(messages: Message[], chunks: ContentChunk[]): Message[] {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-
 export function useChatSession(
   conversationId: string,
   availableAgents: AgentOption[],
@@ -496,7 +495,6 @@ export function useChatSession(
   const startTimeRef = useRef<number | null>(null);
   const historyLoadTimerRef = useRef<number | null>(null);
   const replaySettleTimerRef = useRef<number | null>(null);
-  const liveSettleTimerRef = useRef<number | null>(null);
   const lastMetadataFingerprintRef = useRef<string>('');
   const allowMetadataUpdateRef = useRef(!historySession);
   const touchUpdatedAtRef = useRef(!historySession);
@@ -703,14 +701,18 @@ export function useChatSession(
           setIsHistoryReplaying(false);
           setIsSending(false);
         }, 60);
-      } else if (chunk.role === 'assistant' && chunk.type !== 'assistant_meta') {
-        if (liveSettleTimerRef.current !== null) {
-          window.clearTimeout(liveSettleTimerRef.current);
-          liveSettleTimerRef.current = null;
+      } else if (chunk.role === 'assistant') {
+        if (chunk.type === 'prompt_done') {
+          setIsSending(false);
+        } else {
+          setIsSending(true);
         }
-        setIsSending(true);
       }
       enqueueChunk(chunk);
+      if (!chunk.isReplay && chunk.type === 'prompt_done') {
+        flushScheduledRef.current = false;
+        applyBufferedChunks('prompt-done');
+      }
     });
 
     const unsubConversationReplayLoaded = ACPBridge.onConversationReplayLoaded((e) => {
@@ -737,7 +739,7 @@ export function useChatSession(
         // We don't set isSending(true) here anymore to avoid blocking the user
       }
 
-      if (s === 'ready') {
+      if (s === 'ready' || s === 'error') {
         if (replaySettleTimerRef.current !== null) {
           window.clearTimeout(replaySettleTimerRef.current);
           replaySettleTimerRef.current = null;
@@ -749,29 +751,11 @@ export function useChatSession(
         applyBufferedChunks('status-ready');
 
         if (!pendingPromptRef.current) {
-          if (liveSettleTimerRef.current !== null) {
-            window.clearTimeout(liveSettleTimerRef.current);
-          }
-          liveSettleTimerRef.current = window.setTimeout(() => {
-            liveSettleTimerRef.current = null;
-            setIsSending(false);
-          }, 150);
           setIsHistoryReplaying(false);
         }
       }
 
-      if (s === 'error') {
-        if (replaySettleTimerRef.current !== null) {
-          window.clearTimeout(replaySettleTimerRef.current);
-          replaySettleTimerRef.current = null;
-        }
-        if (liveSettleTimerRef.current !== null) {
-          window.clearTimeout(liveSettleTimerRef.current);
-          liveSettleTimerRef.current = null;
-        }
-        setIsSending(false);
-        setIsHistoryReplaying(false);
-      }
+      // Error is merged into ready block
 
       if (s === 'ready' && pendingPromptRef.current && typeof window.__sendPrompt === 'function') {
         const blocksToSend = pendingPromptRef.current;
@@ -821,10 +805,6 @@ export function useChatSession(
       if (replaySettleTimerRef.current !== null) {
         window.clearTimeout(replaySettleTimerRef.current);
         replaySettleTimerRef.current = null;
-      }
-      if (liveSettleTimerRef.current !== null) {
-        window.clearTimeout(liveSettleTimerRef.current);
-        liveSettleTimerRef.current = null;
       }
     };
   }, [conversationId, enqueueChunk, applyBufferedChunks, consumeHandoff]);
@@ -1054,7 +1034,7 @@ export function useChatSession(
     };
     setMessages((prev) => [...prev, assistantMessage]);
 
-    if (status !== 'ready') {
+    if (status !== 'ready' && status !== 'error') {
       // Queue it up
       pendingPromptRef.current = outgoingBlocks;
       if (status === 'not started' || status === 'error') {
@@ -1075,12 +1055,8 @@ export function useChatSession(
 
   const handleStop = () => {
     if (typeof window.__cancelPrompt === 'function') {
-      if (liveSettleTimerRef.current !== null) {
-        window.clearTimeout(liveSettleTimerRef.current);
-        liveSettleTimerRef.current = null;
-      }
+      pendingPromptRef.current = null;
       window.__cancelPrompt(conversationId);
-      setIsSending(false);
       setPermissionRequest(null);
     }
   };

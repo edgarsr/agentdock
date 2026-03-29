@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, memo, useState, useMemo } from 'react';
+import { useLayoutEffect, useRef, memo, useState, useMemo, useEffect } from 'react';
 import { Message, RichContentBlock, ExploringBlock, ToolCallBlock, PlanBlock, AgentOption } from '../../types/chat';
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
@@ -28,18 +28,18 @@ function MessageList({
   isHistoryReplaying = false
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScroll = useRef(true);
   const lastAtBottomRef = useRef(true);
   const prevIsReplaying = useRef(isHistoryReplaying);
-  const prevIsSending = useRef(isSending);
+  const prevIsSendingForScroll = useRef(isSending);
+  const prevIsSendingForCollapse = useRef(isSending);
 
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Synchronously reset expansion to avoid 1-frame flashes before useEffect kicks in
-  if (isHistoryReplaying && isExpanded) {
-    setIsExpanded(false);
-  }
+  useEffect(() => {
+    if (isHistoryReplaying) {
+      setIsExpanded(false);
+    }
+  }, [isHistoryReplaying]);
 
   const { visibleMessages, hiddenCount } = useMemo(() => {
     if (isExpanded || messages.length <= 6) {
@@ -114,7 +114,6 @@ function MessageList({
     if (!el) return;
     const threshold = 150;
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    shouldAutoScroll.current = isAtBottom;
     if (lastAtBottomRef.current !== isAtBottom) {
       lastAtBottomRef.current = isAtBottom;
       onAtBottomChange?.(isAtBottom);
@@ -141,37 +140,6 @@ function MessageList({
   };
 
   useLayoutEffect(() => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-
-    if (prevIsReplaying.current && !isHistoryReplaying) {
-      shouldAutoScroll.current = true;
-      container.style.scrollBehavior = 'auto';
-      container.scrollTop = container.scrollHeight;
-    }
-    else if (!prevIsSending.current && isSending) {
-      // Don't modify isExpanded here to avoid jumps; it is handled by sync check at start
-      shouldAutoScroll.current = true;     
-      
-      if (messagesEndRef.current) {
-        container.style.scrollBehavior = 'smooth';
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-    else if (!isHistoryReplaying && shouldAutoScroll.current && messagesEndRef.current) {
-      container.style.scrollBehavior = 'smooth';
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      if (!lastAtBottomRef.current) {
-        lastAtBottomRef.current = true;
-        onAtBottomChange?.(true);
-      }
-    }
-
-    prevIsReplaying.current = isHistoryReplaying;
-    prevIsSending.current = isSending;
-  }, [messages, isHistoryReplaying, isSending]);
-
-  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const threshold = 150;
@@ -179,6 +147,46 @@ function MessageList({
     lastAtBottomRef.current = isAtBottom;
     onAtBottomChange?.(isAtBottom);
   }, []);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const historyJustFinished = prevIsReplaying.current && !isHistoryReplaying;
+    const sendingJustStarted = !prevIsSendingForScroll.current && isSending;
+    const shouldKeepBottomPinned = !isHistoryReplaying && lastAtBottomRef.current;
+
+    if (historyJustFinished || sendingJustStarted || shouldKeepBottomPinned) {
+      el.style.scrollBehavior = 'auto';
+      el.scrollTop = el.scrollHeight;
+      lastAtBottomRef.current = true;
+    }
+
+    const threshold = 150;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    if (lastAtBottomRef.current !== isAtBottom) {
+      lastAtBottomRef.current = isAtBottom;
+      onAtBottomChange?.(isAtBottom);
+    }
+    prevIsReplaying.current = isHistoryReplaying;
+    prevIsSendingForScroll.current = isSending;
+  }, [messages, isExpanded, isHistoryReplaying, isSending, onAtBottomChange]);
+
+  useEffect(() => {
+    const wasSending = prevIsSendingForCollapse.current;
+    prevIsSendingForCollapse.current = isSending;
+
+    if (!wasSending || isSending || isHistoryReplaying || !lastAtBottomRef.current) {
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      return;
+    }
+
+    setIsExpanded(false);
+  }, [messages, isSending, isHistoryReplaying]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 relative">
@@ -256,8 +264,6 @@ function MessageList({
             <ChatLoadingIndicator status={status} agentName={agentName} />
           </div>
         )}
-
-        <div ref={messagesEndRef} className="h-4" />
       </div>
     </div>
   </div>
