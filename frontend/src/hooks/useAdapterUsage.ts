@@ -1,76 +1,159 @@
-import { useState, useEffect } from 'react';
+import { createContext, createElement, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ACPBridge } from '../utils/bridge';
 
-const lastFetchTime: Record<string, number> = {};
-const cachedData: Record<string, string | null> = {};
+const CHAT_REFRESH_MS = 60000;
 
-export function useAdapterUsage(adapterId: string, ttlMs: number = 15000) {
-  const [data, setData] = useState<string | null>(cachedData[adapterId] || null);
+type UsageLifecycleContextValue = {
+  enabled: boolean;
+  isSending: boolean;
+  sessionKey?: string;
+} | null;
+
+const UsageLifecycleContext = createContext<UsageLifecycleContextValue>(null);
+
+const providerCache: Record<string, string | null> = {};
+const chatCache: Record<string, string | null> = {};
+
+const RICH_USAGE_FIELDS = ['five_hour', 'seven_day', 'extra_usage', 'rate_limit', 'quota', 'usage'];
+
+function parseUsageJson(json: string | null | undefined): Record<string, unknown> | null {
+  if (!json || !json.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeProviderUsage(json: string | null | undefined): string | null {
+  return parseUsageJson(json) ? json || null : null;
+}
+
+function normalizeChatUsage(json: string | null | undefined): string | null {
+  const parsed = parseUsageJson(json);
+  if (!parsed) return null;
+  const hasUsage = RICH_USAGE_FIELDS.some((field) => parsed[field] != null);
+  return hasUsage ? json || null : null;
+}
+
+export function AdapterUsageLifecycleProvider({
+  value,
+  children,
+}: {
+  value: UsageLifecycleContextValue;
+  children: ReactNode;
+}) {
+  return createElement(UsageLifecycleContext.Provider, { value }, children);
+}
+
+export function useAdapterUsage(adapterId: string) {
+  const lifecycle = useContext(UsageLifecycleContext);
+  const isChatMode = lifecycle !== null;
+  const enabled = lifecycle?.enabled ?? true;
+  const isSending = lifecycle?.isSending ?? false;
+  const sessionKey = lifecycle?.sessionKey ?? '';
+  const cache = isChatMode ? chatCache : providerCache;
+  const normalize = isChatMode ? normalizeChatUsage : normalizeProviderUsage;
+  const [data, setData] = useState<string | null>(cache[adapterId] || null);
+  const didInitRef = useRef(false);
+  const prevAdapterIdRef = useRef(adapterId);
+  const prevSessionKeyRef = useRef(sessionKey);
+  const prevEnabledRef = useRef(enabled);
+  const prevIsSendingRef = useRef(isSending);
 
   useEffect(() => {
     const dispose = ACPBridge.onUsageData((e) => {
-      if (e.detail.adapterId === adapterId && e.detail.json) {
-        const newData = e.detail.json;
-        const currentData = cachedData[adapterId];
-        
-        if (isBetterData(newData, currentData)) {
-          cachedData[adapterId] = newData;
-          setData(newData);
-        }
-      }
+      if (e.detail.adapterId !== adapterId) return;
+      const nextData = normalize(e.detail.json);
+      cache[adapterId] = nextData;
+      setData(nextData);
     });
 
-    const tryFetch = () => {
-      const now = Date.now();
-      const lastFetch = lastFetchTime[adapterId] || 0;
-      if (!cachedData[adapterId] || now - lastFetch > ttlMs) {
-        lastFetchTime[adapterId] = now;
-        console.log('Fetch usage: ' + adapterId);
-        ACPBridge.fetchAdapterUsage(adapterId);
-      }
+    return dispose;
+  }, [adapterId, cache, normalize]);
+
+  useEffect(() => {
+    const fetchUsage = () => {
+      ACPBridge.fetchAdapterUsage(adapterId);
     };
 
-    tryFetch();
-    const interval = setInterval(tryFetch, 240000); // 240 seconds background refresh
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      prevAdapterIdRef.current = adapterId;
+      prevEnabledRef.current = enabled;
+      prevSessionKeyRef.current = sessionKey;
+      prevIsSendingRef.current = isSending;
+
+      if (enabled) {
+        fetchUsage();
+      }
+      return;
+    }
+
+    if (!enabled) {
+      prevEnabledRef.current = false;
+      prevIsSendingRef.current = isSending;
+      prevSessionKeyRef.current = sessionKey;
+      return;
+    }
+
+    const adapterChanged = prevAdapterIdRef.current !== adapterId;
+    const enabledBecameTrue = !prevEnabledRef.current;
+
+    if (adapterChanged) {
+      prevAdapterIdRef.current = adapterId;
+      if (isChatMode) {
+        chatCache[adapterId] = null;
+        setData(null);
+      } else {
+        setData(providerCache[adapterId] || null);
+      }
+      fetchUsage();
+    } else if (enabledBecameTrue) {
+      fetchUsage();
+    }
+
+    if (isChatMode) {
+      const sessionChanged = sessionKey !== '' && prevSessionKeyRef.current !== sessionKey;
+      if (sessionChanged && !adapterChanged) {
+        fetchUsage();
+      }
+    }
+
+    prevEnabledRef.current = true;
+    prevSessionKeyRef.current = sessionKey;
+  }, [adapterId, enabled, isChatMode, isSending, sessionKey]);
+
+  useEffect(() => {
+    if (!isChatMode || !enabled || !isSending) {
+      prevIsSendingRef.current = isSending;
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      ACPBridge.fetchAdapterUsage(adapterId);
+    }, CHAT_REFRESH_MS);
 
     return () => {
-      dispose();
-      clearInterval(interval);
+      window.clearInterval(intervalId);
     };
-  }, [adapterId, ttlMs]);
+  }, [adapterId, enabled, isChatMode, isSending]);
+
+  useEffect(() => {
+    if (!isChatMode || !enabled) {
+      prevIsSendingRef.current = isSending;
+      return;
+    }
+
+    const wasSending = prevIsSendingRef.current;
+    prevIsSendingRef.current = isSending;
+
+    if (wasSending && !isSending) {
+      ACPBridge.fetchAdapterUsage(adapterId);
+    }
+  }, [adapterId, enabled, isChatMode, isSending]);
 
   return data;
-}
-
-function isBetterData(newJson: string, currentJson: string | null | undefined): boolean {
-  try {
-    const newData = JSON.parse(newJson);
-    if (!newData || typeof newData !== 'object') return false;
-
-    // Define "rich" usage fields (actual numbers/percentages)
-    const richFields = [
-      'five_hour', 'seven_day', 'extra_usage', // Claude
-      'rate_limit',                           // Codex
-      'quota',                                // Gemini
-      'usage'                                 // Generic
-    ];
-
-    const hasRichData = (obj: any) => richFields.some(field => obj[field] != null);
-    
-    // If new data is rich, always accept it
-    if (hasRichData(newData)) return true;
-
-    // If new data is NOT rich (e.g. only authType or error), 
-    // only accept it if we don't have rich data in cache
-    if (!currentJson) return true;
-    
-    try {
-      const currentData = JSON.parse(currentJson);
-      return !hasRichData(currentData);
-    } catch {
-      return true;
-    }
-  } catch {
-    return false;
-  }
 }

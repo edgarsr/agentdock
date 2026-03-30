@@ -476,7 +476,7 @@ function App() {
                   onSessionStateChange={(state) => handleChatSessionStateChange(tab.id, state)}
                 />
               )}
-              {tab.type === 'management' && <AgentManagementView initialAgents={availableAgents} />}
+              {tab.type === 'management' && <AgentManagementView initialAgents={availableAgents} isActive={isTabActive} />}
               {tab.type === 'design' && <DesignSystemView />}
               {tab.type === 'history' && (
                 <HistoryPanel availableAgents={availableAgents} onOpenSession={handleOpenHistory} />

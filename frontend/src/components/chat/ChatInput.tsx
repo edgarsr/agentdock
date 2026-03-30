@@ -48,6 +48,7 @@ import {
   RegisterEditorPlugin,
 } from './input/ChatInputPlugins';
 import { ContextUsageIndicator } from './shared/ContextUsageIndicator';
+import { AdapterUsageLifecycleProvider } from '../../hooks/useAdapterUsage';
 
 interface ChatInputProps {
   conversationId: string;
@@ -63,6 +64,8 @@ interface ChatInputProps {
   onAgentChange: (id: string) => void;
   selectedModelId: string;
   onModelChange: (id: string, targetAgentId?: string) => void;
+  usageSessionKey?: string;
+  status: string;
   modeOptions: DropdownOption[];
   selectedModeId: string;
   onModeChange: (id: string) => void;
@@ -102,6 +105,8 @@ export default function ChatInput({
   onAgentChange,
   selectedModelId,
   onModelChange,
+  usageSessionKey,
+  status,
   modeOptions,
   selectedModeId,
   onModeChange,
@@ -418,7 +423,15 @@ export default function ChatInput({
               )}
 
               {selectedAgentId && (
-                <ChatUsageIndicator agentId={selectedAgentId} modelId={selectedModelId} />
+                <AdapterUsageLifecycleProvider
+                  value={{
+                    enabled: true,
+                    isSending,
+                    sessionKey: status === 'ready' ? usageSessionKey : undefined,
+                  }}
+                >
+                  <ChatUsageIndicator agentId={selectedAgentId} modelId={selectedModelId} />
+                </AdapterUsageLifecycleProvider>
               )}
 
               <ContextUsageIndicator used={contextTokensUsed} size={contextWindowSize} />

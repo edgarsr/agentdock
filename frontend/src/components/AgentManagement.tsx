@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AgentOption } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -8,7 +8,13 @@ import { CodexUsage } from './usage/CodexUsage';
 import { GeminiUsage } from './usage/GeminiUsage';
 import { CursorUsage } from './usage/CursorUsage';
 
-export function AgentManagementView({ initialAgents = [] }: { initialAgents?: AgentOption[] }) {
+export function AgentManagementView({
+  initialAgents = [],
+  isActive = false,
+}: {
+  initialAgents?: AgentOption[];
+  isActive?: boolean;
+}) {
   const [agents, setAgents] = useState<AgentOption[]>(initialAgents);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
@@ -16,6 +22,8 @@ export function AgentManagementView({ initialAgents = [] }: { initialAgents?: Ag
   const [confirmUpdateId, setConfirmUpdateId] = useState<string | null>(null);
   const [authIds, setAuthIds] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
+  const prevIsActiveRef = useRef(isActive);
+  const hasActivatedRef = useRef(false);
 
   useEffect(() => {
     const dispose = ACPBridge.onAdapters((e) => {
@@ -42,6 +50,17 @@ export function AgentManagementView({ initialAgents = [] }: { initialAgents?: Ag
 
     return dispose;
   }, []);
+
+  useEffect(() => {
+    const wasActive = prevIsActiveRef.current;
+    prevIsActiveRef.current = isActive;
+
+    if (!isActive || wasActive === isActive || hasActivatedRef.current) return;
+
+    hasActivatedRef.current = true;
+    ACPBridge.requestAdapters();
+    setRefreshKey((k) => k + 1);
+  }, [isActive]);
 
   const handleDownload = (id: string) => {
     if (!window.__downloadAgent) return;

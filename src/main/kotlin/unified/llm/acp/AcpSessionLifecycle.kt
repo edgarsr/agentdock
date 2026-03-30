@@ -334,7 +334,11 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
     }
 
     // Drain the async notification queue BEFORE proceeding to the next replay step.
-    awaitPendingSessionUpdates(requestedAdapterName)
+    try {
+        awaitPendingSessionUpdates(requestedAdapterName)
+    } finally {
+        replayOwnerBySessionId.remove(sess.sessionId.value, context.chatId)
+    }
 }
 
 @Suppress("OPT_IN_USAGE")

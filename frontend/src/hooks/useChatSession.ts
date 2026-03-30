@@ -463,6 +463,12 @@ function applyChunks(messages: Message[], chunks: ContentChunk[]): Message[] {
   return result;
 }
 
+function lastAssistantMessageHasMeta(messages: Message[]): boolean {
+  if (messages.length === 0) return false;
+  const lastMessage = messages[messages.length - 1];
+  return lastMessage.role === 'assistant' && !!lastMessage.metaComplete;
+}
+
 export function useChatSession(
   conversationId: string,
   availableAgents: AgentOption[],
@@ -699,14 +705,7 @@ export function useChatSession(
         replaySettleTimerRef.current = window.setTimeout(() => {
           replaySettleTimerRef.current = null;
           setIsHistoryReplaying(false);
-          setIsSending(false);
         }, 60);
-      } else if (chunk.role === 'assistant') {
-        if (chunk.type === 'prompt_done') {
-          setIsSending(false);
-        } else {
-          setIsSending(true);
-        }
       }
       enqueueChunk(chunk);
       if (!chunk.isReplay && chunk.type === 'prompt_done') {
@@ -726,7 +725,6 @@ export function useChatSession(
       flushScheduledRef.current = false;
       setMessages(buildReplayMessages(payload.data));
       setIsHistoryReplaying(false);
-      setIsSending(false);
     });
 
     const unsubStatus = ACPBridge.onStatus((e) => {
@@ -809,6 +807,12 @@ export function useChatSession(
     };
   }, [conversationId, enqueueChunk, applyBufferedChunks, consumeHandoff]);
 
+  useEffect(() => {
+    if (!isSending || isHistoryReplaying) return;
+    if (!lastAssistantMessageHasMeta(messages)) return;
+    setIsSending(false);
+  }, [messages, isSending, isHistoryReplaying]);
+
   // Handle native attachments from backend
   useEffect(() => {
     const unsub = ACPBridge.onAttachmentsAdded((e) => {
@@ -828,7 +832,6 @@ export function useChatSession(
     pendingPromptRef.current = null;
     setMessages([]);
     setStatus('initializing');
-    setIsSending(false);
     setIsHistoryReplaying(true);
 
     startedAgentIdRef.current = historySession.adapterName;
