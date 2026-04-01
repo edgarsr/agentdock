@@ -1,6 +1,5 @@
 package unified.llm.history
 
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -10,12 +9,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import unified.llm.acp.AcpAdapterConfig
 import unified.llm.acp.AcpAdapterPaths
@@ -23,8 +19,6 @@ import unified.llm.acp.AcpExecutionMode
 import unified.llm.acp.AcpExecutionTarget
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.Path
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -123,6 +117,12 @@ private data class HistoryConversationIndexEntry(
     val wslDistributionName: String? = null
 )
 
+@Serializable
+private data class EphemeralSessionEntry(
+    val sessionId: String,
+    val adapterName: String,
+    val createdAt: Long = Instant.now().toEpochMilli()
+)
 
 private data class AvailableSessionMetaResult(
     val sessions: List<SessionMeta>,
@@ -130,16 +130,12 @@ private data class AvailableSessionMetaResult(
 )
 object UnifiedHistoryService {
     private val backgroundScope = CoroutineScope(Dispatchers.IO)
-    private val initialSyncs = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+    private val ephemeralDeletionJobs = ConcurrentHashMap<String, Boolean>()
     private val indexJson = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
         encodeDefaults = false
         explicitNulls = false
-    }
-    private val rawJson = Json {
-        ignoreUnknownKeys = true
-        prettyPrint = true
     }
     private const val CONVERSATION_REPLAY_STALE_TOLERANCE_MS = 60_000L
 
@@ -162,128 +158,18 @@ object UnifiedHistoryService {
             conversation.wslDistributionName == wslDistributionName
         }
     }
-    private fun hashSha256(value: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        return md.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
-    }
-
-    private fun hashMd5(value: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        return md.digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
-    }
-
-    private fun canonicalProjectPath(projectPath: String?): String {
-        val raw = projectPath?.takeIf { it.isNotBlank() && it != "undefined" && it != "null" } ?: ""
-        return raw.takeIf { it.isNotBlank() }?.let {
-            runCatching { File(it).canonicalPath }.getOrDefault(it)
-        } ?: ""
-    }
-
-    private fun normalizeWindowsProjectPath(projectPath: String): String {
-        val withBackslashes = projectPath.replace("/", "\\")
-        return if (withBackslashes.length >= 2 && withBackslashes[1] == ':') {
-            withBackslashes.substring(0, 1).uppercase() + withBackslashes.substring(1)
-        } else {
-            withBackslashes
-        }
-    }
-
-    private fun projectPathSlug(projectPath: String): String {
-        return projectPath.replace(Regex("[^a-zA-Z0-9]"), "-")
-    }
-
-    private fun projectPathSlugCollapsed(projectPath: String): String {
-        return projectPathSlug(projectPath)
-            .replace(Regex("-+"), "-")
-            .trim('-')
-    }
-
-    fun resolvePathTemplate(template: String, projectPath: String?, sessionId: String? = null): String {
-        val target = AcpAdapterPaths.getExecutionTarget()
-        val home = if (target == AcpExecutionTarget.WSL) (AcpExecutionMode.wslHomeDir() ?: return template) else System.getProperty("user.home")
-        val canonicalProject = canonicalProjectPath(projectPath)
-        val normalizedProject = canonicalProject.replace("/", File.separator).replace("\\", File.separator)
-        val windowsProject = normalizeWindowsProjectPath(canonicalProject)
-        val slug = projectPathSlug(windowsProject)
-        val slugCollapsed = projectPathSlugCollapsed(windowsProject)
-        val hashSha256 = hashSha256(windowsProject)
-        val hashMd5 = hashMd5(windowsProject)
-
-        val resolved = template
-            .replace("~", home)
-            .replace("{projectPathSlug}", slug)
-            .replace("{projectPathSlugCollapsed}", slugCollapsed)
-            .replace("{projectHashSha256}", hashSha256)
-            .replace("{projectHashMd5}", hashMd5)
-            .replace("{slug}", slug)
-            .replace("{hash}", hashSha256)
-            .replace("{sessionId}", sessionId ?: "")
-        return if (target == AcpExecutionTarget.WSL) {
-            val wslPath = resolved.replace("\\", "/")
-            AcpExecutionMode.wslPathToWindowsUnc(wslPath) ?: wslPath
-        } else {
-            resolved.replace("/", File.separator).replace("\\", File.separator)
-        }
-    }
-
-    private fun buildGlobRegex(glob: String): Regex {
-        val sb = StringBuilder("^")
-        var i = 0
-        while (i < glob.length) {
-            val c = glob[i]
-            when (c) {
-                '*' -> {
-                    if (i + 1 < glob.length && glob[i + 1] == '*') {
-                        sb.append(".*")
-                        i++
-                    } else {
-                        sb.append("[^/]*")
-                    }
-                }
-                '?' -> sb.append("[^/]")
-                '.', '(', ')', '[', ']', '{', '}', '+', '^', '$', '|', '\\' -> sb.append('\\').append(c)
-                else -> sb.append(c)
-            }
-            i++
-        }
-        sb.append("$")
-        return Regex(sb.toString())
-    }
-
-    private fun findMatchingFiles(templatePath: String): List<File> {
-        val normalizedTemplate = templatePath.replace("\\", "/")
-        val firstWildcard = normalizedTemplate.indexOfFirst { it == '*' || it == '?' }
-        if (firstWildcard < 0) {
-            val file = File(templatePath)
-            return if (file.exists() && file.isFile) listOf(file) else emptyList()
-        }
-
-        val rootEnd = normalizedTemplate.lastIndexOf('/', firstWildcard)
-        if (rootEnd <= 0) return emptyList()
-        val rootPath = normalizedTemplate.substring(0, rootEnd)
-        val relativePattern = normalizedTemplate.substring(rootEnd + 1)
-        val rootDir = File(rootPath.replace("/", File.separator))
-        if (!rootDir.exists() || !rootDir.isDirectory) return emptyList()
-
-        val matcher = buildGlobRegex(relativePattern)
-        val rootNioPath: Path = rootDir.toPath()
-        return rootDir.walkTopDown()
-            .filter { it.isFile }
-            .filter { file ->
-                val relative = rootNioPath.relativize(file.toPath()).toString().replace("\\", "/")
-                matcher.matches(relative)
-            }
-            .toList()
-    }
-
     private fun projectIndexFile(projectPath: String): File {
         val baseDir = File(AcpAdapterPaths.getBaseRuntimeDir(), "projects")
-        val slug = projectPathSlug(normalizeWindowsProjectPath(projectPath))
+        val slug = historyProjectPathSlug(projectPath.replace("/", "\\"))
         return File(File(baseDir, slug), "index.json")
     }
 
     private fun projectConversationsDir(projectPath: String): File {
         return File(projectIndexFile(projectPath).parentFile, "conversations")
+    }
+
+    private fun ephemeralSessionsFile(projectPath: String): File {
+        return File(projectIndexFile(projectPath).parentFile, "ephemeral-sessions.json")
     }
 
     private fun ensureProjectConversationsDir(projectPath: String): File {
@@ -324,6 +210,47 @@ object UnifiedHistoryService {
         val indexFile = projectIndexFile(projectPath)
         if (!indexFile.exists() || !indexFile.isFile) return emptyList()
         return readProjectIndex(indexFile)
+    }
+
+    private fun readEphemeralSessions(projectPath: String): MutableList<EphemeralSessionEntry> {
+        if (projectPath.isBlank()) return mutableListOf()
+        val file = ephemeralSessionsFile(projectPath)
+        if (!file.exists() || !file.isFile) return mutableListOf()
+        return runCatching {
+            indexJson.decodeFromString<List<EphemeralSessionEntry>>(file.readText()).toMutableList()
+        }.getOrElse { mutableListOf() }
+    }
+
+    private fun writeEphemeralSessions(projectPath: String, entries: List<EphemeralSessionEntry>) {
+        if (projectPath.isBlank()) return
+        val file = ephemeralSessionsFile(projectPath)
+        val parent = file.parentFile
+        if (!parent.exists()) parent.mkdirs()
+        file.writeText(indexJson.encodeToString(entries))
+    }
+
+    private fun removeEphemeralSession(projectPath: String, adapterName: String, sessionId: String) {
+        if (projectPath.isBlank() || adapterName.isBlank() || sessionId.isBlank()) return
+        val remaining = readEphemeralSessions(projectPath)
+            .filterNot { it.adapterName == adapterName && it.sessionId == sessionId }
+        writeEphemeralSessions(projectPath, remaining)
+    }
+
+    fun registerEphemeralSession(projectPath: String?, adapterName: String, sessionId: String) {
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
+        val cleanAdapterName = adapterName.trim()
+        val cleanSessionId = sessionId.trim()
+        if (cleanProjectPath.isBlank() || cleanAdapterName.isBlank() || cleanSessionId.isBlank()) return
+
+        val existing = readEphemeralSessions(cleanProjectPath)
+        if (existing.any { it.adapterName == cleanAdapterName && it.sessionId == cleanSessionId }) return
+        writeEphemeralSessions(
+            cleanProjectPath,
+            existing + EphemeralSessionEntry(
+                sessionId = cleanSessionId,
+                adapterName = cleanAdapterName
+            )
+        )
     }
 
     private fun writeProjectIndex(indexFile: File, conversations: List<HistoryConversationIndexEntry>) {
@@ -424,28 +351,8 @@ object UnifiedHistoryService {
         return null
     }
 
-    fun startInitialHistorySync(projectPath: String?) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
-        if (cleanProjectPath.isBlank()) return
-        val deferred = CompletableDeferred<Unit>()
-        val syncKey = historySyncKey(cleanProjectPath)
-        val existing = initialSyncs.putIfAbsent(syncKey, deferred)
-        if (existing != null) return
-        backgroundScope.launch {
-            try {
-                syncProjectIndex(cleanProjectPath)
-            } finally {
-                deferred.complete(Unit)
-            }
-        }
-    }
-
-    private suspend fun awaitInitialHistorySync(projectPath: String) {
-        initialSyncs[historySyncKey(projectPath)]?.await()
-    }
-
     fun startBackgroundHistorySync(projectPath: String?) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return
         backgroundScope.launch {
             syncProjectIndex(cleanProjectPath)
@@ -467,7 +374,7 @@ object UnifiedHistoryService {
         titleCandidate: String?,
         touchUpdatedAt: Boolean = false
     ): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId.trim()
         val cleanSessionId = sessionId.trim()
         val cleanAdapterName = adapterName.trim()
@@ -541,7 +448,7 @@ object UnifiedHistoryService {
     }
 
     fun hasConversationReplay(projectPath: String?, conversationId: String?): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId?.trim().orEmpty()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
         if (readExistingProjectIndex(cleanProjectPath).none { it.id == cleanConversationId && matchesCurrentHistoryEnvironment(it) }) {
@@ -551,7 +458,7 @@ object UnifiedHistoryService {
     }
 
     fun loadConversationReplay(projectPath: String?, conversationId: String?): ConversationReplayData? {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId?.trim().orEmpty()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return null
         if (readExistingProjectIndex(cleanProjectPath).none { it.id == cleanConversationId && matchesCurrentHistoryEnvironment(it) }) {
@@ -562,7 +469,7 @@ object UnifiedHistoryService {
     }
 
     fun saveConversationReplay(projectPath: String?, conversationId: String, data: ConversationReplayData): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId.trim()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
         val file = conversationDataFile(cleanProjectPath, cleanConversationId)
@@ -571,7 +478,7 @@ object UnifiedHistoryService {
     }
 
     fun saveConversationTranscript(projectPath: String?, conversationId: String, transcriptText: String): String? {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId.trim()
         val normalizedTranscript = transcriptText.trim()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank() || normalizedTranscript.isBlank()) return null
@@ -618,7 +525,7 @@ object UnifiedHistoryService {
         events: List<JsonObject>,
         assistantMeta: ConversationAssistantMetadata? = null
     ): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId.trim()
         val cleanSessionId = sessionId.trim()
         val cleanAdapterName = adapterName.trim()
@@ -658,7 +565,7 @@ object UnifiedHistoryService {
     }
 
     fun deleteConversationReplay(projectPath: String?, conversationId: String?): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId?.trim().orEmpty()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
         return deleteFileIfExists(conversationDataFile(cleanProjectPath, cleanConversationId))
@@ -712,7 +619,7 @@ object UnifiedHistoryService {
         adapterName: String,
         titleCandidate: String? = null
     ): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanPreviousSessionId = previousSessionId.trim()
         val cleanPreviousAdapterName = previousAdapterName.trim()
         val cleanSessionId = sessionId.trim()
@@ -913,72 +820,22 @@ object UnifiedHistoryService {
     private fun conversationId(adapterName: String, sessionId: String): String {
         val wslDistributionName = currentWslDistributionName()
         val suffix = if (wslDistributionName.isNullOrBlank()) "" else ":wsl:$wslDistributionName"
-        return "conv_" + hashMd5("$adapterName:$sessionId$suffix")
+        return "conv_" + historyHashMd5("$adapterName:$sessionId$suffix")
     }
 
     private fun deleteFileIfExists(file: File): Boolean {
-        return !file.exists() || file.delete()
+        return deleteHistoryFileIfExists(file)
     }
 
     private fun deleteDirectoryIfExists(dir: File): Boolean {
-        return !dir.exists() || dir.deleteRecursively()
-    }
-
-    private fun removeSessionIndexEntry(projectPath: String, session: HistorySessionIndexEntry): Boolean {
-        val adapter = runCatching { AcpAdapterConfig.getAdapterInfo(session.adapterName) }.getOrNull() ?: return true
-        val historyConfig = adapter.historyConfig ?: return true
-        val indexTemplate = historyConfig.indexPathTemplate ?: return true
-
-        val indexFile = File(resolvePathTemplate(indexTemplate, projectPath))
-        if (!indexFile.exists()) return true
-
-        return runCatching {
-            val root = rawJson.parseToJsonElement(indexFile.readText()).jsonObject
-            val entries = root["entries"]?.jsonArray ?: JsonArray(emptyList())
-            val filtered = buildJsonArray {
-                entries.forEach { entry ->
-                    val entrySessionId = entry.jsonObject["sessionId"]?.toString()?.trim('"')
-                    if (entrySessionId != session.sessionId) {
-                        add(entry)
-                    }
-                }
-            }
-            val updatedRoot = buildJsonObject {
-                root.forEach { (key, value) ->
-                    if (key == "entries") put(key, filtered) else put(key, value)
-                }
-                if (!root.containsKey("entries")) put("entries", filtered)
-            }
-            indexFile.writeText(rawJson.encodeToString(JsonObject.serializer(), updatedRoot))
-            true
-        }.getOrDefault(true)
+        return deleteHistoryDirectoryIfExists(dir)
     }
 
     private fun deleteSessionArtifacts(projectPath: String, session: HistorySessionIndexEntry): Boolean {
-        val cleanupStrategy = runCatching {
-            AcpAdapterConfig.getAdapterInfo(session.adapterName).historyConfig?.cleanup?.strategy
-        }.getOrNull() ?: "delete_source_file"
         val sourceMeta = findSessionSourceMeta(projectPath, session.sessionId, session.adapterName)
         val sourceFilePath = session.sourceFilePath?.takeIf { it.isNotBlank() } ?: sourceMeta?.filePath.orEmpty()
-        if (sourceFilePath.isBlank()) return false
-
-        val success = when (cleanupStrategy) {
-            "delete_source_file_and_session_index_entry" -> {
-                val deletedFile = deleteFileIfExists(File(sourceFilePath))
-                if (deletedFile) {
-                    removeSessionIndexEntry(projectPath, session)
-                }
-                deletedFile
-            }
-            "delete_source_parent_dir" -> {
-                val sessionDir = File(sourceFilePath).parentFile
-                if (sessionDir != null) deleteDirectoryIfExists(sessionDir) else false
-            }
-            "delete_source_file" -> deleteFileIfExists(File(sourceFilePath))
-            else -> deleteFileIfExists(File(sourceFilePath))
-        }
-
-        return success
+        val history = AdapterHistoryRegistry.get(session.adapterName) ?: return false
+        return history.deleteSession(projectPath, session.sessionId, sourceFilePath)
     }
 
     private fun buildDeleteFailureMessage(remainingSessions: List<HistorySessionIndexEntry>): String {
@@ -996,27 +853,45 @@ object UnifiedHistoryService {
     }
 
     private fun collectAvailableSessionMeta(projectPath: String): List<SessionMeta> {
-        val adapters = runCatching { AcpAdapterConfig.getAllAdapters() }.getOrElse { emptyMap() }
         val result = mutableListOf<SessionMeta>()
+        val ephemeralKeys = readEphemeralSessions(projectPath)
+            .associateBy { "${it.adapterName}:${it.sessionId}" }
 
-        adapters.values.forEach { adapter ->
-            if (!AcpAdapterPaths.isDownloaded(adapter.id)) return@forEach
-            val historyConfig = adapter.historyConfig ?: return@forEach
-
-            val parser = HistoryParserRegistry.getParser(historyConfig.parserStrategy) ?: return@forEach
-            val resolved = resolvePathTemplate(historyConfig.pathTemplate, projectPath)
-            val files = findMatchingFiles(resolved)
-            files.forEach { file ->
-                val sessions = runCatching {
-                    parser.parseSessions(file, adapter, historyConfig, projectPath)
-                }.getOrDefault(emptyList())
-                result.addAll(sessions)
-            }
+        AdapterHistoryRegistry.all().forEach { history ->
+            if (!AcpAdapterPaths.isDownloaded(history.adapterId)) return@forEach
+            result.addAll(runCatching { history.collectSessions(projectPath) }.getOrDefault(emptyList()))
         }
 
         return result
+            .filterNot { meta ->
+                val key = "${meta.adapterName}:${meta.sessionId}"
+                if (ephemeralKeys[key] == null) return@filterNot false
+                scheduleEphemeralSessionDeletion(projectPath, meta)
+                true
+            }
             .sortedByDescending { it.updatedAt }
             .distinctBy { "${it.adapterName}:${it.sessionId}" }
+    }
+
+    private fun scheduleEphemeralSessionDeletion(projectPath: String, session: SessionMeta) {
+        val jobKey = historySyncKey(projectPath) + "||${session.adapterName}:${session.sessionId}"
+        if (ephemeralDeletionJobs.putIfAbsent(jobKey, true) != null) return
+
+        backgroundScope.launch {
+            try {
+                val history = AdapterHistoryRegistry.get(session.adapterName)
+                val deleted = history?.deleteSession(
+                    projectPath = projectPath,
+                    sessionId = session.sessionId,
+                    sourceFilePath = session.filePath.takeIf { it.isNotBlank() }
+                ) == true
+                if (deleted) {
+                    removeEphemeralSession(projectPath, session.adapterName, session.sessionId)
+                }
+            } finally {
+                ephemeralDeletionJobs.remove(jobKey)
+            }
+        }
     }
 
     private fun resolveSyncedUpdatedAt(currentUpdatedAt: Long, discoveredUpdatedAt: Long): Long {
@@ -1167,26 +1042,24 @@ object UnifiedHistoryService {
     }
 
     fun syncHistoryIndex(projectPath: String?): Boolean {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return false
         syncProjectIndex(cleanProjectPath)
         return true
     }
 
     suspend fun getHistoryList(projectPath: String?): List<SessionMeta> = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
-        startInitialHistorySync(cleanProjectPath)
-        awaitInitialHistorySync(cleanProjectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         buildHistoryList(cleanProjectPath, readExistingProjectIndex(cleanProjectPath))
     }
 
     suspend fun syncAndGetHistoryList(projectPath: String?): List<SessionMeta> = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         buildHistoryList(cleanProjectPath, syncProjectIndex(cleanProjectPath))
     }
 
     suspend fun getConversationSessions(projectPath: String?, conversationId: String?): List<SessionMeta> = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId?.trim().orEmpty()
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return@withContext emptyList()
 
@@ -1219,7 +1092,7 @@ object UnifiedHistoryService {
     }
 
     suspend fun deleteConversations(projectPath: String?, conversationIds: List<String>): DeleteConversationsResult = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return@withContext DeleteConversationsResult(success = false)
         if (conversationIds.isEmpty()) return@withContext DeleteConversationsResult(success = true)
 
@@ -1267,7 +1140,7 @@ object UnifiedHistoryService {
         waitTimeoutMillis: Long = 5_000L,
         pollIntervalMillis: Long = 250L
     ): Boolean = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanSessionId = sessionId.trim()
         val cleanAdapterName = adapterName.trim()
         if (cleanProjectPath.isBlank() || cleanSessionId.isBlank() || cleanAdapterName.isBlank()) {
@@ -1325,7 +1198,7 @@ object UnifiedHistoryService {
     }
 
     suspend fun renameConversation(projectPath: String?, conversationId: String, newTitle: String): Boolean = withContext(Dispatchers.IO) {
-        val cleanProjectPath = canonicalProjectPath(projectPath)
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = conversationId.trim()
         val normalizedTitle = newTitle.trim()
         
@@ -1350,11 +1223,6 @@ object UnifiedHistoryService {
         updated
     }
 }
-
-
-
-
-
 
 
 

@@ -15,13 +15,6 @@
   "args": [
     "acp"
   ],
-  "historyConfig": {
-    "parserStrategy": "session_dir_mtime",
-    "pathTemplate": "~/.cursor/chats/{projectHashMd5}/*/store.db",
-    "cleanup": {
-      "strategy": "delete_source_parent_dir"
-    }
-  },
   "cli": {
     "executable": {
       "win": "cursor-agent.cmd",

@@ -4,6 +4,7 @@
     "acp-adapters/gemini-cli.json",
     "acp-adapters/cursor-cli.json",
     "acp-adapters/codex.json",
-    "acp-adapters/github-copilot-cli.json"
+    "acp-adapters/github-copilot-cli.json",
+    "acp-adapters/kilo.json"
   ]
 }

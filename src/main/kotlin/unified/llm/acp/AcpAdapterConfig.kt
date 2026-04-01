@@ -41,19 +41,6 @@ object AcpAdapterConfig {
     )
 
     @Serializable
-    data class HistoryCleanupConfig(
-        val strategy: String = "delete_source_file"
-    )
-
-    @Serializable
-    data class HistoryConfig(
-        val parserStrategy: String,
-        val pathTemplate: String,
-        val indexPathTemplate: String? = null,
-        val cleanup: HistoryCleanupConfig = HistoryCleanupConfig()
-    )
-
-    @Serializable
     data class AuthConfig(
         val authScript: String? = null,
         val uiMode: String = "login_logout",
@@ -115,13 +102,13 @@ object AcpAdapterConfig {
         val iconPath: String? = null,
         val distribution: Distribution,
         val launchPath: String = "",
+        val launchBinary: PlatformBinary? = null,
         val defaultModel: DefaultModelInfo? = null,
         val disabledModels: List<String> = emptyList(),
         val defaultMode: DefaultModeInfo? = null,
         val disabledModes: List<String> = emptyList(),
         val args: List<String> = emptyList(),
         val patches: List<String> = emptyList(),
-        val historyConfig: HistoryConfig? = null,
         val authConfig: AuthConfig? = null,
         val cli: CliConfig? = null,
         /**

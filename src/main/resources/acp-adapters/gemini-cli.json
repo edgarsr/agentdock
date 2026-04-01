@@ -30,13 +30,6 @@
     "@patches/gemini/usage-config.patch",
     "@patches/gemini/usage-gemini.patch"
   ],
-  "historyConfig": {
-    "parserStrategy": "json_array",
-    "pathTemplate": "~/.gemini/tmp/*/chats/*.json",
-    "cleanup": {
-      "strategy": "delete_source_file"
-    }
-  },
   "cli": {
     "executable": {
       "win": "node_modules/.bin/gemini.cmd",

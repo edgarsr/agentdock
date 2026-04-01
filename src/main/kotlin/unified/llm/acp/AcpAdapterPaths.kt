@@ -204,9 +204,10 @@ object AcpAdapterPaths {
         target: AcpExecutionTarget = currentTarget(),
         versionOverride: String? = null
     ): Boolean {
-        val resolvedAdapterInfo = versionOverride?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        val baseAdapterInfo = versionOverride?.trim()?.takeIf { it.isNotEmpty() }?.let {
             adapterInfo.withDistributionVersion(it)
         } ?: adapterInfo
+        val resolvedAdapterInfo = resolveInstallAdapterInfo(baseAdapterInfo, statusCallback) ?: return false
         return when (target) {
             AcpExecutionTarget.LOCAL -> {
                 prepareTargetDir(targetDir)
@@ -237,6 +238,27 @@ object AcpAdapterPaths {
                 downloaded
             }
         }
+    }
+
+    private fun resolveInstallAdapterInfo(
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        statusCallback: ((String) -> Unit)? = null
+    ): AcpAdapterConfig.AdapterInfo? {
+        if (adapterInfo.distribution.type != AcpAdapterConfig.DistributionType.ARCHIVE) {
+            return adapterInfo
+        }
+        val configuredVersion = adapterInfo.distribution.version.trim()
+        if (!configuredVersion.equals("latest", ignoreCase = true)) {
+            return adapterInfo
+        }
+
+        statusCallback?.invoke("Resolving latest ${adapterInfo.name} version...")
+        val resolvedVersion = AcpAdapterUpdates.latestAvailableVersion(adapterInfo)?.trim()?.takeIf { it.isNotEmpty() }
+        if (resolvedVersion == null) {
+            statusCallback?.invoke("Error: Unable to resolve latest version for ${adapterInfo.name}")
+            return null
+        }
+        return adapterInfo.withDistributionVersion(resolvedVersion)
     }
 
     fun downloadFromNpm(targetDir: File, adapterInfo: AcpAdapterConfig.AdapterInfo, statusCallback: ((String) -> Unit)? = null): Boolean {
@@ -442,8 +464,8 @@ object AcpAdapterPaths {
                 if (binName.isNullOrBlank()) null else File(adapterRoot, binName)
             }
             AcpAdapterConfig.DistributionType.NPM -> {
-                val launchPath = adapterInfo.launchPath.ifBlank { DEFAULT_NPM_LAUNCH_PATH }
-                File(resolveNpmPackageRoot(adapterRoot, adapterInfo), launchPath)
+                val launchPath = resolveNpmLaunchRelativePath(adapterInfo, target)
+                File(adapterRoot, launchPath.replace("/", File.separator).replace("\\", File.separator))
             }
         }
     }
@@ -459,8 +481,8 @@ object AcpAdapterPaths {
                 binName?.takeIf { it.isNotBlank() }?.let { joinPath(adapterRootPath, it, target) }
             }
             AcpAdapterConfig.DistributionType.NPM -> {
-                val launchPath = adapterInfo.launchPath.ifBlank { DEFAULT_NPM_LAUNCH_PATH }
-                joinPath(resolveNpmPackageRootPath(adapterRootPath, adapterInfo, target), launchPath, target)
+                val launchPath = resolveNpmLaunchRelativePath(adapterInfo, target)
+                joinPath(adapterRootPath, launchPath, target)
             }
         }
     }
@@ -519,6 +541,22 @@ object AcpAdapterPaths {
         val packageName = adapterInfo.distribution.packageName
             ?: throw IllegalStateException("Adapter '${adapterInfo.id}' missing distribution.packageName in configuration")
         return joinPath(adapterRootPath, "node_modules/$packageName", target)
+    }
+
+    private fun resolveNpmLaunchRelativePath(
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        target: AcpExecutionTarget
+    ): String {
+        val launchBinary = if (target == AcpExecutionTarget.WSL) {
+            adapterInfo.launchBinary?.unix
+        } else {
+            adapterInfo.launchBinary?.win
+        }?.trim().orEmpty()
+        if (launchBinary.isNotEmpty()) return launchBinary
+
+        val launchPath = adapterInfo.launchPath.ifBlank { DEFAULT_NPM_LAUNCH_PATH }
+        val packageRoot = "node_modules/${adapterInfo.distribution.packageName ?: throw IllegalStateException("Adapter '${adapterInfo.id}' missing distribution.packageName in configuration")}"
+        return "$packageRoot/$launchPath"
     }
 
     private fun detectRuntimePlatform(target: AcpExecutionTarget): RuntimePlatform {

@@ -4,7 +4,7 @@
   "iconPath": "/icons/codex.svg",
   "distribution": {
     "type": "archive",
-    "version": "0.11.1",
+    "version": "latest",
     "downloadUrl": "https://github.com/zed-industries/codex-acp/releases/download/v{version}/codex-acp-{version}-{target}.{ext}",
     "updateSource": {
       "type": "github_release",
@@ -39,7 +39,7 @@
     "command": [
       "npx",
       "-y",
-      "@openai/codex@0.118.0"
+      "@openai/codex@latest"
     ],
     "statusArgs": [
       "login",
@@ -59,18 +59,11 @@
     },
     "args": [
       "-y",
-      "@openai/codex@0.116.0"
+      "@openai/codex@latest"
     ],
     "resumeArgs": [
       "resume",
       "{sessionId}"
     ]
-  },
-  "historyConfig": {
-    "parserStrategy": "jsonl_event_stream",
-    "pathTemplate": "~/.codex/sessions/*/*/*/*.jsonl",
-    "cleanup": {
-      "strategy": "delete_source_file"
-    }
   }
 }

@@ -37,21 +37,29 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.Collections
+import unified.llm.history.UnifiedHistoryService
 
 private const val ADAPTER_INITIALIZATION_TIMEOUT_MS = 60_000L
+
+internal data class AdapterRuntimeMetadataFetchResult(
+    val metadata: AcpClientService.AdapterRuntimeMetadata,
+    val sessionId: String
+)
 
 internal fun AcpClientService.initializeDownloadedAdaptersInBackground() {
     if (!startupInitializationStarted.compareAndSet(false, true)) return
 
     AcpAdapterConfig.getAllAdapters().values.forEach { adapterInfo ->
-        if (!AcpAdapterPaths.isDownloaded(adapterInfo.id)) return@forEach
+        val downloaded = runCatching { AcpAdapterPaths.isDownloaded(adapterInfo.id) }.getOrDefault(false)
+        if (!downloaded) return@forEach
         initializeAdapterInBackground(adapterInfo.id)
     }
 }
 
 internal fun AcpClientService.initializeAdapterInBackground(adapterName: String) {
     val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
-    if (!AcpAdapterPaths.isDownloaded(adapterInfo.id)) return
+    val downloaded = runCatching { AcpAdapterPaths.isDownloaded(adapterInfo.id) }.getOrDefault(false)
+    if (!downloaded) return
     adapterInitializationJobs.remove(adapterInfo.id)?.cancel()
     adapterInitializationScopes.remove(adapterInfo.id)?.coroutineContext?.cancel()
     adapterInitialization.remove(adapterInfo.id)
@@ -280,7 +288,10 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
         }
         runCatching { ensureAsyncSessionUpdates(sharedProc) }
         try {
-            adapterRuntimeMetadataMap[requestedAdapterName] = fetchAdapterRuntimeMetadata(c, adapterInfo)
+            val metadataResult = fetchAdapterRuntimeMetadata(c, adapterInfo)
+            adapterRuntimeMetadataMap[requestedAdapterName] = metadataResult.metadata
+            UnifiedHistoryService.registerEphemeralSession(project.basePath, requestedAdapterName, metadataResult.sessionId)
+            UnifiedHistoryService.startBackgroundHistorySync(project.basePath)
         } catch (_: kotlinx.serialization.SerializationException) {
             // Protocol version mismatch between adapter binary and ACP SDK -
             // models/modes will fall back to config defaults in pushAdapters.
@@ -310,7 +321,7 @@ private fun normalizeAdapterStartupException(error: Exception, startupOutput: Li
 internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     client: Client,
     adapterInfo: AcpAdapterConfig.AdapterInfo
-): AcpClientService.AdapterRuntimeMetadata {
+): AdapterRuntimeMetadataFetchResult {
     val cwd = resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
     val params = SessionCreationParameters(cwd = cwd, mcpServers = emptyList())
     val factory = object : ClientOperationsFactory {
@@ -346,12 +357,15 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
         emptyList()
     }
 
-    return applyAdapterRuntimePreferences(
-        adapterInfo = adapterInfo,
-        currentModelId = if (session.modelsSupported) session.currentModel.value.value else null,
-        availableModels = models,
-        currentModeId = if (session.modesSupported) session.currentMode.value.value else null,
-        availableModes = modes
+    return AdapterRuntimeMetadataFetchResult(
+        metadata = applyAdapterRuntimePreferences(
+            adapterInfo = adapterInfo,
+            currentModelId = if (session.modelsSupported) session.currentModel.value.value else null,
+            availableModels = models,
+            currentModeId = if (session.modesSupported) session.currentMode.value.value else null,
+            availableModes = modes
+        ),
+        sessionId = session.sessionId.value
     )
 }
 

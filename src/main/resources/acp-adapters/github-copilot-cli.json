@@ -23,13 +23,6 @@
     "@patches/github-copilot-cli/usage-json-run.patch",
     "@patches/github-copilot-cli/acp-load-session-reuse.patch"
   ],
-  "historyConfig": {
-    "parserStrategy": "yaml_workspace_jsonl_event_stream",
-    "pathTemplate": "~/.copilot/session-state/*/events.jsonl",
-    "cleanup": {
-      "strategy": "delete_source_parent_dir"
-    }
-  },
   "disabledModes": [],
   "disabledModels": [
     "gpt-5.1",

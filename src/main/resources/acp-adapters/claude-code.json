@@ -20,14 +20,6 @@
   },
   "disabledModes": [],
   "patches": [],
-  "historyConfig": {
-    "parserStrategy": "root_user_jsonl",
-    "pathTemplate": "~/.claude/projects/{projectPathSlug}/*.jsonl",
-    "indexPathTemplate": "~/.claude/projects/{projectPathSlug}/sessions-index.json",
-    "cleanup": {
-      "strategy": "delete_source_file_and_session_index_entry"
-    }
-  },
   "cli": {
     "executable": {
       "win": "node.exe",

@@ -1,0 +1,28 @@
+{
+  "id": "kilo",
+  "name": "Kilo",
+  "iconPath": "/icons/kilo.svg",
+  "distribution": {
+    "type": "npm",
+    "packageName": "@kilocode/cli",
+    "version": "latest"
+  },
+  "launchBinary": {
+    "win": "node_modules/.bin/kilo.cmd",
+    "unix": "node_modules/@kilocode/cli/bin/kilo"
+  },
+  "disabledModels": [
+    "kilo/google/lyria-",
+    "kilo/google/imagen-",
+    "kilo/google/veo-"
+  ],
+  "args": [
+    "acp"
+  ],
+  "cli": {
+    "executable": {
+      "win": "node_modules/.bin/kilo.cmd",
+      "unix": "node_modules/.bin/kilo"
+    }
+  }
+}

@@ -70,23 +70,8 @@ internal class AcpBridgeCli(
     }
 
     private fun buildCliCommand(adapterId: String, extraArgs: List<String>): Pair<AcpAdapterConfig.AdapterInfo, String>? {
-        val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull() ?: return null
-        val cli = adapterInfo.cli ?: return null
+        val (adapterInfo, commandParts) = buildAdapterCliCommandParts(adapterId, extraArgs) ?: return null
         val target = AcpAdapterPaths.getExecutionTarget()
-        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
-        if (!AcpAdapterPaths.isDownloaded(adapterId, target)) return null
-
-        val executable = if (target == AcpExecutionTarget.WSL) cli.executable.unix else cli.executable.win
-        val entryPath = cli.entryPath?.takeIf { it.isNotBlank() }
-        if (executable.isNullOrBlank()) return null
-
-        val commandParts = mutableListOf<String>()
-        commandParts += resolveCliPath(adapterRoot, executable, target)
-        if (entryPath != null) {
-            commandParts += resolveCliPath(adapterRoot, entryPath, target)
-        }
-        commandParts += cli.args
-        commandParts += extraArgs
 
         val command = when (target) {
             AcpExecutionTarget.LOCAL -> toShellCommand(commandParts)
@@ -151,6 +136,30 @@ internal class AcpBridgeCli(
 
         return null
     }
+}
+
+internal fun buildAdapterCliCommandParts(
+    adapterId: String,
+    extraArgs: List<String> = emptyList()
+): Pair<AcpAdapterConfig.AdapterInfo, List<String>>? {
+    val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull() ?: return null
+    val cli = adapterInfo.cli ?: return null
+    val target = AcpAdapterPaths.getExecutionTarget()
+    val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
+    if (!AcpAdapterPaths.isDownloaded(adapterId, target)) return null
+
+    val executable = if (target == AcpExecutionTarget.WSL) cli.executable.unix else cli.executable.win
+    val entryPath = cli.entryPath?.takeIf { it.isNotBlank() }
+    if (executable.isNullOrBlank()) return null
+
+    val commandParts = mutableListOf<String>()
+    commandParts += resolveCliPath(adapterRoot, executable, target)
+    if (entryPath != null) {
+        commandParts += resolveCliPath(adapterRoot, entryPath, target)
+    }
+    commandParts += cli.args
+    commandParts += extraArgs
+    return adapterInfo to commandParts
 }
 
 internal fun applyCliPlaceholders(values: List<String>, placeholders: Map<String, String>): List<String> {
