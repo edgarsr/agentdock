@@ -199,7 +199,9 @@ internal object AcpExecutionMode {
             append(script)
         }
         val encoded = Base64.getEncoder().encodeToString(shellCommand.toByteArray(Charsets.UTF_8))
-        val wrapper = "printf %s ${quoteUnixShellArg(encoded)} | base64 -d | bash"
+        // Source the decoded script inside the same login shell so PATH/NVM
+        // initialization stays available without spawning a fresh non-login bash.
+        val wrapper = "printf %s ${quoteUnixShellArg(encoded)} | base64 -d | source /dev/stdin"
         val result = runCommand(
             buildList {
                 add("wsl.exe")

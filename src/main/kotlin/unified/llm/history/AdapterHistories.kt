@@ -15,7 +15,8 @@ internal object AdapterHistoryRegistry {
         CursorCliHistory,
         GeminiCliHistory,
         GithubCopilotCliHistory,
-        KiloHistory
+        KiloHistory,
+        OpenCodeHistory
     ).associateBy { it.adapterId }
 
     fun get(adapterId: String): AdapterHistory? = histories[adapterId]
