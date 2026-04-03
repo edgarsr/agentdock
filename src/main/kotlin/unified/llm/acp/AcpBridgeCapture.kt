@@ -5,6 +5,7 @@ import com.agentclientprotocol.model.SessionUpdate
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import unified.llm.history.ConversationAssistantMetadata
+import unified.llm.history.HistoryDiffCompactor
 import unified.llm.history.UnifiedHistoryService
 
 private val replayIgnoredUserCommandTags = listOf(
@@ -373,7 +374,7 @@ internal fun AcpBridge.buildStoredToolCallChunk(rawJson: String): JsonObject {
         put("toolKind", parsed?.get("kind")?.jsonPrimitive?.contentOrNull ?: "")
         put("toolTitle", parsed?.get("title")?.jsonPrimitive?.contentOrNull ?: "")
         put("toolStatus", parsed?.get("status")?.jsonPrimitive?.contentOrNull ?: "")
-        put("toolRawJson", truncateStoredToolRawJson(rawJson))
+        put("toolRawJson", storedToolRawJson(rawJson))
     }
 }
 
@@ -382,7 +383,16 @@ internal fun AcpBridge.buildStoredToolCallUpdateChunk(toolCallId: String, rawJso
         put("role", "assistant")
         put("type", "tool_call_update")
         put("toolCallId", toolCallId)
-        put("toolRawJson", truncateStoredToolRawJson(rawJson))
+        put("toolRawJson", storedToolRawJson(rawJson))
+    }
+}
+
+internal fun AcpBridge.storedToolRawJson(rawJson: String): String {
+    val parsed = try { Json.parseToJsonElement(rawJson).jsonObject } catch (_: Exception) { null }
+    return if (shouldPreserveToolRawJson(parsed)) {
+        HistoryDiffCompactor.compactStoredToolRawJson(rawJson, Json)
+    } else {
+        truncateStoredToolRawJson(rawJson)
     }
 }
 
@@ -390,6 +400,27 @@ internal fun AcpBridge.truncateStoredToolRawJson(rawJson: String, maxChars: Int 
     if (rawJson.length <= maxChars) return rawJson
     val omitted = rawJson.length - maxChars
     return rawJson.take(maxChars) + "\n\n[Stored history truncated; $omitted chars omitted]"
+}
+
+private fun shouldPreserveToolRawJson(parsed: JsonObject?): Boolean {
+    if (parsed == null) return false
+    val kind = parsed["kind"]?.jsonPrimitive?.contentOrNull
+    if (kind == "edit") return true
+
+    val content = parsed["content"]?.jsonArray
+    if (content != null && content.any(::isDiffLikePayload)) return true
+
+    val diffs = parsed["diffs"]?.jsonArray
+    if (diffs != null && diffs.any(::isDiffLikePayload)) return true
+
+    return false
+}
+
+private fun isDiffLikePayload(element: JsonElement): Boolean {
+    val obj = element as? JsonObject ?: return false
+    val type = obj["type"]?.jsonPrimitive?.contentOrNull
+    if (type == "diff") return true
+    return obj["path"] != null && obj["newText"] != null
 }
 
 private data class LivePromptCaptureSnapshot(

@@ -19,6 +19,8 @@ import {
   ConversationReplayLoadedPayload,
   GlobalSettingsPayload,
   ExecutionTargetSwitchPayload,
+  FileChangeOperation,
+  FileChangeStatsResultPayload,
 } from '../types/chat';
 import { McpServerConfig } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
@@ -38,6 +40,7 @@ export interface ChangesStateEvent { chatId: string; state: ChangesState; }
 export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 export interface ConversationTranscriptSavedEvent { payload: ConversationTranscriptSavedPayload; }
 export interface ConversationReplayLoadedEvent { payload: ConversationReplayLoadedPayload; }
+export interface FileChangeStatsEvent { payload: FileChangeStatsResultPayload; }
 
 export interface McpServersEvent { servers: McpServerConfig[]; }
 export interface PromptLibraryEvent { items: PromptLibraryItem[]; }
@@ -66,6 +69,7 @@ const EVENT_NAMES = {
   HISTORY_DELETE_RESULT: 'history-delete-result',
   UNDO_RESULT: 'acp-undo-result',
   CHANGES_STATE: 'acp-changes-state',
+  FILE_CHANGE_STATS: 'acp-file-change-stats',
   ATTACHMENTS_ADDED: 'acp-attachments-added',
   TOOL_CALL: 'acp-tool-call',
   TOOL_CALL_UPDATE: 'acp-tool-call-update',
@@ -81,6 +85,7 @@ const EVENT_NAMES = {
 
 let saveTranscriptCounter = 0;
 let audioTranscriptionCounter = 0;
+let fileChangeStatsCounter = 0;
 const availableCommandsByAdapter = new Map<string, AvailableCommand[]>();
 
 function nextSaveTranscriptRequestId(): string {
@@ -91,6 +96,11 @@ function nextSaveTranscriptRequestId(): string {
 function nextAudioTranscriptionRequestId(): string {
   audioTranscriptionCounter += 1;
   return `audio-transcription-${audioTranscriptionCounter}-${Date.now()}`;
+}
+
+function nextFileChangeStatsRequestId(): string {
+  fileChangeStatsCounter += 1;
+  return `file-change-stats-${fileChangeStatsCounter}-${Date.now()}`;
 }
 
 export const ACPBridge = {
@@ -193,6 +203,10 @@ export const ACPBridge = {
 
     window.__onChangesState = (chatId, state) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.CHANGES_STATE, { detail: { chatId, state } }));
+    };
+
+    window.__onFileChangeStats = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.FILE_CHANGE_STATS, { detail: { payload } }));
     };
 
     window.__onAttachmentsAdded = (chatId, files) => {
@@ -395,6 +409,30 @@ export const ACPBridge = {
     return () => window.removeEventListener(EVENT_NAMES.CHANGES_STATE, callback as EventListener);
   },
 
+  computeFileChangeStats: (files: { filePath: string; status: 'A' | 'M'; operations: FileChangeOperation[] }[]): Promise<FileChangeStatsResultPayload> => {
+    return new Promise((resolve, reject) => {
+      if (typeof window.__computeFileChangeStats !== 'function') {
+        reject(new Error('File change stats bridge is not available.'));
+        return;
+      }
+
+      const requestId = nextFileChangeStatsRequestId();
+      const cleanup = ACPBridge.onFileChangeStats((e) => {
+        const payload = e.detail.payload;
+        if (payload.requestId !== requestId) return;
+        cleanup();
+        resolve(payload);
+      });
+
+      try {
+        window.__computeFileChangeStats(JSON.stringify({ requestId, files }));
+      } catch (error) {
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  },
+
   onToolCall: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL, callback as EventListener);
@@ -403,6 +441,11 @@ export const ACPBridge = {
   onToolCallUpdate: (callback: (e: CustomEvent<ToolCallBridgeEvent>) => void) => {
     window.addEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
     return () => window.removeEventListener(EVENT_NAMES.TOOL_CALL_UPDATE, callback as EventListener);
+  },
+
+  onFileChangeStats: (callback: (e: CustomEvent<FileChangeStatsEvent>) => void) => {
+    window.addEventListener(EVENT_NAMES.FILE_CHANGE_STATS, callback as EventListener);
+    return () => window.removeEventListener(EVENT_NAMES.FILE_CHANGE_STATS, callback as EventListener);
   },
 
   onAttachmentsAdded: (callback: (e: CustomEvent<{ chatId: string; files: ChatAttachment[] }>) => void) => {

@@ -78,6 +78,38 @@ internal data class SaveConversationTranscriptResultPayload(
     val error: String? = null
 )
 
+@Serializable
+internal data class FileChangeOperationPayload(
+    val oldText: String,
+    val newText: String
+)
+
+@Serializable
+internal data class FileChangeStatsRequestFilePayload(
+    val filePath: String,
+    val status: String,
+    val operations: List<FileChangeOperationPayload>
+)
+
+@Serializable
+internal data class FileChangeStatsRequestPayload(
+    val requestId: String,
+    val files: List<FileChangeStatsRequestFilePayload>
+)
+
+@Serializable
+internal data class FileChangeStatsPayload(
+    val filePath: String,
+    val additions: Int,
+    val deletions: Int
+)
+
+@Serializable
+internal data class FileChangeStatsResultPayload(
+    val requestId: String,
+    val files: List<FileChangeStatsPayload>
+)
+
 internal val adapterJson = Json { encodeDefaults = true }
 
 internal data class AdapterDownloadProbeState(

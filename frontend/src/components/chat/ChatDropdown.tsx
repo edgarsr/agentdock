@@ -28,6 +28,7 @@ export default function ChatDropdown({
   
   const selectedOption = options.find((option) => option.id === value);
   const selectedSub = selectedOption?.subOptions?.find(s => s.id === subValue);
+  const hoveredOption = options.find((option) => option.id === hoveredOptionId && option.subOptions?.length);
 
   const renderIcon = (path?: string, className: string = "w-4 h-4") => {
     if (!path) return null;
@@ -102,11 +103,11 @@ export default function ChatDropdown({
 
       {open && !disabled && (
         <div
-          className={`absolute z-[100] min-w-[200px] rounded-md border border-border bg-background-secondary shadow-2xl py-1 animate-in fade-in duration-75 ${
+          className={`absolute z-[100] min-w-[200px] rounded-md border border-border bg-background-secondary py-1 shadow-2xl animate-in fade-in duration-75 ${
             direction === 'up' ? 'bottom-full mb-2 left-0' : 'top-full mt-2 left-0'
           }`}
         >
-          <div className="flex flex-col">
+          <div className="flex max-h-[calc(100vh-7rem)] flex-col overflow-y-auto">
             {options.map((option) => (
               <div 
                 key={option.id} 
@@ -142,42 +143,44 @@ export default function ChatDropdown({
                   )}
                 </button>
 
-                {/* Second Level Submenu */}
-                {option.subOptions && hoveredOptionId === option.id && (
-                  <div 
-                    className={`absolute z-[101] min-w-[180px] border border-border bg-background-secondary shadow-2xl py-1 rounded-md animate-in fade-in slide-in-from-left-1 duration-75 ${
-                      direction === 'up' ? 'bottom-0 left-full -ml-px' : 'top-0 left-full -ml-px'
-                    }`}
-                  >
-                    {option.subOptions.map((sub) => (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => {
-                          onChange(option.id);
-                          onSubChange?.(option.id, sub.id);
-                          setOpen(false);
-                          setHoveredOptionId(null);
-                        }}
-                        className={`flex items-center w-full px-3 py-2 text-left text-ide-regular transition-colors ${
-                          option.id === value && sub.id === subValue ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                        }`}
-                      >
-                        <span className="w-4 flex-shrink-0">
-                          {option.id === value && sub.id === subValue && (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          )}
-                        </span>
-                         {renderOptionText(sub)}
-                       </button>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
+
+          {hoveredOption?.subOptions && (
+            <div
+              className={`absolute left-full z-[101] ml-[-1px] min-w-[180px] rounded-md border border-border bg-background-secondary py-1 shadow-2xl animate-in fade-in slide-in-from-left-1 duration-75 ${
+                direction === 'up' ? 'bottom-0' : 'top-0'
+              }`}
+            >
+              <div className="max-h-[calc(100vh-7rem)] overflow-y-auto">
+                {hoveredOption.subOptions.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(hoveredOption.id);
+                      onSubChange?.(hoveredOption.id, sub.id);
+                      setOpen(false);
+                      setHoveredOptionId(null);
+                    }}
+                    className={`flex items-center w-full px-3 py-2 text-left text-ide-regular transition-colors ${
+                      hoveredOption.id === value && sub.id === subValue ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                    }`}
+                  >
+                    <span className="w-4 flex-shrink-0">
+                      {hoveredOption.id === value && sub.id === subValue && (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      )}
+                    </span>
+                    {renderOptionText(sub)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

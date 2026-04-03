@@ -67,7 +67,10 @@ internal fun AcpBridge.installServiceCallbacks() {
             }
             is SessionUpdate.ToolCall -> {
                 if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
-                val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                if (json.contains("\"kind\":\"other\"") && json.contains("\"patchText\":")) {
+                    json = convertBrokenOtherPatchToolCallJson(json)
+                }
                 recordStoredEvent(
                     chatId,
                     sessionId,
@@ -84,7 +87,10 @@ internal fun AcpBridge.installServiceCallbacks() {
             }
             is SessionUpdate.ToolCallUpdate -> {
                 if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
-                val json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
+                if (json.contains("\"kind\":\"other\"") && json.contains("\"patchText\":")) {
+                    json = convertBrokenOtherPatchToolCallJson(json)
+                }
                 recordStoredEvent(
                     chatId,
                     sessionId,
@@ -115,6 +121,117 @@ internal fun AcpBridge.installServiceCallbacks() {
             }
         }
     }
+}
+
+private data class PatchDiff(val path: String, val oldText: String?, val newText: String)
+
+// OpenCode reports apply_patch edits as kind=other, so normalize that broken payload shape.
+private fun AcpBridge.convertBrokenOtherPatchToolCallJson(rawJson: String): String {
+    val parsed = try { Json.parseToJsonElement(rawJson).jsonObject } catch (_: Exception) { return rawJson }
+    if (parsed["kind"]?.jsonPrimitive?.contentOrNull != "other") return rawJson
+    val patchText = parsed["rawInput"]?.jsonObject?.get("patchText")?.jsonPrimitive?.contentOrNull ?: return rawJson
+
+    data class PatchHunk(val oldText: String, val newText: String)
+    data class PatchFile(val path: String, val mode: String, val hunks: MutableList<PatchHunk>)
+
+    val files = mutableListOf<PatchFile>()
+    var path = ""
+    var mode: String? = null
+    var oldLines = mutableListOf<String>()
+    var newLines = mutableListOf<String>()
+    var hunks = mutableListOf<PatchHunk>()
+
+    fun flushHunk() {
+        if (path.isBlank()) return
+        if (oldLines.isEmpty() && newLines.isEmpty()) return
+        hunks += PatchHunk(oldLines.joinToString("\n"), newLines.joinToString("\n"))
+        oldLines = mutableListOf()
+        newLines = mutableListOf()
+    }
+
+    fun flush() {
+        if (path.isBlank() || mode == null) return
+        flushHunk()
+        files += PatchFile(path, mode!!, hunks)
+        path = ""
+        mode = null
+        hunks = mutableListOf()
+        oldLines = mutableListOf()
+        newLines = mutableListOf()
+    }
+
+    patchText.replace("\r\n", "\n").replace("\r", "\n").lines().forEach { line ->
+        Regex("^\\*\\*\\* (Update File|Add File|Delete File):\\s*(.+)$").find(line)?.let {
+            flush()
+            mode = when (it.groupValues[1]) {
+                "Add File" -> "add"
+                "Delete File" -> "delete"
+                else -> "update"
+            }
+            path = it.groupValues[2].trim()
+            return@forEach
+        }
+        if (path.isBlank() || line == "*** Begin Patch" || line == "*** End Patch") return@forEach
+        if (line.startsWith("@@")) {
+            flushHunk()
+            return@forEach
+        }
+        when {
+            line.startsWith("+") -> newLines += line.removePrefix("+")
+            line.startsWith("-") -> oldLines += line.removePrefix("-")
+            else -> {
+                oldLines += line.removePrefix(" ")
+                newLines += line.removePrefix(" ")
+            }
+        }
+    }
+
+    flush()
+    val diffs = mutableListOf<PatchDiff>()
+    for (file in files) {
+        when (file.mode) {
+            "add" -> {
+                val newText = file.hunks.joinToString("\n") { it.newText }
+                if (newText.isNotEmpty()) {
+                    diffs += PatchDiff(path = file.path, oldText = null, newText = newText)
+                }
+            }
+            "delete" -> {
+                val oldText = file.hunks.joinToString("\n") { it.oldText }
+                if (oldText.isNotEmpty()) {
+                    diffs += PatchDiff(path = file.path, oldText = oldText, newText = "")
+                }
+            }
+            else -> {
+                file.hunks.forEach { hunk ->
+                    if (hunk.oldText != hunk.newText) {
+                        diffs += PatchDiff(path = file.path, oldText = hunk.oldText, newText = hunk.newText)
+                    }
+                }
+            }
+        }
+    }
+
+    if (diffs.isEmpty()) return rawJson
+
+    return buildJsonObject {
+        parsed.forEach { (key, value) -> put(key, value) }
+        put("kind", JsonPrimitive("edit"))
+        put("title", JsonPrimitive(diffs.map { it.path }.distinct().joinToString(prefix = "Edit ")))
+        put("locations", buildJsonArray {
+            diffs.map { it.path }.distinct().forEach { add(buildJsonObject { put("path", JsonPrimitive(it)) }) }
+        })
+        put("content", buildJsonArray {
+            diffs.forEach {
+                add(buildJsonObject {
+                    put("type", JsonPrimitive("diff"))
+                    put("path", JsonPrimitive(it.path))
+                    put("oldText", it.oldText?.let(::JsonPrimitive) ?: JsonNull)
+                    put("newText", JsonPrimitive(it.newText))
+                })
+            }
+        })
+    }.toString()
 }
 
 internal fun AcpBridge.installAdapterQueries() {

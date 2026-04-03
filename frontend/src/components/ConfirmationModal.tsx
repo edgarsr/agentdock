@@ -58,7 +58,7 @@ export default function ConfirmationModal({
         </div>
 
         <div className="px-5 py-4 pb-6 grow flex items-start gap-4">
-          <p className="text-[14px] leading-snug whitespace-pre-line">
+          <p className="min-w-0 max-w-full overflow-hidden break-words whitespace-pre-wrap text-[14px] leading-snug [overflow-wrap:anywhere]">
             {message}
           </p>
         </div>

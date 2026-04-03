@@ -8,7 +8,6 @@ import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import java.io.File
-import java.nio.charset.StandardCharsets
 
 /**
  * Shows a read-only diff of what the agent changed: left = before agent, right = after agent.
@@ -57,28 +56,15 @@ object AgentDiffViewer {
         try {
             val file = File(resolvedPath)
             val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
-            val currentContent = if (vf != null && vf.exists()) {
-                try {
-                    String(vf.contentsToByteArray(), vf.charset ?: StandardCharsets.UTF_8)
-                } catch (_: Exception) {
-                    ""
-                }
-            } else {
-                ""
-            }
-
-            val originalContent = when (status) {
-                "A" -> ""
-                else -> rebuildBeforeContent(currentContent, operations)
-            }
+            val snapshot = AgentChangeCalculator.buildSnapshot(project, filePath, status, operations) ?: return
 
             val fileName = file.name
             val fileType = (if (vf != null && vf.exists()) vf.fileType else null)?.takeIf { it != FileTypes.UNKNOWN }
                 ?: FileTypeManager.getInstance().getFileTypeByFileName(fileName)
 
             val contentFactory = DiffContentFactory.getInstance()
-            val leftContent = contentFactory.create(project, originalContent, fileType)
-            val rightContent = contentFactory.create(project, currentContent, fileType)
+            val leftContent = contentFactory.create(project, snapshot.beforeContent, fileType)
+            val rightContent = contentFactory.create(project, snapshot.afterContent, fileType)
             val leftTitle = if (status == "A") "(empty)" else "Before (agent edit)"
             val rightTitle = "After (agent edit)"
             val request = SimpleDiffRequest("Agent changes: $fileName", leftContent, rightContent, leftTitle, rightTitle)

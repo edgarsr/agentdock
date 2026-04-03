@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Message,
   AgentOption,
@@ -52,6 +52,7 @@ function isExploringChunk(chunk: ContentChunk): boolean {
 
 let messageCounter = 0;
 let thinkingCounter = 0;
+const EDIT_SPLIT_SEPARATOR = '::diff::';
 function nextMessageId(suffix: string): string {
   return `msg-${++messageCounter}-${Date.now()}-${suffix}`;
 }
@@ -69,6 +70,84 @@ function plainTextFromBlocks(blocks: any[]): string {
     if (block.type === 'code_ref') return codeReferenceText(block.path, block.startLine, block.endLine);
     return '';
   }).join('');
+}
+
+function buildSplitToolCallId(toolCallId: string, pathOrIndex: string): string {
+  return `${toolCallId}${EDIT_SPLIT_SEPARATOR}${encodeURIComponent(pathOrIndex)}`;
+}
+
+function matchesToolCallId(entryId: string, toolCallId: string): boolean {
+  return entryId === toolCallId || entryId.startsWith(`${toolCallId}${EDIT_SPLIT_SEPARATOR}`);
+}
+
+function normalizeDiffEntry(item: Record<string, any>) {
+  const path = typeof item.path === 'string' ? item.path : '';
+  const oldText = item.oldText ?? null;
+  const newText = item.newText ?? '';
+  return {
+    ...item,
+    type: 'diff',
+    path,
+    oldText,
+    newText,
+  };
+}
+
+function hasMeaningfulDiff(entries: Record<string, any>[]): boolean {
+  if (entries.length === 0) return false;
+  const normalizeLineEndings = (text: string) => text.replace(/\r\n?/g, '\n');
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  const oldText = normalizeLineEndings(first.oldText ?? '');
+  const newText = normalizeLineEndings(last.newText ?? '');
+  return oldText !== newText;
+}
+
+function createToolCallBlocks(entry: ToolCallEntry, isReplay: boolean): ToolCallBlock[] {
+  if (entry.kind !== 'edit' || !Array.isArray(entry.content)) {
+    return [{ type: 'tool_call', entry, isReplay } as ToolCallBlock];
+  }
+
+  const diffs = entry.content
+    .filter((item) => item?.type === 'diff' || (item?.path !== undefined && item?.newText !== undefined))
+    .map((item) => normalizeDiffEntry(item as Record<string, any>));
+
+  if (diffs.length === 0) {
+    return [];
+  }
+
+  if (diffs.length === 1) {
+    return hasMeaningfulDiff(diffs)
+      ? [{ type: 'tool_call', entry: { ...entry, content: diffs }, isReplay } as ToolCallBlock]
+      : [];
+  }
+
+  const groupedDiffs = new Map<string, { path?: string; diffs: Record<string, any>[] }>();
+  diffs.forEach((diff, index) => {
+    const diffPath = diff.path || undefined;
+    const key = diffPath || `idx-${index}`;
+    const existing = groupedDiffs.get(key);
+    if (existing) {
+      existing.diffs.push(diff);
+      return;
+    }
+    groupedDiffs.set(key, { path: diffPath, diffs: [diff] });
+  });
+
+  return Array.from(groupedDiffs.values()).flatMap((group, index) => {
+    if (!hasMeaningfulDiff(group.diffs)) return [];
+    const matchingLocation = group.path ? entry.locations?.find((location) => location.path === group.path) : undefined;
+    return {
+      type: 'tool_call',
+      isReplay,
+      entry: {
+        ...entry,
+        toolCallId: buildSplitToolCallId(entry.toolCallId, group.path || `idx-${index}`),
+        content: group.diffs,
+        locations: matchingLocation ? [matchingLocation] : (group.path ? [{ path: group.path }] : entry.locations),
+      }
+    } as ToolCallBlock;
+  });
 }
 
 function titleFromFirstPrompt(messages: Message[]): string | undefined {
@@ -187,7 +266,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
 
   // ------ Create new message if role differs or no messages yet ------
   if (!lastMsg || lastMsg.role !== chunk.role) {
-    const block = buildBlock({ ...chunk, text: displayText });
+    const blocks = buildBlocks({ ...chunk, text: displayText });
     const newMsg: Message = {
       id: nextMessageId(chunk.role),
       role: chunk.role,
@@ -195,9 +274,9 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
       timestamp: chunk.isReplay ? undefined : Date.now()
     };
     if (chunk.role === 'assistant') {
-      newMsg.contentBlocks = [block];
+      newMsg.contentBlocks = blocks;
     } else {
-      newMsg.blocks = [block];
+      newMsg.blocks = blocks;
     }
     newMessages.push(newMsg);
     return newMessages;
@@ -276,10 +355,10 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
   return newMessages;
 }
 
-function buildBlock(chunk: ContentChunk): RichContentBlock {
+function buildBlocks(chunk: ContentChunk): RichContentBlock[] {
   switch (chunk.type) {
     case 'thinking':
-      return {
+      return [{
         type: 'exploring',
         isStreaming: !chunk.isReplay,
         isReplay: chunk.isReplay,
@@ -289,33 +368,33 @@ function buildBlock(chunk: ContentChunk): RichContentBlock {
           text: chunk.text || '',
           rawJson: ''
         }]
-      };
+      }];
     case 'image':
-      return { type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any;
+      return [{ type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'audio':
-      return { type: 'audio', data: chunk.data!, mimeType: chunk.mimeType! } as any;
+      return [{ type: 'audio', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'video':
-      return { type: 'video', data: chunk.data!, mimeType: chunk.mimeType! } as any;
+      return [{ type: 'video', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'file':
-      return { 
+      return [{ 
         type: 'file', 
         name: chunk.name || 'file', 
         mimeType: chunk.mimeType || 'application/octet-stream',
         data: chunk.data,
         path: chunk.path
-      } as any;
+      } as any];
     case 'tool_call': {
       const entry = buildToolCallEntry(chunk);
       if (!isExploringChunk(chunk)) {
-        return { type: 'tool_call', entry } as ToolCallBlock;
+        return createToolCallBlocks(entry, chunk.isReplay);
       }
-      return { type: 'exploring', isStreaming: !chunk.isReplay, isReplay: chunk.isReplay, entries: [entry] } as ExploringBlock;
+      return [{ type: 'exploring', isStreaming: !chunk.isReplay, isReplay: chunk.isReplay, entries: [entry] } as ExploringBlock];
     }
     case 'plan':
-      return { type: 'plan', entries: chunk.planEntries || [], isReplay: chunk.isReplay };
+      return [{ type: 'plan', entries: chunk.planEntries || [], isReplay: chunk.isReplay }];
     case 'text':
     default:
-      return { type: 'text', text: chunk.text || '' };
+      return [{ type: 'text', text: chunk.text || '' }];
   }
 }
 
@@ -333,24 +412,33 @@ function handleToolCall(blocks: RichContentBlock[], lastBlock: RichContentBlock 
 
   if (!isExploringChunk(chunk)) {
     closeStreamingExploring(blocks);
-
-    const idx = blocks.findIndex(b => b.type === 'tool_call' && (b as ToolCallBlock).entry.toolCallId === entry.toolCallId);
-    if (idx >= 0) {
-      const existing = (blocks[idx] as ToolCallBlock).entry;
-      const merged: ToolCallEntry = {
-        ...existing,
-        ...entry,
-        title: entry.title || existing.title,
-        kind: entry.kind || existing.kind,
-        status: entry.status || existing.status,
-        rawJson: entry.rawJson || existing.rawJson,
-        locations: entry.locations || existing.locations,
-        content: entry.content || existing.content,
-        result: entry.result || existing.result
-      };
-      blocks[idx] = { type: 'tool_call', entry: merged, isReplay: chunk.isReplay } as ToolCallBlock;
+    const replacements = createToolCallBlocks(entry, chunk.isReplay);
+    const matchingIndexes = blocks
+      .map((block, index) => block.type === 'tool_call' && matchesToolCallId((block as ToolCallBlock).entry.toolCallId, entry.toolCallId) ? index : -1)
+      .filter(index => index >= 0);
+    if (matchingIndexes.length > 0) {
+      const existingBlocks = matchingIndexes.map(index => blocks[index] as ToolCallBlock);
+      const mergedBlocks = replacements.map((replacement, index) => {
+        const existing = existingBlocks[index]?.entry;
+        if (!existing) return replacement;
+        return {
+          ...replacement,
+          entry: {
+            ...existing,
+            ...replacement.entry,
+            title: replacement.entry.title || existing.title,
+            kind: replacement.entry.kind || existing.kind,
+            status: replacement.entry.status || existing.status,
+            rawJson: replacement.entry.rawJson || existing.rawJson,
+            locations: replacement.entry.locations || existing.locations,
+            content: replacement.entry.content || existing.content,
+            result: replacement.entry.result || existing.result
+          }
+        } as ToolCallBlock;
+      });
+      blocks.splice(matchingIndexes[0], matchingIndexes.length, ...mergedBlocks);
     } else {
-      blocks.push({ type: 'tool_call', entry, isReplay: chunk.isReplay } as ToolCallBlock);
+      blocks.push(...replacements);
     }
   } else {
     // Minor tool - group into exploring block
@@ -383,25 +471,39 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i];
 
-    if (b.type === 'tool_call' && b.entry.toolCallId === tid) {
-      const tb = b as ToolCallBlock;
-      const updatedEntry: ToolCallEntry = {
-        ...tb.entry,
-        status: nextStatus || tb.entry.status,
-        title: nextTitle || tb.entry.title,
-        kind: nextKind || tb.entry.kind,
-        rawJson: chunk.toolRawJson || tb.entry.rawJson,
-        locations: json.locations || tb.entry.locations,
-        content: nextContent || tb.entry.content
+    if (b.type === 'tool_call' && matchesToolCallId(b.entry.toolCallId, tid)) {
+      const matchingIndexes = blocks
+        .map((block, index) => block.type === 'tool_call' && matchesToolCallId((block as ToolCallBlock).entry.toolCallId, tid) ? index : -1)
+        .filter(index => index >= 0);
+      const updatedBaseEntry: ToolCallEntry = {
+        ...buildToolCallEntry(chunk),
+        status: nextStatus || b.entry.status,
+        title: nextTitle || b.entry.title,
+        kind: nextKind || b.entry.kind,
+        rawJson: chunk.toolRawJson || b.entry.rawJson,
+        locations: json.locations || b.entry.locations,
+        content: nextContent || b.entry.content
       };
-
       const resultText = extractResultTexts(json);
       if (resultText) {
-        const merged = appendToolOutput(updatedEntry.result, resultText);
-        updatedEntry.result = merged.text;
+        const merged = appendToolOutput(updatedBaseEntry.result, resultText);
+        updatedBaseEntry.result = merged.text;
       }
-
-      blocks[i] = { ...tb, entry: updatedEntry };
+      const replacements = createToolCallBlocks(updatedBaseEntry, chunk.isReplay);
+      const existingBlocks = matchingIndexes.map(index => blocks[index] as ToolCallBlock);
+      const mergedBlocks = replacements.map((replacement, index) => {
+        const existing = existingBlocks[index]?.entry;
+        if (!existing) return replacement;
+        return {
+          ...replacement,
+          entry: {
+            ...existing,
+            ...replacement.entry,
+            result: replacement.entry.result || existing.result
+          }
+        } as ToolCallBlock;
+      });
+      blocks.splice(matchingIndexes[0], matchingIndexes.length, ...mergedBlocks);
       return;
     }
 
@@ -440,7 +542,7 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
   }
   if (!isExploringChunk(chunk)) {
     closeStreamingExploring(blocks);
-    blocks.push({ type: 'tool_call', entry, isReplay: chunk.isReplay } as ToolCallBlock);
+    blocks.push(...createToolCallBlocks(entry, chunk.isReplay));
   } else {
     const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
     if (lastBlock && lastBlock.type === 'exploring' && ((lastBlock as ExploringBlock).isStreaming || chunk.isReplay)) {
@@ -477,7 +579,8 @@ export function useChatSession(
   pendingHandoff?: PendingHandoffContext,
   onHandoffConsumed?: (handoffId: string) => void
 ) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+  const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [status, setStatus] = useState<string>('not started');
   const [isSending, setIsSending] = useState(false);
@@ -489,6 +592,7 @@ export function useChatSession(
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
   const [availableCommandsByAgent, setAvailableCommandsByAgent] = useState<Record<string, AvailableCommand[]>>({});
+  const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
 
   const pendingPromptRef = useRef<any[] | null>(null);
   const pendingHandoffRef = useRef<PendingHandoffContext | null>(null);
@@ -513,8 +617,16 @@ export function useChatSession(
     const chunks = chunkBufferRef.current;
     chunkBufferRef.current = [];
     if (chunks.length === 0 && reason !== 'status-ready') return;
-    setMessages(prev => {
-      const result = chunks.length > 0 ? applyChunks(prev, chunks) : prev;
+    const replayChunks = chunks.filter((chunk) => chunk.isReplay);
+    const liveChunks = chunks.filter((chunk) => !chunk.isReplay);
+
+    setHistoryMessages(prev => {
+      const result = replayChunks.length > 0 ? applyChunks(prev, replayChunks) : prev;
+      return reason === 'status-ready' ? closeAllStreamingThinking(result) : result;
+    });
+
+    setLiveMessages(prev => {
+      const result = liveChunks.length > 0 ? applyChunks(prev, liveChunks) : prev;
       return reason === 'status-ready' ? closeAllStreamingThinking(result) : result;
     });
   }, []);
@@ -723,7 +835,7 @@ export function useChatSession(
       }
       chunkBufferRef.current = [];
       flushScheduledRef.current = false;
-      setMessages(buildReplayMessages(payload.data));
+      setHistoryMessages(buildReplayMessages(payload.data));
       setIsHistoryReplaying(false);
     });
 
@@ -830,7 +942,8 @@ export function useChatSession(
 
     chunkBufferRef.current = [];
     pendingPromptRef.current = null;
-    setMessages([]);
+    setHistoryMessages([]);
+    setLiveMessages([]);
     setStatus('initializing');
     setIsHistoryReplaying(true);
 
@@ -1017,7 +1130,7 @@ export function useChatSession(
       blocks: normalizedBlocks,
       timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setLiveMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setAttachments([]);
     const promptStartedAt = Date.now();
@@ -1035,7 +1148,7 @@ export function useChatSession(
       promptStartedAtMillis: promptStartedAt,
       metaComplete: false,
     };
-    setMessages((prev) => [...prev, assistantMessage]);
+    setLiveMessages((prev) => [...prev, assistantMessage]);
 
     if (status !== 'ready' && status !== 'error') {
       // Queue it up

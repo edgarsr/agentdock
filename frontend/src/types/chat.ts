@@ -293,26 +293,55 @@ export interface ToolCallEvent {
   locations?: { path: string; line?: number }[];
 }
 
+export interface FileChangeOperation {
+  oldText: string;
+  newText: string;
+}
+
 export interface FileChangeSummary {
   filePath: string;
   fileName: string;
   status: 'A' | 'M';
   additions: number;
   deletions: number;
-  operations: { oldText: string; newText: string }[];
+  operations: FileChangeOperation[];
+  latestToolCallIndex: number;
+}
+
+export interface FileChangeStatsPayload {
+  filePath: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface FileChangeStatsResultPayload {
+  requestId: string;
+  files: FileChangeStatsPayload[];
+}
+
+export interface ProcessedFileState {
+  filePath: string;
+  toolCallIndex: number;
 }
 
 export interface ChangesState {
   sessionId: string;
   adapterName: string;
   baseToolCallIndex: number;
-  processedFiles: string[];
+  processedFileStates: ProcessedFileState[];
   hasPluginEdits?: boolean;
+}
+
+export interface UndoFileResultPayload {
+  filePath: string;
+  success: boolean;
+  message: string;
 }
 
 export interface UndoResultPayload {
   success: boolean;
   message: string;
+  fileResults: UndoFileResultPayload[];
 }
 
 export interface SessionMetadataUpdatePayload {
@@ -435,6 +464,7 @@ declare global {
     __keepAll?: (payload: string) => void;
     __removeProcessedFiles?: (payload: string) => void;
     __getChangesState?: (payload: string) => void;
+    __computeFileChangeStats?: (payload: string) => void;
     __showDiff?: (payload: string) => void;
     __openFile?: (payload: string) => void;
     __openUrl?: (url: string) => void;
@@ -462,6 +492,7 @@ declare global {
 
     __onUndoResult?: (chatId: string, result: UndoResultPayload) => void;
     __onChangesState?: (chatId: string, state: ChangesState) => void;
+    __onFileChangeStats?: (payload: FileChangeStatsResultPayload) => void;
 
     __onMcpServers?: (servers: unknown) => void;
     __onFilesResult?: (filesJson: unknown) => void;

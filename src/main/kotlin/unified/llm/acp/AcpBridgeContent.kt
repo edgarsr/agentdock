@@ -268,12 +268,21 @@ internal fun AcpBridge.pushPermissionRequest(request: PermissionRequest) {
 }
 
 internal fun AcpBridge.pushUndoResult(chatId: String, result: unified.llm.changes.UndoResult) {
-    val successStr = if (result.success) "true" else "false"
-    val messageLiteral = jsStringLiteral(result.message)
+    val payloadJson = buildJsonObject {
+        put("success", result.success)
+        put("message", result.message)
+        put("fileResults", Json.encodeToJsonElement(result.fileResults.map { fileResult ->
+            buildJsonObject {
+                put("filePath", fileResult.filePath)
+                put("success", fileResult.success)
+                put("message", fileResult.message)
+            }
+        }))
+    }.toString().escapeForJsString()
     val chatIdLiteral = jsStringLiteral(chatId)
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onUndoResult) window.__onUndoResult($chatIdLiteral, {success:$successStr,message:$messageLiteral});",
+            "if(window.__onUndoResult) window.__onUndoResult($chatIdLiteral, JSON.parse('$payloadJson'));",
             browser.cefBrowser.url, 0
         )
     }
@@ -290,10 +299,23 @@ internal fun AcpBridge.pushConversationTranscriptSaved(result: SaveConversationT
     }
 }
 
+internal fun AcpBridge.pushFileChangeStats(result: FileChangeStatsResultPayload) {
+    val payloadJson = adapterJson.encodeToString(result)
+    val escaped = payloadJson.escapeForJsString()
+    runOnEdt {
+        browser.cefBrowser.executeJavaScript(
+            "if(window.__onFileChangeStats) window.__onFileChangeStats(JSON.parse('$escaped'));",
+            browser.cefBrowser.url, 0
+        )
+    }
+}
+
 internal fun AcpBridge.pushChangesState(chatId: String, state: ChangesState, hasPluginEdits: Boolean) {
     val hasPluginEditsStr = if (hasPluginEdits) "true" else "false"
-    val processedJson = state.processedFiles.joinToString(",") { escapeJsonString(it) }
-    val payload = """{"sessionId":${escapeJsonString(state.sessionId)},"adapterName":${escapeJsonString(state.adapterName)},"baseToolCallIndex":${state.baseToolCallIndex},"processedFiles":[$processedJson],"hasPluginEdits":$hasPluginEditsStr}"""
+    val processedJson = state.processedFileStates.joinToString(",") { processed ->
+        """{"filePath":${escapeJsonString(processed.filePath)},"toolCallIndex":${processed.toolCallIndex}}"""
+    }
+    val payload = """{"sessionId":${escapeJsonString(state.sessionId)},"adapterName":${escapeJsonString(state.adapterName)},"baseToolCallIndex":${state.baseToolCallIndex},"processedFileStates":[$processedJson],"hasPluginEdits":$hasPluginEditsStr}"""
     val chatIdLiteral = jsStringLiteral(chatId)
     val escaped = payload.escapeForJsString()
     runOnEdt {
@@ -306,7 +328,8 @@ internal fun AcpBridge.pushChangesState(chatId: String, state: ChangesState, has
 
 /**
  * When the agent modifies files in a live (non-replay) tool call, remove those paths from
- * processedFiles so they show again in Edits. Only called when isReplay == false.
+ * processed file watermarks so the next edit to the same path is treated as new work.
+ * Only called when isReplay == false.
  */
 internal fun AcpBridge.removeProcessedFilesForDiffs(chatId: String, content: List<ToolCallContent>?) {
     val sessionId = service.sessionId(chatId) ?: return

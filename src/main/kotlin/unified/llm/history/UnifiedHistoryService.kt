@@ -41,8 +41,14 @@ data class SessionMeta(
 
 data class SessionChangesData(
     val baseToolCallIndex: Int = 0,
-    val processedFiles: List<String> = emptyList(),
+    val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
+)
+
+@Serializable
+data class ProcessedFileState(
+    val filePath: String,
+    val toolCallIndex: Int
 )
 
 @Serializable
@@ -93,7 +99,7 @@ data class DeleteConversationsResult(
 @Serializable
 private data class HistorySessionChangesEntry(
     val baseToolCallIndex: Int = 0,
-    val processedFiles: List<String> = emptyList(),
+    val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )
 
@@ -787,7 +793,7 @@ object UnifiedHistoryService {
         val changes = session.changes ?: return null
         return SessionChangesData(
             baseToolCallIndex = changes.baseToolCallIndex,
-            processedFiles = changes.processedFiles,
+            processedFileStates = changes.processedFileStates,
             updatedAt = changes.updatedAt
         )
     }
@@ -797,14 +803,14 @@ object UnifiedHistoryService {
         sessionId: String,
         adapterName: String,
         baseToolCallIndex: Int,
-        processedFiles: List<String>
+        processedFileStates: List<ProcessedFileState>
     ): Boolean {
         val updatedAt = Instant.now().toEpochMilli()
         return updateSessionEntry(projectPath, sessionId, adapterName) { session ->
             session.copy(
                 changes = HistorySessionChangesEntry(
                     baseToolCallIndex = baseToolCallIndex,
-                    processedFiles = processedFiles,
+                    processedFileStates = processedFileStates,
                     updatedAt = updatedAt
                 )
             )
@@ -1223,9 +1229,3 @@ object UnifiedHistoryService {
         updated
     }
 }
-
-
-
-
-
-

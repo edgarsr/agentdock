@@ -9,7 +9,13 @@ import java.nio.charset.StandardCharsets
 
 data class UndoOperation(val oldText: String, val newText: String)
 
-data class UndoResult(val success: Boolean, val message: String)
+data class UndoFileResult(val filePath: String, val success: Boolean, val message: String)
+
+data class UndoResult(
+    val success: Boolean,
+    val message: String,
+    val fileResults: List<UndoFileResult> = emptyList()
+)
 
 object UndoFileHandler {
 
@@ -36,7 +42,7 @@ object UndoFileHandler {
     }
 
     /**
-     * Undo a single file: for status='A' delete it; for status='M' reverse-apply edits.
+     * Undo a single file according to the same reconstructed "before agent" snapshot used by the diff view.
      */
     fun undoSingleFile(
         project: Project,
@@ -46,98 +52,89 @@ object UndoFileHandler {
     ): UndoResult {
         val resolvedPath = resolveFilePath(project, filePath)
         if (!isPathSafe(project, resolvedPath)) {
-            return UndoResult(false, "Path outside project: $filePath")
+            return UndoResult(
+                success = false,
+                message = "Path outside project: $filePath",
+                fileResults = listOf(UndoFileResult(filePath = filePath, success = false, message = "Path outside project"))
+            )
         }
 
-        return try {
-            if (status == "A") {
-                deleteFile(project, resolvedPath)
-            } else {
-                reverseEdits(project, resolvedPath, operations)
-            }
+        val fileResult = try {
+            restoreBeforeSnapshot(project, resolvedPath, status, operations)
         } catch (e: Exception) {
-            UndoResult(false, "Error: ${e.message}")
+            UndoFileResult(filePath = filePath, success = false, message = "Error: ${e.message}")
         }
+        return UndoResult(
+            success = fileResult.success,
+            message = fileResult.message,
+            fileResults = listOf(fileResult)
+        )
     }
 
     fun undoAllFiles(
         project: Project,
         files: List<Triple<String, String, List<UndoOperation>>>
     ): UndoResult {
-        val errors = mutableListOf<String>()
+        val fileResults = mutableListOf<UndoFileResult>()
         for ((path, status, ops) in files) {
-            val result = undoSingleFile(project, path, status, ops)
-            if (!result.success) errors.add("$path: ${result.message}")
+            val result = try {
+                restoreBeforeSnapshot(project, resolveFilePath(project, path), status, ops)
+            } catch (e: Exception) {
+                UndoFileResult(filePath = path, success = false, message = "Error: ${e.message}")
+            }
+            fileResults += result.copy(filePath = path)
         }
-        return if (errors.isEmpty()) {
-            UndoResult(true, "All files reverted")
-        } else {
-            UndoResult(false, errors.joinToString("; "))
-        }
+        val failed = fileResults.filterNot { it.success }
+        return UndoResult(
+            success = failed.isEmpty(),
+            message = if (failed.isEmpty()) {
+                "All files reverted"
+            } else {
+                failed.joinToString("; ") { "${it.filePath}: ${it.message}" }
+            },
+            fileResults = fileResults
+        )
     }
 
-    private fun deleteFile(project: Project, filePath: String): UndoResult {
+    private fun deleteFile(project: Project, filePath: String): UndoFileResult {
         val file = File(filePath)
-        if (!file.exists()) return UndoResult(true, "Already deleted")
+        if (!file.exists()) return UndoFileResult(filePath = filePath, success = true, message = "Already deleted")
 
         WriteCommandAction.runWriteCommandAction(project) {
             val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
             vf?.delete(this)
         }
-        return UndoResult(true, "Deleted $filePath")
+        return UndoFileResult(filePath = filePath, success = true, message = "Deleted $filePath")
     }
 
-    private fun reverseEdits(
+    private fun restoreBeforeSnapshot(
         project: Project,
         filePath: String,
+        status: String,
         operations: List<UndoOperation>
-    ): UndoResult {
+    ): UndoFileResult {
+        val snapshot = AgentChangeCalculator.buildSnapshot(project, filePath, status, operations)
+            ?: return UndoFileResult(filePath = filePath, success = false, message = "Could not rebuild diff snapshot")
+
+        if (status == "A" && snapshot.beforeContent.isEmpty()) {
+            return deleteFile(project, filePath)
+        }
+
         val file = File(filePath)
         val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
-            ?: return UndoResult(false, "File not found: $filePath")
-
-        // Always use current content from disk (VFS), not in-memory document which may be stale or null
-        val currentText = String(vf.contentsToByteArray(), vf.charset ?: StandardCharsets.UTF_8)
-        val reverted = applyReverseEditsInMemory(currentText, operations)
-            ?: return UndoResult(false, "Could not match content to revert")
+            ?: return UndoFileResult(filePath = filePath, success = false, message = "File not found: $filePath")
 
         WriteCommandAction.runWriteCommandAction(project) {
             val doc = FileDocumentManager.getInstance().getDocument(vf)
+            val restored = snapshot.beforeContent.replace("\r\n", "\n").replace("\r", "\n")
             if (doc != null) {
-                // Normalize line separators to LF for IntelliJ document
-                val normalizedReverted = reverted.replace("\r\n", "\n").replace("\r", "\n")
-                doc.setText(normalizedReverted)
+                doc.setText(restored)
                 FileDocumentManager.getInstance().saveDocument(doc)
             } else {
-                vf.setBinaryContent(reverted.toByteArray(StandardCharsets.UTF_8))
+                vf.setBinaryContent(restored.toByteArray(StandardCharsets.UTF_8))
             }
         }
-        return UndoResult(true, "Reverted $filePath")
-    }
-
-    /** Apply reverse of operations in memory. Returns null if any operation could not be applied. */
-    private fun applyReverseEditsInMemory(
-        text: String,
-        operations: List<UndoOperation>
-    ): String? {
-        var current = text
-        for (op in operations.reversed()) {
-            if (op.newText.isEmpty()) continue
-            val idx = current.indexOf(op.newText)
-            if (idx >= 0) {
-                current = current.substring(0, idx) + op.oldText + current.substring(idx + op.newText.length)
-            } else {
-                // Try with normalized line separators
-                val normalizedNew = op.newText.replace("\r\n", "\n").replace("\r", "\n")
-                val normalizedCurrent = current.replace("\r\n", "\n").replace("\r", "\n")
-                val normIdx = normalizedCurrent.indexOf(normalizedNew)
-                if (normIdx < 0) return null
-                val (start, len) = normalizedToOriginalRange(current, normIdx, normalizedNew.length)
-                if (start < 0 || len <= 0) return null
-                current = current.substring(0, start) + op.oldText + current.substring(start + len)
-            }
-        }
-        return current
+        return UndoFileResult(filePath = filePath, success = true, message = "Reverted $filePath")
     }
 
     /** Map (start index, length) in normalized string back to (start, length) in original. */

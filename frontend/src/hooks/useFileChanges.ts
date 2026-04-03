@@ -1,27 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { diff_match_patch, DIFF_INSERT, DIFF_DELETE } from 'diff-match-patch';
-import { ToolCallEvent, FileChangeSummary } from '../types/chat';
+import { ToolCallEvent, FileChangeSummary, ProcessedFileState } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayToolCallEvents } from '../utils/replay';
-
-const _dmp = new diff_match_patch();
-
-/**
- * Compute diff statistics (added/deleted lines) using diff-match-patch.
- * Consistent with EditBlock.tsx which uses the same library for rendering.
- */
-function computeDiffStats(oldString: string, newString: string): { additions: number; deletions: number } {
-  const diffs = _dmp.diff_main(oldString || '', newString || '');
-  _dmp.diff_cleanupSemantic(diffs);
-  let additions = 0;
-  let deletions = 0;
-  for (const [op, text] of diffs) {
-    const lineCount = (text.match(/\n/g) || []).length + (text.endsWith('\n') ? 0 : 1);
-    if (op === DIFF_INSERT) additions += lineCount;
-    else if (op === DIFF_DELETE) deletions += lineCount;
-  }
-  return { additions, deletions };
-}
 
 /**
  * Tool call statuses that confirm the operation was successfully applied.
@@ -58,16 +38,18 @@ export function useFileChanges(
   sessionId: string,
   adapterName: string
 ) {
+  const [undoErrorMessage, setUndoErrorMessage] = useState<string | null>(null);
+  const [statsByFilePath, setStatsByFilePath] = useState<Record<string, { additions: number; deletions: number }>>({});
   const [toolCallEvents, setToolCallEvents] = useState<ToolCallEvent[]>([]);
-  const [processedFiles, setProcessedFiles] = useState<string[]>([]);
+  const [processedFileStates, setProcessedFileStates] = useState<ProcessedFileState[]>([]);
   const [baseToolCallIndex, setBaseToolCallIndex] = useState(0);
   const [hasPluginEdits, setHasPluginEdits] = useState(false);
+  const [pendingUndoFilePaths, setPendingUndoFilePaths] = useState<string[] | null>(null);
   const initialHasPluginEditsRef = useRef<boolean | null>(null);
   const [loadedSessionKey, setLoadedSessionKey] = useState('');
   const toolCallEventsRef = useRef<ToolCallEvent[]>([]);
   toolCallEventsRef.current = toolCallEvents;
-  const processedFilesRef = useRef<string[]>([]);
-  processedFilesRef.current = processedFiles;
+  const fileChangesRef = useRef<FileChangeSummary[]>([]);
 
   // Load persisted state from backend on mount / session change
   useEffect(() => {
@@ -78,13 +60,15 @@ export function useFileChanges(
 
     // CRITICAL: Reset state when switching sessions to prevent old session data from contaminating new session
     // Reset refs IMMEDIATELY (synchronously) to prevent race conditions with event handlers
-    processedFilesRef.current = [];
     toolCallEventsRef.current = [];
 
-    setProcessedFiles([]);
+    setProcessedFileStates([]);
     setBaseToolCallIndex(0);
     setToolCallEvents([]);
+    setStatsByFilePath({});
     setHasPluginEdits(false);
+    setPendingUndoFilePaths(null);
+    setUndoErrorMessage(null);
     initialHasPluginEditsRef.current = null;
 
     try {
@@ -129,7 +113,7 @@ export function useFileChanges(
       }
 
       setBaseToolCallIndex(newBaseIndex);
-      setProcessedFiles(state.processedFiles);
+      setProcessedFileStates(state.processedFileStates);
       setHasPluginEdits(hasEdits);
     });
 
@@ -137,7 +121,7 @@ export function useFileChanges(
       if (e.detail.chatId !== conversationId) return;
       const payload = e.detail.payload;
       if (payload.diffs && payload.diffs.length > 0) {
-        // Backend removes from processedFiles only for live (non-replay) tool calls and pushes state via onChangesState
+        // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
         setToolCallEvents((prev) => [...prev, payload]);
       }
     });
@@ -148,7 +132,7 @@ export function useFileChanges(
       const hasDiffs = payload.diffs && payload.diffs.length > 0;
 
       if (hasDiffs) {
-        // Backend removes from processedFiles only for live (non-replay) tool calls and pushes state via onChangesState
+        // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
         setToolCallEvents((prevEvents) => {
           const existingIdx = prevEvents.findIndex((ev) => ev.toolCallId === payload.toolCallId);
           if (existingIdx >= 0) {
@@ -186,12 +170,12 @@ export function useFileChanges(
     };
   }, [conversationId, sessionId, adapterName]);
 
-  // Compute file changes from accumulated tool call events
-  const fileChanges = useMemo<FileChangeSummary[]>(() => {
+  // Build per-file operation chains from accumulated tool call events.
+  const baseFileChanges = useMemo<FileChangeSummary[]>(() => {
     const changesMap = new Map<string, FileChangeSummary>();
     const eventsToProcess = toolCallEvents.slice(baseToolCallIndex);
 
-    for (const event of eventsToProcess) {
+    for (const [offset, event] of eventsToProcess.entries()) {
       // Only show tool calls that have been explicitly confirmed as applied.
       // Events with no status yet (awaiting permission) or failed/denied events are excluded.
       if (!event.status || !APPLIED_STATUSES.has(event.status)) continue;
@@ -199,39 +183,82 @@ export function useFileChanges(
       for (const diff of event.diffs) {
         const filePath = diff.path;
         const fileName = filePath.split(/[\\/]/).pop() || filePath;
-        const isNew = diff.oldText === null || diff.oldText === '';
+        const isNew = diff.oldText === null;
         const status: 'A' | 'M' = isNew ? 'A' : 'M';
 
+        const eventIndex = baseToolCallIndex + offset;
         const existing = changesMap.get(filePath);
         if (existing) {
-          // Add operation to existing file changes
           existing.operations.push({ oldText: diff.oldText || '', newText: diff.newText });
+          existing.latestToolCallIndex = eventIndex;
           if (status === 'A' && existing.status !== 'A') existing.status = 'M';
-
-          // Recompute total diff from first oldText to last newText
-          const firstOldText = existing.operations[0].oldText;
-          const lastNewText = existing.operations[existing.operations.length - 1].newText;
-          const { additions, deletions } = computeDiffStats(firstOldText, lastNewText);
-          existing.additions = additions;
-          existing.deletions = deletions;
         } else {
-          const { additions, deletions } = computeDiffStats(diff.oldText || '', diff.newText);
           changesMap.set(filePath, {
             filePath,
             fileName,
             status,
-            additions,
-            deletions,
+            additions: 0,
+            deletions: 0,
             operations: [{ oldText: diff.oldText || '', newText: diff.newText }],
+            latestToolCallIndex: eventIndex,
           });
         }
       }
     }
 
     return Array.from(changesMap.values()).filter(
-      (fc) => !processedFiles.some(pf => pathsMatch(pf, fc.filePath))
+      (fc) => !processedFileStates.some(
+        (processed) => pathsMatch(processed.filePath, fc.filePath) && processed.toolCallIndex >= fc.latestToolCallIndex
+      )
     );
-  }, [toolCallEvents, baseToolCallIndex, processedFiles]);
+  }, [toolCallEvents, baseToolCallIndex, processedFileStates]);
+
+  useEffect(() => {
+    if (baseFileChanges.length === 0) {
+      setStatsByFilePath({});
+      return;
+    }
+
+    let cancelled = false;
+    ACPBridge.computeFileChangeStats(baseFileChanges.map((fc) => ({
+      filePath: fc.filePath,
+      status: fc.status,
+      operations: fc.operations,
+    })))
+      .then((result) => {
+        if (cancelled) return;
+        const nextStats: Record<string, { additions: number; deletions: number }> = {};
+        result.files.forEach((file) => {
+          nextStats[file.filePath] = {
+            additions: file.additions,
+            deletions: file.deletions,
+          };
+        });
+        setStatsByFilePath(nextStats);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[useFileChanges] Failed to compute file change stats:', err);
+          setStatsByFilePath({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseFileChanges]);
+
+  const fileChanges = useMemo<FileChangeSummary[]>(() => {
+    return baseFileChanges.map((fc) => {
+      const stats = statsByFilePath[fc.filePath];
+        return {
+          ...fc,
+          additions: stats?.additions ?? 0,
+          deletions: stats?.deletions ?? 0,
+        };
+    });
+  }, [baseFileChanges, statsByFilePath]);
+  fileChangesRef.current = fileChanges;
 
   const totalAdditions = useMemo(() => fileChanges.reduce((sum, fc) => sum + fc.additions, 0), [fileChanges]);
   const totalDeletions = useMemo(() => fileChanges.reduce((sum, fc) => sum + fc.deletions, 0), [fileChanges]);
@@ -248,11 +275,20 @@ export function useFileChanges(
     );
   }, []);
 
+  const upsertProcessedFileState = useCallback((filePath: string, toolCallIndex: number) => {
+    setProcessedFileStates((prev) => {
+      const next = prev.filter((processed) => !pathsMatch(processed.filePath, filePath));
+      next.push({ filePath, toolCallIndex });
+      return next;
+    });
+  }, []);
+
   const handleUndoFile = useCallback((filePath: string) => {
     const fc = fileChanges.find((f) => f.filePath === filePath);
     if (!fc) return;
 
     if (window.__undoFile) {
+      setPendingUndoFilePaths([fc.filePath]);
       window.__undoFile(JSON.stringify({
         chatId: conversationId,
         filePath: fc.filePath,
@@ -260,20 +296,11 @@ export function useFileChanges(
         operations: fc.operations,
       }));
     }
-
-    if (window.__processFile && sessionId && adapterName) {
-      window.__processFile(JSON.stringify({ sessionId, adapterName, filePath }));
-      // Update local React state immediately so file disappears from UI (avoid duplicates with pathsMatch)
-      setProcessedFiles((prev) =>
-        prev.some(pf => pathsMatch(pf, filePath)) ? prev : [...prev, filePath]
-      );
-    }
-    // Remove this file's diffs from events so old ops won't be re-counted
-    removeDiffsForFiles(new Set([filePath]));
-  }, [conversationId, sessionId, adapterName, fileChanges, removeDiffsForFiles]);
+  }, [conversationId, fileChanges]);
 
   const handleUndoAllFiles = useCallback(() => {
     if (window.__undoAllFiles) {
+      setPendingUndoFilePaths(fileChanges.map((fc) => fc.filePath));
       window.__undoAllFiles(JSON.stringify({
         chatId: conversationId,
         files: fileChanges.map((fc) => ({
@@ -283,37 +310,24 @@ export function useFileChanges(
         })),
       }));
     }
-
-    const allPaths = new Set(fileChanges.map((fc) => fc.filePath));
-    const allPathsArray: string[] = [];
-    for (const fc of fileChanges) {
-      if (window.__processFile && sessionId && adapterName) {
-        window.__processFile(JSON.stringify({ sessionId, adapterName, filePath: fc.filePath }));
-        allPathsArray.push(fc.filePath);
-      }
-    }
-    // Update local React state immediately (avoid duplicates with pathsMatch)
-    if (allPathsArray.length > 0) {
-      setProcessedFiles((prev) => {
-        const newFiles = allPathsArray.filter(fp => !prev.some(pf => pathsMatch(pf, fp)));
-        return newFiles.length > 0 ? [...prev, ...newFiles] : prev;
-      });
-    }
-    // Remove all files' diffs from events
-    removeDiffsForFiles(allPaths);
-  }, [conversationId, sessionId, adapterName, fileChanges, removeDiffsForFiles]);
+  }, [conversationId, fileChanges]);
 
   const handleKeepFile = useCallback((filePath: string) => {
+    const fc = fileChanges.find((f) => f.filePath === filePath);
+    if (!fc) return;
+
     if (window.__processFile && sessionId && adapterName) {
-      window.__processFile(JSON.stringify({ sessionId, adapterName, filePath }));
-      // Update local React state immediately so file disappears from UI (avoid duplicates with pathsMatch)
-      setProcessedFiles((prev) =>
-        prev.some(pf => pathsMatch(pf, filePath)) ? prev : [...prev, filePath]
-      );
+      window.__processFile(JSON.stringify({
+        sessionId,
+        adapterName,
+        filePath,
+        toolCallIndex: String(fc.latestToolCallIndex),
+      }));
+      upsertProcessedFileState(filePath, fc.latestToolCallIndex);
     }
     // Remove this file's diffs from events so old ops won't be re-counted
     removeDiffsForFiles(new Set([filePath]));
-  }, [sessionId, adapterName, removeDiffsForFiles]);
+  }, [sessionId, adapterName, fileChanges, removeDiffsForFiles, upsertProcessedFileState]);
 
   const handleKeepAll = useCallback(() => {
     if (window.__keepAll && sessionId && adapterName) {
@@ -324,14 +338,58 @@ export function useFileChanges(
       }));
     }
     setBaseToolCallIndex(toolCallEvents.length);
-    setProcessedFiles([]);
+    setProcessedFileStates([]);
   }, [sessionId, adapterName, toolCallEvents.length]);
+
+  useEffect(() => {
+    const unsubUndoResult = ACPBridge.onUndoResult((e) => {
+      if (e.detail.chatId !== conversationId) return;
+      if (!pendingUndoFilePaths || pendingUndoFilePaths.length === 0) return;
+
+      const successfulFilePaths = e.detail.result.fileResults
+        .filter((fileResult) => fileResult.success)
+        .map((fileResult) => fileResult.filePath);
+      const failedFileResults = e.detail.result.fileResults.filter((fileResult) => !fileResult.success);
+
+      if (successfulFilePaths.length > 0) {
+        const undoPaths = new Set(successfulFilePaths);
+        for (const filePath of successfulFilePaths) {
+          const fc = fileChangesRef.current.find((file) => pathsMatch(file.filePath, filePath));
+          if (!fc || !window.__processFile || !sessionId || !adapterName) continue;
+          window.__processFile(JSON.stringify({
+            sessionId,
+            adapterName,
+            filePath: fc.filePath,
+            toolCallIndex: String(fc.latestToolCallIndex),
+          }));
+          upsertProcessedFileState(fc.filePath, fc.latestToolCallIndex);
+        }
+        removeDiffsForFiles(undoPaths);
+      }
+
+      if (failedFileResults.length > 0) {
+        setUndoErrorMessage(failedFileResults
+          .map((fileResult) => `${fileResult.filePath}: ${fileResult.message}`)
+          .join('\n'));
+      } else if (!e.detail.result.success) {
+        setUndoErrorMessage(e.detail.result.message);
+      }
+
+      setPendingUndoFilePaths(null);
+    });
+
+    return () => {
+      unsubUndoResult();
+    };
+  }, [conversationId, sessionId, adapterName, pendingUndoFilePaths, removeDiffsForFiles, upsertProcessedFileState]);
 
   return {
     hasPluginEdits: effectiveHasPluginEdits,
     fileChanges,
     totalAdditions,
     totalDeletions,
+    undoErrorMessage,
+    clearUndoError: () => setUndoErrorMessage(null),
     handleUndoFile,
     handleUndoAllFiles,
     handleKeepFile,

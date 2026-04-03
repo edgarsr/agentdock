@@ -5,13 +5,16 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.*
+import kotlinx.serialization.decodeFromString
+import unified.llm.changes.AgentChangeCalculator
 import unified.llm.changes.AgentDiffViewer
 import unified.llm.changes.ChangesState
 import unified.llm.changes.ChangesStateService
 import unified.llm.changes.UndoFileHandler
 import unified.llm.changes.UndoOperation
+import unified.llm.history.UnifiedHistoryService
 import java.io.File
 
 
@@ -82,8 +85,15 @@ internal fun AcpBridge.installFileChangeQueries() {
                 val sessionId = obj["sessionId"]?.jsonPrimitive?.content ?: ""
                 val adapterName = obj["adapterName"]?.jsonPrimitive?.content ?: ""
                 val filePath = obj["filePath"]?.jsonPrimitive?.content ?: ""
-                if (sessionId.isNotEmpty() && adapterName.isNotEmpty() && filePath.isNotEmpty()) {
-                    ChangesStateService.addProcessedFile(service.project.basePath.orEmpty(), sessionId, adapterName, filePath)
+                val toolCallIndex = obj["toolCallIndex"]?.jsonPrimitive?.content?.toIntOrNull()
+                if (sessionId.isNotEmpty() && adapterName.isNotEmpty() && filePath.isNotEmpty() && toolCallIndex != null) {
+                    ChangesStateService.markFileProcessed(
+                        service.project.basePath.orEmpty(),
+                        sessionId,
+                        adapterName,
+                        filePath,
+                        toolCallIndex
+                    )
                 }
             } catch (e: Exception) {
             }
@@ -136,6 +146,34 @@ internal fun AcpBridge.installFileChangeQueries() {
                     pushChangesState(chatId, state ?: ChangesState(sessionId, adapterName), hasPluginEdits)
                 }
             } catch (e: Exception) {
+            }
+            JBCefJSQuery.Response("ok")
+        }
+    }
+
+    computeFileChangeStatsQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+        addHandler { payload ->
+            try {
+                val request = adapterJson.decodeFromString<FileChangeStatsRequestPayload>(payload ?: "{}")
+                if (request.requestId.isNotBlank()) {
+                    val files = request.files.mapNotNull { file ->
+                        val operations = file.operations.map { UndoOperation(oldText = it.oldText, newText = it.newText) }
+                        AgentChangeCalculator.computeFileStats(
+                            project = service.project,
+                            filePath = file.filePath,
+                            status = file.status,
+                            operations = operations
+                        )?.let {
+                            FileChangeStatsPayload(
+                                filePath = it.filePath,
+                                additions = it.additions,
+                                deletions = it.deletions
+                            )
+                        }
+                    }
+                    pushFileChangeStats(FileChangeStatsResultPayload(requestId = request.requestId, files = files))
+                }
+            } catch (_: Exception) {
             }
             JBCefJSQuery.Response("ok")
         }

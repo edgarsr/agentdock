@@ -1,6 +1,7 @@
 package unified.llm.changes
 
 import kotlinx.serialization.Serializable
+import unified.llm.history.ProcessedFileState
 import unified.llm.history.UnifiedHistoryService
 import java.time.Instant
 
@@ -9,7 +10,7 @@ data class ChangesState(
     val sessionId: String,
     val adapterName: String,
     val baseToolCallIndex: Int = 0,
-    val processedFiles: List<String> = emptyList(),
+    val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )
 
@@ -41,7 +42,7 @@ object ChangesStateService {
                 sessionId = sessionId,
                 adapterName = adapterName,
                 baseToolCallIndex = current.baseToolCallIndex,
-                processedFiles = current.processedFiles,
+                processedFileStates = current.processedFileStates,
                 updatedAt = current.updatedAt
             )
         }
@@ -54,7 +55,7 @@ object ChangesStateService {
             sessionId = state.sessionId,
             adapterName = state.adapterName,
             baseToolCallIndex = state.baseToolCallIndex,
-            processedFiles = state.processedFiles
+            processedFileStates = state.processedFileStates
         )
     }
 
@@ -66,27 +67,35 @@ object ChangesStateService {
         return created
     }
 
-    fun addProcessedFile(projectPath: String, sessionId: String, adapterName: String, filePath: String) {
+    fun markFileProcessed(
+        projectPath: String,
+        sessionId: String,
+        adapterName: String,
+        filePath: String,
+        toolCallIndex: Int
+    ) {
         val current = loadState(projectPath, sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
-        // Use pathsMatch to avoid duplicates with different path formats (relative vs absolute)
-        if (current.processedFiles.any { pathsMatch(it, filePath) }) return
-        saveState(projectPath, current.copy(processedFiles = current.processedFiles + filePath))
+        val updated = current.processedFileStates
+            .filterNot { pathsMatch(it.filePath, filePath) } + ProcessedFileState(
+            filePath = filePath,
+            toolCallIndex = toolCallIndex
+        )
+        saveState(projectPath, current.copy(processedFileStates = updated))
     }
 
     fun removeProcessedFiles(projectPath: String, sessionId: String, adapterName: String, filePaths: List<String>) {
         val current = loadState(projectPath, sessionId, adapterName) ?: return
-        // Use pathsMatch for cross-platform absolute/relative comparison
-        val updated = current.processedFiles.filter { processedPath ->
-            !filePaths.any { pathsMatch(it, processedPath) }
+        val updated = current.processedFileStates.filter { processedState ->
+            !filePaths.any { pathsMatch(it, processedState.filePath) }
         }
-        if (updated.size != current.processedFiles.size) {
-            saveState(projectPath, current.copy(processedFiles = updated))
+        if (updated.size != current.processedFileStates.size) {
+            saveState(projectPath, current.copy(processedFileStates = updated))
         }
     }
 
     fun setBaseIndex(projectPath: String, sessionId: String, adapterName: String, index: Int) {
         val current = loadState(projectPath, sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
-        saveState(projectPath, current.copy(baseToolCallIndex = index, processedFiles = emptyList()))
+        saveState(projectPath, current.copy(baseToolCallIndex = index, processedFileStates = emptyList()))
     }
 
     fun deleteState(projectPath: String, sessionId: String, adapterName: String) {

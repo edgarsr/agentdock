@@ -42,6 +42,7 @@ class AcpBridge(
     internal var keepAllQuery: JBCefJSQuery? = null
     internal var removeProcessedFilesQuery: JBCefJSQuery? = null
     internal var getChangesStateQuery: JBCefJSQuery? = null
+    internal var computeFileChangeStatsQuery: JBCefJSQuery? = null
     internal var showDiffQuery: JBCefJSQuery? = null
     internal var openFileQuery: JBCefJSQuery? = null
     internal var openUrlQuery: JBCefJSQuery? = null

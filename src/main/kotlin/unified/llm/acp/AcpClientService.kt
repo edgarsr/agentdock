@@ -320,7 +320,6 @@ class AcpClientService private constructor(val project: Project) {
         }
 
         override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
-            val notificationType = notification::class.simpleName ?: "Unknown"
             val ownerChatId = replayOwnerBySessionId[sessionId]
             var matchingContexts = if (ownerChatId != null) {
                 sessions[ownerChatId]?.takeIf { it.allowReplayDelivery }?.let { listOf(it) } ?: emptyList()
@@ -343,9 +342,6 @@ class AcpClientService private constructor(val project: Project) {
                 if (matchingContexts.isEmpty()) {
                     matchingContexts = sessions.values.filter { it.allowReplayDelivery && it.sharedProcess?.adapterName == adapterName }
                 }
-                if (matchingContexts.isNotEmpty()) {
-                    replayOwnerBySessionId[sessionId] = matchingContexts.first().chatId
-                }
             }
             if (matchingContexts.isEmpty()) {
                 return
@@ -360,7 +356,10 @@ class AcpClientService private constructor(val project: Project) {
                     return@forEach
                 }
 
-                val isReplayDelivery = replayOwnerBySessionId[sessionId] == context.chatId
+                val isReplayDelivery =
+                    ownerChatId != null &&
+                    ownerChatId == context.chatId &&
+                    context.statusRef.get() == Status.Initializing
                 handler.invoke(context.chatId, notification, isReplayDelivery, _meta)
             }
         }

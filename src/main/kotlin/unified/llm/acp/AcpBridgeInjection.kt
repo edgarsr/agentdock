@@ -34,6 +34,7 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val keepAllInject = keepAllQuery?.inject("payload") ?: ""
     val removeProcessedFilesInject = removeProcessedFilesQuery?.inject("payload") ?: ""
     val getChangesStateInject = getChangesStateQuery?.inject("payload") ?: ""
+    val computeFileChangeStatsInject = computeFileChangeStatsQuery?.inject("payload") ?: ""
     val showDiffInject = showDiffQuery?.inject("payload") ?: ""
     val openFileInject = openFileQuery?.inject("payload") ?: ""
     val openUrlInject = openUrlQuery?.inject("url") ?: ""
@@ -122,6 +123,9 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__getChangesState = function(payload) {
                 try { $getChangesStateInject } catch (e) { }
             };
+            window.__computeFileChangeStats = function(payload) {
+                try { $computeFileChangeStatsInject } catch (e) { }
+            };
             window.__showDiff = function(payload) {
                 try { $showDiffInject } catch (e) { }
             };
@@ -175,6 +179,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__onPlan = window.__onPlan || function(chatId, payload) {};
         window.__onUndoResult = window.__onUndoResult || function(chatId, result) {};
         window.__onChangesState = window.__onChangesState || function(chatId, state) {};
+        window.__onFileChangeStats = window.__onFileChangeStats || function(payload) {};
         window.__onConversationTranscriptSaved = window.__onConversationTranscriptSaved || function(payload) {};
         window.__onConversationReplayLoaded = window.__onConversationReplayLoaded || function(payload) {};
 
@@ -196,6 +201,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__continueConversationWithSession = window.__continueConversationWithSession || function(payload) {};
         window.__saveConversationTranscript = window.__saveConversationTranscript || function(payload) {};
         window.__loadHistoryConversation = window.__loadHistoryConversation || function(chatId, projectPath, conversationId) {};
+        window.__computeFileChangeStats = window.__computeFileChangeStats || function(payload) {};
     """.trimIndent()
     cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
 }

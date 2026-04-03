@@ -7,6 +7,7 @@ import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import PermissionBar from './PermissionBar';
 import FileChangesPanel from './FileChangesPanel';
+import ConfirmationModal from '../ConfirmationModal';
 import { buildConversationHandoffFromTranscriptFile, buildConversationHandoffSaveFailureContext, prepareConversationHandoff } from '../../utils/conversationHandoff';
 
 interface ChatSessionProps {
@@ -71,6 +72,8 @@ export default function ChatSessionView({
     fileChanges,
     totalAdditions,
     totalDeletions,
+    undoErrorMessage,
+    clearUndoError,
     handleUndoFile,
     handleUndoAllFiles,
     handleKeepFile,
@@ -425,6 +428,17 @@ export default function ChatSessionView({
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={undoErrorMessage !== null}
+        title="Undo Failed"
+        message={undoErrorMessage || ''}
+        confirmLabel="OK"
+        confirmVariant="danger"
+        showCancelButton={false}
+        onConfirm={clearUndoError}
+        onCancel={clearUndoError}
+      />
     </div>
   );
 }
