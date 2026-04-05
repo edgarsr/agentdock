@@ -13,7 +13,7 @@ import {
   ToolCallEntry,
   ToolCallEvent,
 } from '../types/chat';
-import { appendToolOutput, buildToolCallEntry, extractResultTexts, safeParseJson, truncateToolOutput } from './toolCallUtils';
+import { appendToolOutput, buildToolCallEntry, extractResultTexts, replaceToolOutput, safeParseJson } from './toolCallUtils';
 
 const IMPACTFUL_KEYWORDS = [
   'rm', 'mv', 'cp', 'mkdir', 'touch', 'chmod', 'chown',
@@ -324,9 +324,10 @@ function applyToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
         locations: json.locations || block.entry.locations,
         content: nextContent || block.entry.content,
       };
+      const currentKind = updatedBaseEntry.kind || block.entry.kind || json.kind;
       const resultText = extractResultTexts(json);
       if (resultText) {
-        updatedBaseEntry.result = appendToolOutput(updatedBaseEntry.result, resultText).text;
+        updatedBaseEntry.result = appendToolOutput(updatedBaseEntry.result, resultText, undefined, currentKind).text;
       }
       const replacements = createToolCallBlocks(updatedBaseEntry);
       const existingBlocks = matchingIndexes.map((index) => blocks[index] as ToolCallBlock);
@@ -356,9 +357,10 @@ function applyToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
         if (chunk.toolRawJson) entry.rawJson = chunk.toolRawJson;
         if (json.locations) entry.locations = json.locations;
         if (nextContent) entry.content = nextContent;
+        const currentKind = nextKind || entry.kind || json.kind;
         const resultText = extractResultTexts(json);
         if (resultText) {
-          entry.result = appendToolOutput(entry.result, resultText).text;
+          entry.result = appendToolOutput(entry.result, resultText, undefined, currentKind).text;
         }
         entries[idx] = entry;
         blocks[i] = { ...block, entries };
@@ -370,7 +372,7 @@ function applyToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
   const entry = buildToolCallEntry(chunk);
   const resultText = extractResultTexts(json);
   if (resultText) {
-    entry.result = truncateToolOutput(resultText).text;
+    entry.result = replaceToolOutput(resultText, undefined, entry.kind || json.kind).text;
   }
   blocks.push(...createToolCallBlocks(entry));
 }

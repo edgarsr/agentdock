@@ -10,6 +10,7 @@ interface AssistantMessageProps {
   onImageClick: (src: string) => void;
   showBorder: boolean;
   agentIconPath?: string;
+  isActivePrompt?: boolean;
 }
 
 function formatDuration(seconds?: number): string | null {
@@ -39,13 +40,13 @@ function formatContextUsage(used?: number, size?: number): string | null {
   return size!.toLocaleString();
 }
 
-export const AssistantMessage = memo(({ message, onImageClick, showBorder, agentIconPath }: AssistantMessageProps) => {
+export const AssistantMessage = memo(({ message, onImageClick, showBorder, agentIconPath, isActivePrompt = false }: AssistantMessageProps) => {
   const renderContent = () => {
     if (message.contentBlocks && message.contentBlocks.length > 0) {
       return (
         <div className="flex flex-col">
           {message.contentBlocks.map((block, idx) => (
-            <ContentBlockRenderer key={idx} block={block} />
+            <ContentBlockRenderer key={idx} block={block} isActivePrompt={isActivePrompt} />
           ))}
         </div>
       );

@@ -11,17 +11,18 @@ import { MarkdownMessage } from '../MarkdownMessage';
 
 interface Props {
   block: RichContentBlock;
+  isActivePrompt?: boolean;
 }
 
-export const ContentBlockRenderer: React.FC<Props> = ({ block }) => {
+export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = false }) => {
   switch (block.type) {
     case 'text':
       return <MarkdownMessage content={block.text} />;
     case 'exploring':
-      return <ExploringBlock block={block} />;
+      return <ExploringBlock block={block} isActivePrompt={isActivePrompt} />;
     case 'tool_call':
       if (block.entry.kind === 'execute') {
-        return <ExecuteBlock block={block} />;
+        return <ExecuteBlock block={block} isActivePrompt={isActivePrompt} />;
       }
       if (block.entry.kind === 'think') {
         return <SubAgentBlock block={block} />;

@@ -17,7 +17,7 @@ import {
   isAgentRunnable
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
-import { safeParseJson, buildToolCallEntry, extractResultTexts, appendToolOutput, truncateToolOutput } from '../utils/toolCallUtils';
+import { safeParseJson, buildToolCallEntry, extractResultTexts, appendToolOutput, replaceToolOutput } from '../utils/toolCallUtils';
 import { buildConversationHandoffPromptPrefix } from '../utils/conversationHandoff';
 import { buildReplayMessages } from '../utils/replay';
 
@@ -78,6 +78,10 @@ function buildSplitToolCallId(toolCallId: string, pathOrIndex: string): string {
 
 function matchesToolCallId(entryId: string, toolCallId: string): boolean {
   return entryId === toolCallId || entryId.startsWith(`${toolCallId}${EDIT_SPLIT_SEPARATOR}`);
+}
+
+function isExecuteToolKind(kind?: string): boolean {
+  return (kind || '').toLowerCase() === 'execute';
 }
 
 function normalizeDiffEntry(item: Record<string, any>) {
@@ -484,9 +488,12 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
         locations: json.locations || b.entry.locations,
         content: nextContent || b.entry.content
       };
+      const currentKind = updatedBaseEntry.kind || b.entry.kind || json.kind;
       const resultText = extractResultTexts(json);
       if (resultText) {
-        const merged = appendToolOutput(updatedBaseEntry.result, resultText);
+        const merged = isExecuteToolKind(currentKind)
+          ? replaceToolOutput(resultText, undefined, currentKind)
+          : appendToolOutput(updatedBaseEntry.result, resultText, undefined, currentKind);
         updatedBaseEntry.result = merged.text;
       }
       const replacements = createToolCallBlocks(updatedBaseEntry, chunk.isReplay);
@@ -518,9 +525,12 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
         if (chunk.toolRawJson) e.rawJson = chunk.toolRawJson;
         if (json.locations) e.locations = json.locations;
         if (nextContent) e.content = nextContent;
+        const currentKind = nextKind || e.kind || json.kind;
         const resultText = extractResultTexts(json);
         if (resultText) {
-          const merged = appendToolOutput(e.result, resultText);
+          const merged = isExecuteToolKind(currentKind)
+            ? replaceToolOutput(resultText, undefined, currentKind)
+            : appendToolOutput(e.result, resultText, undefined, currentKind);
           e.result = merged.text;
         }
         const newEntries = [...exp.entries];
@@ -537,7 +547,7 @@ function handleToolCallUpdate(blocks: RichContentBlock[], chunk: ContentChunk) {
   const entry = buildToolCallEntry(chunk);
   const resultText = extractResultTexts(json);
   if (resultText) {
-    const merged = truncateToolOutput(resultText);
+    const merged = replaceToolOutput(resultText, undefined, entry.kind || json.kind);
     entry.result = merged.text;
   }
   if (!isExploringChunk(chunk)) {

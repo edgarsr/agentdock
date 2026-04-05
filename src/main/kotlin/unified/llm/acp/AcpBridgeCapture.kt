@@ -20,6 +20,10 @@ private val replayIgnoredUserCommandRegexes = replayIgnoredUserCommandTags.map {
     Regex("<$tag>.*?</$tag>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 }
 
+private const val MAX_STORED_EXECUTE_OUTPUT_LINES = 200
+private const val STORED_EXECUTE_OUTPUT_OMITTED_NOTICE =
+    "Command output omitted from stored history because it exceeded 200 lines."
+
 
 internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonObject>): String? {
     val projectPath = service.project.basePath.orEmpty()
@@ -226,14 +230,118 @@ internal fun AcpBridge.recordStoredEvent(
                 modeId = capture.currentModeId
             )
         }
-        prompt.events.add(event)
+        upsertStoredToolEvent(prompt.events, event)
         return
     }
 
     val capture = livePromptCaptures[chatId] ?: return
     synchronized(capture) {
         if (capture.closed) return
-        capture.events.add(event)
+        upsertStoredToolEvent(capture.events, event)
+    }
+}
+
+private fun AcpBridge.upsertStoredToolEvent(events: MutableList<JsonObject>, event: JsonObject) {
+    val merged = mergeStoredToolEvent(events, event)
+    if (merged == null) {
+        events.add(event)
+        return
+    }
+
+    val toolCallId = merged["toolCallId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+    val existingIndex = events.indexOfLast { existing ->
+        val existingType = existing["type"]?.jsonPrimitive?.contentOrNull
+        val existingToolCallId = existing["toolCallId"]?.jsonPrimitive?.contentOrNull
+        existingType == "tool_call" && existingToolCallId == toolCallId
+    }
+
+    if (existingIndex >= 0) {
+        events[existingIndex] = merged
+    } else {
+        events.add(merged)
+    }
+}
+
+private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: JsonObject): JsonObject? {
+    val role = event["role"]?.jsonPrimitive?.contentOrNull
+    if (role != "assistant") return null
+
+    val type = event["type"]?.jsonPrimitive?.contentOrNull
+    if (type != "tool_call" && type != "tool_call_update") return null
+
+    val toolCallId = event["toolCallId"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+    val incomingRawJson = event["toolRawJson"]?.jsonPrimitive?.contentOrNull ?: return null
+    val incomingRaw = parseStoredToolRawJson(incomingRawJson) ?: return null
+
+    val existing = events.lastOrNull { existingEvent ->
+        val existingType = existingEvent["type"]?.jsonPrimitive?.contentOrNull
+        val existingToolCallId = existingEvent["toolCallId"]?.jsonPrimitive?.contentOrNull
+        existingType == "tool_call" && existingToolCallId == toolCallId
+    }
+    val existingRaw = existing
+        ?.get("toolRawJson")
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.let(::parseStoredToolRawJson)
+
+    val mergedRaw = mergeJsonObjects(existingRaw, incomingRaw)
+    val mergedRawJson = storedToolRawJson(mergedRaw.toString())
+
+    val mergedKind = event["toolKind"]?.jsonPrimitive?.contentOrNull
+        ?: incomingRaw["kind"]?.jsonPrimitive?.contentOrNull
+        ?: existing?.get("toolKind")?.jsonPrimitive?.contentOrNull
+        ?: existingRaw?.get("kind")?.jsonPrimitive?.contentOrNull
+        ?: mergedRaw["kind"]?.jsonPrimitive?.contentOrNull
+        ?: ""
+
+    val mergedTitle = event["toolTitle"]?.jsonPrimitive?.contentOrNull
+        ?: incomingRaw["title"]?.jsonPrimitive?.contentOrNull
+        ?: existing?.get("toolTitle")?.jsonPrimitive?.contentOrNull
+        ?: existingRaw?.get("title")?.jsonPrimitive?.contentOrNull
+        ?: mergedRaw["title"]?.jsonPrimitive?.contentOrNull
+        ?: ""
+
+    val mergedStatus = event["toolStatus"]?.jsonPrimitive?.contentOrNull
+        ?: incomingRaw["status"]?.jsonPrimitive?.contentOrNull
+        ?: existing?.get("toolStatus")?.jsonPrimitive?.contentOrNull
+        ?: existingRaw?.get("status")?.jsonPrimitive?.contentOrNull
+        ?: mergedRaw["status"]?.jsonPrimitive?.contentOrNull
+        ?: ""
+
+    return buildJsonObject {
+        put("role", "assistant")
+        put("type", "tool_call")
+        put("toolCallId", toolCallId)
+        put("toolKind", mergedKind)
+        put("toolTitle", mergedTitle)
+        put("toolStatus", mergedStatus)
+        put("toolRawJson", mergedRawJson)
+    }
+}
+
+private fun parseStoredToolRawJson(rawJson: String): JsonObject? =
+    try {
+        Json.parseToJsonElement(rawJson).jsonObject
+    } catch (_: Exception) {
+        null
+    }
+
+private fun mergeJsonObjects(base: JsonObject?, patch: JsonObject): JsonObject {
+    if (base == null) return patch
+
+    return buildJsonObject {
+        val keys = linkedSetOf<String>()
+        keys.addAll(base.keys)
+        keys.addAll(patch.keys)
+        keys.forEach { key ->
+            val baseValue = base[key]
+            val patchValue = patch[key]
+            when {
+                patchValue == null -> put(key, baseValue!!)
+                baseValue is JsonObject && patchValue is JsonObject -> put(key, mergeJsonObjects(baseValue, patchValue))
+                else -> put(key, patchValue)
+            }
+        }
     }
 }
 
@@ -389,6 +497,9 @@ internal fun AcpBridge.buildStoredToolCallUpdateChunk(toolCallId: String, rawJso
 
 internal fun AcpBridge.storedToolRawJson(rawJson: String): String {
     val parsed = try { Json.parseToJsonElement(rawJson).jsonObject } catch (_: Exception) { null }
+    if (parsed != null && parsed["kind"]?.jsonPrimitive?.contentOrNull == "execute") {
+        return compactExecuteToolRawJsonForStorage(parsed).toString()
+    }
     return if (shouldPreserveToolRawJson(parsed)) {
         HistoryDiffCompactor.compactStoredToolRawJson(rawJson, Json)
     } else {
@@ -396,10 +507,11 @@ internal fun AcpBridge.storedToolRawJson(rawJson: String): String {
     }
 }
 
-internal fun AcpBridge.truncateStoredToolRawJson(rawJson: String, maxChars: Int = 2_000): String {
-    if (rawJson.length <= maxChars) return rawJson
-    val omitted = rawJson.length - maxChars
-    return rawJson.take(maxChars) + "\n\n[Stored history truncated; $omitted chars omitted]"
+internal fun AcpBridge.truncateStoredToolRawJson(rawJson: String, maxLines: Int = 200): String {
+    val lines = rawJson.split(Regex("\\r\\n|\\n|\\r"))
+    if (lines.size <= maxLines) return rawJson
+    val omitted = lines.size - maxLines
+    return lines.take(maxLines).joinToString("\n") + "\n\n[Stored history truncated; $omitted lines omitted]"
 }
 
 private fun shouldPreserveToolRawJson(parsed: JsonObject?): Boolean {
@@ -415,6 +527,87 @@ private fun shouldPreserveToolRawJson(parsed: JsonObject?): Boolean {
 
     return false
 }
+
+private fun compactExecuteToolRawJsonForStorage(parsed: JsonObject): JsonObject {
+    val exceedsLimit = executeOutputExceedsLimit(parsed)
+    if (!exceedsLimit) return parsed
+
+    return buildJsonObject {
+        parsed.forEach { (key, value) ->
+            when (key) {
+                "content" -> put(key, buildStoredExecuteNoticeContent())
+                "rawOutput" -> put(key, replaceExecuteRawOutputWithNotice(value as? JsonObject))
+                else -> put(key, value)
+            }
+        }
+        if (parsed["content"] == null) {
+            put("content", buildStoredExecuteNoticeContent())
+        }
+    }
+}
+
+private fun buildStoredExecuteNoticeContent(): JsonArray = buildJsonArray {
+    add(
+        buildJsonObject {
+            put("type", "content")
+            put(
+                "content",
+                buildJsonObject {
+                    put("type", "text")
+                    put("text", STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+                }
+            )
+        }
+    )
+}
+
+private fun replaceExecuteRawOutputWithNotice(rawOutput: JsonObject?): JsonObject {
+    if (rawOutput == null) {
+        return buildJsonObject {
+            put("formatted_output", STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+            put("aggregated_output", STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+            put("stdout", "")
+            put("stderr", "")
+        }
+    }
+
+    return buildJsonObject {
+        rawOutput.forEach { (key, value) ->
+            when (key) {
+                "formatted_output", "aggregated_output" -> put(key, STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+                "stdout", "stderr" -> put(key, "")
+                else -> put(key, value)
+            }
+        }
+        if (rawOutput["formatted_output"] == null) put("formatted_output", STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+        if (rawOutput["aggregated_output"] == null) put("aggregated_output", STORED_EXECUTE_OUTPUT_OMITTED_NOTICE)
+    }
+}
+
+private fun executeOutputExceedsLimit(parsed: JsonObject): Boolean {
+    val content = parsed["content"]?.jsonArray
+    if (content != null) {
+        content.forEach { item ->
+            val text = (item as? JsonObject)
+                ?.get("content")
+                ?.let { it as? JsonObject }
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?: (item as? JsonObject)?.get("text")?.jsonPrimitive?.contentOrNull
+            if (text != null && countLines(text) > MAX_STORED_EXECUTE_OUTPUT_LINES) {
+                return true
+            }
+        }
+    }
+
+    val rawOutput = parsed["rawOutput"] as? JsonObject
+    val outputTexts = listOf("formatted_output", "aggregated_output", "stdout", "stderr")
+        .mapNotNull { key -> rawOutput?.get(key)?.jsonPrimitive?.contentOrNull }
+    return outputTexts.any { text -> countLines(text) > MAX_STORED_EXECUTE_OUTPUT_LINES }
+}
+
+private fun countLines(text: String): Int = text.split(Regex("\\r\\n|\\n|\\r")).size
 
 private fun isDiffLikePayload(element: JsonElement): Boolean {
     val obj = element as? JsonObject ?: return false

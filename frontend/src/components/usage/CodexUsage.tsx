@@ -8,9 +8,9 @@ interface CodexWindow {
 interface CodexUsageData {
   authType?: 'subscription' | 'api_key';
   rate_limit?: {
-    primary_window: CodexWindow;
-    secondary_window: CodexWindow;
-  };
+    primary_window?: CodexWindow | null;
+    secondary_window?: CodexWindow | null;
+  } | null;
 }
 
 function formatResetAt(seconds: number): string {
@@ -40,6 +40,16 @@ function WindowLine({ label, window }: { label: string; window: CodexWindow }) {
   );
 }
 
+function isCodexWindow(value: unknown): value is CodexWindow {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.used_percent === 'number' && typeof candidate.reset_after_seconds === 'number';
+}
+
+function labelForWindow(window: CodexWindow): string {
+  return window.reset_after_seconds >= 24 * 60 * 60 ? '7 day limit' : '5 hour limit';
+}
+
 const AGENT_ID = 'codex';
 
 export function CodexUsage() {
@@ -52,7 +62,10 @@ export function CodexUsage() {
     return null;
   }
 
-  if (!usage?.rate_limit) {
+  const primaryWindow = isCodexWindow(usage?.rate_limit?.primary_window) ? usage.rate_limit!.primary_window : null;
+  const secondaryWindow = isCodexWindow(usage?.rate_limit?.secondary_window) ? usage.rate_limit!.secondary_window : null;
+
+  if (!primaryWindow && !secondaryWindow) {
     if (!usage?.authType) return null;
     const url = usage.authType === 'api_key' ? 'https://platform.openai.com/usage' : 'https://chatgpt.com/codex/settings/usage';
     return (
@@ -64,8 +77,8 @@ export function CodexUsage() {
 
   return (
     <div className="flex flex-col gap-0.5">
-      <WindowLine label="5 hour limit" window={usage.rate_limit.primary_window} />
-      <WindowLine label="7 day limit" window={usage.rate_limit.secondary_window} />
+      {primaryWindow && <WindowLine label={labelForWindow(primaryWindow)} window={primaryWindow} />}
+      {secondaryWindow && <WindowLine label={labelForWindow(secondaryWindow)} window={secondaryWindow} />}
     </div>
   );
 }

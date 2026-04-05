@@ -9,6 +9,7 @@ import { ExecuteBlock } from './ExecuteBlock';
 
 interface Props {
   block: ExploringBlockType;
+  isActivePrompt?: boolean;
 }
 
 function buildLabel(entries: ToolCallEntry[], isStreaming: boolean): string {
@@ -55,7 +56,7 @@ function buildLabel(entries: ToolCallEntry[], isStreaming: boolean): string {
   return `Explored${summary}`;
 }
 
-export const ExploringBlock: React.FC<Props> = ({ block }) => {
+export const ExploringBlock: React.FC<Props> = ({ block, isActivePrompt = false }) => {
   const [isExpanded, setIsExpanded] = useState(block.isStreaming);
   const wasStreamingRef = useRef(block.isStreaming);
 
@@ -99,7 +100,7 @@ export const ExploringBlock: React.FC<Props> = ({ block }) => {
           return <SearchActivity key={entry.toolCallId || i} entry={entry} />;
         }
         if (entry.kind === 'execute') {
-          return <ExecuteBlock key={entry.toolCallId || i} block={{ type: 'tool_call', entry, isReplay: block.isReplay }} />;
+          return <ExecuteBlock key={entry.toolCallId || i} block={{ type: 'tool_call', entry, isReplay: block.isReplay }} isActivePrompt={isActivePrompt} />;
         }
         return null;
       })}

@@ -236,6 +236,7 @@ function MessageList({
                 onImageClick={onImageClick} 
                 showBorder={!isLast}
                 agentIconPath={resolvedAgentIconPath}
+                isActivePrompt={Boolean(isSending) && isLast}
               />
             );
           }
