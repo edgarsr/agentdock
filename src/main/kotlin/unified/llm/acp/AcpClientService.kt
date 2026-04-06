@@ -247,6 +247,7 @@ class AcpClientService private constructor(val project: Project) {
         val activeModeIdRef = AtomicReference<String?>(null)
         @Volatile var lastHistoryLoadTime: Long = System.currentTimeMillis()
         @Volatile var allowReplayDelivery: Boolean = true
+        @Volatile var ignoreUpdatesUntilPrompt: Boolean = false
 
         val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<RequestPermissionResponse>>()
 
@@ -264,6 +265,7 @@ class AcpClientService private constructor(val project: Project) {
             activeModeIdRef.set(null)
             lastHistoryLoadTime = 0
             allowReplayDelivery = true
+            ignoreUpdatesUntilPrompt = false
             replayOwnerBySessionId.entries.removeIf { it.value == chatId }
             pendingRequests.values.forEach {
                 it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
@@ -353,14 +355,13 @@ class AcpClientService private constructor(val project: Project) {
                 }
 
                 val handler = sessionUpdateHandler
-                if (handler == null) {
+                if (handler == null || context.ignoreUpdatesUntilPrompt) {
                     return@forEach
                 }
 
                 val isReplayDelivery =
                     ownerChatId != null &&
-                    ownerChatId == context.chatId &&
-                    context.statusRef.get() == Status.Initializing
+                    ownerChatId == context.chatId
                 handler.invoke(context.chatId, notification, isReplayDelivery, _meta)
             }
         }
@@ -369,6 +370,9 @@ class AcpClientService private constructor(val project: Project) {
 }
 
 internal sealed interface QueuedSessionUpdate {
-    data class Notification(val notification: JsonRpcNotification) : QueuedSessionUpdate
+    data class Notification(
+        val notification: JsonRpcNotification,
+        val completed: CompletableDeferred<Unit>
+    ) : QueuedSessionUpdate
     data class Barrier(val completed: CompletableDeferred<Unit>) : QueuedSessionUpdate
 }

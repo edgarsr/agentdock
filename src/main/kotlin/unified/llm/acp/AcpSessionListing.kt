@@ -18,7 +18,7 @@ internal suspend fun AcpClientService.listHistorySessions(
     val sharedProc = activeProcesses[processKey(adapterInfo.id)]?.takeIf { it.isHealthy() } ?: return emptyList()
     val client = sharedProc.client ?: return emptyList()
     val expectedProjectPath = historyComparablePath(projectPath)
-    val requestedCwd = if (adapterInfo.id == "codex") null else resolveSessionCwd(projectPath)
+    val requestedCwd = if (adapterInfo.id == "codex" || adapterInfo.id == "github-copilot-cli") null else resolveSessionCwd(projectPath)
 
     return client.listSessions(cwd = requestedCwd).toList().mapNotNull { session ->
         val sessionProjectPath = historyComparablePath(session.cwd)

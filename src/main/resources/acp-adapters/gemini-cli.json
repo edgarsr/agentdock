@@ -34,7 +34,8 @@
   "patches": [
     "@patches/gemini/usage-config.patch",
     "@patches/gemini/usage-gemini.patch",
-    "@patches/gemini/usage-run.patch"
+    "@patches/gemini/usage-run.patch",
+    "@patches/gemini/load-session-await.patch"
   ],
   "cli": {
     "executable": {

@@ -87,6 +87,7 @@ let saveTranscriptCounter = 0;
 let audioTranscriptionCounter = 0;
 let fileChangeStatsCounter = 0;
 const availableCommandsByAdapter = new Map<string, AvailableCommand[]>();
+const pendingRpcMethodsById = new Map<string | number, string>();
 
 function nextSaveTranscriptRequestId(): string {
   saveTranscriptCounter += 1;
@@ -182,6 +183,29 @@ export const ACPBridge = {
           parsed = JSON.parse(payload.json);
         } catch (_) {}
         console.log('[ACP JSON]', payload.direction, parsed);
+
+        const message = parsed as Record<string, any> | null;
+        if (message && typeof message === 'object') {
+          const id = message.id;
+          const method = typeof message.method === 'string' ? message.method : null;
+
+          if (payload.direction === 'SENT' && id !== undefined && method) {
+            pendingRpcMethodsById.set(id, method);
+            if (method === 'session/load') {
+              console.log('[ACP TRACE] session/load started', { id, request: message });
+            }
+          }
+
+          if (payload.direction === 'RECEIVED' && id !== undefined) {
+            const pendingMethod = pendingRpcMethodsById.get(id);
+            if (pendingMethod === 'session/load') {
+              console.log('[ACP TRACE] session/load completed', { id, response: message });
+            }
+            if (pendingMethod) {
+              pendingRpcMethodsById.delete(id);
+            }
+          }
+        }
       } else if (payload.category === 'INTERNAL') {
         console.log('[ACP INTERNAL]', payload.json);
       }

@@ -614,10 +614,10 @@ export function useChatSession(
   const statusRef = useRef<string>('not started');
   const startTimeRef = useRef<number | null>(null);
   const historyLoadTimerRef = useRef<number | null>(null);
-  const replaySettleTimerRef = useRef<number | null>(null);
   const lastMetadataFingerprintRef = useRef<string>('');
   const allowMetadataUpdateRef = useRef(!historySession);
   const touchUpdatedAtRef = useRef(!historySession);
+  const ignoreReplayChunksRef = useRef(!!historySession);
 
   // Buffered chunk queue - chunks are collected here and flushed atomically
   const chunkBufferRef = useRef<ContentChunk[]>([]);
@@ -820,14 +820,8 @@ export function useChatSession(
     const unsubContent = ACPBridge.onContentChunk((e) => {
       const chunk = e.detail.chunk;
       if (chunk.chatId !== conversationId) return;
-      if (chunk.isReplay) {
-        if (replaySettleTimerRef.current !== null) {
-          window.clearTimeout(replaySettleTimerRef.current);
-        }
-        replaySettleTimerRef.current = window.setTimeout(() => {
-          replaySettleTimerRef.current = null;
-          setIsHistoryReplaying(false);
-        }, 60);
+      if (chunk.isReplay && ignoreReplayChunksRef.current) {
+        return;
       }
       enqueueChunk(chunk);
       if (!chunk.isReplay && chunk.type === 'prompt_done') {
@@ -839,10 +833,7 @@ export function useChatSession(
     const unsubConversationReplayLoaded = ACPBridge.onConversationReplayLoaded((e) => {
       const payload = e.detail.payload;
       if (payload.chatId !== conversationId) return;
-      if (replaySettleTimerRef.current !== null) {
-        window.clearTimeout(replaySettleTimerRef.current);
-        replaySettleTimerRef.current = null;
-      }
+      ignoreReplayChunksRef.current = true;
       chunkBufferRef.current = [];
       flushScheduledRef.current = false;
       setHistoryMessages(buildReplayMessages(payload.data));
@@ -860,17 +851,13 @@ export function useChatSession(
       }
 
       if (s === 'ready' || s === 'error') {
-        if (replaySettleTimerRef.current !== null) {
-          window.clearTimeout(replaySettleTimerRef.current);
-          replaySettleTimerRef.current = null;
-        }
         startTimeRef.current = null;
 
         // Flush any remaining buffered chunks through the same path as RAF flush.
         flushScheduledRef.current = false;
         applyBufferedChunks('status-ready');
 
-        if (!pendingPromptRef.current) {
+        if (!pendingPromptRef.current && !historySession) {
           setIsHistoryReplaying(false);
         }
       }
@@ -922,10 +909,6 @@ export function useChatSession(
       unsubSessionId();
       unsubMode();
       unsubPermission();
-      if (replaySettleTimerRef.current !== null) {
-        window.clearTimeout(replaySettleTimerRef.current);
-        replaySettleTimerRef.current = null;
-      }
     };
   }, [conversationId, enqueueChunk, applyBufferedChunks, consumeHandoff]);
 
@@ -956,6 +939,7 @@ export function useChatSession(
     setLiveMessages([]);
     setStatus('initializing');
     setIsHistoryReplaying(true);
+    ignoreReplayChunksRef.current = true;
 
     startedAgentIdRef.current = historySession.adapterName;
     startedModelIdRef.current = historySession.modelId || '';
@@ -964,10 +948,6 @@ export function useChatSession(
     if (historyLoadTimerRef.current !== null) {
       window.clearTimeout(historyLoadTimerRef.current);
       historyLoadTimerRef.current = null;
-    }
-    if (replaySettleTimerRef.current !== null) {
-      window.clearTimeout(replaySettleTimerRef.current);
-      replaySettleTimerRef.current = null;
     }
 
     historyLoadTimerRef.current = window.setTimeout(() => {

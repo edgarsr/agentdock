@@ -451,7 +451,10 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientSer
                     is QueuedSessionUpdate.Notification -> {
                         try {
                             original(entry.notification)
-                        } catch (_: Exception) {}
+                            entry.completed.complete(Unit)
+                        } catch (t: Throwable) {
+                            entry.completed.completeExceptionally(t)
+                        }
                     }
                     is QueuedSessionUpdate.Barrier -> {
                         entry.completed.complete(Unit)
@@ -463,13 +466,9 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientSer
             extractAvailableCommands(notification.params)?.let { commands ->
                 updateAvailableCommands(sharedProc.adapterName, commands)
             }
-            val result = queue.trySend(QueuedSessionUpdate.Notification(notification))
-            if (!result.isSuccess) {
-                updateScope.launch {
-                    runCatching { queue.send(QueuedSessionUpdate.Notification(notification)) }
-                        .onFailure { }
-                }
-            }
+            val completed = CompletableDeferred<Unit>()
+            queue.send(QueuedSessionUpdate.Notification(notification, completed))
+            completed.await()
         }
         handlers.value = handlers.value.put(methodName, wrapped)
         sharedProc.sessionUpdateWrapped = true

@@ -216,6 +216,7 @@ internal suspend fun AcpClientService.loadSession(
                     keepLoadedSessionActive = true,
                     deliverReplay = deliverReplay
                 )
+                context.ignoreUpdatesUntilPrompt = true
                 context.allowReplayDelivery = true
                 context.statusRef.set(AcpClientService.Status.Ready)
             } catch (e: Exception) {
@@ -262,6 +263,7 @@ internal suspend fun AcpClientService.loadConversation(chatId: String, sessionsC
                     )
                 }
 
+                context.ignoreUpdatesUntilPrompt = true
                 context.statusRef.set(AcpClientService.Status.Ready)
             } catch (e: Exception) {
                 context.stop()
@@ -444,6 +446,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     }
 
     context.statusRef.set(AcpClientService.Status.Prompting)
+    context.ignoreUpdatesUntilPrompt = false
     var stopReason: String? = null
     val activeAdapterName = context.activeAdapterNameRef.get()
     val sessionId = context.sessionIdRef.get()

@@ -1,0 +1,5 @@
+{
+  "path": "bundle/gemini.js",
+  "find": "    this.sessions.set(sessionId2, session);\n    session.streamHistory(sessionData.messages);\n    setTimeout(() => {",
+  "replace": "    this.sessions.set(sessionId2, session);\n    await session.streamHistory(sessionData.messages);\n    setTimeout(() => {"
+}
