@@ -404,13 +404,14 @@ internal fun AcpClientService.applyAdapterRuntimePreferences(
     val filteredModes = availableModes.filterNot { mode ->
         adapterInfo.disabledModes.any { disabled -> disabled == mode.id }
     }
+    val savedPreference = AcpAgentPreferencesStore.preferenceFor(adapterInfo.id)
 
-    val preferredModelId = adapterInfo.defaultModel?.modelId
+    val preferredModelId = savedPreference?.modelId
         ?.takeIf { preferred -> filteredModels.any { it.modelId == preferred } }
         ?: currentModelId?.takeIf { current -> filteredModels.any { it.modelId == current } }
         ?: filteredModels.firstOrNull()?.modelId
 
-    val preferredModeId = adapterInfo.defaultMode?.modeId
+    val preferredModeId = savedPreference?.modeId
         ?.takeIf { preferred -> filteredModes.any { it.id == preferred } }
         ?: currentModeId?.takeIf { current -> filteredModes.any { it.id == current } }
         ?: filteredModes.firstOrNull()?.id

@@ -12,11 +12,6 @@
     "--acp",
     "--stdio"
   ],
-  "defaultMode": {
-    "modeId": "default",
-    "name": "Default",
-    "description": "Copilot CLI default behavior"
-  },
   "patches": [
     "@patches/github-copilot-cli/usage-json-loader.patch",
     "@patches/github-copilot-cli/usage-json.patch",

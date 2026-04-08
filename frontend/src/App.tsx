@@ -145,7 +145,7 @@ function App() {
   const handleNewTab = useCallback((agentId?: string) => {
     const resolvedAgentId = runnableAgents.some(agent => agent.id === agentId)
       ? agentId
-      : runnableAgents[0]?.id;
+      : runnableAgents.find(agent => agent.isLastUsed)?.id || runnableAgents[0]?.id;
     const newId = nextId('tab');
     const newConversationId = nextId('conv');
     const title = 'Untitled';

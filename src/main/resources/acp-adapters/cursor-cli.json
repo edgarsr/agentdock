@@ -39,11 +39,6 @@
       "logout"
     ]
   },
-  "defaultModel": {
-    "modelId": "default[]",
-    "name": "Auto",
-    "description": ""
-  },
   "disabledModels": [
     "composer-1",
     "gemini-2",
@@ -52,10 +47,5 @@
     "claude-opus-4-5",
     "claude-sonnet-4-5"
   ],
-  "defaultMode": {
-    "modeId": "agent",
-    "name": "Agent",
-    "description": ""
-  },
   "disabledModes": []
 }

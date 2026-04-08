@@ -29,6 +29,7 @@ internal fun AcpBridge.installConversationQueries() {
                         withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
                             service.startAgent(chatId, adapterName, modelId)
                         }
+                        pushAdapters()
                         pushStatus(chatId, service.status(chatId).name.lowercase())
                         pushSessionId(chatId, service.sessionId(chatId))
                         pushMode(chatId, service.activeModeId(chatId))
@@ -53,6 +54,8 @@ internal fun AcpBridge.installConversationQueries() {
                     val ok = service.setModel(chatId, modelId)
                     if (!ok) {
                         pushContentChunk(chatId, "assistant", "text", text = "[Error: Failed to set model '$modelId']", isReplay = false)
+                    } else {
+                        pushAdapters()
                     }
                 } finally {
                     pushStatus(chatId, service.status(chatId).name.lowercase())
@@ -73,6 +76,8 @@ internal fun AcpBridge.installConversationQueries() {
                     val ok = service.setMode(chatId, modeId)
                     if (!ok) {
                         pushContentChunk(chatId, "assistant", "text", text = "[Error: Failed to set mode '$modeId']", isReplay = false)
+                    } else {
+                        pushAdapters()
                     }
                 } finally {
                     pushStatus(chatId, service.status(chatId).name.lowercase())
@@ -226,6 +231,7 @@ internal fun AcpBridge.installConversationQueries() {
                                     } finally {
                                         suppressReplayForChatIds.remove(chatId)
                                     }
+                                    pushAdapters()
                                     pushStatus(chatId, service.status(chatId).name.lowercase())
                                     pushSessionId(chatId, service.sessionId(chatId))
                                     pushMode(chatId, service.activeModeId(chatId))
@@ -254,6 +260,7 @@ internal fun AcpBridge.installConversationQueries() {
                                 }
                             }
                             flushHistoryReplayCapture(chatId)
+                            pushAdapters()
                             val refreshedConversation = UnifiedHistoryService.loadConversationReplay(projectPath, conversationId)
                             if (refreshedConversation != null) {
                                 pushConversationReplayLoaded(chatId, refreshedConversation)

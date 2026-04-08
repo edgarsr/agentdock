@@ -7,17 +7,7 @@
     "version": "latest",
     "packageName": "@zed-industries/claude-agent-acp"
   },
-  "defaultModel": {
-    "modelId": "opus",
-    "name": "Opus 4.6",
-    "description": ""
-  },
   "disabledModels": [],
-  "defaultMode": {
-    "modeId": "default",
-    "name": "Default",
-    "description": "Standard behavior, prompts for dangerous operations"
-  },
   "disabledModes": [],
   "patches": [],
   "cli": {

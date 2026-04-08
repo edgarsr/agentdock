@@ -211,31 +211,7 @@ class AcpClientService private constructor(val project: Project) {
         if (!AcpAdapterPaths.isDownloaded(name)) {
             return emptyList()
         }
-        return (adapterRuntimeMetadataMap[name] ?: configFallbackMetadata(name))?.availableModels ?: emptyList()
-    }
-
-    private fun configFallbackMetadata(adapterName: String): AdapterRuntimeMetadata? {
-        val adapterInfo = runCatching { AcpAdapterPaths.getAdapterInfo(adapterName) }.getOrNull() ?: return null
-        val defaultModel = adapterInfo.defaultModel?.let {
-            AcpAdapterConfig.ModelInfo(
-                modelId = it.modelId,
-                name = it.name,
-                description = it.description
-            )
-        }
-        val defaultMode = adapterInfo.defaultMode?.let {
-            AcpAdapterConfig.ModeInfo(
-                id = it.modeId,
-                name = it.name,
-                description = it.description
-            )
-        }
-        return AdapterRuntimeMetadata(
-            currentModelId = defaultModel?.modelId,
-            availableModels = defaultModel?.let { listOf(it) } ?: emptyList(),
-            currentModeId = defaultMode?.id,
-            availableModes = defaultMode?.let { listOf(it) } ?: emptyList()
-        )
+        return adapterRuntimeMetadataMap[name]?.availableModels ?: emptyList()
     }
 
     internal inner class AgentContext(val chatId: String) {

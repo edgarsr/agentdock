@@ -106,6 +106,7 @@ export interface AgentOption {
   id: string;
   name: string;
   iconPath?: string;
+  isLastUsed?: boolean;
   currentModelId?: string;
   availableModels?: ModelOption[];
   currentModeId?: string;

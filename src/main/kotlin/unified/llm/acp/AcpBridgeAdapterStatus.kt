@@ -115,41 +115,34 @@ private fun AcpBridge.buildAdapterPayload(
         }
     } ?: ""
 
-    val runtimeMetadata = service.adapterRuntimeMetadata(info.id) ?: run {
-        val fallbackModel = info.defaultModel?.let {
-            AdapterModelPayload(it.modelId, it.name, it.description.orEmpty())
-        }
-        val fallbackMode = info.defaultMode?.let {
-            AdapterModePayload(it.modeId, it.name, it.description.orEmpty())
-        }
-        AcpClientService.AdapterRuntimeMetadata(
-            currentModelId = fallbackModel?.modelId,
-            availableModels = info.defaultModel?.let {
-                listOf(
-                    AcpAdapterConfig.ModelInfo(
-                        modelId = it.modelId,
-                        name = it.name,
-                        description = it.description
-                    )
-                )
-            } ?: emptyList(),
-            currentModeId = fallbackMode?.id,
-            availableModes = info.defaultMode?.let {
-                listOf(
-                    AcpAdapterConfig.ModeInfo(
-                        id = it.modeId,
-                        name = it.name,
-                        description = it.description
-                    )
-                )
-            } ?: emptyList()
+    val savedPreference = AcpAgentPreferencesStore.preferenceFor(info.id)
+    val rawRuntimeMetadata = service.adapterRuntimeMetadata(info.id)
+        ?: AcpClientService.AdapterRuntimeMetadata(
+            currentModelId = null,
+            availableModels = emptyList(),
+            currentModeId = null,
+            availableModes = emptyList()
         )
-    }
+    val resolvedCurrentModelId = savedPreference?.modelId
+        ?.takeIf { preferred ->
+            rawRuntimeMetadata.availableModels.isEmpty() || rawRuntimeMetadata.availableModels.any { it.modelId == preferred }
+        }
+        ?: rawRuntimeMetadata.currentModelId
+    val resolvedCurrentModeId = savedPreference?.modeId
+        ?.takeIf { preferred ->
+            rawRuntimeMetadata.availableModes.isEmpty() || rawRuntimeMetadata.availableModes.any { it.id == preferred }
+        }
+        ?: rawRuntimeMetadata.currentModeId
+    val runtimeMetadata = rawRuntimeMetadata.copy(
+        currentModelId = resolvedCurrentModelId,
+        currentModeId = resolvedCurrentModeId
+    )
 
     return AdapterPayload(
         id = info.id,
         name = info.name,
         iconPath = iconBase64,
+        isLastUsed = info.id == AcpAgentPreferencesStore.lastAgentId(),
         currentModelId = runtimeMetadata.currentModelId ?: "",
         availableModels = runtimeMetadata.availableModels.map {
             AdapterModelPayload(it.modelId, it.name, it.description.orEmpty())

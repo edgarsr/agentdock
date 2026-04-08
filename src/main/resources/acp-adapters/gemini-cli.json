@@ -15,21 +15,11 @@
   "args": [
     "--acp"
   ],
-  "defaultModel": {
-    "modelId": "gemini-3-flash-preview",
-    "name": "Gemini 3 Flash",
-    "description": ""
-  },
   "disabledModels": [
     "-2.",
     "3.1-flash-lite",
     "auto"
   ],
-  "defaultMode": {
-    "modeId": "default",
-    "name": "Default",
-    "description": "Prompts for approval"
-  },
   "disabledModes": [],
   "patches": [
     "@patches/gemini/usage-config.patch",

@@ -17,21 +17,11 @@
       "unix": "codex-acp"
     }
   },
-  "defaultModel": {
-    "modelId": "gpt-5.4/medium",
-    "name": "gpt-5.4 (medium)",
-    "description": ""
-  },
   "disabledModels": [
     "-5.1",
     "-5.2",
     "mini"
   ],
-  "defaultMode": {
-    "modeId": "read-only",
-    "name": "Read Only",
-    "description": ""
-  },
   "disabledModes": [],
   "authConfig": {
     "uiMode": "login_logout",

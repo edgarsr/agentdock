@@ -27,20 +27,6 @@ object AcpAdapterConfig {
     )
 
     @Serializable
-    data class DefaultModelInfo(
-        val modelId: String,
-        val name: String,
-        val description: String? = null
-    )
-
-    @Serializable
-    data class DefaultModeInfo(
-        val modeId: String,
-        val name: String,
-        val description: String? = null
-    )
-
-    @Serializable
     data class AuthConfig(
         val authScript: String? = null,
         val uiMode: String = "login_logout",
@@ -104,9 +90,7 @@ object AcpAdapterConfig {
         val distribution: Distribution,
         val launchPath: String = "",
         val launchBinary: PlatformBinary? = null,
-        val defaultModel: DefaultModelInfo? = null,
         val disabledModels: List<String> = emptyList(),
-        val defaultMode: DefaultModeInfo? = null,
         val disabledModes: List<String> = emptyList(),
         val args: List<String> = emptyList(),
         val patches: List<String> = emptyList(),

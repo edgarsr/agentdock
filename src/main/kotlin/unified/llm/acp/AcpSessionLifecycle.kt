@@ -106,15 +106,16 @@ internal suspend fun AcpClientService.startAgent(
             context.statusRef.set(AcpClientService.Status.Initializing)
 
             try {
-            val sharedProc = activeProcesses.computeIfAbsent(processKey(requestedAdapterName)) { createSharedProcess(requestedAdapterName) }
-            context.sharedProcess = sharedProc
+                val sharedProc = activeProcesses.computeIfAbsent(processKey(requestedAdapterName)) { createSharedProcess(requestedAdapterName) }
+                context.sharedProcess = sharedProc
 
-            ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
-            ensureAsyncSessionUpdates(sharedProc)
-            val runtimeMetadata = adapterRuntimeMetadataMap[requestedAdapterName]
+                ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
+                ensureAsyncSessionUpdates(sharedProc)
+                val runtimeMetadata = adapterRuntimeMetadataMap[requestedAdapterName]
+                val savedPreference = AcpAgentPreferencesStore.preferenceFor(requestedAdapterName)
 
-            val client = sharedProc.client!!
-            val cwd = resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
+                val client = sharedProc.client!!
+                val cwd = resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
 
                 val factory = object : ClientOperationsFactory {
                     override suspend fun createClientOperations(
@@ -144,9 +145,9 @@ internal suspend fun AcpClientService.startAgent(
                 }
 
                 val selectedModelId = resolveModelToApply(
-                    preferredModelId,
+                    preferredModelId ?: savedPreference?.modelId,
                     runtimeMetadata?.availableModels ?: emptyList(),
-                    runtimeMetadata?.currentModelId
+                    runtimeMetadata?.currentModelId ?: savedPreference?.modelId
                 )
                 if (selectedModelId != null) {
                     try {
@@ -156,7 +157,9 @@ internal suspend fun AcpClientService.startAgent(
                     }
                 }
 
-                val currentModeId = runtimeMetadata?.currentModeId
+                val currentModeId = savedPreference?.modeId
+                    ?.takeIf { preferred -> runtimeMetadata?.availableModes?.any { it.id == preferred } != false }
+                    ?: runtimeMetadata?.currentModeId
                 if (currentModeId != null) {
                     try {
                         sess.setMode(SessionModeId(currentModeId))
@@ -372,6 +375,10 @@ internal suspend fun AcpClientService.setModel(chatId: String, modelId: String):
         "restart-resume" -> {
             try {
                 startAgent(chatId, adapterName, trimmedModelId, context.sessionIdRef.get())
+                AcpAgentPreferencesStore.rememberModel(adapterName, trimmedModelId)
+                adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
+                    adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = trimmedModelId)
+                }
                 true
             } catch (e: Exception) {
                 false
@@ -384,6 +391,10 @@ internal suspend fun AcpClientService.setModel(chatId: String, modelId: String):
                     sess.setModel(ModelId(trimmedModelId))
                 }
                 context.activeModelIdRef.set(trimmedModelId)
+                AcpAgentPreferencesStore.rememberModel(adapterName, trimmedModelId)
+                adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
+                    adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = trimmedModelId)
+                }
                 true
             } catch (e: Exception) {
                 false
@@ -406,6 +417,13 @@ internal suspend fun AcpClientService.setMode(chatId: String, modeId: String): B
             sess.setMode(SessionModeId(trimmedModeId))
         }
         context.activeModeIdRef.set(trimmedModeId)
+        val adapterName = context.activeAdapterNameRef.get()
+        if (!adapterName.isNullOrBlank()) {
+            AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
+            adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
+                adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = trimmedModeId)
+            }
+        }
         true
     } catch (e: Exception) {
         false
@@ -449,6 +467,9 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     context.ignoreUpdatesUntilPrompt = false
     var stopReason: String? = null
     val activeAdapterName = context.activeAdapterNameRef.get()
+    if (!activeAdapterName.isNullOrBlank()) {
+        AcpAgentPreferencesStore.rememberAgent(activeAdapterName)
+    }
     val sessionId = context.sessionIdRef.get()
     val isFirstPrompt = !sessionId.isNullOrBlank() && systemInstructionsInjectedSessionIds.add(sessionId)
     val promptBlocks = if (isFirstPrompt) {

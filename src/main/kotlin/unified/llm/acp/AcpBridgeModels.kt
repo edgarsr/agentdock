@@ -24,6 +24,7 @@ internal data class AdapterPayload(
     val id: String,
     val name: String,
     val iconPath: String,
+    val isLastUsed: Boolean = false,
     val currentModelId: String,
     val availableModels: List<AdapterModelPayload>,
     val currentModeId: String,
