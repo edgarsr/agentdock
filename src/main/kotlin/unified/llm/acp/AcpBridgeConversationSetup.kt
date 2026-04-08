@@ -35,7 +35,7 @@ internal fun AcpBridge.installConversationQueries() {
                         pushMode(chatId, service.activeModeId(chatId))
                     } catch (e: Exception) {
                         pushStatus(chatId, "error")
-                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                     }
                 }
             }
@@ -57,6 +57,8 @@ internal fun AcpBridge.installConversationQueries() {
                     } else {
                         pushAdapters()
                     }
+                } catch (e: Exception) {
+                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                 } finally {
                     pushStatus(chatId, service.status(chatId).name.lowercase())
                 }
@@ -79,6 +81,8 @@ internal fun AcpBridge.installConversationQueries() {
                     } else {
                         pushAdapters()
                     }
+                } catch (e: Exception) {
+                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                 } finally {
                     pushStatus(chatId, service.status(chatId).name.lowercase())
                 }
@@ -137,8 +141,8 @@ internal fun AcpBridge.installConversationQueries() {
                         pushStatus(chatId, "ready")
                         throw e
                     } catch (e: Exception) {
-                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
-                        appendLivePromptTextEvent(chatId, "[Error: ${e.message ?: e.toString()}]", captureId)
+                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
+                        appendLivePromptTextEvent(chatId, "[Error: ${formatAcpError(e)}]", captureId)
                         flushLivePromptCapture(chatId, captureId)?.let {
                             pushPromptDoneChunk(chatId, it, outcome = "error")
                         }
@@ -237,7 +241,7 @@ internal fun AcpBridge.installConversationQueries() {
                                     pushMode(chatId, service.activeModeId(chatId))
                                 } catch (e: Exception) {
                                     pushStatus(chatId, "error")
-                                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
+                                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                                 }
                             }
                         } else {
@@ -275,7 +279,7 @@ internal fun AcpBridge.installConversationQueries() {
                         discardHistoryReplayCapture(chatId)
                         replaySeqByChatId.remove(chatId)
                         pushStatus(chatId, "error")
-                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${e.message ?: e.toString()}]", isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                     }
                 }
             }
@@ -376,7 +380,7 @@ internal fun AcpBridge.installConversationQueries() {
                         requestId = request?.requestId.orEmpty(),
                         conversationId = request?.conversationId.orEmpty(),
                         success = false,
-                        error = error.message ?: error.toString()
+                        error = formatAcpError(error)
                     )
                 }
                 pushConversationTranscriptSaved(result)

@@ -29,15 +29,13 @@ export const SearchActivity: React.FC<Props> = ({ entry }) => {
   const hasError = status === 'error' || status === 'failed';
 
   return (
-    <Tooltip content={<span>Search: {tooltipText}</span>}>
-      <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
-        <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
-          <SearchIcon size={13} />
-        </div>
-        <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">
+    <Tooltip variant="minimal" content={`Search: ${tooltipText}`}>
+      <div className="flex items-center gap-1.5 min-w-0 cursor-help pr-2">
+        <div className="text-foreground-secondary flex-shrink-0"><SearchIcon size={13} /></div>
+        <span className="text-foreground-secondary truncate min-w-0 flex-1 block">
           {cleanTitle || pattern || entry.kind}
         </span>
-        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />)}
+        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />)}
       </div>
     </Tooltip>
   );

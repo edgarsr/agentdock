@@ -8,6 +8,44 @@ import { CopilotUsage } from './usage/CopilotUsage';
 import { CodexUsage } from './usage/CodexUsage';
 import { GeminiUsage } from './usage/GeminiUsage';
 import { CursorUsage } from './usage/CursorUsage';
+import { Button } from './ui/Button';
+import { SplitButton } from './ui/SplitButton';
+import { useAdapterUsage } from '../hooks/useAdapterUsage';
+
+function AgentLoadingSpinner({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return <div className={`${className} shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin`} />;
+}
+
+const linkButtonFocusClassName = [
+  'focus:outline-none',
+  'focus-visible:rounded-[3px]',
+  'focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]',
+].join(' ');
+
+function UsageSection({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="-mt-[0.375rem] flex flex-wrap gap-x-4 gap-y-1 text-ide-small">{children}</div>
+  );
+}
+
+function CopilotUsageSection({ refreshKey }: { refreshKey: number }) {
+  const data = useAdapterUsage('github-copilot-cli');
+
+  if (data) {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed?.quota_snapshots?.premium_interactions?.unlimited === true) return null;
+    } catch {
+      // Let CopilotUsage handle malformed data fallback.
+    }
+  }
+
+  return (
+    <UsageSection>
+      <CopilotUsage key={refreshKey} />
+    </UsageSection>
+  );
+}
 
 export function AgentManagementView({
   initialAgents = [],
@@ -133,18 +171,18 @@ export function AgentManagementView({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden font-sans">
-      <div className="flex items-center justify-end px-3 py-2 border-b border-border shrink-0 min-h-12">
+    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden pb-4">
+      <div className="flex items-center justify-end px-3 border-b border-border shrink-0 min-h-12">
         <button
           onClick={handleRefresh}
-          className="p-1 text-foreground-secondary hover:text-foreground transition-colors"
+          className={`p-1 text-foreground-secondary hover:text-foreground transition-colors ${linkButtonFocusClassName}`}
           title="Refresh"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto w-full p-2 space-y-1">
-        <div className="flex flex-col">
+      <div className="flex-1 overflow-y-auto w-full px-2">
+        <div className="flex flex-col max-w-[1200px] mx-auto w-full">
           {agents.map((agent, index) => {
             const isDownloadedKnown = agent.downloadedKnown === true;
             const isDownloaded = agent.downloaded === true;
@@ -159,8 +197,12 @@ export function AgentManagementView({
             const isAuthKnown = isManageAuth || agent.hasAuthentication !== true || agent.authKnown === true;
             const canResolveStatus = isDownloaded && agent.readyKnown === true && isAuthKnown;
             const isStatusUnknown = isDownloaded && !isStarting && !canResolveStatus;
-            const isUpdateChecking = isDownloaded && agent.updateSupported === true && agent.updateChecking === true;
             const canUpdate = isDownloaded && agent.updateAvailable === true;
+            const versionLabel = agent.installedVersion
+              ? (canUpdate && agent.latestVersion
+                  ? `v${agent.installedVersion} -> v${agent.latestVersion}`
+                  : `v${agent.installedVersion}`)
+              : null;
             const statusLabel = isStarting
               ? 'Starting'
               : (agent.hasAuthentication === true && agent.authKnown === true && agent.authAuthenticated === false)
@@ -177,93 +219,94 @@ export function AgentManagementView({
                 : 'text-error';
 
             return (
-              <div
-                key={agent.id}
-                className={`flex py-8 group ${!isLast ? 'border-b border-border' : ''}`}
-              >
-                <div className="flex items-start gap-3 w-full px-2">
-                  <div className="flex flex-col items-center shrink-0 w-10 min-w-10 pt-0.5">
-                    {agent.iconPath ? (
-                      <img src={agent.iconPath} alt={agent.name} className="h-9 w-9 object-contain" />
-                    ) : (
-                      <div className="flex items-center justify-center rounded bg-background border border-border font-bold uppercase h-9 w-9 text-base">
-                        {agent.name.charAt(0)}
-                      </div>
-                    )}
+              <div key={agent.id} className={`flex group ${!isLast ? 'border-b border-border' : ''}`}>
+                <div className="flex items-start gap-3 w-full px-2 py-1">
+                  <div className="flex flex-col items-center shrink-0 w-10 min-w-10 py-4">
+                    <img src={agent.iconPath} alt={agent.name} className="h-9 w-9 object-contain" />
                   </div>
 
-                  <div className="min-w-0 flex-1 flex flex-col justify-center gap-2">
-                    <div className="flex items-center gap-2 flex-wrap min-h-6">
-                      <span className="font-bold text-base">{agent.name}</span>
+                  <div className="min-w-0 flex-1 self-center py-2 text-ide-small text-foreground-secondary">
+                    <div className="flex items-baseline gap-1.5">
+                      <div className="font-semibold text-ide-regular text-foreground">{agent.name}</div>
+                      {versionLabel && (
+                        <span className="text-foreground-secondary">
+                          {versionLabel}
+                        </span>
+                      )}
                     </div>
 
                     {!isInstalling && isDownloaded && (
-                      <div className="flex items-center gap-1.5 text-[13px]">
-                        <span className="font-medium shrink-0 text-foreground-secondary">Status:</span>
-                        {isStatusUnknown ? (
-                          <RefreshCw className="w-3 h-3 animate-spin text-foreground-secondary" />
-                        ) : (
-                          <span className={`font-medium ${statusClass}`}>
-                            {statusLabel}
-                          </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="shrink-0">Status:</span>
+                        {isStatusUnknown ? (<AgentLoadingSpinner className="w-3 h-3" />) : (
+                          <span className={`${statusClass} font-semibold`}>{statusLabel}</span>
                         )}
                       </div>
                     )}
 
-                    <div className="flex flex-col gap-1.5 text-[13px]">
+                    <div className="flex flex-col gap-1.5">
                       {isInstalling && agent.downloadStatus && (
-                        <div className="flex items-center gap-3 py-1 text-primary font-bold text-[13px]">
-                          <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <div className="flex items-center gap-3">
+                          <AgentLoadingSpinner />
                           <span>Installing...</span>
-                          <span className="text-foreground-secondary font-normal italic truncate">{agent.downloadStatus}</span>
+                          <span className="font-normal italic truncate">{agent.downloadStatus}</span>
                         </div>
                       )}
 
                       {!isInstalling && agent.downloadStatus?.startsWith('Error') && (
-                        <div className="text-error font-medium text-[13px]">{agent.downloadStatus}</div>
+                        <div className="text-error">{agent.downloadStatus}</div>
                       )}
 
                       {!isInstalling && isDownloaded && agent.downloadPath && (
-                        <div className="flex items-center gap-1.5 text-foreground-secondary">
-                          <span className="font-medium shrink-0">Path:</span>
-                          <span className="font-mono opacity-90 truncate" title={agent.downloadPath}>
+                        <div className="flex items-center gap-1.5">
+                          <span className="shrink-0">Path:</span>
+                          <span className="font-mono truncate" title={agent.downloadPath}>
                             {agent.downloadPath}
                           </span>
                         </div>
                       )}
 
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'claude-code' && <ClaudeUsage key={refreshKey} />}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'gemini-cli' && <GeminiUsage key={refreshKey} disabledModels={agent.disabledModels} />}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && <CodexUsage key={refreshKey} />}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsage key={refreshKey} />}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'claude-code' && (
+                        <UsageSection>
+                          <ClaudeUsage key={refreshKey} />
+                        </UsageSection>
+                      )}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'gemini-cli' && (
+                        <UsageSection>
+                          <GeminiUsage key={refreshKey} disabledModels={agent.disabledModels} />
+                        </UsageSection>
+                      )}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (
+                        <UsageSection>
+                          <CodexUsage key={refreshKey} />
+                        </UsageSection>
+                      )}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection refreshKey={refreshKey} />}
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && <CursorUsage />}
 
                       {!isInstalling && isDownloaded && (
-                        <div className="flex flex-col gap-1 items-start text-foreground-secondary">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                           {agent.hasAuthentication && !isManageAuth && agent.authKnown === true && (
                             <button
                               type="button"
                               onClick={() => handleAuth(agent)}
-                              disabled={
-                                isProcessing ||
-                                isAuthenticating
-                              }
-                              className="text-link hover:brightness-150 focus:outline-none disabled:opacity-50 transition-colors flex items-center gap-1 font-medium select-none"
+                              disabled={isProcessing || isAuthenticating}
+                              className={`text-link hover:underline disabled:opacity-50 transition-colors flex items-center gap-1 select-none whitespace-nowrap ${linkButtonFocusClassName}`}
                             >
                               {isAuthenticating && (
-                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                <AgentLoadingSpinner className="w-3 h-3" />
                               )}
                               {agent.authAuthenticated === true ? 'Log out' : 'Log in'}
                             </button>
                           )}
                           {!agent.cliAvailable && (
-                            <span className="text-error">IDE terminal is required</span>
+                            <span className="basis-full text-error">IDE terminal is required</span>
                           )}
                           <button
                             type="button"
                             onClick={() => window.__openAgentCli?.(agent.id)}
                             disabled={!agent.cliAvailable}
-                            className="text-link hover:brightness-150 focus:outline-none disabled:opacity-50 transition-colors font-medium select-none"
+                            className={`text-link hover:underline disabled:opacity-50 transition-colors select-none whitespace-nowrap ${linkButtonFocusClassName}`}
                           >
                             CLI auth
                           </button>
@@ -277,39 +320,49 @@ export function AgentManagementView({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 pt-0.5 whitespace-nowrap">
+                  <div className="flex items-center py-4 whitespace-nowrap">
                     {!isDownloadedKnown ? (
-                      <RefreshCw className="w-4 h-4 animate-spin text-foreground-secondary" />
+                      <div className="text-foreground-secondary">
+                        <AgentLoadingSpinner className="w-4 h-4" />
+                      </div>
                     ) : !isDownloaded ? (
                       !isInstalling && (
-                        <button
+                        <Button
                           onClick={() => handleDownload(agent.id)}
-                          className="px-4 py-1 flex items-center justify-center bg-primary text-primary-foreground border-primary-border outline outline-1 outline-primary/30 outline-offset-1 hover:brightness-110 font-medium rounded-[4px] disabled:opacity-50 transition-colors select-none focus:outline-none focus:ring-2 focus:ring-primary/50 text-[13px]"
+                          variant="install"
                         >
                           Install
-                        </button>
+                        </Button>
                       )
                     ) : (
                       <>
-                        {isUpdateChecking && !canUpdate && (
-                          <RefreshCw className="w-4 h-4 animate-spin text-foreground-secondary" />
-                        )}
-                        {canUpdate && (
-                          <button
-                            onClick={() => handleUpdate(agent.id)}
+                        {canUpdate ? (
+                          <SplitButton
+                            label="Update"
+                            onAction={() => handleUpdate(agent.id)}
                             disabled={isDeleting || isInstalling}
-                            className="px-4 py-1 flex items-center justify-center bg-primary text-primary-foreground border-primary-border outline outline-1 outline-primary/30 outline-offset-1 hover:brightness-110 font-medium rounded-[4px] disabled:opacity-50 transition-colors select-none focus:outline-none focus:ring-2 focus:ring-primary/50 text-[13px]"
+                            menuItems={[
+                              {
+                                label: (
+                                  <span className="inline-flex items-center gap-2">
+                                    {isDeleting ? <AgentLoadingSpinner className="w-4 h-4" /> : null}
+                                    {isDeleting ? 'Uninstalling' : 'Uninstall'}
+                                  </span>
+                                ),
+                                onClick: () => handleDelete(agent.id),
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <Button
+                            onClick={() => handleDelete(agent.id)}
+                            disabled={isDeleting || isInstalling}
+                            variant="accentOutline"
+                            leftIcon={isDeleting ? <AgentLoadingSpinner className="w-4 h-4" /> : undefined}
                           >
-                            Update
-                          </button>
+                            {isDeleting ? 'Uninstalling' : 'Uninstall'}
+                          </Button>
                         )}
-                        <button
-                          onClick={() => handleDelete(agent.id)}
-                          disabled={isDeleting || isInstalling}
-                          className="px-4 py-1 flex items-center justify-center bg-secondary text-secondary-foreground border border-secondary-border hover:brightness-110 font-medium rounded-[4px] disabled:opacity-50 transition-colors select-none focus:outline-none focus:ring-2 focus:ring-primary/50 text-[13px]"
-                        >
-                          {isDeleting ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Uninstall'}
-                        </button>
                       </>
                     )}
                   </div>
@@ -322,18 +375,16 @@ export function AgentManagementView({
 
       <ConfirmationModal
         isOpen={confirmDeleteId !== null}
-        title="Confirm Uninstall"
-        message={`Are you sure you want to uninstall ${agents.find(a => a.id === confirmDeleteId)?.name || 'this agent'}?`}
+        title="Uninstall Service Provider"
+        message={`Do you want to uninstall ${agents.find(a => a.id === confirmDeleteId)?.name || 'this service provider'}?`}
         onConfirm={performDelete}
-        confirmLabel="Confirm"
         onCancel={() => setConfirmDeleteId(null)}
       />
       <ConfirmationModal
         isOpen={confirmUpdateId !== null}
-        title="Confirm Update"
-        message={`Are you sure you want to update ${agents.find(a => a.id === confirmUpdateId)?.name || 'this agent'} to the latest version?`}
+        title="Update Service Provider"
+        message={`Do you want to update ${agents.find(a => a.id === confirmUpdateId)?.name || 'this service provider'} to the latest version?`}
         onConfirm={performUpdate}
-        confirmLabel="Update"
         onCancel={() => setConfirmUpdateId(null)}
       />
     </div>

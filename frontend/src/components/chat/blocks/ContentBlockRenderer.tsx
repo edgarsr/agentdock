@@ -38,7 +38,7 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       return <PlanBlockComponent block={block} />;
     case 'image':
       return (
-        <div className="my-2 rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-sm">
+        <div className="rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-sm">
           <img
             src={block.data.startsWith('data:') ? block.data : `data:${block.mimeType};base64,${block.data}`}
             alt="AI Attachment"
@@ -48,9 +48,8 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       );
     case 'audio':
       return (
-        <div className="my-2 rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-md">
-          <audio
-            controls
+        <div className="rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-md">
+          <audio controls
             src={block.data.startsWith('data:') ? block.data : `data:${block.mimeType};base64,${block.data}`}
             className="w-full"
           />
@@ -58,9 +57,8 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       );
     case 'video':
       return (
-        <div className="my-2 rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-md">
-          <video
-            controls
+        <div className="rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-md">
+          <video controls
             src={block.data.startsWith('data:') ? block.data : `data:${block.mimeType};base64,${block.data}`}
             className="w-full h-auto"
           />

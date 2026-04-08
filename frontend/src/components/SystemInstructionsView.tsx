@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ACPBridge } from '../utils/bridge';
 import { SystemInstruction } from '../types/systemInstructions';
+import { Button } from './ui/Button';
+import { Checkbox } from './ui/Checkbox';
+import { Tooltip } from './chat/shared/Tooltip';
+import ConfirmationModal from './ConfirmationModal';
+import { FormDialog } from './ui/FormDialog';
 
 interface FormState {
   name: string;
   content: string;
 }
-
-const inputClass = 'bg-input border border-border rounded-ide px-2 py-1 text-foreground font-mono focus:outline-none focus:border-primary';
-const labelClass = 'flex flex-col gap-1';
-const labelTextClass = 'text-foreground/50 font-sans';
 
 function emptyForm(): FormState {
   return { name: '', content: '' };
@@ -40,6 +41,7 @@ export function SystemInstructionsView() {
   const [instructions, setInstructions] = useState<SystemInstruction[]>([]);
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SystemInstruction | null>(null);
 
   useEffect(() => {
     const cleanup = ACPBridge.onSystemInstructions((e) => setInstructions(e.detail.instructions));
@@ -102,112 +104,140 @@ export function SystemInstructionsView() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground text-ide-small">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2 text-foreground/80">
-          <FileText size={14} />
-          <span className="font-medium">System Instructions</span>
-        </div>
-        <button
+    <div className="h-full flex flex-col text-ide-small">
+      <div className="flex items-center justify-end px-2 min-h-12 border-b border-border flex-shrink-0">
+        <Button
           onClick={openAdd}
-          className="flex items-center gap-1 px-2 py-1 rounded-ide text-foreground/60 hover:text-foreground hover:bg-background-secondary transition-colors"
+          variant="primary"
+          leftIcon={<Plus size={14} />}
+          className="max-h-8"
         >
-          <Plus size={14} />
           <span>Add</span>
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
         {instructions.length === 0 && !form && (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-foreground/30">
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary">
             <FileText size={28} strokeWidth={1.5} />
             <span>No system instructions configured</span>
+            <p className="max-w-[400px] text-center mt-2">
+              Enabled instructions are sent to the AI agent at the start of a conversation as system instructions.
+            </p>
           </div>
         )}
 
         {instructions.map((instruction) => (
           <div
             key={instruction.id}
-            onClick={() => openEdit(instruction)}
-            className={`flex items-start gap-3 px-4 py-2.5 border-b border-border cursor-pointer hover:bg-background-secondary transition-colors ${editingId === instruction.id ? 'bg-background-secondary' : ''}`}
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border"
           >
-            <button
-              role="switch"
-              aria-checked={instruction.enabled}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggle(instruction.id);
-              }}
-              className={`relative mt-0.5 inline-flex h-4 w-7 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${instruction.enabled ? 'bg-primary' : 'bg-border'}`}
-            >
-              <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${instruction.enabled ? 'translate-x-3' : 'translate-x-0'}`} />
-            </button>
+            <Tooltip variant="minimal" content={instruction.enabled ? 'Enabled' : 'Disabled'}>
+              <Checkbox
+                checked={instruction.enabled}
+                onCheckedChange={() => toggle(instruction.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                className="mt-0.5"
+              />
+            </Tooltip>
 
             <div className="flex-1 min-w-0">
-              <div className={`truncate ${instruction.enabled ? 'text-foreground' : 'text-foreground/40'}`}>
+              <div className="truncate">
                 {instruction.name}
               </div>
-              <div className="mt-1 line-clamp-2 text-xs text-foreground/45 whitespace-pre-wrap break-words">
+              <div className="mt-1 text-xs text-foreground-secondary truncate">
                 {instruction.content}
               </div>
             </div>
 
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                remove(instruction.id);
-              }}
-              className="p-1 rounded text-foreground/30 hover:text-error transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
+            <div className="flex items-center gap-1">
+              <Tooltip variant="minimal" content="Edit">
+                <button
+                  type="button"
+                  onClick={() => openEdit(instruction)}
+                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-foreground focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                  aria-label={`Edit ${instruction.name}`}
+                >
+                  <Pencil size={13} />
+                </button>
+              </Tooltip>
+              <Tooltip variant="minimal" content="Delete">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(instruction)}
+                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-error focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                  aria-label={`Delete ${instruction.name}`}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </Tooltip>
+            </div>
           </div>
         ))}
 
-        {form && (
-          <div className="border-b border-border bg-background-secondary px-4 py-3 flex flex-col gap-3">
-            <span className="text-foreground/60 font-medium">{editingId ? 'Edit instruction' : 'New instruction'}</span>
+        </div>
+      </div>
 
-            <label className={labelClass}>
-              <span className={labelTextClass}>Name</span>
+      <FormDialog
+        isOpen={form !== null}
+        title={editingId ? 'Edit Instruction' : 'New Instruction'}
+        onClose={cancelForm}
+        footer={(
+          <>
+            <Button
+              onClick={submitForm}
+              disabled={!form?.name.trim() || !form?.content.trim()}
+              variant="primary"
+            >
+              Save
+            </Button>
+            <Button onClick={cancelForm} variant="secondary">
+              Cancel
+            </Button>
+          </>
+        )}
+      >
+        {form ? (
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-foreground-secondary">Name</span>
               <input
-                autoFocus
+                data-autofocus="true"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
-                placeholder="Name"
-                className={inputClass}
+                className="w-full rounded-[4px] px-2 py-1"
               />
-            </label>
+            </div>
 
-            <label className={labelClass}>
-              <span className={labelTextClass}>Instruction</span>
+            <div className="flex flex-col gap-1">
+              <span className="text-foreground-secondary">Instruction</span>
               <textarea
                 value={form.content}
                 onChange={(event) => setForm({ ...form, content: event.target.value })}
-                placeholder="Instruction"
                 rows={8}
-                className={`${inputClass} resize-none`}
+                className="w-full min-h-[120px] h-auto resize-none rounded-[4px] px-2 py-1"
               />
-            </label>
-
-            <div className="flex gap-2">
-              <button
-                onClick={submitForm}
-                disabled={!form.name.trim() || !form.content.trim()}
-                className="px-3 py-1 rounded-ide bg-primary text-primary-foreground border border-primary-border hover:opacity-90 transition-opacity disabled:opacity-40"
-              >
-                Save
-              </button>
-              <button
-                onClick={cancelForm}
-                className="px-3 py-1 rounded-ide bg-secondary text-secondary-foreground border border-secondary-border hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                Cancel
-              </button>
             </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </FormDialog>
+
+      <ConfirmationModal
+        isOpen={deleteTarget !== null}
+        title="Delete Instruction"
+        message={deleteTarget ? `Do you want to delete "${deleteTarget.name}"?` : ''}
+        confirmLabel="Yes"
+        cancelLabel="No"
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          remove(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

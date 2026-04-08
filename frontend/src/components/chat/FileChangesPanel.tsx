@@ -38,23 +38,18 @@ const FileChangesPanel = memo(({
   };
 
   return (
-    <>
-      <div className="border-t bordert-border w-full" />
-
-      <div className="px-4 pb-4 pt-3">
-        <div className="max-w-4xl mx-auto border border-border rounded-md overflow-hidden bg-editor-bg">
+    <div className="mx-auto w-full max-w-[1200px] border-t border-border px-4 py-2">
+      <div className="border border-border rounded-[6px] overflow-hidden bg-editor-bg">
           
           <div 
-            className="flex items-center w-full px-3 py-2 bg-editor-bg hover:bg-background-secondary transition-colors cursor-pointer group/header"
+            className="flex items-center h-9 w-full px-3 bg-editor-bg transition-colors cursor-pointer group/header"
             onClick={() => setExpanded(!expanded)}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0 text-sm font-medium text-foreground">
-              <FileDiff size={14} className="opacity-70" />
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-foreground-secondary">
-                  {fileChanges.length} {fileChanges.length === 1 ? 'file' : 'files'}
-                </span>
-                <div className="flex items-center gap-1.5 ml-1">
+            <div className="flex items-center gap-2 flex-1 min-w-0 text-ide-small text-foreground-secondary">
+              <FileDiff size={14} />
+              <div className="flex items-center gap-2 min-w-0 mt-0.5">
+                <span>{fileChanges.length} {fileChanges.length === 1 ? 'file' : 'files'} changed</span>
+                <div className="flex items-center gap-1.5">
                   {totalAdditions > 0 && <span className="font-bold text-added">+{totalAdditions}</span>}
                   {totalDeletions > 0 && <span className="font-bold text-deleted">-{totalDeletions}</span>}
                 </div>
@@ -64,10 +59,10 @@ const FileChangesPanel = memo(({
             <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
               {confirmUndoAll ? (
                 <div className="flex items-center gap-1">
-                  <span className="text-sm text-foreground-secondary mr-1">Undo all?</span>
+                  <span className="text-sm text-foreground-secondary mr-2 mt-1">Undo all?</span>
                   <button
                     type="button"
-                    className="text-xs px-2 py-0.5 bg-error text-white rounded"
+                    className="text-xs px-2 py-0.5 bg-error text-white rounded mr-1"
                     onClick={() => { onUndoAllFiles(); setConfirmUndoAll(false); }}
                   >
                     Yes
@@ -82,7 +77,7 @@ const FileChangesPanel = memo(({
                 </div>
               ) : (
                 <>
-                  <Tooltip content="Accept all changes">
+                  <Tooltip variant="minimal" content="Accept all changes">
                     <button
                       type="button"
                       className="p-1 text-foreground-secondary hover:text-added transition-colors"
@@ -91,7 +86,7 @@ const FileChangesPanel = memo(({
                       <Check size={14} />
                     </button>
                   </Tooltip>
-                  <Tooltip content="Reject all changes">
+                  <Tooltip variant="minimal" content="Undo all changes">
                     <button
                       type="button"
                       className="p-1 text-foreground-secondary hover:text-deleted transition-colors"
@@ -120,7 +115,7 @@ const FileChangesPanel = memo(({
                 {fileChanges.map((fc) => (
                   <div
                     key={fc.filePath}
-                    className="flex items-center justify-between py-1.5 px-3 hover:bg-background-secondary transition-colors"
+                    className="flex items-center justify-between h-9 px-3 transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`font-mono w-4 text-center flex-shrink-0 font-bold ${
@@ -128,10 +123,10 @@ const FileChangesPanel = memo(({
                       }`}>
                         {fc.status}
                       </span>
-                      <Tooltip content={fc.filePath}>
+                      <Tooltip variant="minimal" content={fc.filePath}>
                         <button
                           type="button"
-                          className="truncate text-left text-foreground hover:text-link hover:underline transition-colors min-w-0 font-mono"
+                          className="truncate text-left text-foreground hover:underline transition-colors min-w-0 font-mono"
                           onClick={() => onOpenFile?.(fc.filePath)}
                         >
                           {getFileName(fc.filePath)}
@@ -145,10 +140,10 @@ const FileChangesPanel = memo(({
 
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {onShowDiff && (
-                        <Tooltip content="View changes (diff)">
+                        <Tooltip variant="minimal" content="View changes (diff)">
                           <button
                             type="button"
-                            className="p-1 text-foreground-secondary hover:text-foreground hover:bg-background rounded transition-colors"
+                            className="p-1 text-foreground-secondary hover:text-foreground rounded transition-colors"
                             onClick={() => onShowDiff(fc)}
                           >
                             <FileDiff size={14} />
@@ -156,20 +151,20 @@ const FileChangesPanel = memo(({
                         </Tooltip>
                       )}
                       {onKeepFile && (
-                        <Tooltip content="Accept changes">
+                        <Tooltip variant="minimal" content="Accept changes">
                           <button
                             type="button"
-                            className="p-1 text-foreground-secondary hover:text-added hover:bg-background rounded transition-colors"
+                            className="p-1 text-foreground-secondary hover:text-added rounded transition-colors"
                             onClick={() => onKeepFile(fc.filePath)}
                           >
                             <Check size={14} />
                           </button>
                         </Tooltip>
                       )}
-                      <Tooltip content="Reject changes">
+                      <Tooltip variant="minimal" content="Undo changes">
                         <button
                           type="button"
-                          className="p-1 text-foreground-secondary hover:text-deleted hover:bg-background rounded transition-colors"
+                          className="p-1 text-foreground-secondary hover:text-deleted rounded transition-colors"
                           onClick={() => onUndoFile(fc.filePath)}
                         >
                           <Undo2 size={14} />
@@ -181,9 +176,8 @@ const FileChangesPanel = memo(({
               </div>
             </div>
           </div>
-        </div>
       </div>
-    </>
+    </div>
   );
 });
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, LoaderCircle, Mic, Palette, Settings2, Type, Waypoints } from 'lucide-react';
 import { AgentOption, AudioTranscriptionFeatureState, AudioTranscriptionSettings, GitCommitGenerationSettings as GitCommitGenerationSettingsValue, GlobalSettingsPayload } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -7,17 +6,9 @@ import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSetti
 import { SettingsCardShell } from './settings/SettingsCardShell';
 import { SettingsSelectCard } from './settings/SettingsSelectCard';
 import { SettingsToggleCard } from './settings/SettingsToggleCard';
-
-const emptyState: AudioTranscriptionFeatureState = {
-  id: 'whisper-transcription',
-  title: 'Whisper',
-  installed: false,
-  installing: false,
-  supported: false,
-  status: 'Loading',
-  detail: '',
-  installPath: '',
-};
+import { Button } from './ui/Button';
+import { Checkbox } from './ui/Checkbox';
+import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
 
 const defaultGlobalSettings: GlobalSettingsPayload = {
   settings: {
@@ -29,8 +20,12 @@ const defaultGlobalSettings: GlobalSettingsPayload = {
     audioTranscription: { language: 'auto' },
     gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', instructions: '' },
   },
-  host: { hostOs: 'other', wslSupported: false, wslDistributions: [], uiFontSizeBasePx: 14 },
+  host: { hostOs: 'other', wslSupported: false, wslDistributions: [] },
 };
+
+function SettingsLoadingSpinner({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return <div className={`${className} shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin`} />;
+}
 
 function normalizeGitCommitGenerationSettings(payload: Partial<GitCommitGenerationSettingsValue> | undefined): GitCommitGenerationSettingsValue {
   return {
@@ -49,9 +44,6 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
   const selectedDistribution = wslDistributions.some((item) => item.name === requestedDistribution)
     ? requestedDistribution
     : (wslDistributions[0]?.name ?? requestedDistribution);
-  const uiFontSizeBasePx = Number.isFinite(payload?.host?.uiFontSizeBasePx)
-    ? Math.round(payload!.host!.uiFontSizeBasePx)
-    : 14;
   const uiFontSizeOffsetPx = Number.isFinite(payload?.settings?.uiFontSizeOffsetPx)
     ? Math.max(-3, Math.min(3, Math.round(payload!.settings!.uiFontSizeOffsetPx)))
     : 0;
@@ -71,27 +63,50 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       hostOs: payload?.host?.hostOs === 'windows' ? 'windows' : 'other',
       wslSupported: Boolean(payload?.host?.wslSupported),
       wslDistributions,
-      uiFontSizeBasePx,
     },
   };
 }
 
-function uiFontSizeCssValue(offsetPx: number): string {
-  return offsetPx === 0
-    ? 'var(--ide-font-size-base)'
-    : `calc(var(--ide-font-size-base) + ${offsetPx}px)`;
+function readIdeFontSizePx(): number {
+  if (typeof window === 'undefined') {
+    return 14;
+  }
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue('--ide-font-size').trim();
+  const px = Number.parseFloat(value);
+  return Number.isFinite(px) ? Math.round(px) : 14;
 }
 
 const userMessageBackgroundOptions: Array<{
   id: GlobalSettingsPayload['settings']['userMessageBackgroundStyle'];
   background: string;
+  toneClass: string;
 }> = [
-  { id: 'background-secondary', background: 'var(--ide-background-secondary)' },
-  { id: 'primary', background: 'var(--ide-Button-default-startBackground)' },
-  { id: 'secondary', background: 'var(--ide-Button-startBackground)' },
-  { id: 'accent', background: 'var(--ide-List-selectionBackground)' },
-  { id: 'input', background: 'var(--ide-TextField-background)' },
-  { id: 'editor-bg', background: 'var(--ide-editor-bg)' },
+  { id: 'background-secondary', background: 'var(--ide-background-secondary)', toneClass: 'bg-background-secondary' },
+  { id: 'primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
+  { id: 'secondary', background: 'var(--ide-Button-startBackground)', toneClass: 'bg-secondary' },
+  { id: 'accent', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
+  { id: 'input', background: 'var(--ide-TextField-background)', toneClass: 'bg-input' },
+  { id: 'editor-bg', background: 'var(--ide-editor-bg)', toneClass: 'bg-[var(--ide-editor-bg)]' },
+];
+
+const emptyState: AudioTranscriptionFeatureState = {
+  id: 'whisper-transcription',
+  title: 'Audio Input',
+  installed: false,
+  installing: false,
+  supported: false,
+  status: 'Loading',
+  detail: '',
+  installPath: '',
+};
+
+const whisperLanguageOptions: DropdownOption[] = [
+  { value: 'auto', label: 'auto' },
+  { value: 'en', label: 'English (en)' },
+  { value: 'de', label: 'German (de)' },
+  { value: 'lv', label: 'Latvian (lv)' },
+  { value: 'fr', label: 'French (fr)' },
+  { value: 'es', label: 'Spanish (es)' },
 ];
 
 function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userMessageBackgroundStyle']) {
@@ -106,20 +121,36 @@ export function SettingsView() {
   const [installedAgents, setInstalledAgents] = useState<AgentOption[]>([]);
   const pendingWslSaveRef = useRef(false);
   const [pendingWslTarget, setPendingWslTarget] = useState<boolean | null>(null);
+  const [pendingAudioInputUninstall, setPendingAudioInputUninstall] = useState(false);
   const [switchInProgress, setSwitchInProgress] = useState(false);
+  const [uiFontSizeBasePx, setUiFontSizeBasePx] = useState(() => readIdeFontSizePx());
   const hasWslDistributions = globalSettings.host.wslDistributions.length > 0;
   const uiFontSizeOptions = Array.from({ length: 7 }, (_, index) => {
     const offset = index - 3;
-    const px = globalSettings.host.uiFontSizeBasePx + offset;
+    const px = uiFontSizeBasePx + offset;
     return {
       offset,
       label: offset === 0 ? `${px}px (default)` : `${px}px`,
     };
   });
+  const wslDistributionOptions: DropdownOption[] = hasWslDistributions
+    ? globalSettings.host.wslDistributions.map((distribution) => ({
+        value: distribution.name,
+        label: distribution.name,
+      }))
+    : [{ value: '', label: 'No distributions' }];
+  const uiFontSizeSelectOptions: DropdownOption[] = uiFontSizeOptions.map((option) => ({
+    value: String(option.offset),
+    label: option.label,
+  }));
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--ide-font-size', uiFontSizeCssValue(globalSettings.settings.uiFontSizeOffsetPx));
+    document.documentElement.style.setProperty('--ui-font-size-offset', `${globalSettings.settings.uiFontSizeOffsetPx}px`);
   }, [globalSettings.settings.uiFontSizeOffsetPx]);
+
+  useEffect(() => {
+    setUiFontSizeBasePx(readIdeFontSizePx());
+  }, [globalSettings]);
 
   useEffect(() => {
     applyUserMessageTheme(globalSettings.settings.userMessageBackgroundStyle);
@@ -173,9 +204,20 @@ export function SettingsView() {
   }, []);
 
   const actionLabel = feature.installed ? 'Uninstall' : 'Install';
-  const action = feature.installed
-    ? () => ACPBridge.uninstallAudioTranscriptionFeature()
-    : () => ACPBridge.installAudioTranscriptionFeature();
+  const showAudioInputDetails = feature.installed || feature.installing;
+
+  const handleAudioInputAction = () => {
+    if (feature.installed) {
+      setPendingAudioInputUninstall(true);
+      return;
+    }
+    ACPBridge.installAudioTranscriptionFeature();
+  };
+
+  const confirmAudioInputUninstall = () => {
+    ACPBridge.uninstallAudioTranscriptionFeature();
+    setPendingAudioInputUninstall(false);
+  };
 
   const handleLanguageChange = (language: string) => {
     const next = { language };
@@ -237,109 +279,27 @@ export function SettingsView() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <div className="flex items-center gap-2 text-foreground/80">
-          <Settings2 size={14} />
-          <span className="font-medium">Settings</span>
-        </div>
-      </div>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto w-full px-2 py-2">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col divide-y divide-border">
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4">
-          {(globalSettings.host.hostOs === 'windows') && (
-            <SettingsCardShell
-              icon={Waypoints}
-              title="Agent Environment"
-              description="Choose whether coding agents run in Windows or inside WSL. Switching affects installation, detection and terminal-based sign-in."
-              aside={(
-                <button
-                  role="switch"
-                  aria-checked={globalSettings.settings.useWslForAcpAdapters}
-                  aria-label="Use WSL"
-                  onClick={() => handleUseWslChange(!globalSettings.settings.useWslForAcpAdapters)}
-                  disabled={!globalSettings.host.wslSupported || !globalSettings.settings.wslDistributionName || switchInProgress}
-                  className={`relative mt-0.5 inline-flex h-4 w-7 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    globalSettings.settings.useWslForAcpAdapters ? 'bg-primary' : 'bg-border'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                      globalSettings.settings.useWslForAcpAdapters ? 'translate-x-3' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              )}
-            >
-              <div className="mt-3 flex items-center gap-2">
-                <label htmlFor="wsl-distribution" className="text-xs text-foreground/60">Distribution</label>
-                <select
-                  id="wsl-distribution"
-                  value={globalSettings.settings.wslDistributionName}
-                  onChange={(e) => handleWslDistributionChange(e.target.value)}
-                  disabled={globalSettings.settings.useWslForAcpAdapters || switchInProgress || !hasWslDistributions}
-                  className="min-w-[180px] rounded-ide border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
-                >
-                  {globalSettings.host.wslDistributions.length === 0 ? (
-                    <option value="">No distributions</option>
-                  ) : (
-                    globalSettings.host.wslDistributions.map((distribution) => (
-                      <option key={distribution.name} value={distribution.name}>
-                        {distribution.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-              {!globalSettings.host.wslSupported && (
-                <div className="mt-2 text-xs text-error">WSL could not be detected from the IDE process.</div>
-              )}
-            </SettingsCardShell>
-          )}
-
-          <GitCommitGenerationSettings
-            settings={globalSettings.settings.gitCommitGeneration}
-            installedAgents={installedAgents}
-            onChange={handleGitCommitGenerationChange}
-          />
-
-          <SettingsToggleCard
-            icon={Bell}
-            title="Audio Notifications"
-            description="Play sounds for new assistant messages and permission requests."
-            enabled={globalSettings.settings.audioNotificationsEnabled}
-            onToggle={() => handleAudioNotificationsChange(!globalSettings.settings.audioNotificationsEnabled)}
-            ariaLabel="Enable audio notifications"
-          />
-
-          <SettingsSelectCard
-            icon={Type}
-            title="UI Font Size"
-            description="Adjust the plugin interface font size relative to the IDE default."
-          >
-            <div className="mt-3 flex items-center gap-2">
-              <label htmlFor="ui-font-size" className="text-xs text-foreground/60">Size</label>
-              <select
-                id="ui-font-size"
+          <SettingsSelectCard title="Base Font Size">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-ide-small text-foreground-secondary">Size: </span>
+              <DropdownSelect
                 value={String(globalSettings.settings.uiFontSizeOffsetPx)}
-                onChange={(e) => handleUiFontSizeChange(Number(e.target.value))}
-                className="min-w-[180px] rounded-ide border border-border bg-background px-2 py-1 text-xs text-foreground"
-              >
-                {uiFontSizeOptions.map((option) => (
-                  <option key={option.offset} value={option.offset}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => handleUiFontSizeChange(Number(value))}
+                options={uiFontSizeSelectOptions}
+                className="min-w-[180px]"
+              />
             </div>
           </SettingsSelectCard>
 
           <SettingsCardShell
-            icon={Palette}
-            title="Your Message Color"
-            description="Choose the background color used for your chat messages."
+            title="User Message Background"
+            description="Choose the background color used for your chat messages:"
           >
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-1">
               {userMessageBackgroundOptions.map((option) => {
                 const selected = globalSettings.settings.userMessageBackgroundStyle === option.id;
                 return (
@@ -347,15 +307,14 @@ export function SettingsView() {
                     key={option.id}
                     type="button"
                     onClick={() => handleUserMessageBackgroundStyleChange(option.id)}
-                    aria-label="Select message color"
                     aria-pressed={selected}
-                    className={`h-8 w-8 rounded-ide border transition-all ${
+                    className={`h-7 w-7 rounded-[4px] border border-[var(--ide-Button-disabledBorderColor)] focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${
                       selected
-                        ? 'border-primary ring-2 ring-primary/50'
-                        : 'border-border hover:border-foreground/40'
+                        ? 'shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]'
+                        : ''
                     }`}
-                    style={{ backgroundColor: option.background }}
                   >
+                    <span className={`block h-full w-full rounded-[4px] ${option.toneClass}`} />
                     <span className="sr-only">{option.id}</span>
                   </button>
                 );
@@ -363,48 +322,84 @@ export function SettingsView() {
             </div>
           </SettingsCardShell>
 
-          <SettingsCardShell
-            icon={Mic}
-            title={feature.title}
-            description={feature.status}
-            className="mb-0"
-            aside={(
-              <button
-                type="button"
-                onClick={action}
-                disabled={feature.installing || (!feature.installed && !feature.supported)}
-                className="inline-flex shrink-0 items-center gap-1 rounded-ide border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-background-secondary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {feature.installing && <LoaderCircle size={12} className="animate-spin" />}
-                <span>{actionLabel}</span>
-              </button>
-            )}
-          >
-            {feature.detail && (
-              <div className="mt-1 break-words text-xs text-foreground/40">{feature.detail}</div>
-            )}
-            {feature.installed && feature.installPath && (
-              <div className="mt-1 break-all font-mono text-[11px] text-foreground/35">{feature.installPath}</div>
-            )}
-            <div className="mt-3 flex items-center gap-2">
-              <label htmlFor="whisper-language" className="text-xs text-foreground/60">Language</label>
-              <select
-                id="whisper-language"
-                value={settings.language}
-                onChange={(e) => handleLanguageChange(e.target.value)}
-                disabled={!feature.installed}
-                className="rounded-ide border border-border bg-background px-2 py-1 text-xs text-foreground disabled:opacity-50"
-              >
-                <option value="auto">auto</option>
-                <option value="lv">Latvian (lv)</option>
-                <option value="en">English (en)</option>
-                <option value="ru">Russian (ru)</option>
-                <option value="de">German (de)</option>
-                <option value="fr">French (fr)</option>
-                <option value="es">Spanish (es)</option>
-              </select>
-            </div>
-          </SettingsCardShell>
+          <SettingsToggleCard
+            title="Audio Notifications"
+            description="Play sounds for new assistant messages and permission requests"
+            enabled={globalSettings.settings.audioNotificationsEnabled}
+            onToggle={() => handleAudioNotificationsChange(!globalSettings.settings.audioNotificationsEnabled)}
+            ariaLabel="Enable audio notifications"
+          />
+
+          <GitCommitGenerationSettings
+            settings={globalSettings.settings.gitCommitGeneration}
+            installedAgents={installedAgents}
+            onChange={handleGitCommitGenerationChange}
+          />
+
+          {(globalSettings.host.hostOs === 'windows') && (
+            <SettingsCardShell
+              title="Agents Environment"
+              description="Run AI agents inside WSL"
+              leading={(
+                <Checkbox
+                  checked={globalSettings.settings.useWslForAcpAdapters}
+                  onCheckedChange={handleUseWslChange}
+                  disabled={!globalSettings.host.wslSupported || !globalSettings.settings.wslDistributionName || switchInProgress}
+                />
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ide-small text-foreground-secondary">Distribution:</span>
+                <DropdownSelect
+                  value={globalSettings.settings.wslDistributionName}
+                  onChange={handleWslDistributionChange}
+                  options={wslDistributionOptions}
+                  disabled={globalSettings.settings.useWslForAcpAdapters || switchInProgress || !hasWslDistributions}
+                  className="min-w-[180px]"
+                />
+              </div>
+              {!globalSettings.host.wslSupported && (
+                <div className="text-ide-small text-error">WSL could not be detected from the IDE process.</div>
+              )}
+            </SettingsCardShell>
+          )}
+
+          {feature.supported && (
+            <SettingsCardShell title="Audio Input">
+              {showAudioInputDetails && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-ide-small text-foreground-secondary">Language:</span>
+                    <DropdownSelect
+                      value={settings.language}
+                      onChange={handleLanguageChange}
+                      options={whisperLanguageOptions}
+                      disabled={!feature.installed}
+                    />
+                  </div>
+                  {feature.installed && feature.installPath && (
+                    <div className="break-all text-foreground-secondary">
+                      Path: <span className="font-mono">{feature.installPath}</span>
+                    </div>
+                  )}
+                  <div className="text-foreground-secondary">
+                    Status: {feature.status}
+                  </div>
+                </div>
+              )}
+              <div>
+                <Button
+                  onClick={handleAudioInputAction}
+                  disabled={feature.installing || (!feature.installed && !feature.supported)}
+                  variant={feature.installed ? 'accentOutline' : 'install'}
+                  className="text-ide-regular"
+                  leftIcon={feature.installing ? <SettingsLoadingSpinner className="w-3 h-3" /> : undefined}
+                >
+                  <span>{actionLabel}</span>
+                </Button>
+              </div>
+            </SettingsCardShell>
+          )}
         </div>
       </div>
 
@@ -413,12 +408,18 @@ export function SettingsView() {
         title={pendingWslTarget ? 'Switch to WSL' : 'Switch to Windows'}
         message={
           pendingWslTarget
-            ? `This will close all open conversations, stop all running ACP agents, refresh Service Providers immediately and restart downloaded agents inside WSL (${globalSettings.settings.wslDistributionName}).`
-            : 'This will close all open conversations, stop all running ACP agents, refresh Service Providers immediately and restart downloaded agents in Windows.'
+            ? `This will close all tabs except Settings and start downloaded agents inside WSL (${globalSettings.settings.wslDistributionName}).`
+            : 'This will close all tabs except Settings and start downloaded agents in Windows.'
         }
-        confirmLabel="Switch"
         onConfirm={confirmUseWslChange}
         onCancel={() => setPendingWslTarget(null)}
+      />
+      <ConfirmationModal
+        isOpen={pendingAudioInputUninstall}
+        title="Uninstall Audio Input"
+        message="Do you want to uninstall Audio Input?"
+        onConfirm={confirmAudioInputUninstall}
+        onCancel={() => setPendingAudioInputUninstall(false)}
       />
     </div>
   );

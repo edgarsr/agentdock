@@ -13,20 +13,12 @@ import {
   ToolCallBlock,
   ToolCallEntry,
   ContentChunk,
-  AvailableCommand,
-  isAgentRunnable
+  AvailableCommand
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { safeParseJson, buildToolCallEntry, extractResultTexts, appendToolOutput, replaceToolOutput, extractToolCallDiffEntries } from '../utils/toolCallUtils';
 import { buildConversationHandoffPromptPrefix } from '../utils/conversationHandoff';
 import { buildReplayMessages } from '../utils/replay';
-
-function selectPreferredAgentId(agents: AgentOption[], preferredId?: string): string {
-  if (preferredId && agents.some((agent) => agent.id === preferredId && isAgentRunnable(agent))) {
-    return preferredId;
-  }
-  return agents.find(isAgentRunnable)?.id || '';
-}
 
 function isExploringChunk(chunk: ContentChunk): boolean {
   const kind = chunk.toolKind || '';
@@ -234,6 +226,49 @@ function setBlocks(msg: Message, blocks: RichContentBlock[]): Message {
   }
 }
 
+function failPendingToolStatuses(blocks: RichContentBlock[] | undefined): RichContentBlock[] | undefined {
+  if (!blocks) return blocks;
+
+  let changed = false;
+  const nextBlocks = blocks.map((block) => {
+    if (block.type === 'tool_call') {
+      const status = (block.entry.status || '').toLowerCase();
+      if (!status || status === 'pending' || status === 'running' || status === 'in_progress' || status === 'active') {
+        changed = true;
+        return {
+          ...block,
+          entry: {
+            ...block.entry,
+            status: 'failed',
+          }
+        };
+      }
+      return block;
+    }
+
+    if (block.type === 'exploring') {
+      let entriesChanged = false;
+      const entries = block.entries.map((entry) => {
+        const status = (entry.status || '').toLowerCase();
+        if (!status || status === 'pending' || status === 'running' || status === 'in_progress' || status === 'active') {
+          entriesChanged = true;
+          return { ...entry, status: 'failed' };
+        }
+        return entry;
+      });
+
+      if (entriesChanged) {
+        changed = true;
+        return { ...block, entries };
+      }
+    }
+
+    return block;
+  });
+
+  return changed ? nextBlocks : blocks;
+}
+
 function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -250,6 +285,7 @@ function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
       duration: chunk.durationSeconds ?? message.duration,
       contextTokensUsed: chunk.contextTokensUsed ?? message.contextTokensUsed,
       contextWindowSize: chunk.contextWindowSize ?? message.contextWindowSize,
+      contentBlocks: failPendingToolStatuses(message.contentBlocks),
       metaComplete: true,
     };
     next[i] = finalizedMessage;
@@ -658,7 +694,6 @@ export function useChatSession(
   const [status, setStatus] = useState<string>('not started');
   const [isSending, setIsSending] = useState(false);
   const [isHistoryReplaying, setIsHistoryReplaying] = useState(!!historySession);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>(initialAgentId || '');
   const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({});
   const [selectedModeByAgent, setSelectedModeByAgent] = useState<Record<string, string>>({});
   const [permissionQueue, setPermissionQueue] = useState<PermissionRequest[]>([]);
@@ -667,10 +702,12 @@ export function useChatSession(
   const [acpSessionId, setAcpSessionId] = useState<string>('');
   const [availableCommandsByAgent, setAvailableCommandsByAgent] = useState<Record<string, AvailableCommand[]>>({});
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
+  const selectedAgentId = initialAgentId || '';
 
   const pendingPromptRef = useRef<any[] | null>(null);
   const pendingHandoffRef = useRef<PendingHandoffContext | null>(null);
   const consumedHandoffIdRef = useRef<string | null>(null);
+  const resetSessionAfterInitialCancelRef = useRef(false);
   const startedAgentIdRef = useRef<string>('');
   const startedModelIdRef = useRef<string>('');
   const startedModeIdRef = useRef<string>('');
@@ -682,6 +719,15 @@ export function useChatSession(
   const allowMetadataUpdateRef = useRef(!historySession);
   const touchUpdatedAtRef = useRef(!historySession);
   const ignoreReplayChunksRef = useRef(!!historySession);
+  const pinnedAgentSnapshotRef = useRef<{
+    id: string;
+    name?: string;
+    iconPath?: string;
+    currentModelId?: string;
+    availableModels?: AgentOption['availableModels'];
+    currentModeId?: string;
+    availableModes?: AgentOption['availableModes'];
+  } | null>(null);
 
   // Buffered chunk queue - chunks are collected here and flushed atomically
   const chunkBufferRef = useRef<ContentChunk[]>([]);
@@ -727,46 +773,114 @@ export function useChatSession(
   }, [onHandoffConsumed]);
 
   const selectedAgent = availableAgents.find((agent) => agent.id === selectedAgentId);
+  const pinnedAgentId = selectedAgentId;
+
+  useEffect(() => {
+    const snapshotSourceId = pinnedAgentId;
+    if (!snapshotSourceId) return;
+    const matchingAgent = availableAgents.find((agent) => agent.id === snapshotSourceId);
+    if (!matchingAgent) return;
+    pinnedAgentSnapshotRef.current = {
+      id: matchingAgent.id,
+      name: matchingAgent.name,
+      iconPath: matchingAgent.iconPath,
+      currentModelId: matchingAgent.currentModelId,
+      availableModels: matchingAgent.availableModels,
+      currentModeId: matchingAgent.currentModeId,
+      availableModes: matchingAgent.availableModes,
+    };
+  }, [availableAgents, pinnedAgentId]);
+
+  const resolvedSelectedAgent = selectedAgent
+    ?? (pinnedAgentSnapshotRef.current?.id === pinnedAgentId
+      ? ({
+          id: pinnedAgentSnapshotRef.current.id,
+          name: pinnedAgentSnapshotRef.current.name,
+          iconPath: pinnedAgentSnapshotRef.current.iconPath,
+          currentModelId: pinnedAgentSnapshotRef.current.currentModelId,
+          availableModels: pinnedAgentSnapshotRef.current.availableModels,
+          currentModeId: pinnedAgentSnapshotRef.current.currentModeId,
+          availableModes: pinnedAgentSnapshotRef.current.availableModes,
+        } as AgentOption)
+      : undefined);
   const availableCommands = selectedAgentId
     ? (availableCommandsByAgent[selectedAgentId] ?? ACPBridge.getAvailableCommands(selectedAgentId))
     : [];
-  const availableModels = selectedAgent?.availableModels ?? [];
-  const availableModes = selectedAgent?.availableModes ?? [];
+  const effectiveSelectedAgent = resolvedSelectedAgent;
+  const availableModels = effectiveSelectedAgent?.availableModels ?? [];
+  const availableModes = effectiveSelectedAgent?.availableModes ?? [];
 
-  const selectedModelId = selectedAgent
-      ? (selectedModelByAgent[selectedAgent.id] || selectedAgent.currentModelId || availableModels[0]?.modelId || '')
+  const selectedModelId = effectiveSelectedAgent
+      ? (selectedModelByAgent[effectiveSelectedAgent.id] || effectiveSelectedAgent.currentModelId || availableModels[0]?.modelId || '')
       : '';
 
-  const selectedModeId = selectedAgent
-      ? (selectedModeByAgent[selectedAgent.id] || selectedAgent.currentModeId || availableModes[0]?.id || '')
+  const selectedModeId = effectiveSelectedAgent
+      ? (selectedModeByAgent[effectiveSelectedAgent.id] || effectiveSelectedAgent.currentModeId || availableModes[0]?.id || '')
       : '';
 
-  const adapterDisplayName = selectedAgent?.name || '';
-  const agentOptions: DropdownOption[] = availableAgents.map((agent) => ({ 
-    id: agent.id, 
-    label: agent.name,
-    iconPath: agent.iconPath,
-    subOptions: agent.availableModels?.map(m => ({
-      id: m.modelId,
-      label: m.name,
-      description: m.description,
-    }))
-  }));
-  const modeOptions: DropdownOption[] = availableModes.map((mode) => ({
-    id: mode.id,
-    label: mode.name,
-    description: mode.description,
-  }));
+  const adapterDisplayName = resolvedSelectedAgent?.name || '';
+  const agentOptions: DropdownOption[] = useMemo(() => {
+    const options = availableAgents.map((agent) => ({
+      id: agent.id,
+      label: agent.name,
+      iconPath: agent.iconPath,
+      subOptions: agent.availableModels?.map(m => ({
+        id: m.modelId,
+        label: m.name,
+        description: m.description,
+      }))
+    }));
 
-  // Sync selection when agents list changes (passed from parent)
+    const pinnedSnapshot = pinnedAgentSnapshotRef.current;
+    const selectedId = pinnedAgentId;
+    if (
+      pinnedSnapshot &&
+      selectedId &&
+      pinnedSnapshot.id === selectedId &&
+      !options.some((option) => option.id === selectedId)
+    ) {
+      options.unshift({
+        id: pinnedSnapshot.id,
+        label: pinnedSnapshot.name || pinnedSnapshot.id,
+        iconPath: pinnedSnapshot.iconPath,
+        subOptions: pinnedSnapshot.availableModels?.map((model) => ({
+          id: model.modelId,
+          label: model.name,
+          description: model.description,
+        })) || (pinnedSnapshot.currentModelId ? [{
+          id: pinnedSnapshot.currentModelId,
+          label: pinnedSnapshot.currentModelId,
+          description: undefined,
+        }] : []),
+      });
+    }
+
+    return options;
+  }, [availableAgents, pinnedAgentId]);
+  const modeOptions: DropdownOption[] = useMemo(() => {
+    const options = availableModes.map((mode) => ({
+      id: mode.id,
+      label: mode.name,
+      description: mode.description,
+    }));
+
+    if (options.length > 0) {
+      return options;
+    }
+
+    if (selectedModeId) {
+      return [{
+        id: selectedModeId,
+        label: selectedModeId,
+        description: undefined,
+      }];
+    }
+
+    return [];
+  }, [availableModes, selectedModeId]);
+
   useEffect(() => {
     if (availableAgents.length === 0) return;
-
-    setSelectedAgentId((prev) => {
-      if (prev && availableAgents.some((a) => a.id === prev && isAgentRunnable(a))) return prev;
-      return selectPreferredAgentId(availableAgents, initialAgentId);
-    });
-
     setSelectedModelByAgent((prev) => {
       const next: Record<string, string> = { ...prev };
       availableAgents.forEach((agent) => {
@@ -786,12 +900,9 @@ export function useChatSession(
       });
       return next;
     });
-  }, [availableAgents, initialAgentId]);
+  }, [availableAgents]);
 
   useEffect(() => {
-    if (!initialAgentId) return;
-    if (initialAgentId === selectedAgentId) return;
-    if (!availableAgents.some((agent) => agent.id === initialAgentId && isAgentRunnable(agent))) return;
     allowMetadataUpdateRef.current = false;
     lastMetadataFingerprintRef.current = '';
     statusRef.current = 'not started';
@@ -800,8 +911,7 @@ export function useChatSession(
     startedAgentIdRef.current = '';
     startedModelIdRef.current = '';
     startedModeIdRef.current = '';
-    setSelectedAgentId(initialAgentId);
-  }, [availableAgents, initialAgentId, selectedAgentId]);
+  }, [selectedAgentId]);
 
   useEffect(() => {
     const nextByAgent: Record<string, AvailableCommand[]> = {};
@@ -908,7 +1018,18 @@ export function useChatSession(
       if (e.detail.chatId !== conversationId) return;
       const s = e.detail.status;
       statusRef.current = s;
-      setStatus(s);
+      if (s === 'ready' && resetSessionAfterInitialCancelRef.current) {
+        resetSessionAfterInitialCancelRef.current = false;
+        statusRef.current = 'not started';
+        setStatus('not started');
+        setAcpSessionId('');
+        startedAgentIdRef.current = '';
+        startedModelIdRef.current = '';
+        startedModeIdRef.current = '';
+        setIsSending(false);
+      } else {
+        setStatus(s);
+      }
 
       if (s === 'initializing') {
         // We don't set isSending(true) here anymore to avoid blocking the user
@@ -1038,7 +1159,6 @@ export function useChatSession(
   useEffect(() => {
     if (status !== 'ready') return;
     if (!acpSessionId || !selectedAgentId) return;
-    if (initialAgentId && initialAgentId !== selectedAgentId) return;
     if (!allowMetadataUpdateRef.current) return;
 
     const promptCount = messages.filter((message) => message.role === 'user').length;
@@ -1056,15 +1176,17 @@ export function useChatSession(
       title,
       touchUpdatedAt: touchUpdatedAtRef.current
     });
+    window.setTimeout(() => {
+      ACPBridge.requestHistoryList();
+    }, 100);
     lastMetadataFingerprintRef.current = fingerprint;
-  }, [conversationId, status, acpSessionId, selectedAgentId, initialAgentId, messages]);
+  }, [conversationId, status, acpSessionId, selectedAgentId, messages]);
 
 
   // Track model changes
   useEffect(() => {
     if (!selectedAgentId || !selectedModelId) return;
     if (status !== 'ready') return;
-    if (initialAgentId && initialAgentId !== selectedAgentId) return;
     if (startedAgentIdRef.current !== selectedAgentId) return;
 
     if (startedModelIdRef.current === selectedModelId) {
@@ -1078,13 +1200,12 @@ export function useChatSession(
     } catch (e) {
       console.warn('[useChatSession] Failed to set model:', e);
     }
-  }, [conversationId, selectedAgentId, selectedModelId, status, initialAgentId]);
+  }, [conversationId, selectedAgentId, selectedModelId, status]);
 
   // Track mode changes
   useEffect(() => {
     if (!selectedAgentId || !selectedModeId) return;
     if (status !== 'ready') return;
-    if (initialAgentId && initialAgentId !== selectedAgentId) return;
     if (startedAgentIdRef.current !== selectedAgentId) return;
 
     if (startedModeIdRef.current === selectedModeId) {
@@ -1098,7 +1219,7 @@ export function useChatSession(
     } catch (e) {
       console.warn('[useChatSession] Failed to set mode:', e);
     }
-  }, [conversationId, selectedAgentId, selectedModeId, status, initialAgentId]);
+  }, [conversationId, selectedAgentId, selectedModeId, status]);
 
   const handleSend = () => {
     const text = inputValue.trim();
@@ -1225,6 +1346,8 @@ export function useChatSession(
 
   const handleStop = () => {
     if (typeof window.__cancelPrompt === 'function') {
+      const liveUserMessageCount = liveMessages.filter((message) => message.role === 'user').length;
+      resetSessionAfterInitialCancelRef.current = !historySession && liveUserMessageCount === 1;
       pendingPromptRef.current = null;
       window.__cancelPrompt(conversationId);
       setPermissionQueue([]);
@@ -1265,7 +1388,6 @@ export function useChatSession(
     isSending,
     isHistoryReplaying,
     selectedAgentId,
-    setSelectedAgentId,
     agentOptions,
     selectedModelId,
     handleModelChange,
@@ -1276,14 +1398,14 @@ export function useChatSession(
     handleSend,
     handleStop,
     handlePermissionDecision,
-    hasSelectedAgent: !!selectedAgent,
+    hasSelectedAgent: !!resolvedSelectedAgent,
     attachments,
     setAttachments,
     availableCommands,
     acpSessionId,
     adapterName: selectedAgentId,
     adapterDisplayName,
-    adapterIconPath: selectedAgent?.iconPath || ''
+    adapterIconPath: resolvedSelectedAgent?.iconPath || ''
   };
 }
 

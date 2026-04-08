@@ -1,20 +1,26 @@
 import { useEffect, useState } from 'react';
-import { PlugZap, Plus, Trash2 } from 'lucide-react';
+import { Network, Pencil, Plus, Trash2 } from 'lucide-react';
 import { McpServerConfig, McpTransport } from '../types/mcp';
 import { ACPBridge } from '../utils/bridge';
+import { Button } from './ui/Button';
+import { Checkbox } from './ui/Checkbox';
+import { Tooltip } from './chat/shared/Tooltip';
+import ConfirmationModal from './ConfirmationModal';
+import { DropdownSelect } from './ui/DropdownSelect';
+import { FormDialog } from './ui/FormDialog';
 
 interface FormState {
   name: string;
   transport: McpTransport;
   command: string;
-  args: string;      // one per line
-  env: string;       // NAME=value per line
+  args: string;
+  env: string;
   url: string;
-  headers: string;   // Name: value per line
+  headers: string;
 }
 
 const emptyForm = (): FormState => ({
-  name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '',
+  name: '', transport: 'http', command: '', args: '', env: '', url: '', headers: '',
 });
 
 function parseLines(raw: string): string[] {
@@ -52,14 +58,11 @@ function nextId(): string {
   return `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-const inputClass = 'bg-input border border-border rounded-ide px-2 py-1 text-foreground font-mono focus:outline-none focus:border-primary';
-const labelClass = 'flex flex-col gap-1';
-const labelTextClass = 'text-foreground/50 font-sans';
-
 export function McpServersView() {
   const [servers, setServers] = useState<McpServerConfig[]>([]);
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<McpServerConfig | null>(null);
 
   useEffect(() => {
     const cleanup = ACPBridge.onMcpServers(e => setServers(e.detail.servers));
@@ -99,123 +102,182 @@ export function McpServersView() {
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground text-ide-small">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2 text-foreground/80">
-          <PlugZap size={14} />
-          <span className="font-medium">MCP Servers</span>
-        </div>
-        <button
+      <div className="flex items-center justify-end px-2 min-h-12 border-b border-border flex-shrink-0">
+        <Button
           onClick={openAdd}
-          className="flex items-center gap-1 px-2 py-1 rounded-ide text-foreground/60 hover:text-foreground hover:bg-background-secondary transition-colors"
+          variant="primary"
+          leftIcon={<Plus size={14} />}
+          className="max-h-8"
         >
-          <Plus size={14} />
-          <span>Add</span>
-        </button>
+          Add
+        </Button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
         {servers.length === 0 && !form && (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-foreground/30">
-            <PlugZap size={28} strokeWidth={1.5} />
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary p-4">
+            <Network size={28} strokeWidth={1.5} />
             <span>No MCP servers configured</span>
+            <p className="max-w-[400px] text-center">
+              MCP servers provide access to external tools and resources for AI agents
+            </p>
           </div>
         )}
 
         {servers.map(s => (
           <div
             key={s.id}
-            onClick={() => openEdit(s)}
-            className={`flex items-center gap-3 px-4 py-2.5 border-b border-border cursor-pointer hover:bg-background-secondary transition-colors ${editingId === s.id ? 'bg-background-secondary' : ''}`}
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border"
           >
-            <button
-              role="switch"
-              aria-checked={s.enabled}
-              onClick={e => { e.stopPropagation(); toggle(s.id); }}
-              className={`relative inline-flex h-4 w-7 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${s.enabled ? 'bg-primary' : 'bg-border'}`}
-            >
-              <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-3' : 'translate-x-0'}`} />
-            </button>
-            <span className={`flex-1 truncate ${s.enabled ? 'text-foreground' : 'text-foreground/40'}`}>{s.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-background text-foreground/50 border border-border uppercase tracking-wide">{s.transport}</span>
-            <button
-              onClick={e => { e.stopPropagation(); remove(s.id); }}
-              className="p-1 rounded text-foreground/30 hover:text-error transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
+            <Tooltip variant="minimal" content={s.enabled ? 'Enabled' : 'Disabled'}>
+              <Checkbox
+                checked={s.enabled}
+                onCheckedChange={() => toggle(s.id)}
+                onClick={e => { e.stopPropagation(); }}
+              />
+            </Tooltip>
+
+
+            <div className="flex-1 min-w-0">
+              <div className="truncate">
+                {s.name}
+              </div>
+              <div className="mt-1 text-xs text-foreground-secondary truncate">
+                {s.transport}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Tooltip variant="minimal" content="Edit">
+                <button
+                  type="button"
+                  onClick={() => openEdit(s)}
+                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-foreground focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                  aria-label={`Edit ${s.name}`}
+                >
+                  <Pencil size={13} />
+                </button>
+              </Tooltip>
+              <Tooltip variant="minimal" content="Delete">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(s)}
+                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-error focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                  aria-label={`Delete ${s.name}`}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </Tooltip>
+            </div>
           </div>
         ))}
 
-        {/* Form */}
-        {form && (
-          <div className="border-b border-border bg-background-secondary px-4 py-3 flex flex-col gap-3">
-            <span className="text-foreground/60 font-medium">{editingId ? 'Edit server' : 'New server'}</span>
+        </div>
+      </div>
 
-            <label className={labelClass}>
-              <span className={labelTextClass}>Name</span>
-              <input autoFocus value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="My MCP Server" className={inputClass} />
-            </label>
+      <FormDialog
+        isOpen={form !== null}
+        title={editingId ? 'Edit MCP Server' : 'New MCP Server'}
+        onClose={cancelForm}
+        footer={(
+          <>
+            <Button onClick={submitForm} disabled={!form?.name.trim()} variant="primary">Save</Button>
+            <Button onClick={cancelForm} variant="secondary">Cancel</Button>
+          </>
+        )}
+      >
+        {form ? (
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-foreground-secondary">Name</span>
+              <input
+                data-autofocus="true"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
 
-            <label className={labelClass}>
-              <span className={labelTextClass}>Transport</span>
-              <select value={form.transport} onChange={e => setForm({ ...form, transport: e.target.value as McpTransport })}
-                className={inputClass}>
-                <option value="stdio">stdio</option>
-                <option value="http">http</option>
-                <option value="sse">sse</option>
-              </select>
-            </label>
+            <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+              <span className="text-foreground-secondary">Transport</span>
+              <DropdownSelect
+                value={form.transport}
+                options={[
+                  { value: 'http', label: 'http' },
+                  { value: 'sse', label: 'sse' },
+                  { value: 'stdio', label: 'stdio' },
+                ]}
+                onChange={(transport) => setForm({ ...form, transport: transport as McpTransport })}
+                className="w-full min-w-0"
+                buttonClassName="w-full"
+              />
+            </div>
 
             {form.transport === 'stdio' ? (
               <>
-                <label className={labelClass}>
-                  <span className={labelTextClass}>Command</span>
-                  <input value={form.command} onChange={e => setForm({ ...form, command: e.target.value })}
-                    placeholder="npx" className={inputClass} />
-                </label>
-                <label className={labelClass}>
-                  <span className={labelTextClass}>Args <span className="text-foreground/30">(one per line)</span></span>
-                  <textarea value={form.args} onChange={e => setForm({ ...form, args: e.target.value })}
-                    placeholder={'-y\n@modelcontextprotocol/server-fetch'} rows={3}
-                    className={`${inputClass} resize-none`} />
-                </label>
-                <label className={labelClass}>
-                  <span className={labelTextClass}>Environment <span className="text-foreground/30">(NAME=value per line)</span></span>
-                  <textarea value={form.env} onChange={e => setForm({ ...form, env: e.target.value })}
-                    placeholder="API_KEY=your-key" rows={2} className={`${inputClass} resize-none`} />
-                </label>
+                <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+                  <span className="text-foreground-secondary">Command</span>
+                  <input
+                    value={form.command}
+                    onChange={e => setForm({ ...form, command: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-foreground-secondary">Args</span>
+                  <textarea
+                    value={form.args}
+                    onChange={e => setForm({ ...form, args: e.target.value })}
+                    placeholder={'-y\n@modelcontextprotocol/server-fetch'}
+                    rows={3}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-foreground-secondary">Environment</span>
+                  <textarea
+                    value={form.env}
+                    onChange={e => setForm({ ...form, env: e.target.value })}
+                    placeholder="API_KEY=your-key"
+                    rows={3}
+                  />
+                </div>
               </>
             ) : (
               <>
-                <label className={labelClass}>
-                  <span className={labelTextClass}>URL</span>
-                  <input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })}
-                    placeholder="http://localhost:3000/mcp" className={inputClass} />
-                </label>
-                <label className={labelClass}>
-                  <span className={labelTextClass}>Headers <span className="text-foreground/30">(Name: value per line)</span></span>
-                  <textarea value={form.headers} onChange={e => setForm({ ...form, headers: e.target.value })}
-                    placeholder="Authorization: Bearer token" rows={2} className={`${inputClass} resize-none`} />
-                </label>
+                <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+                  <span className="text-foreground-secondary">URL</span>
+                  <input
+                    value={form.url}
+                    onChange={e => setForm({ ...form, url: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-foreground-secondary">Headers</span>
+                  <textarea
+                    value={form.headers}
+                    onChange={e => setForm({ ...form, headers: e.target.value })}
+                    placeholder="Authorization: Bearer token"
+                    rows={3}
+                  />
+                </div>
               </>
             )}
-
-            <div className="flex gap-2">
-              <button onClick={submitForm} disabled={!form.name.trim()}
-                className="px-3 py-1 rounded-ide bg-primary text-primary-foreground border border-primary-border hover:opacity-90 transition-opacity disabled:opacity-40">
-                Save
-              </button>
-              <button onClick={cancelForm}
-                className="px-3 py-1 rounded-ide bg-secondary text-secondary-foreground border border-secondary-border hover:bg-accent hover:text-accent-foreground transition-colors">
-                Cancel
-              </button>
-            </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </FormDialog>
+
+      <ConfirmationModal
+        isOpen={deleteTarget !== null}
+        title="Delete MCP configuration"
+        message={deleteTarget ? `Do you want to delete "${deleteTarget.name}"?` : ''}
+        confirmLabel="Yes"
+        cancelLabel="No"
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          remove(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

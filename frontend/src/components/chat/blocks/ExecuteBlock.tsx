@@ -4,10 +4,9 @@ import { ChevronRight, SquareTerminal } from 'lucide-react';
 import { parseToolStatus } from '../../../utils/toolCallUtils';
 import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
 import { MarkdownMessage } from '../MarkdownMessage';
+import { chatInsetFocusClassName } from '../shared/focusStyles';
 
-const TerminalIcon = () => (
-  <SquareTerminal size={16} className="text-primary" />
-);
+const TerminalIcon = () => (<SquareTerminal size={16} className="text-primary" />);
 
 interface Props {
   block: ToolCallBlock;
@@ -63,24 +62,13 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false })
   }, [block.entry.rawJson, block.entry.title, block.entry.kind]);
 
   return (
-    <div className="my-2 border border-border rounded-md overflow-hidden shadow-sm">
-      <button
-        onClick={toggle}
-        className="flex items-center gap-2 w-full px-3 py-2 bg-editor-bg "
-      >
-        <div className="flex-shrink-0 text-editor-fg opacity-70">
-          <TerminalIcon />
-        </div>
-        <div className="flex-1 text-left font-mono truncate text-editor-fg opacity-90 pr-2">
-          {command}
-        </div>
+    <div className="border border-border rounded-[6px] overflow-hidden">
+      <button onClick={toggle} className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}>
+        <div className="flex-shrink-0"><TerminalIcon /></div>
+        <div className="flex-1 text-left font-mono truncate pr-2">{command}</div>
         <div className="flex-shrink-0 flex items-center gap-2">
           {(showPending || isError) && (
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${
-                showPending ? 'bg-warning animate-pulse' : 'bg-error'
-              }`}
-            />
+            <div className={`w-2.5 h-2.5 rounded-full ${showPending ? 'bg-warning animate-pulse' : 'bg-error'}`}/>
           )}
           <div className={`transition-transform duration-200 text-editor-fg opacity-50 ${isExpanded ? 'rotate-90' : ''}`}>
             <ChevronRight size={14} />
@@ -88,30 +76,25 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false })
         </div>
       </button>
 
-      <div
-        className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
+      <div className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="p-3 bg-editor-bg max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-            <div className="leading-relaxed text-editor-fg min-h-[0.5rem]">
-              <div className="mb-1 text-editor-fg opacity-100 font-bold">
-                <span className="opacity-50 mr-2 select-none font-mono">$</span>
-                {command}
+          <div tabIndex={-1} className="p-3 text-ide-small bg-editor-bg max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb
+              border-t border-border scrollbar-track-transparent [&_.markdown-body]:my-0 [&_.markdown-body_pre]:my-0
+              [&_.markdown-body_pre]:border-0 [&_.markdown-body_pre]:rounded-none
+              [&_.markdown-body_pre]:bg-transparent [&_.markdown-body_pre]:overflow-visible
+              [&_.markdown-body_pre_code]:overflow-visible [&_.markdown-body_pre_code]:p-0">
+            <div className="text-editor-fg font-mono min-h-[0.5rem]">
+              <div className="mb-1 text-editor-fg">
+                <span className="text-foreground-secondary mr-1 select-none">$</span>{command}
               </div>
               {block.entry.result ? (
-                <div className="mt-2 opacity-90">
-                  {isFencedCodeAtStart ? (
-                    <MarkdownMessage content={sanitizedResultText} />
-                  ) : (
-                    <pre className="whitespace-pre-wrap break-words font-mono text-sm m-0">
-                      {sanitizedResultText}
-                    </pre>
+                <div className="mt-4">{isFencedCodeAtStart ? (<MarkdownMessage content={sanitizedResultText} />) : (
+                    <pre className="whitespace-pre-wrap break-words font-mono text-sm m-0">{sanitizedResultText}</pre>
                   )}
                 </div>
-              ) : !showFinished ? (
-                <span className="opacity-40 italic">Executing...</span>
-              ) : null}
+              ) : !showFinished ? (<span className="italic">Executing...</span>) : null}
             </div>
           </div>
         </div>

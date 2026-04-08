@@ -10,6 +10,7 @@ import { McpServersView } from './components/McpServersView';
 import { PromptLibraryView } from './components/PromptLibraryView';
 import { SystemInstructionsView } from './components/SystemInstructionsView';
 import { SettingsView } from './components/SettingsView';
+import { EmptyStateView } from './components/EmptyStateView';
 import ConfirmationModal from './components/ConfirmationModal';
 
 let tabCounter = 0;
@@ -17,7 +18,7 @@ function nextId(prefix: string): string {
   return `${prefix}-${++tabCounter}-${Date.now()}`;
 }
 
-const DEFAULT_TAB_UI: TabUiFlags = { unread: false, atBottom: true, warning: false };
+const DEFAULT_TAB_UI: TabUiFlags = { unread: false, atBottom: true, canMarkRead: true, warning: false };
 
 interface TabSessionState {
   acpSessionId: string;
@@ -40,6 +41,7 @@ function App() {
   const [tabs, setTabs] = useState<ChatTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
   const [availableAgents, setAvailableAgents] = useState<AgentOption[]>([]);
+  const [adaptersResolved, setAdaptersResolved] = useState(false);
   const [tabUi, setTabUi] = useState<Record<string, TabUiFlags>>({});
   const [tabSessionState, setTabSessionState] = useState<Record<string, TabSessionState>>({});
   const [pendingAgentSwitch, setPendingAgentSwitch] = useState<PendingAgentSwitch | null>(null);
@@ -54,11 +56,13 @@ function App() {
   tabUiRef.current = tabUi;
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
+  const lastStableNewTabAgentIdRef = useRef<string>('');
+  const stableAgentSnapshotsRef = useRef<Record<string, AgentOption>>({});
 
   const canUserSeeResponse = useCallback((tabId: string) => {
     const isActive = tabId === activeTabIdRef.current;
-    const atBottom = tabUiRef.current[tabId]?.atBottom ?? true;
-    return isActive && atBottom;
+    const canMarkRead = tabUiRef.current[tabId]?.canMarkRead ?? true;
+    return isActive && canMarkRead;
   }, []);
 
   // Helpers for tab UI state init/cleanup
@@ -91,9 +95,35 @@ function App() {
 
   // Single global listener for adapter updates
   useEffect(() => {
-    return ACPBridge.onAdapters((e) => {
+    const dispose = ACPBridge.onAdapters((e) => {
       const safeAdapters = Array.isArray(e.detail.adapters) ? e.detail.adapters : [];
+      const nextSnapshots = { ...stableAgentSnapshotsRef.current };
+      safeAdapters.forEach((agent) => {
+        const previous = nextSnapshots[agent.id];
+        nextSnapshots[agent.id] = {
+          ...previous,
+          ...agent,
+          iconPath: agent.iconPath || previous?.iconPath,
+          name: agent.name || previous?.name,
+        };
+      });
+      stableAgentSnapshotsRef.current = nextSnapshots;
+
+      const stableLastUsedRunnableId = safeAdapters.find((agent) => agent.isLastUsed && agent.downloaded === true)?.id;
+      if (stableLastUsedRunnableId) {
+        lastStableNewTabAgentIdRef.current = stableLastUsedRunnableId;
+      } else {
+        const currentStable = lastStableNewTabAgentIdRef.current;
+        const currentStableStatus = currentStable ? safeAdapters.find((agent) => agent.id === currentStable) : undefined;
+        if (currentStableStatus?.downloadedKnown === true && currentStableStatus.downloaded !== true) {
+          lastStableNewTabAgentIdRef.current = safeAdapters.find((agent) => agent.downloaded === true)?.id || '';
+        } else if (!currentStable) {
+          lastStableNewTabAgentIdRef.current = safeAdapters.find((agent) => agent.downloaded === true)?.id || '';
+        }
+      }
+
       setAvailableAgents(safeAdapters);
+      setAdaptersResolved(true);
       if (safeAdapters.length > 0) {
         try {
           localStorage.setItem('unified-llm.adapters', JSON.stringify(safeAdapters));
@@ -102,42 +132,91 @@ function App() {
         }
       }
     });
+    ACPBridge.requestAdapters();
+    return dispose;
   }, []);
 
   useEffect(() => {
-    return ACPBridge.onExecutionTargetSwitched(() => {
-      const chatTabIds = tabsRef.current.filter(tab => tab.type === 'chat').map(tab => tab.id);
-      setTabs(prev => prev.filter(tab => tab.type !== 'chat'));
-      setTabUi(prev => {
-        const next = { ...prev };
-        chatTabIds.forEach(id => delete next[id]);
-        return next;
-      });
-      setTabSessionState(prev => {
-        const next = { ...prev };
-        chatTabIds.forEach(id => delete next[id]);
-        return next;
-      });
-      setPendingHandoffsByTab(prev => {
-        const next = { ...prev };
-        chatTabIds.forEach(id => delete next[id]);
-        return next;
-      });
-      chatTabIds.forEach(id => {
-        delete pendingPermissionRef.current[id];
-        delete pendingConversationContinuationsRef.current[id];
-      });
+    return ACPBridge.onHistoryList((e) => {
+      const historyByConversationId = new Map(
+        e.detail.list
+          .filter((item) => item.conversationId && item.title?.trim())
+          .map((item) => [item.conversationId, item])
+      );
 
-      const remainingTabs = tabsRef.current.filter(tab => tab.type !== 'chat');
-      setActiveTabId(current => {
-        if (remainingTabs.length === 0) return '';
-        if (remainingTabs.some(tab => tab.id === current)) return current;
-        return remainingTabs[0].id;
+      setTabs((prev) => {
+        let changed = false;
+        const next = prev.map((tab) => {
+          if (tab.type !== 'chat') return tab;
+
+          const historyItem = historyByConversationId.get(tab.historySession?.conversationId || tab.conversationId);
+          const nextTitle = historyItem?.title?.trim();
+          if (!nextTitle || nextTitle === tab.title) {
+            if (!historyItem || !tab.historySession) return tab;
+            if (tab.historySession.title === historyItem.title) return tab;
+            changed = true;
+            return {
+              ...tab,
+              historySession: {
+                ...tab.historySession,
+                title: historyItem.title,
+              }
+            };
+          }
+
+          changed = true;
+          return {
+            ...tab,
+            title: nextTitle,
+            historySession: historyItem
+          };
+        });
+
+        return changed ? next : prev;
       });
     });
   }, []);
 
+  useEffect(() => {
+    return ACPBridge.onExecutionTargetSwitched(() => {
+      const activeSettingsTab = tabsRef.current.find(
+        tab => tab.id === activeTabIdRef.current && tab.type === 'settings'
+      );
+      const remainingTabs = activeSettingsTab ? [activeSettingsTab] : [];
+      const closedTabIds = tabsRef.current
+        .filter(tab => !activeSettingsTab || tab.id !== activeSettingsTab.id)
+        .map(tab => tab.id);
+
+      setTabs(remainingTabs);
+      setTabUi(prev => {
+        const next = { ...prev };
+        closedTabIds.forEach(id => delete next[id]);
+        return next;
+      });
+      setTabSessionState(prev => {
+        const next = { ...prev };
+        closedTabIds.forEach(id => delete next[id]);
+        return next;
+      });
+      setPendingHandoffsByTab(prev => {
+        const next = { ...prev };
+        closedTabIds.forEach(id => delete next[id]);
+        return next;
+      });
+      closedTabIds.forEach(id => {
+        delete pendingPermissionRef.current[id];
+        delete pendingConversationContinuationsRef.current[id];
+      });
+      setPendingAgentSwitch(null);
+      setActiveTabId(activeSettingsTab?.id ?? '');
+    });
+  }, []);
+
   const runnableAgents = useMemo(() => availableAgents.filter(isAgentRunnable), [availableAgents]);
+  const agentAvailabilityResolved = useMemo(
+    () => adaptersResolved && availableAgents.every((agent) => agent.downloadedKnown === true),
+    [adaptersResolved, availableAgents]
+  );
   const pendingAgentName = pendingAgentSwitch
     ? (availableAgents.find((agent) => agent.id === pendingAgentSwitch.targetAgentId)?.name || pendingAgentSwitch.targetAgentId)
     : 'the selected agent';
@@ -145,10 +224,15 @@ function App() {
   const handleNewTab = useCallback((agentId?: string) => {
     const resolvedAgentId = runnableAgents.some(agent => agent.id === agentId)
       ? agentId
-      : runnableAgents.find(agent => agent.isLastUsed)?.id || runnableAgents[0]?.id;
+      : lastStableNewTabAgentIdRef.current
+        || runnableAgents.find(agent => agent.isLastUsed)?.id
+        || runnableAgents[0]?.id;
+    if (!resolvedAgentId) {
+      return;
+    }
     const newId = nextId('tab');
     const newConversationId = nextId('conv');
-    const title = 'Untitled';
+    const title = 'New';
     setTabs((prev) => [...prev, { id: newId, type: 'chat', title, conversationId: newConversationId, agentId: resolvedAgentId }]);
     initTabUi(newId);
     setActiveTabId(newId);
@@ -220,7 +304,7 @@ function App() {
       : runnableAgents[0]?.id;
     const newId = nextId('tab');
     const newConversationId = nextId('conv');
-    const title = 'Untitled';
+    const title = 'New';
 
     setTabs(prev => {
       const remaining = prev.filter(item => item.id !== pendingAgentSwitch.tabId);
@@ -279,9 +363,6 @@ function App() {
     const existing = tabsRef.current.find(t => t.type === type);
     if (existing) {
       setActiveTabId(existing.id);
-      if (type === 'management') {
-        ACPBridge.requestAdapters();
-      }
       return;
     }
     const newId = nextId('tab');
@@ -347,7 +428,7 @@ function App() {
     }
 
     const newId = nextId('tab');
-    const title = item.title || 'Untitled';
+    const title = item.title || 'New';
 
     // Open the history session as a new chat tab
     setTabs((prev) => [
@@ -380,15 +461,37 @@ function App() {
   const handleAtBottomChange = useCallback((tabId: string, isAtBottom: boolean) => {
     setTabUi(prev => {
       const current = prev[tabId] ?? DEFAULT_TAB_UI;
-      const shouldClearUnread = isAtBottom && tabId === activeTabIdRef.current && current.unread;
       const next = {
         ...current,
         atBottom: isAtBottom,
+      };
+
+      if (
+        current.atBottom === next.atBottom &&
+        current.canMarkRead === next.canMarkRead &&
+        current.unread === next.unread &&
+        current.warning === next.warning
+      ) {
+        return prev;
+      }
+
+      return { ...prev, [tabId]: next };
+    });
+  }, []);
+
+  const handleCanMarkReadChange = useCallback((tabId: string, canMarkRead: boolean) => {
+    setTabUi(prev => {
+      const current = prev[tabId] ?? DEFAULT_TAB_UI;
+      const shouldClearUnread = canMarkRead && tabId === activeTabIdRef.current && current.unread;
+      const next = {
+        ...current,
+        canMarkRead,
         unread: shouldClearUnread ? false : current.unread,
       };
 
       if (
         current.atBottom === next.atBottom &&
+        current.canMarkRead === next.canMarkRead &&
         current.unread === next.unread &&
         current.warning === next.warning
       ) {
@@ -432,7 +535,7 @@ function App() {
         tabUi={tabUi}
         onSelectTab={(id) => {
           setActiveTabId(id);
-          if ((tabUi[id]?.atBottom ?? true)) {
+          if ((tabUi[id]?.canMarkRead ?? true)) {
             setTabUi(prev => prev[id]?.unread ? { ...prev, [id]: { ...prev[id], unread: false } } : prev);
           }
         }}
@@ -470,77 +573,50 @@ function App() {
                   isActive={isTabActive}
                   onAssistantActivity={() => handleAssistantActivity(tab.id)}
                   onAtBottomChange={(isAtBottom) => handleAtBottomChange(tab.id, isAtBottom)}
+                  onCanMarkReadChange={(canMarkRead) => handleCanMarkReadChange(tab.id, canMarkRead)}
                   onPermissionRequestChange={(hasPendingPermission) => handlePermissionRequestChange(tab.id, hasPendingPermission)}
                   onAgentChangeRequest={(payload) => requestAgentSwitch(tab.id, payload)}
                   onHandoffConsumed={(handoffId) => handleHandoffConsumed(tab.id, handoffId)}
                   onSessionStateChange={(state) => handleChatSessionStateChange(tab.id, state)}
                 />
               )}
-              {tab.type === 'management' && <AgentManagementView initialAgents={availableAgents} isActive={isTabActive} />}
-              {tab.type === 'design' && <DesignSystemView />}
-              {tab.type === 'history' && (
-                <HistoryPanel availableAgents={availableAgents} onOpenSession={handleOpenHistory} />
+              {tab.type !== 'chat' && (
+                <>
+                  {tab.type === 'management' && <AgentManagementView initialAgents={availableAgents} isActive={isTabActive} />}
+                  {tab.type === 'design' && <DesignSystemView />}
+                  {tab.type === 'history' && (
+                    <HistoryPanel availableAgents={availableAgents} onOpenSession={handleOpenHistory} />
+                  )}
+                  {tab.type === 'mcp' && <McpServersView />}
+                  {tab.type === 'prompt-library' && <PromptLibraryView />}
+                  {tab.type === 'system-instructions' && <SystemInstructionsView />}
+                  {tab.type === 'settings' && <SettingsView />}
+                </>
               )}
-              {tab.type === 'mcp' && <McpServersView />}
-              {tab.type === 'prompt-library' && <PromptLibraryView />}
-              {tab.type === 'system-instructions' && <SystemInstructionsView />}
-              {tab.type === 'settings' && <SettingsView />}
             </div>
           );
         })}
 
         {/* Empty state */}
         {tabs.length === 0 && (
-          <div className="absolute inset-0 w-full h-full z-10 bg-background flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4 max-w-[620px] px-6 text-center">
-              {runnableAgents.length === 0 ? (
-                <>
-                  <div className="text-ide-regular text-foreground/85">
-                    No AI agents are currently available.
-                  </div>
-                  <div className="text-sm text-foreground/60">
-                    Install at least one agent and sign in from the plugin Agent Management section.
-                  </div>
-                  <button
-                    onClick={() => openSingletonTab('management', 'Service Providers')}
-                    className="px-4 py-2 rounded-md border border-border bg-background-secondary hover:bg-accent hover:text-accent-foreground transition-colors text-ide-regular"
-                  >
-                    Open Agent Management
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={() => handleNewTab()}
-                    className="px-4 py-2 rounded-md border border-border bg-background-secondary hover:bg-accent hover:text-accent-foreground transition-colors text-ide-regular"
-                  >
-                    Open new chat
-                  </button>
-                <div className="flex items-center gap-2 flex-wrap justify-center max-w-[520px]">
-                  {runnableAgents.map((agent) => (
-                    <button
-                      key={agent.id}
-                      onClick={() => handleNewTab(agent.id)}
-                      className="px-3 py-1.5 rounded-md border border-border bg-background-secondary hover:bg-accent hover:text-accent-foreground transition-colors text-xs flex items-center gap-2"
-                    >
-                      {agent.iconPath && <img src={agent.iconPath} className="w-3.5 h-3.5" alt="" />}
-                      <span>{agent.name}</span>
-                    </button>
-                  ))}
-                </div>
-                </>
-              )}
-            </div>
-          </div>
+          <EmptyStateView
+            availableAgents={availableAgents}
+            runnableAgents={runnableAgents}
+            adaptersResolved={agentAvailabilityResolved}
+            onStartWithAgent={handleNewTab}
+            onOpenRecentConversation={handleOpenHistory}
+            onOpenHistory={() => openSingletonTab('history', 'History')}
+            onOpenManagement={() => openSingletonTab('management', 'Service Providers')}
+          />
         )}
       </div>
 
       <ConfirmationModal
         isOpen={pendingAgentSwitch !== null}
         title={`Switch to ${pendingAgentName}`}
-        message={`Click "Continue" to pass the current conversation context to ${pendingAgentName}.` + "\n" + `Click "Start New" to begin a new separate conversation.`}
+        message={`Click "Continue" to pass the current chat context to ${pendingAgentName}.` + "\n" + `Click "Start New" to begin a new separate chat.`}
         confirmLabel="Continue"
-        confirmVariant="primary"
+        
         secondaryActionLabel="Start New"
         onSecondaryAction={handleContinueInNewTab}
         showCancelButton={false}

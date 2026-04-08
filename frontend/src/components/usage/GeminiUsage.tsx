@@ -1,4 +1,9 @@
 import { useAdapterUsage } from '../../hooks/useAdapterUsage';
+import { UsageMetricRow } from './shared/UsageMetricRow';
+import { clampPercent, formatUsagePercent } from './shared/quotaVisuals';
+import { formatResetAt } from './shared/formatResetAt';
+
+const usageLinkClassName = 'text-link hover:underline focus:outline-none focus-visible:rounded-[3px] focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]';
 
 interface QuotaBucket {
   modelId: string;
@@ -10,23 +15,9 @@ interface GeminiUsageData {
   quota?: { buckets: QuotaBucket[] };
 }
 
-function formatResetAt(value: string | null | undefined): string | null {
-  if (!value) return null;
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return null;
-  }
-}
-
 const AGENT_ID = 'gemini-cli';
 
-export function GeminiUsage({ disabledModels }: { disabledModels?: string[] }) {
+export function GeminiUsage({ disabledModels, stacked = false }: { disabledModels?: string[]; stacked?: boolean }) {
   const data = useAdapterUsage(AGENT_ID);
 
   if (!data) return null;
@@ -44,24 +35,30 @@ export function GeminiUsage({ disabledModels }: { disabledModels?: string[] }) {
 
   if (buckets.length === 0) return (
     <div className="text-foreground-secondary">
-      Usage: <button type="button" onClick={() => window.__openUrl?.('https://console.cloud.google.com')} className="text-link">console.cloud.google.com</button>
+      Usage : <button type="button" onClick={() => window.__openUrl?.('https://console.cloud.google.com')} className={usageLinkClassName}>console.cloud.google.com</button>
     </div>
   );
 
   return (
-    <div className="flex flex-col gap-0.5">
-      {buckets.map((bucket, idx) => {
-        const pct = typeof bucket.remainingFraction === 'number'
-          ? `${parseFloat(((1 - bucket.remainingFraction) * 100).toFixed(1))}% used`
-          : 'N/A';
-        const resetLabel = formatResetAt(bucket.resetTime);
-        return (
-          <div key={bucket.modelId || idx} className="text-[12px] text-foreground">
-            <span className="text-foreground-secondary">{bucket.modelId.replace('gemini-', '')}:</span> {pct}
-            {resetLabel && <span className="text-foreground-tertiary"> · Resets in: {resetLabel}</span>}
-          </div>
-        );
-      })}
+    <div className="flex flex-col gap-y-2">
+      <span className="whitespace-nowrap text-foreground-secondary">Usage quotas</span>
+      <div className={stacked ? 'flex flex-col gap-y-2' : 'flex flex-wrap gap-x-8 gap-y-2'}>
+        {buckets.map((bucket, idx) => {
+          const percent = typeof bucket.remainingFraction === 'number'
+            ? clampPercent((1 - bucket.remainingFraction) * 100)
+            : null;
+          const resetLabel = formatResetAt(bucket.resetTime);
+          return (
+            <UsageMetricRow
+              key={bucket.modelId || idx}
+              label={bucket.modelId.replace('gemini-', '')}
+              percent={percent}
+              valueLabel={formatUsagePercent(percent, 1)}
+              meta={resetLabel ? `Resets: ${resetLabel}` : undefined}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

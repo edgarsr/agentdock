@@ -80,7 +80,7 @@
 
 /* Markdown content rendering */
 .markdown-body {
-    @apply my-4 text-inherit leading-relaxed break-words;
+    @apply my-4 text-inherit break-words;
 
     /* Text cursor only for regular markdown text nodes */
     & p,
@@ -96,19 +96,32 @@
     }
 
     & p {
-        margin-bottom: var(--ide-paragraph-spacing);
+        @apply mt-1;
+        @apply mb-2;
+    }
+
+    & h3,
+    & h4,
+    & h5,
+    & h6 {
+        @apply mt-2;
+        @apply mb-4;
     }
 
     & p:last-child {
-        @apply mb-0;
+        @apply mt-0;
+    }
+
+    & p:first-child {
+        @apply mt-0;
     }
 
     & h1 {
-        @apply text-ide-h1 font-bold mb-2 mt-4;
+        @apply text-ide-h1 font-bold my-6;
     }
 
     & h2 {
-        @apply text-ide-h2 font-semibold mb-2 mt-3;
+        @apply text-ide-h2 font-semibold my-6;
     }
 
     & ul {
@@ -125,18 +138,27 @@
         margin-bottom: var(--ide-paragraph-spacing);
     }
 
-    & code {
-        @apply px-1 rounded;
-        background-color: var(--ide-editor-bg);
+    & a code {
+        color: var(--ide-Hyperlink-linkColor);
+        background: transparent;
+    }
+
+    & a:focus {
+        outline: none;
+    }
+
+    & a:focus-visible {
+        border-radius: 4px;
+        box-shadow: 0 0 0 1px var(--ide-Button-default-focusColor);
     }
 
     & pre {
-        @apply border border-border rounded-md p-3 my-3 overflow-x-auto;
-        background-color: var(--editor-bg);
+        @apply my-3 overflow-hidden rounded-[8px] border border-border p-0;
+        background-color: var(--ide-editor-bg);
     }
 
     & pre code {
-        @apply bg-transparent p-0 rounded-none;
+        @apply block overflow-x-auto bg-transparent p-3 rounded-none;
     }
 
     & blockquote {

@@ -31,7 +31,7 @@ export const SimpleActivityBlock: React.FC<Props> = ({ block }) => {
   const title = block.entry.title || (kind === 'delete' ? 'Deleting file...' : 'Moving file...');
 
   return (
-    <div className="my-2 border border-border rounded-md overflow-hidden shadow-sm">
+    <div className="border border-border rounded-[6px] overflow-hidden">
       <div className="flex items-center gap-2 w-full px-3 py-2 bg-editor-bg">
         <div className="flex-shrink-0 text-editor-fg opacity-70 relative top-[-1px]">
           {kind === 'delete' ? <TrashIcon size={14} /> : <MoveIcon size={14} />}
@@ -41,11 +41,7 @@ export const SimpleActivityBlock: React.FC<Props> = ({ block }) => {
         </div>
         <div className="flex-shrink-0">
           {(isPending || isError) && (
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${
-                isPending ? 'bg-warning animate-pulse' : 'bg-error'
-              }`}
-            />
+            <div className={`w-2.5 h-2.5 rounded-full ${isPending ? 'bg-warning animate-pulse' : 'bg-error'}`}/>
           )}
         </div>
       </div>

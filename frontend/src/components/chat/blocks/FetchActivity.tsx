@@ -2,6 +2,7 @@ import React from 'react';
 import { ToolCallEntry } from '../../../types/chat';
 import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
+import { chatFocusClassName } from '../shared/focusStyles';
 
 interface Props {
   entry: ToolCallEntry;
@@ -59,23 +60,23 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
       ) : (
         <div className="font-semibold mb-0.5">{cleanTitle}</div>
       )}
-      {rawInput?.prompt && <div className="opacity-80 italic line-clamp-3 mt-0.5">Prompt: {rawInput.prompt}</div>}
+      {rawInput?.prompt && <div className="italic line-clamp-3 mt-0.5">Prompt: {rawInput.prompt}</div>}
     </>
   );
 
   if (!url) {
     if (isSearch) {
       return (
-        <Tooltip content={tooltipContent}>
+        <Tooltip variant="minimal" content={tooltipContent}>
           <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
-            <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
+            <div className="flex-shrink-0">
               {isSearch ? <WebSearchIcon size={13} /> : <GlobeIcon size={13} />}
             </div>
-            <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">
+            <span className="truncate min-w-0 flex-1 block">
               {cleanTitle || entry.kind}
             </span>
             {hasError && (
-              <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
+              <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
             )}
           </div>
         </Tooltip>
@@ -84,10 +85,8 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
     return (
       <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
         {icon}
-        <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
-        {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
-        )}
+        <span className="truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
+        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />)}
       </div>
     );
   }
@@ -95,20 +94,17 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
   const displayUrl = url.replace(/^https?:\/\//, '');
 
   return (
-    <Tooltip content={tooltipContent}>
+    <Tooltip variant="minimal" content={tooltipContent}>
       <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
-        <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
+        <div className="flex-shrink-0 group-hover/activity:opacity-100 transition-opacity">
           {isSearch ? <WebSearchIcon size={13} /> : <GlobeIcon size={13} />}
         </div>
-        <button
-          onClick={() => onOpenUrl(url)}
-          className="text-[var(--ide-Label-foreground)] hover:text-[var(--ide-Link-foreground)] hover:underline transition-colors text-left font-normal truncate min-w-0 flex-1"
+        <button onClick={() => onOpenUrl(url)}
+          className={`hover:underline transition-colors text-left font-normal truncate min-w-0 flex-1 ${chatFocusClassName}`}
         >
           {displayUrl}
         </button>
-        {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
-        )}
+        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />)}
       </div>
     </Tooltip>
   );

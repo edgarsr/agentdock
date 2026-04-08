@@ -3,23 +3,22 @@ import { ReactNode } from 'react';
 import { SettingsCardShell } from './SettingsCardShell';
 
 interface SettingsSelectCardProps {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
-  description: ReactNode;
+  description?: ReactNode;
   children: ReactNode;
   className?: string;
 }
 
 export function SettingsSelectCard({
-  icon: Icon,
+  icon: _icon,
   title,
   description,
   children,
-  className = 'mb-4',
+  className = '',
 }: SettingsSelectCardProps) {
   return (
     <SettingsCardShell
-      icon={Icon}
       title={title}
       description={description}
       className={className}

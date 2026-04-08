@@ -4,9 +4,9 @@ import com.intellij.ui.JBColor
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColors
-import com.intellij.openapi.editor.colors.TextAttributesKey
 import unified.llm.settings.GlobalSettingsStore
 import java.awt.Color
+import java.util.Locale
 import javax.swing.UIManager
 
 /**
@@ -21,7 +21,7 @@ object IdeTheme {
     private val uiComponents = linkedMapOf(
         "Panel" to UiComponentDef(listOf("background", "foreground")),
         "Label" to UiComponentDef(listOf("background", "foreground", "disabledForeground", "infoForeground", "errorForeground", "warningForeground")),
-        "Button" to UiComponentDef(listOf("startBackground", "endBackground", "foreground", "borderColor", "disabledText", "disabledBorderColor", "focusedBorderColor")),
+        "Button" to UiComponentDef(listOf("startBackground", "endBackground", "foreground", "startBorderColor", "borderColor", "disabledText", "disabledBorderColor", "focusedBorderColor")),
         "TextField" to UiComponentDef(listOf("background", "foreground", "borderColor", "caretForeground", "selectionBackground", "selectionForeground", "focusedBorderColor")),
         "List" to UiComponentDef(listOf("background", "foreground", "selectionBackground", "selectionForeground", "selectionInactiveBackground", "hoverBackground")),
         "Table" to UiComponentDef(listOf("background", "gridColor", "selectionBackground", "foreground")),
@@ -37,12 +37,27 @@ object IdeTheme {
     fun generateCssBlock(): String {
         val sb = StringBuilder()
         sb.append(":root {\n")
+        val scheme = EditorColorsManager.getInstance().globalScheme
+        val editorBackground = scheme.defaultBackground
+        val baseBackground = uiColor("Panel.background", editorBackground)
 
         // 1. UI Component colors from UIManager
         for ((component, def) in uiComponents) {
             for (prop in def.colorProps) {
                 val uiKey = "$component.$prop"
-                val color = UIManager.getColor(uiKey) ?: JBColor.namedColor(uiKey, Color(0, 0, 0, 0))
+                val fallback = when (uiKey) {
+                    "Button.startBorderColor" -> uiColor("Button.borderColor", Color(0, 0, 0, 0))
+                    else -> Color(0, 0, 0, 0)
+                }
+                val originalColor = UIManager.getColor(uiKey) ?: JBColor.namedColor(uiKey, fallback)
+                val color = if (
+                    uiKey == "List.hoverBackground" &&
+                    (isTransparent(originalColor) || areColorsSimilar(originalColor, baseBackground))
+                ) {
+                    adjustBrightness(baseBackground, 1.20)
+                } else {
+                    originalColor
+                }
                 sb.append("  --ide-${uiKey.replace(".", "-")}: ${toCssColor(color)};\n")
             }
         }
@@ -50,17 +65,11 @@ object IdeTheme {
         // 2. Base fonts only — UI and Code
         val baseFont = com.intellij.util.ui.JBFont.regular()
         sb.append("  --ide-font-family: '${baseFont.family}', sans-serif;\n")
-        sb.append("  --ide-font-size-base: ${baseFont.size2D + 1}px;\n")
-        val uiFontSizeOffsetPx = GlobalSettingsStore.uiFontSizeOffsetPx()
-        if (uiFontSizeOffsetPx == 0) {
-            sb.append("  --ide-font-size: var(--ide-font-size-base);\n")
-        } else {
-            sb.append("  --ide-font-size: calc(var(--ide-font-size-base) + ${uiFontSizeOffsetPx}px);\n")
-        }
+        sb.append("  --ide-font-size: ${baseFont.size2D}px;\n")
+        sb.append("  --ui-font-size-offset: ${GlobalSettingsStore.uiFontSizeOffsetPx()}px;\n")
 
-        val scheme = EditorColorsManager.getInstance().globalScheme
         sb.append("  --ide-code-font-family: '${scheme.editorFontName}', monospace;\n")
-        sb.append("  --ide-code-font-size: ${scheme.editorFontSize + 1}px;\n")
+        sb.append("  --ide-code-font-size: ${scheme.editorFontSize}px;\n")
 
         // 3. Editor colors
         sb.append("  --ide-editor-bg: ${toCssColor(scheme.defaultBackground)};\n")
@@ -99,21 +108,24 @@ object IdeTheme {
 
         // 6. Dynamic background variations
         val isDark = !JBColor.isBright()
-        val baseBackground = UIManager.getColor("Panel.background")
-        val editorBackground = scheme.defaultBackground
 
         // Secondary: use editor background if different from panel, otherwise calculate
         val secondaryBackground = if (areColorsSimilar(baseBackground, editorBackground)) {
             // Editor and panel backgrounds are similar - calculate variation
-            adjustBrightness(baseBackground, if (isDark) 1.10 else 0.95)
+            adjustBrightness(baseBackground, if (isDark) 1.15 else 0.9)
         } else {
             // Use editor background as secondary
             editorBackground
         }
         sb.append("  --ide-background-secondary: ${toCssColor(secondaryBackground)};\n")
+        sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.3)" else "brightness(0.98)"};\n")
+        sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.3)" else "brightness(0.98)"};\n")
 
         // 7. Dynamic border color (must be different from both backgrounds)
-        val originalBorder = UIManager.getColor("Borders.color")
+        val originalBorder = uiColor(
+            "Borders.color",
+            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.85)
+        )
         val borderColor = if (areColorsSimilar(originalBorder, baseBackground) ||
                              areColorsSimilar(originalBorder, secondaryBackground)) {
             // Border is too similar to backgrounds - adjust it
@@ -125,6 +137,8 @@ object IdeTheme {
             originalBorder
         }
         sb.append("  --ide-Borders-color: ${toCssColor(borderColor)};\n")
+        val contrastBorderColor = uiColor("Borders.ContrastBorderColor", borderColor)
+        sb.append("  --ide-Borders-ContrastBorderColor: ${toCssColor(contrastBorderColor)};\n")
 
         // Scrollbar color based on border
         val scrollbarColor = adjustBrightness(borderColor, if (isDark) 1.15 else 0.90)
@@ -170,12 +184,20 @@ object IdeTheme {
         return Color(rgb)
     }
 
+    private fun isTransparent(color: Color): Boolean {
+        return color.alpha == 0
+    }
+
+    private fun uiColor(uiKey: String, fallback: Color): Color {
+        return UIManager.getColor(uiKey) ?: JBColor.namedColor(uiKey, fallback)
+    }
+
     private fun toCssColor(color: Color): String {
         val alpha = color.alpha / 255.0
         return if (alpha >= 1.0) {
             "rgb(${color.red}, ${color.green}, ${color.blue})"
         } else {
-            "rgba(${color.red}, ${color.green}, ${color.blue}, ${String.format("%.2f", alpha)})"
+            "rgba(${color.red}, ${color.green}, ${color.blue}, ${String.format(Locale.US, "%.2f", alpha)})"
         }
     }
 }

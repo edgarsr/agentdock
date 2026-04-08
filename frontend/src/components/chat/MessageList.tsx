@@ -3,11 +3,41 @@ import { Message, RichContentBlock, ExploringBlock, ToolCallBlock, PlanBlock, Ag
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
 import { ChatLoadingIndicator } from './ChatLoadingIndicator';
+import { Button } from '../ui/Button';
+
+const BOTTOM_PIN_THRESHOLD_PX = 8;
+const READ_ACK_THRESHOLD_PX = 48;
+const EARLIER_PROMPTS_BATCH_SIZE = 20;
+
+function countUserMessages(messages: Message[], endExclusive: number): number {
+  let count = 0;
+  for (let i = 0; i < endExclusive; i++) {
+    if (messages[i].role === 'user') count++;
+  }
+  return count;
+}
+
+function expandCutoffByPromptCount(messages: Message[], cutoffIndex: number, promptCount: number): number {
+  if (promptCount <= 0 || cutoffIndex <= 0) return cutoffIndex;
+
+  let remainingPrompts = promptCount;
+  let nextCutoffIndex = cutoffIndex;
+
+  while (nextCutoffIndex > 0 && remainingPrompts > 0) {
+    nextCutoffIndex--;
+    if (messages[nextCutoffIndex].role === 'user') {
+      remainingPrompts--;
+    }
+  }
+
+  return nextCutoffIndex;
+}
 
 interface MessageListProps {
   messages: Message[];
   onImageClick: (src: string) => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
+  onCanMarkReadChange?: (canMarkRead: boolean) => void;
   isSending?: boolean;
   status?: string;
   agentName?: string;
@@ -20,6 +50,7 @@ function MessageList({
   messages,
   onImageClick,
   onAtBottomChange,
+  onCanMarkReadChange,
   isSending,
   status,
   agentName,
@@ -28,22 +59,51 @@ function MessageList({
   isHistoryReplaying = false
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const atBottomChangeRef = useRef(onAtBottomChange);
+  const canMarkReadChangeRef = useRef(onCanMarkReadChange);
   const lastAtBottomRef = useRef(true);
+  const lastCanMarkReadRef = useRef(true);
   const prevIsReplaying = useRef(isHistoryReplaying);
   const prevIsSendingForScroll = useRef(isSending);
   const prevIsSendingForCollapse = useRef(isSending);
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [revealedPromptCount, setRevealedPromptCount] = useState(0);
+
+  useEffect(() => {
+    atBottomChangeRef.current = onAtBottomChange;
+  }, [onAtBottomChange]);
+
+  useEffect(() => {
+    canMarkReadChangeRef.current = onCanMarkReadChange;
+  }, [onCanMarkReadChange]);
+
+  const getDistanceFromBottom = (el: HTMLDivElement) => el.scrollHeight - el.scrollTop - el.clientHeight;
+
+  const publishViewportState = (el: HTMLDivElement) => {
+    const distanceFromBottom = getDistanceFromBottom(el);
+    const isAtBottom = distanceFromBottom < BOTTOM_PIN_THRESHOLD_PX;
+    const canMarkRead = distanceFromBottom < READ_ACK_THRESHOLD_PX;
+
+    if (lastAtBottomRef.current !== isAtBottom) {
+      lastAtBottomRef.current = isAtBottom;
+      atBottomChangeRef.current?.(isAtBottom);
+    }
+
+    if (lastCanMarkReadRef.current !== canMarkRead) {
+      lastCanMarkReadRef.current = canMarkRead;
+      canMarkReadChangeRef.current?.(canMarkRead);
+    }
+  };
 
   useEffect(() => {
     if (isHistoryReplaying) {
-      setIsExpanded(false);
+      setRevealedPromptCount(0);
     }
   }, [isHistoryReplaying]);
 
-  const { visibleMessages, hiddenCount } = useMemo(() => {
-    if (isExpanded || messages.length <= 6) {
-      return { visibleMessages: messages, hiddenCount: 0 };
+  const { visibleMessages, hiddenCount, hiddenPromptCount } = useMemo(() => {
+    if (messages.length <= 6) {
+      return { visibleMessages: messages, hiddenCount: 0, hiddenPromptCount: 0 };
     }
 
     const SYMBOL_LIMIT = 15000;
@@ -103,34 +163,45 @@ function MessageList({
       totalSize += size;
     }
 
+    const effectiveCutoffIndex = expandCutoffByPromptCount(messages, cutoffIndex, revealedPromptCount);
+
     return {
-      visibleMessages: messages.slice(cutoffIndex),
-      hiddenCount: cutoffIndex
+      visibleMessages: messages.slice(effectiveCutoffIndex),
+      hiddenCount: effectiveCutoffIndex,
+      hiddenPromptCount: countUserMessages(messages, effectiveCutoffIndex),
     };
-  }, [messages, isExpanded]);
+  }, [messages, revealedPromptCount]);
+
+  const userPromptNumberById = useMemo(() => {
+    const numbering = new Map<string, number>();
+    let promptNumber = 0;
+
+    messages.forEach((message) => {
+      if (message.role !== 'user') return;
+      promptNumber += 1;
+      numbering.set(message.id, promptNumber);
+    });
+
+    return numbering;
+  }, [messages]);
 
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
-    const threshold = 150;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (lastAtBottomRef.current !== isAtBottom) {
-      lastAtBottomRef.current = isAtBottom;
-      onAtBottomChange?.(isAtBottom);
-    }
+    publishViewportState(el);
   };
 
   const handleExpand = () => {
     const el = containerRef.current;
     if (!el) {
-      setIsExpanded(true);
+      setRevealedPromptCount((prev) => prev + EARLIER_PROMPTS_BATCH_SIZE);
       return;
     }
 
     const previousScrollHeight = el.scrollHeight;
     const previousScrollTop = el.scrollTop;
 
-    setIsExpanded(true);
+    setRevealedPromptCount((prev) => prev + EARLIER_PROMPTS_BATCH_SIZE);
 
     // After state update and re-render, adjust scroll to keep relative position
     requestAnimationFrame(() => {
@@ -142,10 +213,13 @@ function MessageList({
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const threshold = 150;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    const distanceFromBottom = getDistanceFromBottom(el);
+    const isAtBottom = distanceFromBottom < BOTTOM_PIN_THRESHOLD_PX;
+    const canMarkRead = distanceFromBottom < READ_ACK_THRESHOLD_PX;
     lastAtBottomRef.current = isAtBottom;
-    onAtBottomChange?.(isAtBottom);
+    lastCanMarkReadRef.current = canMarkRead;
+    atBottomChangeRef.current?.(isAtBottom);
+    canMarkReadChangeRef.current?.(canMarkRead);
   }, []);
 
   useLayoutEffect(() => {
@@ -154,23 +228,19 @@ function MessageList({
 
     const historyJustFinished = prevIsReplaying.current && !isHistoryReplaying;
     const sendingJustStarted = !prevIsSendingForScroll.current && isSending;
-    const shouldKeepBottomPinned = !isHistoryReplaying && lastAtBottomRef.current;
+    const shouldKeepBottomPinned = !isHistoryReplaying && Boolean(isSending) && lastAtBottomRef.current;
 
     if (historyJustFinished || sendingJustStarted || shouldKeepBottomPinned) {
       el.style.scrollBehavior = 'auto';
       el.scrollTop = el.scrollHeight;
       lastAtBottomRef.current = true;
+      lastCanMarkReadRef.current = true;
     }
 
-    const threshold = 150;
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
-    if (lastAtBottomRef.current !== isAtBottom) {
-      lastAtBottomRef.current = isAtBottom;
-      onAtBottomChange?.(isAtBottom);
-    }
+    publishViewportState(el);
     prevIsReplaying.current = isHistoryReplaying;
     prevIsSendingForScroll.current = isSending;
-  }, [messages, isExpanded, isHistoryReplaying, isSending, onAtBottomChange]);
+  }, [messages, revealedPromptCount, isHistoryReplaying, isSending]);
 
   useEffect(() => {
     const wasSending = prevIsSendingForCollapse.current;
@@ -185,7 +255,7 @@ function MessageList({
       return;
     }
 
-    setIsExpanded(false);
+    setRevealedPromptCount(0);
   }, [messages, isSending, isHistoryReplaying]);
 
   return (
@@ -200,23 +270,15 @@ function MessageList({
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto p-8 space-y-6 opacity-100 transition-opacity duration-300"
+        className="flex-1 min-h-0 overflow-y-auto px-6 py-6 space-y-6 opacity-100 transition-opacity duration-300"
       >
-      <div className="max-w-4xl mx-auto w-full flex flex-col">
+      <div className="mx-auto w-full max-w-[1200px] flex flex-col">
         
         {hiddenCount > 0 && !isHistoryReplaying && (
-          <div className="flex justify-center mb-6">
-            <button
-              onClick={handleExpand}
-              className="px-4 py-2 flex items-center gap-2 text-xs font-medium text-foreground-secondary hover:text-foreground hover:bg-accent transition-colors border border-border rounded-md"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 5 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="5"></line>
-              </svg>
-              Show {Math.ceil(hiddenCount / 2)} earlier message{Math.ceil(hiddenCount / 2) > 1 ? 's' : ''}
-            </button>
+          <div className="flex justify-center mb-12">
+            <Button onClick={handleExpand} variant="secondary">
+              Show {Math.min(hiddenPromptCount, EARLIER_PROMPTS_BATCH_SIZE)} earlier message{Math.min(hiddenPromptCount, EARLIER_PROMPTS_BATCH_SIZE) > 1 ? 's' : ''}
+            </Button>
           </div>
         )}
 
@@ -245,7 +307,8 @@ function MessageList({
             <UserMessage 
               key={message.id} 
               message={message} 
-              onImageClick={onImageClick} 
+              onImageClick={onImageClick}
+              promptNumber={userPromptNumberById.get(message.id)}
             />
           );
         })}

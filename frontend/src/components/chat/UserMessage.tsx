@@ -8,9 +8,42 @@ import { openFile } from '../../utils/openFile';
 interface UserMessageProps {
   message: Message;
   onImageClick: (src: string) => void;
+  promptNumber?: number;
 }
 
-export const UserMessage = memo(({ message, onImageClick }: UserMessageProps) => {
+function formatPromptTime(timestamp?: number): string | null {
+  if (timestamp === undefined) return null;
+
+  try {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate()
+      && date.getMonth() === now.getMonth()
+      && date.getFullYear() === now.getFullYear();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.getDate() === yesterday.getDate()
+      && date.getMonth() === yesterday.getMonth()
+      && date.getFullYear() === yesterday.getFullYear();
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const time = `${hours}:${minutes}`;
+
+    if (isToday) return `Today ${time}`;
+    if (isYesterday) return `Yesterday ${time}`;
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year} ${time}`;
+  } catch {
+    return null;
+  }
+}
+
+export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMessageProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLargeContent, setIsLargeContent] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -72,6 +105,7 @@ export const UserMessage = memo(({ message, onImageClick }: UserMessageProps) =>
                     data: img.data
                   }}
                   onImageClick={onImageClick}
+                  flushLeft={idx === 0}
                 />
               );
             }
@@ -122,57 +156,56 @@ export const UserMessage = memo(({ message, onImageClick }: UserMessageProps) =>
     );
   };
 
-  const formattedDate = message.timestamp ? (() => {
-    const d = new Date(message.timestamp);
-    const datePart = d.toISOString().split('T')[0];
-    const timePart = d.toTimeString().split(' ')[0].slice(0, 5);
-    return `${datePart} ${timePart}`;
-  })() : null;
+  const formattedTime = formatPromptTime(message.timestamp);
+  const showCollapseToggle = isLargeContent;
+  const showFooter = showCollapseToggle || promptNumber !== undefined || !!formattedTime;
 
   return (
-    <div className="flex flex-col mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300 mt-12">
-      {formattedDate && (
-        <div className="flex justify-end mb-1 px-1">
-          <span className="text-ide-small text-foreground-secondary font-mono">
-            {formattedDate}
-          </span>
-        </div>
-      )}
+    <div className="flex flex-col mb-8 animate-in fade-in slide-in-from-bottom-2">
       <div className="flex justify-end relative">
-        <div
-          className="user-message-bubble group max-w-[85%] bg-accent text-accent-foreground px-6 py-4 ml-auto
-            shadow-sm rounded-lg relative transition-[max-height] duration-300 ease-in-out"
-          style={{
-            backgroundColor: 'var(--user-message-bg)',
-          }}
+        <div className="user-message-bubble bg-accent rounded-[6px] group max-w-[85%] text-primary-foreground px-3 py-2"
+          style={{backgroundColor: 'var(--user-message-bg)',}}
         >
-          {isLargeContent && (
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full"
-              title={isExpanded ? "Collapse text" : "Expand text"}
-            >
-              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          )}
+          <div className="opacity-90">
+            <div className="relative">
+              <div ref={contentRef}
+                className={`break-words transition-[max-height] duration-500 ease-in-out overflow-hidden ${
+                  isLargeContent && !isExpanded ? 'max-h-[220px]' : 'max-h-[5000px]'
+                }`}
+                style={{ maxHeight: isLargeContent ? undefined : 'none' }}
+              >
+                {renderContent()}
+              </div>
 
-          <div
-            ref={contentRef}
-            className={`leading-relaxed break-words transition-[max-height] duration-500 ease-in-out 
-              ${!isExpanded && isLargeContent ? 'max-h-[200px] overflow-hidden' : ''} 
-              ${isLargeContent ? 'pr-8' : ''}`}
-          >
-            {renderContent()}
+              {!isExpanded && isLargeContent && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t
+                  from-[var(--user-message-bg)] via-[color-mix(in_srgb,var(--user-message-bg),transparent_10%)]
+                  to-transparent" />
+              )}
+            </div>
+
+            {renderTrailingAttachments()}
+
+            {showFooter && (
+              <div className={`mt-1 flex items-center gap-3 ${showCollapseToggle ? 'justify-between' : 'justify-end'}`}>
+                {showCollapseToggle && (
+                  <button type="button" onClick={() => setIsExpanded(!isExpanded)}
+                    className="inline-flex items-center gap-1 text-xs opacity-75 hover:underline
+                    focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                  >
+                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <span>{isExpanded ? 'Show less' : 'Show more'}</span>
+                  </button>
+                )}
+
+                <div className="flex items-center gap-1.5 text-xs opacity-75">
+                  {promptNumber !== undefined && <span>{`#${promptNumber}`}</span>}
+                  {promptNumber !== undefined && formattedTime && <span aria-hidden="true">•</span>}
+                  {formattedTime && <span>{formattedTime}</span>}
+                </div>
+              </div>
+            )}
           </div>
-
-          {!isExpanded && isLargeContent && (
-            <div
-              className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none z-10"
-              style={{ background: 'linear-gradient(to top, var(--user-message-bg), transparent)' }}
-            />
-          )}
-
-          {renderTrailingAttachments()}
         </div>
       </div>
     </div>

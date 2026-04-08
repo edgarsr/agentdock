@@ -39,7 +39,7 @@ export function CodeReferenceChip({
   const tooltipContent = formatTooltip(path, startLine, endLine);
 
   return (
-    <Tooltip content={<span className="font-mono">{tooltipContent}</span>}>
+    <Tooltip variant="minimal" content={<span className="font-mono">{tooltipContent}</span>}>
       <span
         contentEditable={false}
         className="inline-flex items-center gap-1.5 px-2 py-0.5 mx-1 rounded-md border border-border align-middle bg-background transition-all group relative top-[-1px]"

@@ -244,6 +244,39 @@ function closeStreamingExploring(blocks: RichContentBlock[]) {
   }
 }
 
+function failPendingToolStatuses(blocks: RichContentBlock[]): RichContentBlock[] {
+  return blocks.map((block) => {
+    if (block.type === 'tool_call') {
+      const status = (block.entry.status || '').toLowerCase();
+      if (!status || status === 'pending' || status === 'running' || status === 'in_progress' || status === 'active') {
+        return {
+          ...block,
+          entry: {
+            ...block.entry,
+            status: 'failed',
+          }
+        };
+      }
+      return block;
+    }
+
+    if (block.type === 'exploring') {
+      return {
+        ...block,
+        entries: block.entries.map((entry) => {
+          const status = (entry.status || '').toLowerCase();
+          if (!status || status === 'pending' || status === 'running' || status === 'in_progress' || status === 'active') {
+            return { ...entry, status: 'failed' };
+          }
+          return entry;
+        })
+      };
+    }
+
+    return block;
+  });
+}
+
 function applyToolCall(blocks: RichContentBlock[], chunk: ContentChunk, replayKeyPrefix: string) {
   const entry = buildToolCallEntry(chunk);
   const json = safeParseJson(chunk.toolRawJson);
@@ -491,13 +524,14 @@ function buildAssistantMessage(prompt: ReplayPromptEntry, sessionIndex: number, 
   });
 
   const meta = prompt.assistantMeta;
-  if (blocks.length === 0 && !meta) return null;
+  const finalizedBlocks = meta ? failPendingToolStatuses(blocks) : blocks;
+  if (finalizedBlocks.length === 0 && !meta) return null;
 
   return {
     id: `replay-assistant-${sessionIndex}-${promptIndex}`,
     role: 'assistant',
-    content: blocks.filter((block): block is TextBlock => block.type === 'text').map((block) => block.text).join(''),
-    contentBlocks: blocks,
+    content: finalizedBlocks.filter((block): block is TextBlock => block.type === 'text').map((block) => block.text).join(''),
+    contentBlocks: finalizedBlocks,
     agentId: meta?.agentId,
     agentName: meta?.agentName,
     modelName: meta?.modelName,
@@ -523,6 +557,7 @@ export function buildReplayMessages(data: ConversationReplayData): Message[] {
           role: 'user',
           content: userContentFromBlocks(userBlocks),
           blocks: userBlocks,
+          timestamp: prompt.assistantMeta?.promptStartedAtMillis,
         });
       }
       const assistantMessage = buildAssistantMessage(prompt, sessionIndex, promptIndex);

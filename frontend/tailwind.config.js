@@ -11,6 +11,10 @@ export default {
           DEFAULT: 'var(--ide-Panel-background)',
           secondary: 'var(--ide-background-secondary)'
         },
+        surface: {
+          hover: 'var(--ide-surface-hover)',
+          active: 'var(--ide-surface-active)'
+        },
         foreground: {
           DEFAULT: 'var(--ide-Label-foreground)',
           secondary: 'color-mix(in srgb, var(--ide-Label-foreground), transparent 40%)'
@@ -40,12 +44,12 @@ export default {
         warning: '#ba9752',
         link: 'var(--ide-Hyperlink-linkColor)',
         added: {
-          DEFAULT: 'var(--ide-vcs-added)',
-          bg: 'color-mix(in srgb, var(--ide-vcs-added), transparent 70%)'
+          DEFAULT: '#368e59',
+          bg: 'color-mix(in srgb, #368e59, transparent 70%)'
         },
         deleted: {
-          DEFAULT: 'var(--ide-vcs-deleted)',
-          bg: 'color-mix(in srgb, var(--ide-vcs-deleted), transparent 70%)'
+          DEFAULT: '#ed615f',
+          bg: 'color-mix(in srgb, #ed615f, transparent 70%)'
         },
         syntax: {
           keyword: 'var(--ide-syntax-keyword)',
@@ -79,5 +83,13 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [
+    function({ addUtilities }) {
+      addUtilities({
+        '.bg-hover': {
+          'filter': 'var(--ide-surface-hover-filter)',
+        },
+      })
+    },
+  ],
 }

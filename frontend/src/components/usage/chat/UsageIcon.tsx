@@ -1,16 +1,27 @@
 import { Tooltip } from '../../chat/shared/Tooltip';
 import React from 'react';
+import { QuotaMeter } from '../shared/QuotaMeter';
 
-export function UsageIcon({ children, label }: { children: React.ReactNode, label?: string }) {
+export function UsageIcon({
+  children,
+  percent,
+}: {
+  children: React.ReactNode;
+  percent?: number | null;
+}) {
+  if (percent === null || percent === undefined) return null;
+
+  const displayLabel = `${Math.round(percent)}%`;
+
   return (
-    <Tooltip content={<div className="p-1 min-w-[150px]">{children}</div>}>
-      <div className="flex items-center gap-1.5 p-1.5 ml-1 text-foreground/50 hover:text-foreground cursor-default transition-colors outline-none rounded hover:bg-background">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-          <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-        </svg>
-        {label && <span className="text-[11px] font-medium whitespace-nowrap">{label}</span>}
-      </div>
+    <Tooltip content={children}>
+      <button className="flex items-center h-full ml-0.5 gap-1.5 rounded px-1.5 border-0 bg-editor-bg text-ide-small text-foreground transition-colors outline-none cursor-default hover:bg-hover hover:text-foreground focus-visible:bg-hover focus-visible:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]">
+        <div className="flex items-center gap-1">
+          <QuotaMeter percent={percent} size={12} className="mr-0.5 relative top-[-1px]" />
+          <span className="whitespace-nowrap">{displayLabel}</span>
+          <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
+        </div>
+      </button>
     </Tooltip>
   );
 }

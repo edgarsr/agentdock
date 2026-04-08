@@ -123,6 +123,7 @@ internal suspend fun AcpClientService.startAgent(
                         sessionResponse: AcpCreatedSessionResponse
                     ): ClientSessionOperations {
                         context.sessionIdRef.compareAndSet(null, sessionId.value)
+                        bindLiveSessionOwner(chatId, sessionId.value)
                         return createSharedSessionOperations(sessionId.value, requestedAdapterName)
                     }
                 }
@@ -140,6 +141,7 @@ internal suspend fun AcpClientService.startAgent(
 
                 context.session = sess
                 context.sessionIdRef.set(sess.sessionId.value)
+                bindLiveSessionOwner(chatId, sess.sessionId.value)
                 if (resumeSessionId != null && sess.sessionId.value == resumeSessionId) {
                     systemInstructionsInjectedSessionIds.add(sess.sessionId.value)
                 }
@@ -314,6 +316,9 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
             sessionResponse: AcpCreatedSessionResponse
         ): ClientSessionOperations {
             context.sessionIdRef.set(sessionId.value)
+            if (keepLoadedSessionActive) {
+                bindLiveSessionOwner(context.chatId, sessionId.value)
+            }
             if (deliverReplay) {
                 replayOwnerBySessionId[sessionId.value] = context.chatId
             }
@@ -325,6 +330,9 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
     val sess = client.loadSession(SessionId(sessionId), params, factory)
 
     context.sessionIdRef.set(sess.sessionId.value)
+    if (keepLoadedSessionActive) {
+        bindLiveSessionOwner(context.chatId, sess.sessionId.value)
+    }
     if (deliverReplay) {
         replayOwnerBySessionId[sess.sessionId.value] = context.chatId
     }
@@ -456,7 +464,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     val sess = context.lifecycleMutex.withLock {
         val s = context.session
         if (s == null) {
-            emit(AcpEvent.Error("No active agent session. Please click the agent dropdown at the top to restart the agent."))
+            emit(AcpEvent.Error("No active agent session."))
             return@flow
         }
 
@@ -499,6 +507,9 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
         }
         stopReason?.let { emit(AcpEvent.PromptDone(it)) }
 
+    } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        emit(AcpEvent.Error(formatAcpError(e)))
     } finally {
         if (context.statusRef.get() == AcpClientService.Status.Prompting) {
             context.statusRef.set(AcpClientService.Status.Ready)

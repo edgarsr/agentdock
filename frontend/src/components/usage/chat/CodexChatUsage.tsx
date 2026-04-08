@@ -6,7 +6,7 @@ export function CodexChatUsage() {
   const data = useAdapterUsage('codex');
 
   let hasData = false;
-  let usageLabel = '';
+  let displayPercent: number | null = null;
 
   if (data) {
     try {
@@ -30,7 +30,7 @@ export function CodexChatUsage() {
         }
 
         if (hasData) {
-          usageLabel = `${Math.round(percent)}% used`;
+          displayPercent = percent;
         }
       }
     } catch {
@@ -41,8 +41,8 @@ export function CodexChatUsage() {
   if (!hasData) return null;
 
   return (
-    <UsageIcon label={usageLabel}>
-      <CodexUsage />
+    <UsageIcon percent={displayPercent}>
+      <CodexUsage stacked />
     </UsageIcon>
   );
 }

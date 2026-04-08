@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
+import { chatInsetFocusClassName } from '../shared/focusStyles';
 
 interface Props {
   block: PlanBlock;
@@ -71,7 +72,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
     if (hasInProgress) {
       return (
         <>
-          <span className="opacity-50 mr-2">
+          <span className="text-foreground-secondary mr-2">
             Task {currentTaskIndex + 1} of {entries.length}
           </span>
           {currentTask?.content || 'Executing...'}
@@ -83,40 +84,30 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
 
   return (
     <div className="my-2 border border-border rounded-md overflow-hidden">
-      <button
-        onClick={toggleExpanded}
-        className="flex items-center gap-2 w-full px-3 py-2 bg-editor-bg "
-      >
-        <div className="flex-shrink-0 text-editor-fg opacity-70">
+      <button onClick={toggleExpanded} className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}>
+        <div className="flex-shrink-0 text-foreground-secondary">
           <ClipboardList size={14} />
         </div>
         
-        <div className="flex-1 text-left font-medium truncate text-editor-fg opacity-90 pr-2">
-          {renderHeaderText()}
-        </div>
+        <div className="flex-1 truncate pr-2 text-left">{renderHeaderText()}</div>
 
         <div className="flex-shrink-0 flex items-center gap-2">
-          {hasFailed && (
-            <div className="w-2.5 h-2.5 rounded-full bg-error" />
-          )}
-          <div className={`transition-transform duration-200 text-editor-fg opacity-50 ${expanded ? 'rotate-90' : ''}`}>
+          {hasFailed && (<div className="w-2.5 h-2.5 rounded-full bg-error" />)}
+          <div className={`transition-transform duration-200 text-foreground-secondary ${expanded ? 'rotate-90' : ''}`}>
             <ChevronRight size={14} />
           </div>
         </div>
       </button>
 
-      <div
-        className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
+      <div className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
         style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="p-3 bg-editor-bg space-y-2">
+          <div className="p-3 bg-editor-bg space-y-2 border-t border-border">
             {entries.map((entry, idx) => (
               <div key={idx} className="flex gap-3 items-start group">
-                <div className="mt-0.5 flex-shrink-0">
-                  {getStatusIcon(entry.status)}
-                </div>
-                <div className={`leading-relaxed ${entry.status === 'completed' ? 'opacity-50 line-through' : 'text-editor-fg opacity-90'}`}>
+                <div className="relative top-1 flex-shrink-0">{getStatusIcon(entry.status)}</div>
+                <div className={`leading-relaxed ${entry.status === 'completed' ? 'text-foreground-secondary' : ''}`}>
                   {entry.content}
                 </div>
               </div>

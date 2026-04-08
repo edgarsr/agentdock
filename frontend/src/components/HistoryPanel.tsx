@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ACPBridge } from '../utils/bridge';
 import type { AgentOption, HistorySessionMeta } from '../types/chat';
 import ConfirmationModal from './ConfirmationModal';
-import { RefreshCw, Trash2, Search, ChevronDown, Pencil, Check, X, Terminal } from 'lucide-react';
+import { RefreshCw, Trash2, Funnel, Pencil, Check, X, Terminal } from 'lucide-react';
+import { Button } from './ui/Button';
+import { Checkbox } from './ui/Checkbox';
+import { Tooltip } from './chat/shared/Tooltip';
 
 interface HistoryPanelProps {
   availableAgents: AgentOption[];
@@ -13,6 +16,17 @@ function getItemAgents(item: HistorySessionMeta): string[] {
   return item.allAdapterNames && item.allAdapterNames.length > 0
     ? item.allAdapterNames
     : [item.adapterName];
+}
+
+function handleHistoryRowKeyDown(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  disabled: boolean,
+  onActivate: () => void
+) {
+  if (disabled || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  event.stopPropagation();
+  onActivate();
 }
 
 export default function HistoryPanel({ availableAgents, onOpenSession }: HistoryPanelProps) {
@@ -27,6 +41,8 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
   const [editTitle, setEditTitle] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const filterOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     const unsubHistory = ACPBridge.onHistoryList((e) => {
@@ -91,7 +107,25 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     });
   }, [historyList, selectedAgents]);
 
+  const selectedAgentLabel = useMemo(() => {
+    if (selectedAgents.length !== 1) return '';
+    const agent = adapterDisplay.get(selectedAgents[0]);
+    return agent?.name || selectedAgents[0];
+  }, [adapterDisplay, selectedAgents]);
+
+  useEffect(() => {
+    if (!isFilterOpen) return;
+    const selectedIndex = uniqueAgentsInHistory.findIndex((agentId) => selectedAgents.includes(agentId));
+    const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    requestAnimationFrame(() => {
+      filterOptionRefs.current[targetIndex]?.focus();
+    });
+  }, [isFilterOpen, selectedAgents, uniqueAgentsInHistory]);
+
   const selectedCount = selectedConversationIds.length;
+  const filteredConversationIds = filteredHistoryList.map((item) => item.conversationId);
+  const areAllFilteredSelected = filteredConversationIds.length > 0 &&
+    filteredConversationIds.every((conversationId) => selectedConversationIds.includes(conversationId));
 
   const formatDate = (ms: number) => {
     const d = new Date(ms);
@@ -121,7 +155,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
 
   const formatConversationLength = (promptCount?: number) => {
     if (promptCount == null || promptCount <= 0) return null;
-    return `${promptCount} prompts`;
+    return `${promptCount} prompt${promptCount === 1 ? '' : 's'}`;
   };
 
   const toggleSelection = (conversationId: string) => {
@@ -152,6 +186,19 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     setIsLoading(true);
     setDeleteErrors({});
     ACPBridge.syncHistoryList();
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (filteredConversationIds.length === 0) return;
+    setSelectedConversationIds((prev) => {
+      if (areAllFilteredSelected) {
+        return prev.filter((conversationId) => !filteredConversationIds.includes(conversationId));
+      }
+
+      const next = new Set(prev);
+      filteredConversationIds.forEach((conversationId) => next.add(conversationId));
+      return Array.from(next);
+    });
   };
 
   const openDeleteConfirmation = (items: HistorySessionMeta[]) => {
@@ -193,44 +240,143 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     }
   };
 
+  const closeFilter = (restoreFocus = false) => {
+    setIsFilterOpen(false);
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        filterButtonRef.current?.focus();
+      });
+    }
+  };
+
+  const handleFilterButtonKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    setIsFilterOpen(true);
+  };
+
+  const handleFilterOptionKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    agentId: string,
+    index: number
+  ) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeFilter(true);
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setSelectedAgents([agentId]);
+      closeFilter(true);
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      filterOptionRefs.current[(index + 1) % uniqueAgentsInHistory.length]?.focus();
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      filterOptionRefs.current[(index - 1 + uniqueAgentsInHistory.length) % uniqueAgentsInHistory.length]?.focus();
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      filterOptionRefs.current[0]?.focus();
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      filterOptionRefs.current[uniqueAgentsInHistory.length - 1]?.focus();
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-background text-foreground z-10 w-full overflow-hidden relative">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0 min-h-12 relative z-20">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <button 
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded transition-colors ${
-                isFilterOpen || selectedAgents.length > 0
-                  ? 'bg-background-secondary text-foreground' 
-                  : 'bg-transparent text-foreground-secondary hover:text-foreground'
-              }`}
-              title="Filter by Agent"
+    <div className="flex flex-col h-full bg-background text-foreground z-10 w-full overflow-hidden relative pb-4">
+      <div className="flex items-center justify-between min-h-12 px-3 py-1 border-b border-border shrink-0 relative z-20">
+        <div className="flex items-center gap-2">
+          <Tooltip variant="minimal" content="Synchronize history">
+            <button
+              onClick={refreshHistory}
+              disabled={isLoading}
+              className={`rounded-[4px] p-1 text-foreground-secondary transition-colors hover:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none ${isLoading ? 'animate-spin' : ''}`}
+              aria-label="Refresh history"
             >
-              <Search size={16} />
-              <span className="text-sm font-medium pr-1">Filter Agents</span>
-              <ChevronDown size={14} className="opacity-70" />
+              <RefreshCw className="w-4 h-4" />
             </button>
+          </Tooltip>
+
+          <div className="relative flex items-center gap-1.5">
+            <Tooltip variant="minimal" content="Filter by AI agent">
+              <button
+                type="button"
+                ref={filterButtonRef}
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                onKeyDown={handleFilterButtonKeyDown}
+                aria-label="Filter by AI agent"
+                className={`rounded-[4px] p-1 text-foreground-secondary transition-colors focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none ${
+                  isFilterOpen || selectedAgents.length > 0
+                    ? 'text-foreground'
+                    : 'text-foreground-secondary hover:text-foreground'
+                }`}
+              >
+                <Funnel className="h-4 w-4" />
+              </button>
+            </Tooltip>
+
+            {selectedAgents.length > 0 ? (
+              <div className="flex items-center gap-1 mt-[1px]">
+                <span className="max-w-[140px] truncate text-ide-small text-foreground">
+                  {selectedAgentLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAgents([]);
+                    closeFilter();
+                  }}
+                  className="rounded-[4px] mt-[-1px] p-0.5 text-foreground-secondary hover:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                  aria-label="Clear agent filter"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : null}
             
             {isFilterOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsFilterOpen(false)} />
-                <div className="absolute top-full left-0 mt-1 w-48 bg-background border border-border rounded shadow-lg py-1 z-50">
-                  <button 
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${selectedAgents.length === 0 ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-background-secondary'}`}
-                    onClick={() => { setSelectedAgents([]); setIsFilterOpen(false); }}
-                  >
-                    All Agents
-                  </button>
-                  {uniqueAgentsInHistory.map(agentId => {
+                <div className="fixed inset-0 z-40" onClick={() => closeFilter()} />
+                <div
+                  role="listbox"
+                  aria-label="Filter by AI agent"
+                  className="absolute top-full left-0 mt-1 z-50 min-w-max overflow-hidden rounded-[7px] border border-border bg-background p-1"
+                >
+                  {uniqueAgentsInHistory.map((agentId, index) => {
                     const agent = adapterDisplay.get(agentId);
                     const label = agent?.name || agentId;
                     const isSelected = selectedAgents.includes(agentId);
                     return (
                       <button 
                         key={agentId}
-                        className={`w-full flex justify-between items-center text-left px-3 py-2 text-sm transition-colors ${isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-background-secondary'}`}
-                        onClick={() => { setSelectedAgents([agentId]); setIsFilterOpen(false); }}
+                        ref={(element) => {
+                          filterOptionRefs.current[index] = element;
+                        }}
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`flex w-full items-center rounded-[4px] my-0.5 px-3 py-1 text-left text-ide-small whitespace-nowrap transition-colors 
+                          focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none 
+                          ${isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'}`}
+                        onClick={() => {
+                          setSelectedAgents([agentId]);
+                          closeFilter();
+                        }}
+                        onKeyDown={(event) => handleFilterOptionKeyDown(event, agentId, index)}
                       >
                         {label}
                       </button>
@@ -241,50 +387,44 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             )}
           </div>
           
-          <span className="text-sm text-foreground-secondary font-medium pl-1">
-            {filteredHistoryList.length} conversation{filteredHistoryList.length !== 1 ? 's' : ''}
+          <span className="pl-1 text-foreground-secondary max-[399px]:hidden">
+            {filteredHistoryList.length} chat{filteredHistoryList.length !== 1 ? 's' : ''}
           </span>
         </div>
         
         <div className="flex items-center gap-3 shrink-0">
           {selectedCount > 0 && (
-            <>
-              <button
-                onClick={() => openDeleteConfirmation(historyList.filter((item) => selectedConversationIds.includes(item.conversationId)))}
-                className="px-3 py-1.5 text-xs rounded-sm bg-[#3574F0] text-white hover:bg-[#2B5DD0] font-medium transition-colors"
-                title="Delete Selected Conversations"
-              >
-                Delete Selected ({selectedCount})
-              </button>
-              <button
-                onClick={() => setSelectedConversationIds([])}
-                className="px-3 py-1.5 text-xs rounded-sm text-link hover:underline transition-colors"
-                title="Clear Selection"
-              >
-                Clear
-              </button>
-            </>
+            <Button
+              onClick={() => openDeleteConfirmation(historyList.filter((item) => selectedConversationIds.includes(item.conversationId)))}
+              variant="danger"
+              className="max-h-8"
+            >
+              Delete ({selectedCount})
+            </Button>
           )}
-          <button
-            onClick={refreshHistory}
-            disabled={isLoading}
-            className={`p-1 text-foreground-secondary hover:text-foreground transition-colors ${isLoading ? 'animate-spin' : ''}`}
-            title="Refresh History"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+
+          {filteredConversationIds.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAllFiltered}
+              className="text-ide-small text-link hover:underline p-1 rounded-[4px] focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+            >
+              {areAllFilteredSelected ? 'Clear all' : 'Select all'}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto w-full p-2 space-y-1 mt-1">
+      <div className="flex-1 overflow-y-auto w-full space-y-1 mt-1">
+        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
         {isLoading ? (
           <div className="flex justify-center p-8 text-foreground">Loading history...</div>
         ) : filteredHistoryList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 text-foreground h-full">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-foreground">
             <p className="text-sm italic">No history available yet.</p>
           </div>
         ) : (
-          filteredHistoryList.map((item, index) => {
+          filteredHistoryList.map((item) => {
             const conversationId = item.conversationId;
             const isSelected = selectedConversationIds.includes(conversationId);
             const conversationLength = formatConversationLength(item.promptCount);
@@ -297,134 +437,150 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             const mainAgent = adapterDisplay.get(item.adapterName);
             const mainLabel = mainAgent?.name || item.adapterName;
             const canOpenCli = !!mainAgent?.cliAvailable;
-            const isLast = index === filteredHistoryList.length - 1;
 
             return (
               <div
                 key={conversationId}
-                className={`group relative transition-colors ${!isLast ? 'border-b border-border' : ''} ${isSelected ? 'bg-background-secondary' : ''}`}
-                onClick={() => { if (editingId !== conversationId) onOpenSession(item); }}
+                className="group relative"
               >
-                <div className="flex items-start gap-3 p-3 pr-4 cursor-pointer">
-                  <div className="flex flex-col items-center shrink-0 w-[42px] min-w-[42px] gap-1.5 pt-0.5">
-                    {mainAgent?.iconPath ? (
-                      <img src={mainAgent.iconPath} alt={mainLabel} className="h-9 w-9 object-contain opacity-80" />
-                    ) : (
-                      <div className="flex items-center justify-center rounded bg-background border border-border font-bold uppercase shrink-0 h-9 w-9 text-base">
-                        {mainLabel.slice(0, 1)}
-                      </div>
+                <div className="min-h-[56px] border-b border-border flex items-center gap-3 max-[400px]:gap-2 py-1 px-4">
+                  <div
+                    role="button"
+                    tabIndex={editingId === conversationId ? -1 : 0}
+                    className="flex min-w-0 flex-1 items-center gap-3 max-[400px]:gap-2 cursor-pointer rounded-[4px] focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                    onClick={() => { if (editingId !== conversationId) onOpenSession(item); }}
+                    onKeyDown={(event) => handleHistoryRowKeyDown(
+                      event,
+                      editingId === conversationId,
+                      () => onOpenSession(item)
                     )}
-                    
-                    {otherAgents.length > 0 && (
-                      <div className="flex flex-wrap items-center justify-center gap-0.5 w-full">
-                        {otherAgents.map((agentId, idx) => {
-                          const adapter = adapterDisplay.get(agentId);
-                          const iconLabel = adapter?.name || agentId;
-                          if (adapter?.iconPath) {
+                  >
+                    <div className="flex flex-col items-center shrink-0 gap-0.5 pt-0.5 mx-0.5 max-[350px]:hidden">
+                      {mainAgent?.iconPath ? (
+                        <img src={mainAgent.iconPath} alt={mainLabel} className="h-8 w-8 object-contain opacity-80" />
+                      ) : (
+                        <div className="flex items-center justify-center rounded bg-background border border-border font-bold uppercase shrink-0 h-8 w-8 text-base">
+                          {mainLabel.slice(0, 1)}
+                        </div>
+                      )}
+
+                      {otherAgents.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-center gap-0.5 w-full">
+                          {otherAgents.map((agentId, idx) => {
+                            const adapter = adapterDisplay.get(agentId);
+                            const iconLabel = adapter?.name || agentId;
+                            if (adapter?.iconPath) {
+                              return (
+                                <img
+                                  key={idx}
+                                  src={adapter.iconPath}
+                                  alt={iconLabel}
+                                  className="h-4 w-4 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
+                                />
+                              );
+                            }
                             return (
-                              <img 
-                                key={idx} 
-                                src={adapter.iconPath} 
-                                alt={iconLabel} 
-                                className="h-4 w-4 object-contain opacity-70 group-hover:opacity-100 transition-opacity" 
-                                title={iconLabel} 
-                              />
+                              <div key={idx} className="flex h-4 min-w-4 items-center justify-center rounded bg-background border border-border text-[9px] font-bold uppercase shrink-0 opacity-70 group-hover:opacity-100">
+                                {iconLabel.slice(0, 1)}
+                              </div>
                             );
-                          }
-                          return (
-                             <div key={idx} className="flex h-4 min-w-4 items-center justify-center rounded bg-background border border-border text-[9px] font-bold uppercase shrink-0 opacity-70 group-hover:opacity-100" title={iconLabel}>
-                               {iconLabel.slice(0, 1)}
-                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="min-w-0 flex-1 flex flex-col justify-center py-0.5">
-                    {editingId === conversationId ? (
-                      <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          autoFocus
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => handleEditKeyDown(e, item.projectPath, conversationId)}
-                          className="font-semibold text-sm bg-background border border-primary text-foreground outline-none px-1 py-0.5 rounded -ml-1 flex-1 min-w-0"
-                        />
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); submitRename(item.projectPath, conversationId); }}
-                          className="p-1 text-foreground-secondary hover:text-primary transition-colors bg-background rounded border border-border"
-                          title="Save"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
-                          className="p-1 text-foreground-secondary hover:text-error transition-colors bg-background rounded border border-border"
-                          title="Cancel"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="font-semibold text-sm truncate">{item.title}</div>
-                    )}
-                    <div className="mt-1 flex items-center gap-2 text-xs text-foreground-secondary group-hover:text-accent-foreground/80 transition-colors">
-                      <span>{formatDate(item.updatedAt)}</span>
-                      {conversationLength || item.modelId ? (
-                        <span className="opacity-50">&bull;</span>
-                      ) : null}
-                      {conversationLength ? <span>{conversationLength}</span> : null}
-                      {item.modelId ? <span>{item.modelId}</span> : null}
+                          })}
+                        </div>
+                      )}
                     </div>
-                    {deleteError ? (
-                      <div className="mt-1 text-xs text-error">
-                        {deleteError}
+
+                    <div className="min-w-0 flex-1 flex flex-col justify-center py-0.5">
+                      {editingId === conversationId ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            spellCheck={false}
+                            autoFocus
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, item.projectPath, conversationId)}
+                            className="-ml-1 h-auto min-w-0 flex-1 border-none bg-background px-1 py-0.5 text-ide-small focus:border-none focus:shadow-none border-none"
+                          />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); submitRename(item.projectPath, conversationId); }}
+                            className="rounded border border-[var(--ide-Button-startBorderColor)] bg-background p-1 text-foreground-secondary transition-colors hover:text-primary focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
+                            className="rounded border border-[var(--ide-Button-startBorderColor)] bg-background p-1 text-foreground-secondary transition-colors hover:text-error focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="py-0.5 text-ide-small truncate">{item.title}</div>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-foreground-secondary">
+                        <span>{formatDate(item.updatedAt)}</span>
+                        {conversationLength || item.modelId ? (
+                          <span className="opacity-50">&bull;</span>
+                        ) : null}
+                        {conversationLength ? <span>{conversationLength}</span> : null}
+                        {item.modelId ? <span>{item.modelId}</span> : null}
                       </div>
-                    ) : null}
+                      {deleteError ? (
+                        <div className="mt-1 text-xs text-error">
+                          {deleteError}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
                   <div 
-                    className="flex items-center gap-2 shrink-0 pt-1 relative z-10"
+                    className="flex shrink-0 items-center self-stretch gap-1 relative z-10 ml-2"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {canOpenCli && (
+
+                    <Tooltip variant="minimal" content="Rename chat">
+                      <button
+                        onClick={(e) => startEditing(item, e)}
+                        className="m-0.5 rounded-[4px] p-0.5 text-foreground-secondary opacity-0 transition-opacity hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                        aria-label="Rename chat"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
+
+                    <Tooltip variant="minimal" content="Delete chat">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          ACPBridge.openHistoryConversationCli(item.projectPath, conversationId);
+                          openDeleteConfirmation([item]);
                         }}
-                        className="p-1 text-foreground-secondary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Open Conversation in CLI"
+                        className="m-0.5 rounded-[4px] p-0.5 text-foreground-secondary opacity-0 transition-opacity hover:text-error group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                        aria-label="Delete chat"
                       >
-                        <Terminal className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
+                    </Tooltip>
+
+                    {canOpenCli && (
+                      <Tooltip variant="minimal" content="Open chat in CLI">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            ACPBridge.openHistoryConversationCli(item.projectPath, conversationId);
+                          }}
+                          className="m-0.5 rounded-[4px] p-0.5 text-foreground-secondary opacity-0 transition-opacity hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                          aria-label="Open chat in CLI"
+                        >
+                          <Terminal className="w-5 h-5" />
+                        </button>
+                      </Tooltip>
                     )}
-                    <button
-                      onClick={(e) => startEditing(item, e)}
-                      className="p-1 text-foreground-secondary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Rename Conversation"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDeleteConfirmation([item]);
-                      }}
-                      className="p-1 text-foreground-secondary hover:text-error opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Delete Conversation"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    
-                    <input
-                      type="checkbox"
+
+                    <Checkbox
                       checked={isSelected}
-                      onChange={() => toggleSelection(conversationId)}
+                      onCheckedChange={() => toggleSelection(conversationId)}
                       onClick={(e) => e.stopPropagation()}
-                      className={`h-3.5 w-3.5 transition-opacity cursor-pointer shrink-0 accent-primary ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      className="shrink-0 ml-2 mt-[-2px]"
                       aria-label={`Select ${item.title}`}
                     />
                   </div>
@@ -433,18 +589,20 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             );
           })
         )}
+        </div>
       </div>
 
       <ConfirmationModal
         isOpen={pendingDeleteIds.length > 0}
-        title={pendingDeleteIds.length > 1 ? 'Delete Conversations' : 'Delete Conversation'}
+        title={pendingDeleteIds.length > 1 ? 'Delete Chats' : 'Delete Chat'}
         message={
           pendingDeleteIds.length > 1
-            ? `Are you sure you want to delete ${pendingDeleteIds.length} conversations? This action cannot be undone.`
-            : `Are you sure you want to delete this conversation? This action cannot be undone.`
+            ? `Do you want to delete these ${pendingDeleteIds.length} chats?`
+            : 'Do you want to delete this chat?'
         }
         onConfirm={confirmDelete}
-        confirmLabel="Delete"
+        confirmLabel="Yes"
+        cancelLabel="No"
         onCancel={() => {
           setPendingDeleteIds([]);
           setDeleteProjectPath('');

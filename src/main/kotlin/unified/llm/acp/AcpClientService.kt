@@ -99,6 +99,14 @@ class AcpClientService private constructor(val project: Project) {
         adapterInitializationStateHandler = handler
     }
 
+    internal fun bindLiveSessionOwner(chatId: String, sessionId: String?) {
+        liveOwnerBySessionId.entries.removeIf { it.value == chatId }
+        val normalizedSessionId = sessionId?.trim().orEmpty()
+        if (normalizedSessionId.isNotBlank()) {
+            liveOwnerBySessionId[normalizedSessionId] = chatId
+        }
+    }
+
     fun activeAdapterName(chatId: String): String? = sessions[chatId]?.activeAdapterNameRef?.get()
 
     enum class Status { NotStarted, Initializing, Ready, Prompting, Error }
@@ -144,6 +152,7 @@ class AcpClientService private constructor(val project: Project) {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal val sessions = ConcurrentHashMap<String, AgentContext>()
     internal val activeProcesses = ConcurrentHashMap<String, SharedProcess>()
+    internal val liveOwnerBySessionId = ConcurrentHashMap<String, String>()
     internal val replayOwnerBySessionId = ConcurrentHashMap<String, String>()
     internal val startupInitializationStarted = AtomicBoolean(false)
     internal val adapterInitialization = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
@@ -236,6 +245,7 @@ class AcpClientService private constructor(val project: Project) {
             statusRef.set(Status.NotStarted)
             sessionIdRef.get()?.let { systemInstructionsInjectedSessionIds.remove(it) }
             sessionIdRef.set(null)
+            liveOwnerBySessionId.entries.removeIf { it.value == chatId }
             activeAdapterNameRef.set(null)
             activeModelIdRef.set(null)
             activeModeIdRef.set(null)
@@ -268,8 +278,9 @@ class AcpClientService private constructor(val project: Project) {
                 return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
             }
 
-            val matchingContexts = sessions.values.filter { it.sessionIdRef.get() == sessionId }
-            val primaryCtx = matchingContexts.firstOrNull()
+            val primaryCtx = liveOwnerBySessionId[sessionId]
+                ?.let { ownerChatId -> sessions[ownerChatId] }
+                ?.takeIf { it.sessionIdRef.get() == sessionId }
                 ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
 
             // Push the tool call as a SessionUpdate so the frontend creates
@@ -299,47 +310,31 @@ class AcpClientService private constructor(val project: Project) {
         }
 
         override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
-            val ownerChatId = replayOwnerBySessionId[sessionId]
-            var matchingContexts = if (ownerChatId != null) {
-                sessions[ownerChatId]?.takeIf { it.allowReplayDelivery }?.let { listOf(it) } ?: emptyList()
+            val replayOwnerChatId = replayOwnerBySessionId[sessionId]
+            val targetContext = if (replayOwnerChatId != null) {
+                sessions[replayOwnerChatId]?.takeIf { it.allowReplayDelivery }
             } else {
-                sessions.values.filter { it.allowReplayDelivery && it.sessionIdRef.get() == sessionId }
+                liveOwnerBySessionId[sessionId]
+                    ?.let { ownerChatId -> sessions[ownerChatId] }
+                    ?.takeIf { it.allowReplayDelivery && it.sessionIdRef.get() == sessionId }
             }
-            if (matchingContexts.isEmpty()) {
-                // Fallback path: during session load, ACP can emit updates before the
-                // final session id is fully reflected in the chat context. In that case,
-                // route replay updates to contexts that are currently initializing the
-                // same adapter process in a recent load window.
-                val now = System.currentTimeMillis()
-                matchingContexts = sessions.values.filter { ctx ->
-                    ctx.allowReplayDelivery &&
-                    ctx.statusRef.get() == Status.Initializing &&
-                        ctx.sharedProcess?.adapterName == adapterName &&
-                        (now - ctx.lastHistoryLoadTime) <= 60_000L
-                }
-                // Last-resort routing: deliver-first for same adapter contexts.
-                if (matchingContexts.isEmpty()) {
-                    matchingContexts = sessions.values.filter { it.allowReplayDelivery && it.sharedProcess?.adapterName == adapterName }
-                }
-            }
-            if (matchingContexts.isEmpty()) {
+            if (targetContext == null) {
                 return
             }
-            matchingContexts.forEach { context ->
-                if (notification is SessionUpdate.CurrentModeUpdate) {
-                    context.activeModeIdRef.set(notification.currentModeId.value)
-                }
 
-                val handler = sessionUpdateHandler
-                if (handler == null || context.ignoreUpdatesUntilPrompt) {
-                    return@forEach
-                }
-
-                val isReplayDelivery =
-                    ownerChatId != null &&
-                    ownerChatId == context.chatId
-                handler.invoke(context.chatId, notification, isReplayDelivery, _meta)
+            if (notification is SessionUpdate.CurrentModeUpdate) {
+                targetContext.activeModeIdRef.set(notification.currentModeId.value)
             }
+
+            val handler = sessionUpdateHandler
+            if (handler == null || targetContext.ignoreUpdatesUntilPrompt) {
+                return
+            }
+
+            val isReplayDelivery =
+                replayOwnerChatId != null &&
+                replayOwnerChatId == targetContext.chatId
+            handler.invoke(targetContext.chatId, notification, isReplayDelivery, _meta)
         }
     }
 

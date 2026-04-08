@@ -94,7 +94,7 @@ internal fun AcpClientService.initializeAdapterInBackground(adapterName: String)
             updateAdapterInitializationState(
                 adapterInfo.id,
                 AcpClientService.AdapterInitializationStatus.Failed,
-                e.message ?: e.toString()
+                formatAcpError(e)
             )
         } finally {
             adapterInitializationJobs.remove(adapterInfo.id)
@@ -147,7 +147,7 @@ internal suspend fun AcpClientService.initializeAdapterIfEligible(adapterName: S
         updateAdapterInitializationState(
             adapterInfo.id,
             AcpClientService.AdapterInitializationStatus.Failed,
-            e.message ?: e.toString()
+            formatAcpError(e)
         )
         throw e
     }

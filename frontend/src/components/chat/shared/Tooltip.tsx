@@ -1,20 +1,34 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { FocusEvent, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface TooltipProps {
   content: React.ReactNode;
   children: React.ReactNode;
   delay?: number;
+  className?: string;
+  showOnFocus?: boolean;
+  contentClassName?: string;
+  variant?: 'default' | 'minimal';
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300 }) => {
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
+
+export const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  children,
+  delay = 350,
+  className,
+  showOnFocus = true,
+  contentClassName,
+  variant = 'default',
+}) => {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
-
   const tooltipRef = useRef<HTMLDivElement>(null);
-
   const [offset, setOffset] = React.useState(0);
 
   const updatePosition = () => {
@@ -45,7 +59,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300
   }, [visible, coords.x]);
 
   const handleMouseEnter = () => {
-    setOffset(0); // Reset offset before showing
+    setOffset(0);
     updatePosition();
     timerRef.current = setTimeout(() => {
       setVisible(true);
@@ -53,6 +67,24 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300
   };
 
   const handleMouseLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setVisible(false);
+  };
+
+  const handleFocus = (event: FocusEvent<HTMLDivElement>) => {
+    if (!showOnFocus) return;
+    const focusedElement = event.target as HTMLElement | null;
+    if (focusedElement && !focusedElement.matches(':focus-visible')) {
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setOffset(0);
+    updatePosition();
+    setVisible(true);
+  };
+
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (triggerRef.current?.contains(event.relatedTarget as Node | null)) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     setVisible(false);
   };
@@ -66,12 +98,14 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300
   return (
     <div 
       ref={triggerRef}
-      className="inline-block w-fit max-w-full align-middle"
+      className={cx('block w-fit max-w-full align-middle', className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
     >
       {children}
-      {visible && createPortal(
+      {visible && content && createPortal(
         <div 
           ref={tooltipRef}
           className="fixed z-[9999] pointer-events-none"
@@ -79,11 +113,18 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, children, delay = 300
             left: coords.x, 
             top: coords.y,
             transform: `translate(calc(-50% + ${offset}px), calc(-100% - 6px))`,
-            maxWidth: 'calc(100vw - 24px)',
-            animation: 'tooltip-in 150ms ease-out forwards',
+            animation: 'tooltip-in 250ms ease-out forwards',
           }}
         >
-          <div className="bg-background border border-border text-foreground text-xs px-2 py-1 rounded-sm w-max max-w-full whitespace-normal break-all shadow-md">
+          <div
+            className={cx(
+              'max-w-[calc(100vw-16px)] border border-[var(--ide-Button-startBorderColor)] bg-background text-foreground rounded-md',
+              variant === 'minimal'
+                ? 'overflow-hidden px-2 py-1 text-xs whitespace-nowrap text-ellipsis'
+                : 'max-w-[300px] p-3 pt-2 text-ide-small whitespace-normal break-words',
+              contentClassName
+            )}
+          >
             {content}
           </div>
         </div>,

@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { ToolCallBlock } from '../../../types/chat';
-import { FileCode, Plus, Minus, ChevronRight } from 'lucide-react';
+import { FileCode, ChevronRight } from 'lucide-react';
 import { diff_match_patch } from 'diff-match-patch';
 import hljs, { getLanguageFromPath } from '../../../utils/highlight';
 import { parseToolStatus } from '../../../utils/toolCallUtils';
 import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
 import '../../../styles/markdown.css';
+import { chatFocusClassName, chatInsetFocusClassName } from '../shared/focusStyles';
 
 interface Props {
   block: ToolCallBlock;
@@ -121,32 +122,42 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
     }
   };
 
+  const handleOpenFileKeyDown: React.KeyboardEventHandler<HTMLSpanElement> = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleOpenFile();
+  };
+
   return (
-    <div className="my-2 border border-border rounded-md overflow-hidden shadow-sm">
+    <div className="border border-border rounded-[6px] overflow-hidden mb-2">
       <button
         onClick={toggle}
-        className="flex items-center gap-2 w-full px-3 py-2 bg-editor-bg "
+        className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
       >
-        <div className="flex-shrink-0 text-editor-fg opacity-70">
+        <div className="flex-shrink-0 text-foreground-secondary">
           <FileCode size={14} />
         </div>
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <span
+            role="button"
+            tabIndex={0}
             onClick={(e) => { e.stopPropagation(); handleOpenFile(); }}
-            className="font-mono truncate text-editor-fg opacity-90 hover:underline cursor-pointer"
+            onKeyDown={handleOpenFileKeyDown}
+            className={`font-mono truncate text-editor-fg opacity-90 hover:underline cursor-pointer text-left ${chatFocusClassName}`}
           >
             {fileName}
           </span>
           {diffData && (
-            <div className="flex items-center gap-1.5 ml-1 flex-shrink-0">
+            <div className="flex items-center gap-1.5 ml-1 flex-shrink-0 text-ide-small">
               {diffData.additions > 0 && (
-                <span className="font-bold text-success flex items-center">
-                  <Plus size={11} className="mr-0.5" />{diffData.additions}
+                <span className="font-bold text-added flex items-center">
+                  +{diffData.additions}
                 </span>
               )}
               {diffData.deletions > 0 && (
-                <span className="font-bold text-error flex items-center">
-                  <Minus size={11} className="mr-0.5" />{diffData.deletions}
+                <span className="font-bold text-deleted flex items-center">
+                  -{diffData.deletions}
                 </span>
               )}
             </div>
@@ -167,23 +178,23 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
       </button>
 
       <div
-        className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
+        className={`grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden ${isExpanded ? 'border-t border-border' : ''}`}
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
           {diffData && (
-            <div className="bg-editor-bg max-h-[400px] overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-              <div className="syntax-highlighted font-mono leading-relaxed py-2 min-w-max inline-block w-full">
+            <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ">
+              <div className="syntax-highlighted font-mono text-ide-small cursor-text py-2 min-w-max inline-block w-full">
                 {diffData.lines.map((line, i) => (
                   <React.Fragment key={i}>
                     {i > 0 && line.hunkIndex !== diffData.lines[i - 1].hunkIndex && (
-                      <div className="h-px bg-border/70 my-1" />
+                      <div className="h-px my-1" />
                     )}
                     <div
-                      className={`flex w-full group ${
+                      className={`flex w-full ${
                         line.type === 'added' ? 'bg-added-bg' :
                         line.type === 'removed' ? 'bg-deleted-bg' :
-                        'hover:bg-secondary'
+                        ''
                       }`}
                     >
                       <div className={`w-5 flex-shrink-0 flex justify-center select-none py-0.5 font-bold ${

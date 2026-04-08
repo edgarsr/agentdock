@@ -36,8 +36,8 @@ export function ClaudeChatUsage() {
   if (!hasData) return null;
 
   return (
-    <UsageIcon label={displayPct !== null ? `${parseFloat(displayPct.toFixed(1))}% used` : undefined}>
-      <ClaudeUsage />
+    <UsageIcon percent={displayPct}>
+      <ClaudeUsage stacked />
     </UsageIcon>
   );
 }

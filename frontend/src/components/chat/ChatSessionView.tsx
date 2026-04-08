@@ -3,11 +3,13 @@ import { useChatSession } from '../../hooks/useChatSession';
 import { useFileChanges } from '../../hooks/useFileChanges';
 import { AgentOption, FileChangeSummary, HistorySessionMeta, PendingHandoffContext } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
+import { Check, Copy, Download, X } from 'lucide-react';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import PermissionBar from './PermissionBar';
 import FileChangesPanel from './FileChangesPanel';
 import ConfirmationModal from '../ConfirmationModal';
+import { Tooltip } from './shared/Tooltip';
 import { buildConversationHandoffFromTranscriptFile, buildConversationHandoffSaveFailureContext, prepareConversationHandoff } from '../../utils/conversationHandoff';
 
 interface ChatSessionProps {
@@ -19,6 +21,7 @@ interface ChatSessionProps {
   isActive?: boolean;
   onAssistantActivity?: () => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
+  onCanMarkReadChange?: (canMarkRead: boolean) => void;
   onPermissionRequestChange?: (hasPendingPermission: boolean) => void;
   onAgentChangeRequest?: (payload: { agentId: string; handoffText: string }) => void;
   onHandoffConsumed?: (handoffId: string) => void;
@@ -34,6 +37,7 @@ export default function ChatSessionView({
   isActive = false,
   onAssistantActivity,
   onAtBottomChange,
+  onCanMarkReadChange,
   onPermissionRequestChange,
   onAgentChangeRequest,
   onHandoffConsumed,
@@ -110,15 +114,53 @@ export default function ChatSessionView({
   }, []);
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [downloaded, setDownloaded] = useState(false);
+  const [overlayActionState, setOverlayActionState] = useState<'downloaded' | 'copied' | null>(null);
   const lastReportedSessionStateRef = useRef('');
   const permissionRequestChangeRef = useRef(onPermissionRequestChange);
+  const overlayActionTimerRef = useRef<number | null>(null);
+  const overlayPrimaryActionRef = useRef<HTMLButtonElement | null>(null);
+
+  const clearOverlayActionState = useCallback(() => {
+    if (overlayActionTimerRef.current !== null) {
+      window.clearTimeout(overlayActionTimerRef.current);
+      overlayActionTimerRef.current = null;
+    }
+    setOverlayActionState(null);
+  }, []);
+
+  const flashOverlayActionState = useCallback((state: 'downloaded' | 'copied') => {
+    clearOverlayActionState();
+    setOverlayActionState(state);
+    overlayActionTimerRef.current = window.setTimeout(() => {
+      overlayActionTimerRef.current = null;
+      setOverlayActionState(null);
+    }, 1800);
+  }, [clearOverlayActionState]);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setDownloaded(true);
-    setTimeout(() => setDownloaded(false), 2000);
+    flashOverlayActionState('downloaded');
   };
+
+  const handleCopyImage = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectedImage || !navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      return;
+    }
+
+    try {
+      const response = await fetch(selectedImage);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type || 'image/png']: blob,
+        }),
+      ]);
+      flashOverlayActionState('copied');
+    } catch (error) {
+      console.warn('[ChatSessionView] Failed to copy image:', error);
+    }
+  }, [flashOverlayActionState, selectedImage]);
 
   // --- Resizing Logic ---
   const INPUT_MIN_HEIGHT = 144;
@@ -193,6 +235,10 @@ export default function ChatSessionView({
     onAtBottomChange?.(isAtBottom);
   }, [onAtBottomChange]);
 
+  const handleCanMarkReadChange = useCallback((canMarkRead: boolean) => {
+    onCanMarkReadChange?.(canMarkRead);
+  }, [onCanMarkReadChange]);
+
   const prevIsSendingRef = useRef(isSending);
   const pendingAssistantActivityRef = useRef(false);
   const lastNotifiedAssistantKeyRef = useRef('');
@@ -261,8 +307,20 @@ export default function ChatSessionView({
   useEffect(() => {
     return () => {
       permissionRequestChangeRef.current?.(false);
+      clearOverlayActionState();
     };
-  }, []);
+  }, [clearOverlayActionState]);
+
+  useEffect(() => {
+    clearOverlayActionState();
+  }, [selectedImage, clearOverlayActionState]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    requestAnimationFrame(() => {
+      overlayPrimaryActionRef.current?.focus();
+    });
+  }, [selectedImage]);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
@@ -274,6 +332,7 @@ export default function ChatSessionView({
             messages={messages} 
             onImageClick={setSelectedImage} 
             onAtBottomChange={handleAtBottomChange}
+            onCanMarkReadChange={handleCanMarkReadChange}
             isSending={isSending}
             status={status}
             agentName={adapterDisplayName}
@@ -284,7 +343,7 @@ export default function ChatSessionView({
         </div>
       </div>
 
-      <div className="flex flex-col shrink-0 relative z-20 shadow-[0_-4px_15px_rgba(0,0,0,0.15)] bg-background">
+      <div className="flex flex-col shrink-0 relative z-20 shadow-[0_-2px_8px_rgba(0,0,0,0.08)] bg-background">
         <FileChangesPanel
           hasPluginEdits={hasPluginEdits}
           fileChanges={fileChanges}
@@ -310,8 +369,14 @@ export default function ChatSessionView({
           onMouseDown={startResizing}
           className="h-[12px] -my-[6px] w-full cursor-row-resize relative z-10 group select-none"
         >
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-border transition-colors group-hover:bg-accent" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-[2px] bg-border group-hover:bg-accent rounded-full transition-all" />
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px]
+            bg-[var(--ide-Borders-ContrastBorderColor)] transition-[background-color,box-shadow] duration-500
+            delay-150 ease-out group-hover:bg-[var(--ide-Button-default-focusColor)]
+            group-hover:shadow-[0_0_4px_color-mix(in_srgb,var(--ide-Button-default-focusColor),transparent_55%)]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-[2px]
+            bg-[var(--ide-Borders-ContrastBorderColor)] rounded-full transition-[background-color,box-shadow]
+            duration-500 delay-150 ease-out group-hover:bg-[var(--ide-Button-default-focusColor)]
+            group-hover:shadow-[0_0_6px_color-mix(in_srgb,var(--ide-Button-default-focusColor),transparent_45%)]" />
         </div>
 
         <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
@@ -375,56 +440,54 @@ export default function ChatSessionView({
       {/* Full-size Image Overlay */}
       {selectedImage && (
         <div 
-          className="fixed inset-0 z-[100] bg-black bg-opacity-70 flex items-center 
+          className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center
             justify-center p-8 animate-in fade-in duration-200 cursor-zoom-out"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="relative max-w-full max-h-full flex items-center justify-center">
-            <img 
-              src={selectedImage} 
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200" 
-              alt="Full size preview"
-            />
-            <div className="absolute top-2 right-4 flex gap-2">
-              <a 
-                href={selectedImage}
-                download="image.png"
-                className="p-2 bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full text-white 
-                  transition-all outline-none shadow-xl"
-                onClick={handleDownload}
-                title="Download image"
+          <div
+            className="absolute right-4 top-16 z-10 flex items-center gap-1.5 px-2 py-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Tooltip content="Copy" variant="minimal">
+              <button
+                ref={overlayPrimaryActionRef}
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
+                transition-colors hover:bg-hover hover:text-foreground focus:outline-none
+                focus-visible:ring-2focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                onClick={handleCopyImage}
               >
-                {downloaded ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" 
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" 
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
-                )}
-              </a>
-              <button 
-                className="p-2 bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full text-white 
-                  transition-all outline-none shadow-xl"
-                onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
-                title="Close"
-              >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" 
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+                {overlayActionState === 'copied' ? <Check size={13} /> : <Copy size={16} />}
               </button>
-            </div>
+            </Tooltip>
+            <Tooltip content="Download" variant="minimal">
+              <a href={selectedImage} download="image.png"
+                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
+                transition-colors hover:bg-hover hover:text-foreground focus:outline-none focus-visible:ring-2
+                focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                onClick={handleDownload}
+              >
+                {overlayActionState === 'downloaded' ? <Check size={14} /> : <Download size={16} />}
+              </a>
+            </Tooltip>
+            <Tooltip content="Close" variant="minimal">
+              <button type="button"
+                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
+                transition-colors hover:bg-hover hover:text-foreground focus:outline-none focus-visible:ring-2
+                focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}
+              >
+                <X size={14} />
+              </button>
+            </Tooltip>
+          </div>
+
+          <div className="relative max-w-full max-h-full flex items-center justify-center">
+            <img src={selectedImage} tabIndex={0}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4
+              focus-visible:ring-offset-black"
+            />
           </div>
         </div>
       )}
@@ -434,7 +497,6 @@ export default function ChatSessionView({
         title="Undo Failed"
         message={undoErrorMessage || ''}
         confirmLabel="OK"
-        confirmVariant="danger"
         showCancelButton={false}
         onConfirm={clearUndoError}
         onCancel={clearUndoError}

@@ -2,6 +2,7 @@ import React from 'react';
 import { ToolCallEntry } from '../../../types/chat';
 import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
+import { chatFocusClassName } from '../shared/focusStyles';
 
 interface Props {
   entry: ToolCallEntry;
@@ -35,10 +36,8 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
   if (!filePath || !fileName) {
     return (
       <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
-        <span className=" flex-shrink-0">
-          <FileIcon size={13} />
-        </span>
-        <span className="text-foreground opacity-60 truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
+        <span className=" flex-shrink-0"><FileIcon size={13} /></span>
+        <span className="text-foreground truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
         {hasError && (
           <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
         )}
@@ -72,19 +71,19 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
     : null;
 
   return (
-    <Tooltip content={<span>Read {filePath}{lineRange}</span>}>
-      <div className="flex items-center gap-1.5 ml-0.5 py-0.5 min-w-0 group/activity cursor-help pr-2">
-        <div className="flex-shrink-0 mt-[-2px] opacity-70 group-hover/activity:opacity-100 transition-opacity">
+    <Tooltip variant="minimal" content={`Read ${filePath}${lineRange}`}>
+      <div className="flex items-center gap-1.5 min-w-0 group/activity cursor-help pr-2">
+        <div className="flex-shrink-0 transition-opacity">
           <FileIcon size={13} />
         </div>
         <button
           onClick={() => onOpenFile(filePath, startLine || undefined)}
-          className="text-[var(--ide-Link-foreground)] hover:underline text-left truncate min-w-0 flex-1"
+          className={`text-foreground-secondary hover:underline text-left truncate min-w-0 flex-1 ${chatFocusClassName}`}
         >
-          {fileName}{lineRange}{pattern ? ` | Pattern: ${pattern}` : ''}
+          Read {fileName}{lineRange}{pattern ? ` | Pattern: ${pattern}` : ''}
         </button>
         {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0 ml-1" />
+          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
         )}
       </div>
     </Tooltip>

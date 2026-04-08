@@ -11,12 +11,13 @@
     overflow-x: hidden;
     background-color: var(--ide-Panel-background);
     color: var(--ide-Panel-foreground);
-    font-size: var(--ide-font-size);
+    font-size: calc(var(--ide-font-size) + var(--ui-font-size-offset, 0px));
     font-family: var(--ide-font-family);
   }
 
   :root {
     --user-message-bg: var(--ide-background-secondary);
+    --ui-font-size-offset: 0px;
   }
 
   h1 {
@@ -45,21 +46,32 @@
 
   button:focus {
     outline: none;
-    border: none;
   }
 
   input, select, textarea {
-    background: var(--ide-TextField-background);
     color: var(--ide-TextField-foreground);
-    border: 1px solid var(--ide-TextField-borderColor);
-    font-family: inherit;
-    font-size: 1rem;
-    padding: 0.5rem;
+    border: 1px solid var(--ide-Button-startBorderColor);
+    border-radius: 4px;
+    box-sizing: border-box;
+    padding: 0.3rem 0.5rem;
   }
 
   input:focus, select:focus, textarea:focus {
     border-color: var(--ide-TextField-focusedBorderColor);
+    box-shadow: 0 0 0 1px var(--ide-Button-default-focusColor);
     outline: none;
+  }
+
+  input, select {
+    background: var(--ide-TextField-background);
+  }
+
+  textarea {
+    background: var(--ide-editor-bg);
+  }
+
+  textarea::placeholder {
+    opacity: 0.5;
   }
 
   input::selection, textarea::selection {
@@ -71,10 +83,19 @@
     padding: 0.5rem;
   }
 
-  pre, code {
+  pre, pre code {
+    color: var(--ide-Label-foreground);
     background: var(--ide-editor-bg);
     font-family: var(--ide-code-font-family);
-    font-size: var(--ide-code-font-size);
+  }
+
+  a, a code {
+    color: var(--ide-Hyperlink-linkColor);
+    background: transparent;
+  }
+
+  a:hover {
+    text-decoration: underline;
   }
 
   ul, ol {
@@ -83,6 +104,13 @@
     padding-left: var(--ide-list-indent);
     margin-top: var(--ide-paragraph-spacing);
     margin-bottom: var(--ide-paragraph-spacing);
+  }
+
+  hr {
+    border: none;
+    height: 1px;
+    background-color: var(--ide-Label-disabledForeground);
+    margin: 1rem 0;
   }
 
   li {

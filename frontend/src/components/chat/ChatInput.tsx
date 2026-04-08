@@ -11,7 +11,16 @@ import {
   $isRangeSelection,
   LexicalEditor,
 } from 'lexical';
-import { LoaderCircle, Mic, Square } from 'lucide-react';
+import {
+  Bookmark,
+  CornerDownLeft,
+  Keyboard as KeyboardIcon,
+  LoaderCircle,
+  Mic,
+  Paperclip,
+  SendHorizontal,
+  SquareTerminal,
+} from 'lucide-react';
 
 import ChatDropdown from './ChatDropdown';
 import {
@@ -23,13 +32,16 @@ import {
 } from '../../types/chat';
 import { PromptLibraryItem } from '../../types/promptLibrary';
 import AttachmentBar from './input/AttachmentBar';
-import { Tooltip } from './shared/Tooltip';
 import { ACPBridge } from '../../utils/bridge';
 import { openFile } from '../../utils/openFile';
 import { ChatUsageIndicator } from '../usage/chat/ChatUsageIndicator';
 import SlashCommandMenu from './input/SlashCommandMenu';
 import { useSlashCommands } from '../../hooks/useSlashCommands';
-import { buildAgentSlashItems, buildPromptLibrarySlashItems } from './input/slashCommands';
+import {
+  applySlashCommandToEditor,
+  buildAgentSlashItems,
+  buildPromptLibrarySlashItems,
+} from './input/slashCommands';
 import FileMentionMenu from './input/FileMentionMenu';
 import { useFileMentions } from '../../hooks/useFileMentions';
 
@@ -48,6 +60,7 @@ import {
   RegisterEditorPlugin,
 } from './input/ChatInputPlugins';
 import { ContextUsageIndicator } from './shared/ContextUsageIndicator';
+import { Tooltip } from './shared/Tooltip';
 import { AdapterUsageLifecycleProvider } from '../../hooks/useAdapterUsage';
 
 interface ChatInputProps {
@@ -122,6 +135,7 @@ export default function ChatInput({
 }: ChatInputProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const inputRootRef = useRef<HTMLDivElement>(null);
+  const controlsRowRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
@@ -131,12 +145,30 @@ export default function ChatInput({
   const [transcriptionFeature, setTranscriptionFeature] = useState<AudioTranscriptionFeatureState>(emptyTranscriptionFeature);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [composerRevision, setComposerRevision] = useState(0);
+  const registeredNodeClassesRef = useRef({
+    imageNode: ImageNode,
+    codeReferenceNode: CodeReferenceNode,
+  });
 
   useEffect(() => {
     const cleanup = ACPBridge.onPromptLibrary((e) => setPromptLibraryItems(e.detail.items));
     ACPBridge.loadPromptLibrary();
     return cleanup;
   }, []);
+
+  useEffect(() => {
+    const previous = registeredNodeClassesRef.current;
+    if (previous.imageNode !== ImageNode || previous.codeReferenceNode !== CodeReferenceNode) {
+      registeredNodeClassesRef.current = {
+        imageNode: ImageNode,
+        codeReferenceNode: CodeReferenceNode,
+      };
+      lexicalEditorRef.current = null;
+      setComposerRevision((value) => value + 1);
+    }
+  }, [ImageNode, CodeReferenceNode]);
 
   useEffect(() => {
     const cleanup = ACPBridge.onAudioTranscriptionFeature((e) => setTranscriptionFeature(e.detail.state));
@@ -164,6 +196,20 @@ export default function ChatInput({
     return () => window.removeEventListener('drag-highlight', handleDragHighlight as EventListener);
   }, []);
 
+  useEffect(() => {
+    const updateWidths = () => {
+      setContainerWidth(inputRootRef.current?.clientWidth ?? 0);
+    };
+
+    updateWidths();
+    const raf = requestAnimationFrame(updateWidths);
+    window.addEventListener('resize', updateWidths);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', updateWidths);
+    };
+  }, [selectedAgentId, selectedModelId, selectedModeId, modeOptions.length, status, isSending]);
+
   const handleOpenFile = useCallback((filePath: string, line?: number) => {
     openFile(filePath, line);
   }, []);
@@ -172,13 +218,7 @@ export default function ChatInput({
     return (localStorage.getItem('chat-send-mode') as 'enter' | 'ctrl-enter') || 'enter';
   });
 
-  const toggleSendMode = useCallback(() => {
-    setSendMode(prev => {
-      const next = prev === 'enter' ? 'ctrl-enter' : 'enter';
-      localStorage.setItem('chat-send-mode', next);
-      return next;
-    });
-  }, []);
+
 
   const initialConfig = useMemo(() => ({
     namespace: `ChatInput-${conversationId}`,
@@ -188,12 +228,72 @@ export default function ChatInput({
       text: { base: 'text-foreground' },
     },
     onError: (error: Error) => console.error(error),
-  }), [conversationId]);
+  }), [conversationId, composerRevision]);
+
+  const agentSlashItems = useMemo(
+    () => buildAgentSlashItems(availableCommands),
+    [availableCommands]
+  );
+
+  const promptLibrarySlashItems = useMemo(
+    () => buildPromptLibrarySlashItems(promptLibraryItems),
+    [promptLibraryItems]
+  );
 
   const slashItems = useMemo(() => ([
-    ...buildAgentSlashItems(availableCommands),
-    ...buildPromptLibrarySlashItems(promptLibraryItems),
-  ]), [availableCommands, promptLibraryItems]);
+    ...agentSlashItems,
+    ...promptLibrarySlashItems,
+  ]), [agentSlashItems, promptLibrarySlashItems]);
+
+  const sendModeIcon = useMemo(() => (
+    sendMode === 'ctrl-enter'
+      ? <KeyboardIcon className="w-4 h-4" />
+      : <CornerDownLeft className="w-4 h-4" />
+  ), [sendMode]);
+
+  const plusMenuOptions: DropdownOption[] = useMemo(() => {
+    const options: DropdownOption[] = [
+      { id: 'add-files', label: 'Attach file', icon: <Paperclip className="w-4 h-4" /> },
+    ];
+
+    if (agentSlashItems.length > 0) {
+      options.push({
+        id: 'commands',
+        label: 'Insert command',
+        icon: <SquareTerminal className="w-4 h-4" />,
+        subOptions: agentSlashItems.map((command) => ({
+          id: command.id,
+          label: `${command.displayPrefix}${command.name}`,
+          description: command.description,
+        })),
+      });
+    }
+
+    if (promptLibrarySlashItems.length > 0) {
+      options.push({
+        id: 'prompt-library',
+        label: 'Insert prompt',
+        icon: <Bookmark className="w-4 h-4" />,
+        subOptions: promptLibrarySlashItems.map((prompt) => ({
+          id: prompt.id,
+          label: prompt.name,
+          description: prompt.description,
+        })),
+      });
+    }
+
+    options.push({
+      id: 'send-mode',
+      label: 'Send mode',
+      icon: sendModeIcon,
+      subOptions: [
+        { id: 'enter', label: 'Enter', icon: <CornerDownLeft className="w-4 h-4" /> },
+        { id: 'ctrl-enter', label: 'Ctrl+Enter', icon: <KeyboardIcon className="w-4 h-4" /> },
+      ]
+    });
+
+    return options;
+  }, [agentSlashItems, promptLibrarySlashItems, sendModeIcon]);
 
   const handleImagePaste = useCallback((file: File, editor: LexicalEditor) => {
     const reader = new FileReader();
@@ -295,6 +395,17 @@ export default function ChatInput({
     onInputChange(nextText);
   }, [inputValue, onInputChange]);
 
+  const handleInsertSlashItem = useCallback((itemId: string, items: typeof slashItems) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+
+    applySlashCommandToEditor(
+      lexicalEditorRef.current,
+      item,
+      onInputChange
+    );
+  }, [lexicalEditorRef, onInputChange]);
+
   const handleVoiceInput = useCallback(async () => {
     if (isTranscribing) return;
 
@@ -324,11 +435,13 @@ export default function ChatInput({
   }, [conversationId, insertTranscript, isRecording, isTranscribing]);
 
   const showVoiceButton = transcriptionFeature.installed;
+  const collapsedAgentDropdown = containerWidth > 0 && containerWidth < 400;
+  const showAuxIndicators = containerWidth === 0 || containerWidth >= 320;
 
   return (
-    <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-4 pt-2">
-      <div className="mx-auto h-full max-w-4xl flex flex-col">
-        <div className="relative flex h-full flex-col rounded-ide border border-border bg-background-secondary shadow-2xl transition-all focus-within:ring-1 focus-within:ring-accent/50">
+    <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-2 pt-2">
+      <div className="mx-auto h-full w-full max-w-[1200px] flex flex-col">
+        <div className="relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)] bg-editor-bg transition-all focus-within:ring-1 focus-within:ring-accent/50">
 
           <AttachmentBar
             attachments={attachments}
@@ -339,20 +452,20 @@ export default function ChatInput({
           <div
             ref={editorContainerRef}
             onKeyDownCapture={combinedHandleKeyDownCapture}
-            className={`relative flex min-h-0 flex-1 cursor-text flex-col overflow-y-auto rounded-t-ide bg-background-secondary transition-colors ${isDragOver ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : ''}`}
+            className={`relative flex min-h-0 flex-1 cursor-text flex-col overflow-y-auto rounded-t-ide transition-colors ${isDragOver ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : ''}`}
           >
             <ChatInputActionsContext.Provider value={{ onImageClick, onOpenFile: handleOpenFile, attachments }}>
-              <LexicalComposer initialConfig={initialConfig}>
+              <LexicalComposer key={`chat-input-${conversationId}-${composerRevision}`} initialConfig={initialConfig}>
                 <RichTextPlugin
                   contentEditable={
                     <ContentEditable
-                      className="outline-none p-3 text-ide-regular text-foreground placeholder:text-foreground/30"
+                      className="outline-none p-3 text-foreground placeholder:text-foreground"
                       spellCheck={false}
                     />
                   }
                   placeholder={
-                    <div className="absolute top-3 left-3 text-foreground/30 pointer-events-none text-ide-regular">
-                      Type your task here (Paste images with Ctrl+V)
+                    <div className="absolute top-3 left-3 text-foreground-secondary pointer-events-none">
+                      Type your task here, @ to add files, / for commands
                     </div>
                   }
                   ErrorBoundary={LexicalErrorBoundary}
@@ -383,21 +496,45 @@ export default function ChatInput({
             </ChatInputActionsContext.Provider>
           </div>
 
-          <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-background-secondary/50 rounded-b-ide">
-            <div className="flex items-center gap-1">
-              <button
-                className="p-1.5 rounded text-foreground/60 hover:text-foreground hover:bg-background transition-all outline-none"
-                title="Add context"
-                onClick={() => {
-                   if (typeof window.__attachFile === 'function') {
-                       window.__attachFile(conversationId);
-                   }
+          <div ref={controlsRowRef} className="flex flex-wrap items-stretch gap-y-1 px-1 py-1 text-foreground">
+            <div className="flex min-w-0 flex-1 items-stretch">
+              <ChatDropdown
+                value="send-mode"
+                subValue={sendMode}
+                options={plusMenuOptions}
+                placeholder=""
+                disabled={isSending}
+                direction="up"
+                customTrigger={
+                  <div className="flex items-center text-ide-small">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
+                  </div>
+                }
+                onChange={(id) => {
+                  if (id === 'add-files') {
+                    if (typeof window.__attachFile === 'function') {
+                      window.__attachFile(conversationId);
+                    }
+                  }
                 }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
+                onSubChange={(parentId, subId) => {
+                  if (parentId === 'send-mode') {
+                    setSendMode(subId as 'enter' | 'ctrl-enter');
+                    localStorage.setItem('chat-send-mode', subId);
+                    return;
+                  }
 
-              <div className="h-4 w-[1px] bg-border mx-1" />
+                  if (parentId === 'commands') {
+                    handleInsertSlashItem(subId, agentSlashItems);
+                    return;
+                  }
+
+                  if (parentId === 'prompt-library') {
+                    handleInsertSlashItem(subId, promptLibrarySlashItems);
+                  }
+                }}
+              />
 
               <ChatDropdown
                 value={selectedAgentId}
@@ -405,10 +542,13 @@ export default function ChatInput({
                 options={agentOptions}
                 placeholder="Select Agent"
                 disabled={isSending}
+                collapsed={collapsedAgentDropdown}
+                showSubValueInTrigger={true}
                 onChange={onAgentChange}
                 onSubChange={(_agentId, modelId) => {
                   onModelChange(modelId, _agentId);
                 }}
+                className="ml-0.5"
               />
 
               {modeOptions.length > 0 && (
@@ -416,13 +556,13 @@ export default function ChatInput({
                   value={selectedModeId}
                   options={modeOptions}
                   placeholder="Mode"
-                  minWidthClass="min-w-[80px]"
                   disabled={isSending || !hasSelectedAgent}
                   onChange={onModeChange}
+                  className="ml-0.5"
                 />
               )}
 
-              {selectedAgentId && (
+              {showAuxIndicators && selectedAgentId && (
                 <AdapterUsageLifecycleProvider
                   value={{
                     enabled: true,
@@ -434,70 +574,78 @@ export default function ChatInput({
                 </AdapterUsageLifecycleProvider>
               )}
 
-              <ContextUsageIndicator used={contextTokensUsed} size={contextWindowSize} />
+              {showAuxIndicators && <ContextUsageIndicator used={contextTokensUsed} size={contextWindowSize} />}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-stretch">
               {showVoiceButton && (
-                <button
-                  type="button"
-                  onClick={handleVoiceInput}
-                  disabled={isSending || isTranscribing}
-                  className={`p-1.5 rounded transition-all outline-none disabled:opacity-40 ${
-                    isRecording
-                      ? 'text-error hover:bg-error/10'
-                      : 'text-foreground/60 hover:text-foreground hover:bg-background'
-                  }`}
-                  title={isRecording ? 'Stop voice input' : 'Start voice input'}
-                >
-                  {isTranscribing ? (
-                    <LoaderCircle size={16} className="animate-spin" />
-                  ) : isRecording ? (
-                    <Square size={16} />
-                  ) : (
-                    <Mic size={16} />
-                  )}
-                </button>
-              )}
-
-              <Tooltip
-                content={
-                  <div className="normal-case tracking-normal text-left">
-                    <div className="font-semibold mb-1">Send mode</div>
-                    <div>Click to toggle between sending on Enter or Ctrl+Enter.</div>
-                  </div>
-                }
-              >
-                <button
-                  type="button"
-                  onClick={toggleSendMode}
-                  className="text-[10px] text-foreground/40 hover:text-foreground/80 transition-colors uppercase font-medium tracking-wide outline-none relative px-1"
-                >
-                  {sendMode === 'enter' ? 'Enter' : 'Ctrl+Enter'}
-                </button>
-              </Tooltip>
-
-              <div className="flex items-center ml-1">
-                {isSending ? (
+                isTranscribing ? (
                   <button
                     type="button"
-                    onClick={onStop}
-                    className="p-1.5 text-error hover:bg-error/10 rounded transition-all outline-none"
-                    title="Stop"
+                    disabled={true}
+                    className="flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg outline-none text-ide-small text-foreground opacity-50 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
+                    <LoaderCircle size={16} className="animate-spin" />
+                    <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={onSend}
-                    disabled={!inputValue.trim()}
-                    className="p-1.5 text-foreground/60 hover:text-accent hover:bg-accent/10 rounded transition-all disabled:opacity-20 outline-none"
+                    onClick={handleVoiceInput}
+                    disabled={isSending}
+                    className={`flex items-center h-full px-1.5 rounded appearance-none border-0 outline-none text-ide-small focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${
+                      isRecording
+                        ? 'bg-[#db5c5c] text-foreground'
+                        : 'bg-editor-bg text-foreground hover:text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:text-foreground'
+                    }`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                    <Tooltip variant="minimal" content={isRecording ? 'Stop recording' : 'Voice input'}>
+                      <div className="flex items-center">
+                        <Mic size={16} className="block translate-y-px" />
+                        <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
+                      </div>
+                    </Tooltip>
                   </button>
-                )}
-              </div>
+                )
+              )}
+
+              {isSending ? (
+                  <button
+                    type="button"
+                    onClick={onStop}
+                    className="flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg
+                        outline-none text-ide-small text-error hover:bg-hover focus-visible:bg-hover
+                        focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                  >
+                    <Tooltip variant="minimal" content="Cancel">
+                      <div className="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                        <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
+                      </div>
+                    </Tooltip>
+                  </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onSend}
+                  disabled={!inputValue.trim()}
+                  className={`flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg outline-none 
+                    text-ide-small focus-visible:bg-hover focus-visible:text-foreground 
+                    focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] 
+                    hover:bg-hover disabled:pointer-events-none text-foreground-secondary
+                    hover:text-foreground ${!inputValue.trim() ? 'opacity-30' : ''}`}
+                >
+                  <Tooltip variant="minimal" content={inputValue.trim() ? "Send" : null}>
+                    <div className="flex items-center">
+                      <SendHorizontal size={16} className="block" strokeWidth={2} />
+                      <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
+                    </div>
+                  </Tooltip>
+                </button>
+              )}
             </div>
           </div>
         </div>

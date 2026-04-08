@@ -153,6 +153,7 @@ export interface DropdownOption {
   id: string;
   label: string;
   description?: string;
+  icon?: string | React.ReactNode;
   iconPath?: string;
   subOptions?: DropdownOption[];
 }
@@ -160,6 +161,7 @@ export interface DropdownOption {
 export interface TabUiFlags {
   unread: boolean;
   atBottom: boolean;
+  canMarkRead: boolean;
   warning: boolean;
 }
 
@@ -423,7 +425,6 @@ export interface HostSettingsInfo {
   hostOs: 'windows' | 'other';
   wslSupported: boolean;
   wslDistributions: { name: string }[];
-  uiFontSizeBasePx: number;
 }
 
 export interface GlobalSettings {

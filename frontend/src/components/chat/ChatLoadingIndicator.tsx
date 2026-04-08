@@ -57,21 +57,11 @@ export function ChatLoadingIndicator({ status, agentName }: ChatLoadingIndicator
   const isInitializing = status === 'initializing';
 
   return (
-    <div className="flex items-center gap-3 text-foreground-secondary text-sm animate-in fade-in duration-300">
-      <div className="flex-shrink-0">
-        <SpinnerIcon />
-      </div>
-      
+    <div className="flex items-center mt-4 gap-3 text-foreground-secondary text-ide-small animate-in fade-in duration-300">
+      <div className="flex-shrink-0 mt-[-2px]"><SpinnerIcon /></div>
       <div className="flex items-center">
-        <span>
-          {isInitializing && `Connect to ${agentName || 'agent'}...`}
-        </span>
-        
-        {!isInitializing && (
-          <span className="font-mono tabular-nums opacity-80">
-            {formatTime(seconds)}
-          </span>
-        )}
+        <span>{isInitializing && `Connect to ${agentName || 'agent'}...`}</span>
+        {!isInitializing && (<span className="tabular-nums">{formatTime(seconds)}</span>)}
       </div>
     </div>
   );

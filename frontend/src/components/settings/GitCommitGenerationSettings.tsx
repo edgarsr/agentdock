@@ -1,6 +1,7 @@
-import { Bot, FileText, GitCommitHorizontal } from 'lucide-react';
+import { GitCommitHorizontal } from 'lucide-react';
 import { AgentOption, GitCommitGenerationSettings as GitCommitGenerationSettingsValue, ModelOption } from '../../types/chat';
 import { SettingsToggleCard } from './SettingsToggleCard';
+import { DropdownOption, DropdownSelect } from '../ui/DropdownSelect';
 
 interface GitCommitGenerationSettingsProps {
   settings: GitCommitGenerationSettingsValue;
@@ -40,6 +41,16 @@ export function GitCommitGenerationSettings({
   const activeAgent = installedAgents.find((agent) => agent.id === settings.adapterId) ?? fallbackAgent;
   const models = activeAgent?.availableModels ?? [];
   const activeModelId = selectedModelValue(models, settings.modelId);
+  const agentOptions: DropdownOption[] = installedAgents.map((agent) => ({
+    value: agent.id,
+    label: agent.name,
+  }));
+  const modelOptions: DropdownOption[] = models.length === 0
+    ? [{ value: '', label: 'No models available' }]
+    : models.map((model) => ({
+        value: model.modelId,
+        label: model.name,
+      }));
 
   const update = (next: Partial<GitCommitGenerationSettingsValue>) => {
     onChange({
@@ -72,66 +83,49 @@ export function GitCommitGenerationSettings({
   return (
     <SettingsToggleCard
       icon={GitCommitHorizontal}
-      title="Git Commit Generation"
-      description="Use a downloaded AI agent to prepare commit message settings. The generation flow itself is not enabled yet."
+      title="Git Commit Message Generation"
+      description="Enable the button for AI commit message generation"
       enabled={settings.enabled}
       onToggle={handleToggle}
-      ariaLabel="Enable Git commit generation settings"
+      ariaLabel="Enable Git commit generation"
     >
       {settings.enabled && (
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-foreground/55">
-              <Bot size={13} />
-              <span>AI Agent</span>
+        <div className="flex flex-col gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+              <span>AI Agent:</span>
             </div>
-            <select
+            <DropdownSelect
               value={activeAgent?.id ?? ''}
-              onChange={(event) => handleAgentChange(event.target.value)}
-              className="w-full rounded-ide border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary"
-            >
-              {installedAgents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </select>
+              onChange={handleAgentChange}
+              options={agentOptions}
+              className="min-w-[180px]"
+            />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-foreground/55">
-              <GitCommitHorizontal size={13} />
-              <span>Model</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+              <span>Model:</span>
             </div>
-            <select
+            <DropdownSelect
               value={activeModelId}
-              onChange={(event) => update({ modelId: event.target.value })}
+              onChange={(modelId) => update({ modelId })}
               disabled={models.length === 0}
-              className="w-full rounded-ide border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {models.length === 0 ? (
-                <option value="">No models available</option>
-              ) : (
-                models.map((model) => (
-                  <option key={model.modelId} value={model.modelId}>
-                    {model.name}
-                  </option>
-                ))
-              )}
-            </select>
+              options={modelOptions}
+              className="min-w-[180px]"
+            />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-foreground/55">
-              <FileText size={13} />
-              <span>Instructions</span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+              <span>Custom Instructions (optional): </span>
             </div>
             <textarea
               value={settings.instructions}
               onChange={(event) => update({ instructions: event.target.value })}
               rows={5}
               placeholder="Describe how commit messages should be written."
-              className="w-full resize-y rounded-ide border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/35 focus:border-primary"
+              className="w-full max-w-[400px] resize-y rounded-[4px] px-3 py-2 text-ide-small"
             />
           </div>
         </div>

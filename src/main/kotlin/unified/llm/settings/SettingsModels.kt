@@ -1,7 +1,6 @@
 package unified.llm.settings
 
 import kotlinx.serialization.Serializable
-import kotlin.math.roundToInt
 
 @Serializable
 data class AudioTranscriptionFeatureState(
@@ -73,19 +72,16 @@ data class WslDistributionInfo(
 data class HostSettingsInfo(
     val hostOs: String,
     val wslSupported: Boolean,
-    val wslDistributions: List<WslDistributionInfo>,
-    val uiFontSizeBasePx: Int
+    val wslDistributions: List<WslDistributionInfo>
 ) {
     companion object {
         fun resolve(): HostSettingsInfo {
             val isWindows = unified.llm.acp.AcpExecutionMode.isWindowsHost()
-            val baseFont = com.intellij.util.ui.JBFont.regular()
             return HostSettingsInfo(
                 hostOs = if (isWindows) "windows" else "other",
                 wslSupported = if (isWindows) unified.llm.acp.AcpExecutionMode.isWslSupportedHost() else false,
                 wslDistributions = if (isWindows) unified.llm.acp.AcpExecutionMode.listWslDistributions()
-                    .map { WslDistributionInfo(it) } else emptyList(),
-                uiFontSizeBasePx = (baseFont.size2D + 1f).roundToInt()
+                    .map { WslDistributionInfo(it) } else emptyList()
             )
         }
     }

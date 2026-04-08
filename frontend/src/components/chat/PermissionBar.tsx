@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { PermissionRequest } from '../../types/chat';
+import { Button } from '../ui/Button';
 import { Tooltip } from './shared/Tooltip';
 
 interface PermissionBarProps {
@@ -11,42 +12,36 @@ interface PermissionBarProps {
 const PermissionBar = memo(({ request, onRespond }: PermissionBarProps) => {
   return (
     <>
-      <div className="border-t border-border w-full" />
+      <div className="border-t border-border w-full text-foreground-secondary text-ide-small" />
 
-      <div className="px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-2.5">
+      <div className="mx-auto w-full max-w-[1200px] px-5 py-2">
+        <div className="flex items-center gap-3 min-w-0 overflow-x-auto">
 
-          <ShieldAlert size={14} className="flex-shrink-0 text-warning" />
-
-          <span className="font-medium text-foreground-secondary flex-shrink-0">
-            Permission Request:
-          </span>
+          <div className="">
+            <ShieldAlert size={18} className="text-warning" />
+          </div>
 
           <div className="flex-1 min-w-0">
-            <Tooltip content={request.title}>
-              <span className="font-mono text-foreground opacity-80">
+            <Tooltip content={request.title} variant={"minimal"}>
+              <span className="block truncate text-foreground text-ide-small">
                 {request.title}
               </span>
             </Tooltip>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {request.options.map((opt, idx) => (
-              <button
+              <Button
                 key={opt.optionId}
                 type="button"
                 onClick={() => onRespond(opt.optionId)}
-                className={`px-3 py-0.5 rounded transition-colors ${
-                  idx === 0
-                    ? 'bg-primary text-primary-foreground hover:opacity-90'
-                    : 'bg-transparent border border-border text-foreground-secondary hover:text-foreground'
-                }`}
+                variant={idx === 0 ? 'primary' : 'secondary'}
+                className="text-ide-small max-w-[20vw] truncate !inline-block"
               >
                 {opt.label}
-              </button>
+              </Button>
             ))}
           </div>
-
         </div>
       </div>
     </>

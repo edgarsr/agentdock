@@ -12,6 +12,7 @@ import {
   KEY_BACKSPACE_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
   KEY_ENTER_COMMAND,
+  PASTE_COMMAND,
   LexicalEditor
 } from 'lexical';
 import { ImageNode } from './ImageNode';
@@ -89,6 +90,41 @@ export function PasteLogPlugin({ onImagePaste }: { onImagePaste: (file: File, ed
       return () => rootElement.removeEventListener('paste', handlePaste);
     }
   }, [editor, handlePaste]);
+
+  useEffect(() => {
+    return editor.registerCommand(
+      PASTE_COMMAND,
+      (event: ClipboardEvent) => {
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].type.startsWith('image/')) {
+              return false;
+            }
+          }
+        }
+
+        const plainText = event.clipboardData?.getData('text/plain');
+        if (!plainText) return false;
+
+        event.preventDefault();
+        editor.update(() => {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            selection.insertText(plainText);
+            return;
+          }
+          $getRoot().selectEnd();
+          const nextSelection = $getSelection();
+          if ($isRangeSelection(nextSelection)) {
+            nextSelection.insertText(plainText);
+          }
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+  }, [editor]);
 
   return null;
 }

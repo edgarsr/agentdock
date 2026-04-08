@@ -4,6 +4,7 @@ import { ChevronRight, Wrench } from 'lucide-react';
 import { parseToolStatus, safeParseJson } from '../../../utils/toolCallUtils';
 import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
 import { MarkdownMessage } from '../MarkdownMessage';
+import { chatInsetFocusClassName } from '../shared/focusStyles';
 
 interface Props {
   block: ToolCallBlock;
@@ -77,10 +78,10 @@ export const OtherToolBlock: React.FC<Props> = ({ block }) => {
   const hasContent = !!(argsText || promptText || bodyText);
 
   return (
-    <div className="my-2 border border-border rounded-md overflow-hidden shadow-sm">
+    <div className="border border-border rounded-[6px] overflow-hidden mb-2">
       <button
         onClick={hasContent ? toggle : undefined}
-        className={`flex items-center gap-2 w-full px-3 py-2 bg-editor-bg${hasContent ? '' : ' cursor-default'}`}
+        className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}${hasContent ? '' : ' cursor-default'}`}
       >
         <div className="flex-shrink-0 text-editor-fg opacity-70">
           <Wrench size={14} />
@@ -105,12 +106,11 @@ export const OtherToolBlock: React.FC<Props> = ({ block }) => {
       </button>
 
       {hasContent && (
-        <div
-          className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
+        <div className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
           style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
         >
           <div className="overflow-hidden">
-            <div className="p-3 bg-editor-bg max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+          <div tabIndex={-1} className="p-3 bg-editor-bg max-h-[400px] text-ide-small overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent border-t border-border">
               <div className="leading-relaxed text-editor-fg min-h-[0.5rem]">
                 {argsText && (<div className="mb-2 text-sm font-mono whitespace-pre-wrap break-words opacity-70">Arguments: {argsText}</div>)}
                 {promptText && (<div className="mb-2"><b>Prompt: </b>{promptText}<hr /></div>)}
