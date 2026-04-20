@@ -58,6 +58,7 @@ import {
   InlineAttachmentBackspacePlugin,
   ExternalCodeReferencePlugin,
   RegisterEditorPlugin,
+  PlainTextFormattingGuardPlugin,
 } from './input/ChatInputPlugins';
 import { ContextUsageIndicator } from './shared/ContextUsageIndicator';
 import { Tooltip } from './shared/Tooltip';
@@ -441,7 +442,8 @@ export default function ChatInput({
   return (
     <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-2 pt-2">
       <div className="mx-auto h-full w-full max-w-[1200px] flex flex-col">
-        <div className="relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)] bg-editor-bg transition-all focus-within:ring-1 focus-within:ring-accent/50">
+        <div className="relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)]
+          bg-editor-bg transition-all focus-within:ring-1 focus-within:ring-accent/50">
 
           <AttachmentBar
             attachments={attachments}
@@ -452,7 +454,8 @@ export default function ChatInput({
           <div
             ref={editorContainerRef}
             onKeyDownCapture={combinedHandleKeyDownCapture}
-            className={`relative flex min-h-0 flex-1 cursor-text flex-col overflow-y-auto rounded-t-ide transition-colors ${isDragOver ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : ''}`}
+            className={`relative flex min-h-0 flex-1 cursor-text flex-col overflow-y-auto rounded-t-ide transition-colors 
+              ${isDragOver ? 'bg-accent/5 ring-2 ring-inset ring-accent/50' : ''}`}
           >
             <ChatInputActionsContext.Provider value={{ onImageClick, onOpenFile: handleOpenFile, attachments }}>
               <LexicalComposer key={`chat-input-${conversationId}-${composerRevision}`} initialConfig={initialConfig}>
@@ -484,6 +487,7 @@ export default function ChatInput({
                 <AttachmentsSyncPlugin attachments={attachments} onAttachmentsChange={onAttachmentsChange} />
                 <PasteLogPlugin onImagePaste={handleImagePaste} />
                 <KeyboardPlugin onSend={onSend} sendMode={sendMode} disabled={isSlashMenuOpen} />
+                <PlainTextFormattingGuardPlugin />
                 <InlineAttachmentBackspacePlugin />
                 <ExternalCodeReferencePlugin
                   isActive={isActive}
@@ -503,7 +507,7 @@ export default function ChatInput({
                 subValue={sendMode}
                 options={plusMenuOptions}
                 placeholder=""
-                disabled={isSending}
+                disabled={false}
                 direction="up"
                 customTrigger={
                   <div className="flex items-center text-ide-small">

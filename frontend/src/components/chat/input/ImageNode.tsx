@@ -99,14 +99,11 @@ function ImageComponent({ id, nodeKey }: { id: string; nodeKey: NodeKey }) {
   return (
     <span 
       contentEditable={false}
-      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-[4px] border border-border
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-[4px] border border-border mb-1
         align-middle bg-background transition-all group relative focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${isAtStart ? 'ml-0 mr-2' : 'mx-2'}`}
     >
-      <button
-        type="button"
-        onClick={onClick}
+      <button type="button" onClick={onClick}
         className="flex items-center gap-1.5 cursor-pointer rounded-sm focus:outline-none"
-        aria-label={att ? `Open image attachment ${att.name}` : 'Open image attachment'}
       >
         {att ? (
           <div className="w-3 h-3 rounded-sm overflow-hidden flex-shrink-0">

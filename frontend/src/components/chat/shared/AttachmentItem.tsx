@@ -23,23 +23,17 @@ export function AttachmentItem({ att, onRemove, onImageClick, flushLeft = false 
   };
 
   return (
-    <div
-      className={`group relative inline-flex min-w-0 max-w-[200px] flex-shrink-0 items-center gap-1.5
-      rounded-[4px] border border-border bg-background px-2 py-1 transition-all
-      focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${flushLeft ? 'ml-0 mr-1' : 'mx-1'}`}
-      title={att.name}
+    <div className={`group relative inline-flex min-w-0 max-w-[200px] flex-shrink-0 items-center gap-1.5 mb-1 rounded-[4px] 
+      border border-border bg-background px-2 py-1 transition-all focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] 
+      ${flushLeft ? 'ml-0 mr-1' : 'mx-1'}`}
     >
-      <button
-        type="button"
-        onClick={onClick}
+      <button type="button" onClick={onClick}
         className={`flex min-w-0 items-center gap-1.5 overflow-hidden rounded-sm text-left outline-none
           transition-colors focus-visible:text-foreground ${isImage ? 'cursor-pointer' : 'cursor-default'}`}
-        aria-label={isImage ? `Open image attachment ${att.name}` : `Attachment ${att.name}`}
       >
         <div className="flex-shrink-0 w-3 h-3 flex items-center justify-center overflow-hidden">
           {isImage ? (
-            <img src={`data:${att.mimeType};base64,${att.data}`} alt=""
-                 className="w-full h-full object-cover rounded-[1px]"/>
+            <img src={`data:${att.mimeType};base64,${att.data}`} className="w-full h-full object-cover rounded-[1px]"/>
           ) : (
             <FileIcon mimeType={att.mimeType}/>
           )}

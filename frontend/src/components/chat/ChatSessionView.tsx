@@ -163,11 +163,11 @@ export default function ChatSessionView({
   }, [flashOverlayActionState, selectedImage]);
 
   // --- Resizing Logic ---
-  const INPUT_MIN_HEIGHT = 144;
+  const INPUT_MIN_HEIGHT = 120;
   const INPUT_MIN_HEIGHT_WITH_ATTACHMENTS = 192;
   const INPUT_MAX_HEIGHT = 424;
   const INPUT_DEFAULT_HEIGHT = 180;
-  const INPUT_BOTTOM_BAR_BUFFER = 86;
+  const INPUT_BOTTOM_BAR_BUFFER = 70;
   const ATTACHMENT_BAR_HEIGHT = 48;
   const MAX_HEIGHT_RATIO = 0.8;
 

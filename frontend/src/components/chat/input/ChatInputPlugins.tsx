@@ -11,6 +11,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   KEY_BACKSPACE_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
+  FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
   PASTE_COMMAND,
   LexicalEditor
@@ -163,6 +164,20 @@ export function KeyboardPlugin({
       COMMAND_PRIORITY_CRITICAL
     );
   }, [disabled, editor, onSend, sendMode]);
+
+  return null;
+}
+
+export function PlainTextFormattingGuardPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      FORMAT_TEXT_COMMAND,
+      () => true,
+      COMMAND_PRIORITY_CRITICAL
+    );
+  }, [editor]);
 
   return null;
 }

@@ -20,14 +20,9 @@ export default function AttachmentBar({ attachments, onRemove, onImageClick }: A
   if (visibleAttachments.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 mt-2 overflow-x-auto max-h-24 no-scrollbar">
+    <div className="flex items-center -mb-2 px-2 pt-2 pb-1 overflow-x-auto max-h-24 no-scrollbar">
       {visibleAttachments.map((att) => (
-        <AttachmentItem 
-          key={att.id} 
-          att={att} 
-          onRemove={onRemove} 
-          onImageClick={onImageClick} 
-        />
+        <AttachmentItem key={att.id} att={att} onRemove={onRemove} onImageClick={onImageClick}/>
       ))}
     </div>
   );

@@ -22,7 +22,6 @@ private val replayIgnoredUserCommandRegexes = replayIgnoredUserCommandTags.map {
 
 private const val MAX_TOOL_OUTPUT_LINES = 300
 private const val MAX_TOOL_OUTPUT_CHARS = 5000
-private const val TOOL_OUTPUT_REMOVED_NOTICE = "[Output removed]"
 
 
 internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonObject>): String? {
@@ -551,23 +550,24 @@ private fun shouldPreserveToolRawJson(parsed: JsonObject?): Boolean {
 
 private fun compactToolRawJson(parsed: JsonObject): JsonObject {
     if (parsed["kind"]?.jsonPrimitive?.contentOrNull == "edit") return parsed
-    if (!toolOutputExceedsLimit(parsed)) return parsed
+    val oversizedText = findOversizedToolOutputText(parsed) ?: return parsed
 
+    val removedNotice = buildToolOutputRemovedNotice(oversizedText.length)
     return buildJsonObject {
         parsed.forEach { (key, value) ->
             when (key) {
-                "content" -> put(key, buildToolOutputRemovedContent())
-                "rawOutput" -> put(key, buildToolOutputRemovedRawOutput(value as? JsonObject))
+                "content" -> put(key, buildToolOutputRemovedContent(removedNotice))
+                "rawOutput" -> put(key, buildToolOutputRemovedRawOutput(value as? JsonObject, removedNotice))
                 else -> put(key, value)
             }
         }
         if (parsed["content"] == null) {
-            put("content", buildToolOutputRemovedContent())
+            put("content", buildToolOutputRemovedContent(removedNotice))
         }
     }
 }
 
-private fun buildToolOutputRemovedContent(): JsonArray = buildJsonArray {
+private fun buildToolOutputRemovedContent(removedNotice: String): JsonArray = buildJsonArray {
     add(
         buildJsonObject {
             put("type", "content")
@@ -575,47 +575,54 @@ private fun buildToolOutputRemovedContent(): JsonArray = buildJsonArray {
                 "content",
                 buildJsonObject {
                     put("type", "text")
-                    put("text", TOOL_OUTPUT_REMOVED_NOTICE)
+                    put("text", removedNotice)
                 }
             )
         }
     )
 }
 
-private fun buildToolOutputRemovedRawOutput(rawOutput: JsonObject?): JsonObject = buildJsonObject {
+private fun buildToolOutputRemovedRawOutput(rawOutput: JsonObject?, removedNotice: String): JsonObject = buildJsonObject {
     rawOutput?.get("parsed_cmd")?.let { put("parsed_cmd", it) }
-    put("formatted_output", TOOL_OUTPUT_REMOVED_NOTICE)
-    put("aggregated_output", TOOL_OUTPUT_REMOVED_NOTICE)
-    put("message", TOOL_OUTPUT_REMOVED_NOTICE)
-    put("content", TOOL_OUTPUT_REMOVED_NOTICE)
+    put("formatted_output", removedNotice)
+    put("aggregated_output", removedNotice)
+    put("message", removedNotice)
+    put("content", removedNotice)
     put("stdout", "")
     put("stderr", "")
 }
 
-private fun toolOutputExceedsLimit(parsed: JsonObject): Boolean {
+private fun buildToolOutputRemovedNotice(removedCharacters: Int): String =
+    "[Output removed: $removedCharacters characters]"
+
+private fun extractToolContentText(item: JsonElement): String? {
+    val obj = item as? JsonObject ?: return null
+    return (obj["content"] as? JsonObject)
+        ?.get("text")
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?: obj["text"]?.jsonPrimitive?.contentOrNull
+}
+
+private fun findOversizedToolOutputText(parsed: JsonObject): String? {
     val content = parsed["content"] as? JsonArray
     if (content != null) {
         content.forEach { item ->
-            val text = (item as? JsonObject)
-                ?.get("content")
-                ?.let { it as? JsonObject }
-                ?.get("text")
-                ?.let { it as? JsonPrimitive }
-                ?.contentOrNull
-                ?: (item as? JsonObject)?.get("text")?.let { it as? JsonPrimitive }?.contentOrNull
+            val text = extractToolContentText(item)
             if (text != null && toolOutputTextExceedsLimit(text)) {
-                return true
+                return text
             }
         }
     }
 
     val text = (parsed["text"] as? JsonPrimitive)?.contentOrNull
-    if (text != null && toolOutputTextExceedsLimit(text)) return true
+    if (text != null && toolOutputTextExceedsLimit(text)) return text
 
     val rawOutput = parsed["rawOutput"] as? JsonObject
-    val outputTexts = listOf("formatted_output", "aggregated_output", "stdout", "stderr", "message", "content")
+    return listOf("formatted_output", "aggregated_output", "stdout", "stderr", "message", "content")
+        .asSequence()
         .mapNotNull { key -> (rawOutput?.get(key) as? JsonPrimitive)?.contentOrNull }
-    return outputTexts.any(::toolOutputTextExceedsLimit)
+        .firstOrNull(::toolOutputTextExceedsLimit)
 }
 
 private fun toolOutputTextExceedsLimit(text: String): Boolean =

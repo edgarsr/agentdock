@@ -115,7 +115,10 @@ export function extractResultTexts(json: Record<string, any>): string | undefine
 
 const MAX_TOOL_OUTPUT_LINES = 600;
 const MAX_TOOL_OUTPUT_CHARS = 10000;
-const TOOL_OUTPUT_REMOVED_NOTICE = '[Output removed]';
+
+function buildToolOutputRemovedNotice(removedCharacters: number): string {
+  return `[Output removed: ${removedCharacters} characters]`;
+}
 
 export function truncateToolOutputForKind(text: string, kind?: string): { text: string; truncated: boolean; originalLength: number } {
   const originalLength = text.split(/\r\n|\n|\r/).length;
@@ -123,7 +126,7 @@ export function truncateToolOutputForKind(text: string, kind?: string): { text: 
     return { text, truncated: false, originalLength };
   }
   if (originalLength > MAX_TOOL_OUTPUT_LINES || text.length > MAX_TOOL_OUTPUT_CHARS) {
-    return { text: TOOL_OUTPUT_REMOVED_NOTICE, truncated: true, originalLength };
+    return { text: buildToolOutputRemovedNotice(text.length), truncated: true, originalLength };
   }
   return { text, truncated: false, originalLength };
 }

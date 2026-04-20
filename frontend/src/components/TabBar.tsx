@@ -9,6 +9,7 @@ interface TabBarProps {
   activeTabId: string;
   tabUi?: Record<string, TabUiFlags>;
   onSelectTab: (id: string) => void;
+  onReorderTabs: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
   onCloseTab: (id: string) => void;
   onCloseAllTabs: () => void;
   onNewTab: () => void;
@@ -106,9 +107,12 @@ interface TabItemProps {
   hasUnread: boolean;
   titleClassName: string;
   onSelectTab: (id: string) => void;
+  onPointerDown: (id: string, event: React.PointerEvent<HTMLDivElement>) => void;
+  shouldSuppressClick: (id: string) => boolean;
   onCloseTab: (id: string) => void;
   onFocusTab: (id: string) => void;
   onBlurTab: (id: string) => void;
+  dropIndicator: 'before' | 'after' | null;
 }
 
 function TabItem({
@@ -120,18 +124,30 @@ function TabItem({
   hasUnread,
   titleClassName,
   onSelectTab,
+  onPointerDown,
+  shouldSuppressClick,
   onCloseTab,
   onFocusTab,
-  onBlurTab
+  onBlurTab,
+  dropIndicator
 }: TabItemProps) {
   return (
     <div
+      data-tab-id={tab.id}
+      onPointerDown={(event) => onPointerDown(tab.id, event)}
       className={`text-foreground group relative pl-1 pr-2 flex h-full max-w-[180px] shrink items-center rounded-[4px] bg-background
+        cursor-grab active:cursor-grabbing
         ${isActive ? 'text-foreground before:absolute before:inset-0 before:bg-background before:[filter:var(--ide-surface-active-filter)] ' +
           'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary' :
           ''}
       `}
     >
+      {dropIndicator === 'before' ? (
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-1 left-0 top-1 z-30 w-px bg-primary" />
+      ) : null}
+      {dropIndicator === 'after' ? (
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-1 right-0 top-1 z-30 w-px bg-primary" />
+      ) : null}
       {isKeyboardFocused ? (<span aria-hidden="true"
           className="pointer-events-none absolute inset-[1px] z-20 rounded-[3px] shadow-[inset_0_0_0_1px_var(--ide-Button-default-focusColor)]"
         />
@@ -140,7 +156,13 @@ function TabItem({
         type="button"
         role="tab"
         aria-selected={isActive}
-        onClick={() => onSelectTab(tab.id)}
+        onClick={(event) => {
+          if (shouldSuppressClick(tab.id)) {
+            event.preventDefault();
+            return;
+          }
+          onSelectTab(tab.id);
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -166,7 +188,10 @@ function TabItem({
         <span className="relative z-10 ml-2 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />
       ) : null}
 
-      <button onClick={(e) => {
+      <button
+        data-close-tab="true"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(e) => {
           e.stopPropagation();
           onCloseTab(tab.id);
         }}
@@ -190,6 +215,7 @@ export default function TabBar({
   activeTabId,
   tabUi = {},
   onSelectTab,
+  onReorderTabs,
   onCloseTab,
   onCloseAllTabs,
   onNewTab,
@@ -208,6 +234,7 @@ export default function TabBar({
   const [tabFocusedControl, setTabFocusedControl] = useState<'new' | 'menu' | 'hamburger' | null>(null);
   const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
   const [tabsViewportWidth, setTabsViewportWidth] = useState(0);
+  const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLDivElement>(null);
@@ -218,6 +245,7 @@ export default function TabBar({
   const lastInteractionWasTabRef = useRef(false);
   const focusFirstMenuItemOnOpenRef = useRef(false);
   const focusFirstHamburgerItemOnOpenRef = useRef(false);
+  const suppressClickTabIdRef = useRef<string | null>(null);
   const runnableAgents = agents.filter(isAgentRunnable);
 
   useEffect(() => {
@@ -296,6 +324,73 @@ export default function TabBar({
     averageTabWidth < 156 ? 'max-w-[80px]' :
     'max-w-[120px]';
 
+  const findDropTarget = (sourceId: string, clientX: number, clientY: number) => {
+    const tabElements = Array.from(tabsListRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? []);
+    for (const element of tabElements) {
+      const id = element.dataset.tabId;
+      if (!id || id === sourceId) {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+        continue;
+      }
+      return {
+        id,
+        position: clientX < rect.left + rect.width / 2 ? 'before' as const : 'after' as const,
+      };
+    }
+    return null;
+  };
+
+  const handleTabPointerDown = (id: string, event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('[data-close-tab]')) {
+      return;
+    }
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let moved = false;
+    let latestDropTarget: { id: string; position: 'before' | 'after' } | null = null;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const distance = Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY);
+      if (distance < 4) {
+        return;
+      }
+
+      moved = true;
+      latestDropTarget = findDropTarget(id, moveEvent.clientX, moveEvent.clientY);
+      setDropTarget(latestDropTarget);
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      setDropTarget(null);
+
+      if (!moved) {
+        return;
+      }
+
+      suppressClickTabIdRef.current = id;
+      window.setTimeout(() => {
+        if (suppressClickTabIdRef.current === id) {
+          suppressClickTabIdRef.current = null;
+        }
+      }, 0);
+
+      if (latestDropTarget) {
+        onReorderTabs(id, latestDropTarget.id, latestDropTarget.position);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
   return (
     <div className="relative z-30 flex h-[36px] bg-background border-t border-b border-[var(--ide-Borders-ContrastBorderColor)] select-none shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
       {/* Tabs List */}
@@ -320,9 +415,12 @@ export default function TabBar({
               hasUnread={hasUnread}
               titleClassName={titleClassName}
               onSelectTab={onSelectTab}
+              onPointerDown={handleTabPointerDown}
+              shouldSuppressClick={(id) => suppressClickTabIdRef.current === id}
               onCloseTab={onCloseTab}
               onFocusTab={(id) => setFocusedTabId(lastInteractionWasTabRef.current ? id : null)}
               onBlurTab={(id) => setFocusedTabId((current) => current === id ? null : current)}
+              dropIndicator={dropTarget?.id === tab.id ? dropTarget.position : null}
             />
           );
         })}

@@ -409,6 +409,30 @@ function App() {
     }
   };
 
+  const handleReorderTabs = useCallback((draggedId: string, targetId: string, position: 'before' | 'after') => {
+    if (draggedId === targetId) {
+      return;
+    }
+
+    setTabs((prev) => {
+      const draggedTab = prev.find((tab) => tab.id === draggedId);
+      if (!draggedTab || !prev.some((tab) => tab.id === targetId)) {
+        return prev;
+      }
+
+      const withoutDragged = prev.filter((tab) => tab.id !== draggedId);
+      const targetIndex = withoutDragged.findIndex((tab) => tab.id === targetId);
+      if (targetIndex === -1) {
+        return prev;
+      }
+
+      const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+      const next = [...withoutDragged];
+      next.splice(insertIndex, 0, draggedTab);
+      return next;
+    });
+  }, []);
+
   const handleCloseAllTabs = () => {
     if (typeof window.__stopAgent === 'function') {
       tabs.forEach((tab) => {
@@ -547,6 +571,7 @@ function App() {
             setTabUi(prev => prev[id]?.unread ? { ...prev, [id]: { ...prev[id], unread: false } } : prev);
           }
         }}
+        onReorderTabs={handleReorderTabs}
         onCloseTab={handleCloseTab}
         onCloseAllTabs={handleCloseAllTabs}
         onNewTab={() => handleNewTab()}

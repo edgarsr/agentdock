@@ -121,7 +121,6 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
                   onClick={() => handleOpenFile(codeRef.path, codeRef.startLine)}
                   flushLeft={idx === 0}
                   showTooltip={false}
-                  className="top-[-2px]"
                 />
               );
             }
@@ -136,7 +135,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
   const renderTrailingAttachments = () => {
     if (trailing.length === 0) return null;
     return (
-      <div className="flex flex-wrap gap-2 mt-3 block w-full">
+      <div className="flex flex-wrap pt-3 pb-2 block w-full">
         {trailing.map((block, idx) => {
           if (block.type === 'file') {
             const fb = block as FileBlock;

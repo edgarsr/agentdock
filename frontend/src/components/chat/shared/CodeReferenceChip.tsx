@@ -45,15 +45,12 @@ export function CodeReferenceChip({
   const tooltipContent = formatTooltip(path, startLine, endLine);
 
   const chip = (
-    <span
-      contentEditable={false}
-      className={`group relative inline-flex min-w-0 max-w-[200px] flex-shrink-0 items-center gap-1.5
-        rounded-[4px] border border-border bg-background px-2 py-1 align-middle transition-all
-        focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${flushLeft ? 'ml-0 mr-1' : 'mx-1'} ${className}`}
-      title={showTooltip ? undefined : tooltipContent}
+    <div contentEditable={false}
+      className={`group relative inline-flex min-w-0 max-w-[200px] flex-shrink-0 items-center gap-1.5 mb-1 rounded-[4px] 
+      border border-border bg-background px-2 py-1 transition-all focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] 
+        ${flushLeft ? 'ml-0 mr-1' : 'mx-1'} ${className}`}
     >
-      <button
-        type="button"
+      <button type="button"
         onClick={(e) => {
           e.stopPropagation();
           onClick?.();
@@ -82,7 +79,7 @@ export function CodeReferenceChip({
           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       )}
-    </span>
+    </div>
   );
 
   if (!showTooltip) return chip;
