@@ -156,8 +156,8 @@ object AcpAdapterPaths {
             AcpExecutionTarget.LOCAL -> {
                 val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
                 try {
-                    if (runtimeDir.exists()) runtimeDir.deleteRecursively()
-                    true
+                    AcpProcessUtils.stopProcessesUsingAdapterRoot(adapterInfo.id, target)
+                    deleteDirectoryWithRetries(runtimeDir)
                 } catch (_: Exception) {
                     false
                 }
@@ -167,6 +167,15 @@ object AcpAdapterPaths {
                 AcpExecutionMode.runWslShell("rm -rf ${quoteUnixShellArg(runtimeDir)}")?.exitCode == 0
             }
         }
+    }
+
+    private fun deleteDirectoryWithRetries(dir: File, attempts: Int = 3): Boolean {
+        repeat(attempts) { attempt ->
+            if (!dir.exists()) return true
+            if (dir.deleteRecursively() && !dir.exists()) return true
+            if (attempt < attempts - 1) Thread.sleep(250)
+        }
+        return !dir.exists()
     }
 
     suspend fun getAdapterRoot(adapterName: String? = null): File? {
