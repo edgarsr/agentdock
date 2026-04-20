@@ -8,6 +8,7 @@ import { CopilotUsage } from './usage/CopilotUsage';
 import { CodexUsage } from './usage/CodexUsage';
 import { GeminiUsage } from './usage/GeminiUsage';
 import { CursorUsage } from './usage/CursorUsage';
+import { QoderUsage } from './usage/QoderUsage';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { SplitButton } from './ui/SplitButton';
@@ -253,7 +254,7 @@ export function AgentManagementView({
   };
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden pb-4">
+    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       <div className="flex items-center justify-end px-3 border-b border-border shrink-0 min-h-12">
         <button
           onClick={handleRefresh}
@@ -263,7 +264,7 @@ export function AgentManagementView({
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto w-full px-2">
+      <div className="flex-1 overflow-y-auto w-full px-2 pb-16">
         <div className="flex flex-col max-w-[1200px] mx-auto w-full">
           {agents.map((agent, index) => {
             const isDownloadedKnown = agent.downloadedKnown === true;
@@ -361,6 +362,11 @@ export function AgentManagementView({
                       )}
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection refreshKey={refreshKey} />}
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && <CursorUsage />}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'qoder' && (
+                        <UsageSection>
+                          <QoderUsage />
+                        </UsageSection>
+                      )}
 
                       {!isInstalling && isDownloaded && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">

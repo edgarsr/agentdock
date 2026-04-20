@@ -5,7 +5,7 @@
   "distribution": {
     "type": "npm",
     "version": "latest",
-    "packageName": "@zed-industries/claude-agent-acp"
+    "packageName": "@agentclientprotocol/claude-agent-acp"
   },
   "disabledModels": [],
   "disabledModes": [],

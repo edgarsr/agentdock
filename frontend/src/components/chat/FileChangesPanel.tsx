@@ -38,12 +38,24 @@ const FileChangesPanel = memo(({
     return path.split(/[\\/]/).pop() || path;
   };
 
+  const toggleExpanded = () => setExpanded(value => !value);
+
+  const handleHeaderKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleExpanded();
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1200px] border-t border-border px-4 py-2">
       <div className="border border-border rounded-[6px] overflow-hidden bg-editor-bg">
-          <button type="button"
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
             className={`flex items-center h-9 w-full px-3 bg-editor-bg transition-colors cursor-pointer group/header ${chatInsetFocusClassName}`}
-            onClick={() => setExpanded(!expanded)}
+            onClick={toggleExpanded}
+            onKeyDown={handleHeaderKeyDown}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0 text-ide-small text-foreground-secondary">
               <FileDiff size={14} />
@@ -99,16 +111,14 @@ const FileChangesPanel = memo(({
               )}
               <div 
                 className={`p-1 ml-1 text-foreground-secondary transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}
-                onClick={() => setExpanded(!expanded)}
               >
                 <ChevronRight size={14} />
               </div>
             </div>
-          </button>
+          </div>
 
           <div
-            className="grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden"
-            style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+            className={`grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
           >
             <div className={`overflow-hidden bg-editor-bg border-t transition-colors duration-300 ${expanded ? 'border-border' : 'border-transparent'}`}>
               <div className="py-1 max-h-48 overflow-y-auto">

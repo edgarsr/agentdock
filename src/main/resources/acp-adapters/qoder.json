@@ -1,0 +1,30 @@
+{
+  "id": "qoder",
+  "name": "Qoder",
+  "iconPath": "/icons/qoder.svg",
+  "iconPathLight": "/icons/qoder-light.svg",
+  "iconPathDark": "/icons/qoder-dark.svg",
+  "supportsSessionList": false,
+  "distribution": {
+    "type": "npm",
+    "version": "latest",
+    "packageName": "@qoder-ai/qodercli"
+  },
+  "launchBinary": {
+    "win": "node_modules/.bin/qodercli.cmd",
+    "unix": "node_modules/@qoder-ai/qodercli/bin/qodercli"
+  },
+  "args": [
+    "--acp"
+  ],
+  "cli": {
+    "executable": {
+      "win": "node_modules/.bin/qodercli.cmd",
+      "unix": "node_modules/.bin/qodercli"
+    }
+  },
+  "authConfig": {
+    "uiMode": "manage_terminal",
+    "loginMode": "manage_terminal"
+  }
+}
