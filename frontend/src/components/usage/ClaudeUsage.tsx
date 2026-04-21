@@ -53,7 +53,7 @@ export function ClaudeUsage({ stacked = false }: { stacked?: boolean }) {
   const hasUsageData = fiveHour || sevenDay;
 
   if (!hasUsageData) {
-    const url = usage.authType === 'api_key' ? 'https://platform.claude.com' : 'https://claude.ai/settings/usage';
+    const url = usage.authType === 'api_key' ? 'https://platform.claude.com/settings/billing' : 'https://claude.ai/settings/usage';
     return (
       <div className="text-foreground-secondary">
         Usage quotas: <button type="button" onClick={() => window.__openUrl?.(url)} className={usageLinkClassName}>{url}</button>

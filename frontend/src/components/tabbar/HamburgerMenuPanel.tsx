@@ -41,14 +41,16 @@ export function HamburgerMenuPanel({
   onOpenSystemInstructions,
   onOpenSettings,
 }: HamburgerMenuPanelProps) {
+  const isDev = !!(window as any).__IS_DEV;
+
   const actions: MenuAction[] = [
     { label: 'History', icon: <HistoryTabIcon />, onClick: onOpenHistory },
-    { label: 'Settings', icon: <SettingsTabIcon />, onClick: onOpenSettings },
     { label: 'Service Providers', icon: <ManagementTabIcon />, onClick: onOpenManagement },
+    { label: 'Settings', icon: <SettingsTabIcon />, onClick: onOpenSettings },
     { label: 'Prompt Library', icon: <PromptLibraryTabIcon />, onClick: onOpenPromptLibrary },
     { label: 'System Instructions', icon: <SystemInstructionsTabIcon />, onClick: onOpenSystemInstructions },
-    { label: 'Design System', icon: <DesignTabIcon />, onClick: onOpenDesignSystem },
     { label: 'MCP Servers', icon: <McpTabIcon />, onClick: onOpenMcp },
+    ...(isDev ? [{ label: 'Design System', icon: <DesignTabIcon />, onClick: onOpenDesignSystem }] : []),
   ];
 
   return (

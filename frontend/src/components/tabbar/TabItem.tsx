@@ -82,9 +82,7 @@ export function TabItem({
           {getTabIcon(tab, agents)}
         </div>
         <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
-          <div className="truncate text-ide-small">
-            {tab.title}
-          </div>
+          <div className="truncate text-ide-small relative top-[1px]">{tab.title}</div>
         </div>
       </button>
       {hasWarning ? (

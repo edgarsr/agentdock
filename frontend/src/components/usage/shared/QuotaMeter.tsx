@@ -28,19 +28,13 @@ export function QuotaMeter({
   const resolvedHeight = height ?? Math.round(size * 1.3);
 
   return (
-    <span
-      className={cx('relative inline-flex shrink-0 overflow-hidden rounded-full', className)}
+    <span className={cx('relative inline-flex shrink-0 overflow-hidden rounded-full', className)}
       style={{ width: resolvedWidth, height: resolvedHeight }}
-      aria-hidden="true"
     >
-      <span
-        className={cx('absolute inset-x-0 bottom-0 rounded-full transition-[height,background-color] duration-200 ease-out', progressClass)}
+      <span className={cx('absolute inset-x-0 bottom-0 rounded-full transition-[height,background-color] duration-200 ease-out', progressClass)}
         style={{ height: `${normalizedPercent}%` }}
       />
-      <span
-        className={cx('absolute inset-0 rounded-full border', borderClass)}
-        style={{ borderWidth: strokeWidth }}
-      />
+      <span className={cx('absolute inset-0 rounded-full border', borderClass)} style={{ borderWidth: strokeWidth }}/>
     </span>
   );
 }

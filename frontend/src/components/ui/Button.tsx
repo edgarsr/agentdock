@@ -16,7 +16,7 @@ function cx(...values: Array<string | false | null | undefined>) {
 const baseClassName = [
   'inline-flex items-center justify-center gap-[0.5em] whitespace-nowrap select-none',
   'rounded-[4px] border border-[var(--ide-Button-startBorderColor)] leading-none',
-  'min-w-[5.35em] px-[1rem] py-[0.5rem]',
+  'min-w-[5.35em] px-[1rem] py-[6px]',
   'hover:bg-hover focus:outline-none transition-[filter] duration-150',
   'disabled:cursor-default disabled:pointer-events-none disabled:opacity-100',
   'disabled:border-[var(--ide-Button-disabledBorderColor)] disabled:bg-[var(--ide-Button-disabledBackground)] disabled:text-[var(--ide-Button-disabledText)]',

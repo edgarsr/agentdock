@@ -73,7 +73,6 @@ export function SplitButton({
             toggleButtonClassName,
             !hasMenu && 'before:hidden'
           )}
-          aria-label="Open button menu"
           aria-expanded={hasMenu ? menuOpen : undefined}
           disabled={disabled}
           onClick={(event) => {
@@ -87,12 +86,15 @@ export function SplitButton({
       </div>
 
       {hasMenu && menuOpen ? (
-        <div className="absolute left-0 top-[calc(100%+0.5em)] z-20 min-w-full rounded-[6px] border border-[var(--ide-Button-startBorderColor)] p-1.5">
+        <div className="absolute left-0 top-[calc(100%+0.5em)] bg-background z-20 min-w-full rounded-[6px]
+          border border-[var(--ide-Button-startBorderColor)] p-1.5">
           {menuItems.map((item, index) => (
             <button
               key={index}
               type="button"
-              className="flex px-2 py-0.5 w-full items-center rounded-[4px] hover:bg-accent hover:text-[var(--ide-Button-default-foreground)] focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+              className="flex px-2 py-0.5 w-full items-center rounded-[4px] hover:bg-accent
+                hover:text-[var(--ide-Button-default-foreground)] focus:outline-none
+                focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
               onClick={() => {
                 item.onClick?.();
                 setMenuOpen(false);

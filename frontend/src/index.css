@@ -13,6 +13,7 @@
     color: var(--ide-Panel-foreground);
     font-size: calc(var(--ide-font-size) + var(--ui-font-size-offset, 0px));
     font-family: var(--ide-font-family);
+    letter-spacing: -0.2px;
   }
 
   :root {

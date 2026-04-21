@@ -141,7 +141,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             )}
           </div>
           
-          <span className="pl-1 text-foreground-secondary max-[399px]:hidden">
+          <span className="pl-1 text-foreground-secondary text-ide-small max-[399px]:hidden">
             {filteredHistoryList.length} chat{filteredHistoryList.length !== 1 ? 's' : ''}
           </span>
         </div>

@@ -83,7 +83,7 @@ export function CodexUsage({ stacked = false }: { stacked?: boolean }) {
 
   if (!primaryWindow && !secondaryWindow) {
     if (!usage?.authType) return null;
-    const url = usage.authType === 'api_key' ? 'https://platform.openai.com/usage' : 'https://chatgpt.com/codex/settings/usage';
+    const url = usage.authType === 'api_key' ? 'https://platform.openai.com/settings/organization/usage' : 'https://chatgpt.com/codex/settings/usage';
     return (
       <div className="text-foreground-secondary">
         Usage quotas: <button type="button" onClick={() => window.__openUrl?.(url)} className={usageLinkClassName}>{url}</button>

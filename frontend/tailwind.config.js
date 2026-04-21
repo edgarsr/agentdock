@@ -69,7 +69,7 @@ export default {
         'ide-h4': '1.125rem',
         'ide-regular': '1rem',
         'ide-medium': '1.125rem',
-        'ide-small': '0.875rem',
+        'ide-small': '0.93rem',
       },
       borderRadius: {
         'ide': '6px',

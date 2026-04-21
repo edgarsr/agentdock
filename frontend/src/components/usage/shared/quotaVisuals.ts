@@ -20,7 +20,7 @@ export function getUsageFillClass(value: number | null | undefined): string {
     case 'warning':
       return 'bg-warning';
     case 'ok':
-      return 'bg-foreground-secondary';
+      return 'bg-foreground';
     default:
       return 'bg-foreground-secondary';
   }

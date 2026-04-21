@@ -229,7 +229,7 @@ export function EmptyStateView({
                       key={agent.id}
                       onClick={() => onStartWithAgent(agent.id)}
                       variant="secondary"
-                      className="w-full min-w-0 pl-[0.78em] [&>span:first-child]:w-auto"
+                      className="w-full min-w-0 pl-[0.78em] [&>span:first-child]:w-auto text-ide-small font-semibold"
                       leftIcon={<AgentIcon agent={agent} />}
                     >
                       {agent.name}
@@ -338,7 +338,7 @@ export function EmptyStateView({
                               </button>
                             </div>
                           ) : (
-                            <div className="truncate py-0.5 text-ide-small">{item.title}</div>
+                            <div className="truncate py-0.5 text-ide-small font-semibold">{item.title}</div>
                           )}
 
                           <div className="flex items-center gap-2 text-xs text-foreground-secondary">

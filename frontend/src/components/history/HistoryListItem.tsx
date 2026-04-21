@@ -136,7 +136,7 @@ export function HistoryListItem({
                 </button>
               </div>
             ) : (
-              <div className="py-0.5 text-ide-small truncate">{item.title}</div>
+              <div className="py-0.5 text-ide-small font-semibold truncate">{item.title}</div>
             )}
             <div className="flex items-center gap-2 text-xs text-foreground-secondary">
               <span>{formatDate(item.updatedAt)}</span>
