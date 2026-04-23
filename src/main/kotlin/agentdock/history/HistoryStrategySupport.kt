@@ -5,9 +5,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import agentdock.acp.AcpAdapterPaths
-import agentdock.acp.AcpExecutionMode
-import agentdock.acp.AcpExecutionTarget
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
@@ -84,14 +81,7 @@ internal fun historyComparablePath(path: String?): String {
     val value = path?.trim().orEmpty()
     if (value.isEmpty()) return ""
     val withoutExtendedPrefix = stripWindowsExtendedPathPrefix(value)
-    val mountMatch = Regex("^/mnt/([A-Za-z])/(.*)$").matchEntire(withoutExtendedPrefix.replace("\\", "/"))
-    val comparable = if (mountMatch != null) {
-        val drive = mountMatch.groupValues[1].uppercase()
-        val rest = mountMatch.groupValues[2].replace("/", "\\")
-        "$drive:\\$rest"
-    } else {
-        withoutExtendedPrefix
-    }
+    val comparable = withoutExtendedPrefix
     val normalized = if (isWindowsLikePath(comparable)) {
         comparable.replace("/", "\\")
     } else {
@@ -105,7 +95,7 @@ internal fun historyComparablePath(path: String?): String {
 internal fun readableHistorySourcePath(path: String?): String {
     val value = path?.trim().orEmpty()
     if (value.isEmpty()) return ""
-    return AcpExecutionMode.wslPathToWindowsUnc(value) ?: value
+    return value
 }
 
 internal fun historyHashMd5(value: String): String {
@@ -138,12 +128,7 @@ private fun historyProjectPathSlugCollapsed(projectPath: String): String {
 }
 
 internal fun resolveHistoryPathTemplate(template: String, projectPath: String?, sessionId: String? = null): String {
-    val target = AcpAdapterPaths.getExecutionTarget()
-    val home = if (target == AcpExecutionTarget.WSL) {
-        AcpExecutionMode.wslHomeDir() ?: return template
-    } else {
-        System.getProperty("user.home")
-    }
+    val home = System.getProperty("user.home")
     val canonicalProject = canonicalHistoryProjectPath(projectPath)
     val windowsProject = normalizeWindowsHistoryPath(canonicalProject)
     val slug = historyProjectPathSlug(windowsProject)
@@ -160,12 +145,7 @@ internal fun resolveHistoryPathTemplate(template: String, projectPath: String?, 
         .replace("{slug}", slug)
         .replace("{hash}", hashSha256)
         .replace("{sessionId}", sessionId ?: "")
-    return if (target == AcpExecutionTarget.WSL) {
-        val wslPath = resolved.replace("\\", "/")
-        AcpExecutionMode.wslPathToWindowsUnc(wslPath) ?: wslPath
-    } else {
-        resolved.replace("/", File.separator).replace("\\", File.separator)
-    }
+    return resolved.replace("/", File.separator).replace("\\", File.separator)
 }
 
 private fun buildHistoryGlobRegex(glob: String): Regex {

@@ -395,12 +395,6 @@ internal fun AcpBridge.installAdapterQueries() {
                         AcpAuthService.incrementActive(adapterId)
                         pushAdapters()
                         when {
-                            AcpAdapterPaths.getExecutionTarget() == AcpExecutionTarget.WSL -> {
-                                if (!cli.isIdeTerminalAvailable()) {
-                                    throw Exception("IDE terminal is required for auth management")
-                                }
-                                cli.openAgentCliInTerminal(adapterId)
-                            }
                             AcpAuthService.getLoginMode(adapterId) == "manage_terminal" -> {
                                 if (!cli.isIdeTerminalAvailable()) {
                                     throw Exception("IDE terminal is required for auth management")
@@ -456,9 +450,7 @@ internal fun AcpBridge.installAdapterQueries() {
                     try {
                         AcpAuthService.incrementActive(adapterId)
                         pushAdapters()
-                        if (AcpAdapterPaths.getExecutionTarget() != AcpExecutionTarget.WSL) {
-                            AcpAuthService.logout(adapterId)
-                        }
+                        AcpAuthService.logout(adapterId)
                     } finally {
                         AcpAuthService.decrementActive(adapterId)
                         authActionJobs.remove(adapterId)

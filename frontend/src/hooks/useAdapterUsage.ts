@@ -85,15 +85,6 @@ export function useAdapterUsage(adapterId: string) {
   }, [adapterId, cache, isChatMode, normalize]);
 
   useEffect(() => {
-    const dispose = ACPBridge.onExecutionTargetSwitched(() => {
-      resetAdapterUsageCaches();
-      setData(null);
-    });
-
-    return dispose;
-  }, []);
-
-  useEffect(() => {
     const fetchUsage = () => {
       ACPBridge.fetchAdapterUsage(adapterId);
     };

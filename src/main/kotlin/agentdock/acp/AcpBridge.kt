@@ -68,14 +68,12 @@ class AcpBridge(
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
     internal val suppressReplayForChatIds: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
-    @Volatile internal var wslRuntimeProbeState = WslRuntimeProbeState()
-    @Volatile internal var wslRuntimeProbeJob: Job? = null
 
     internal val cli = AcpBridgeCli(service.project) { action -> runOnEdt(action) }
     internal val audio = AcpAudioPlayer(scope)
 
     companion object {
-        // Keep this aligned with the service startup budget. Cold WSL/Gemini starts can exceed 45s.
+        // Keep this aligned with the service startup budget. Cold Gemini starts can exceed 45s.
         const val START_AGENT_TIMEOUT_MS = 300_000L
     }
 

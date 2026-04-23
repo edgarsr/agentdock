@@ -53,8 +53,7 @@ internal data class AdapterPayload(
     val downloading: Boolean,
     val downloadStatus: String,
     val disabledModels: List<String>,
-    val cliAvailable: Boolean,
-    val executionTarget: String = "local"
+    val cliAvailable: Boolean
 )
 
 @Serializable
@@ -118,13 +117,6 @@ internal data class AdapterDownloadProbeState(
     val downloaded: Boolean? = null,
     val downloadedKnown: Boolean = false,
     val installedVersion: String? = null
-)
-
-internal data class WslRuntimeProbeState(
-    val attempted: Boolean = false,
-    val ready: Boolean = false,
-    val homeDir: String? = null,
-    val distroName: String? = null
 )
 
 internal data class LivePromptCapture(

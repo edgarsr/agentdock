@@ -9,7 +9,6 @@ import {
   ContentChunk,
   ConversationReplayLoadedPayload,
   ConversationTranscriptSavedPayload,
-  ExecutionTargetSwitchPayload,
   FileChangeStatsResultPayload,
   GlobalSettingsPayload,
   HistoryDeleteResultPayload,
@@ -45,7 +44,6 @@ export interface AudioTranscriptionResultEvent { payload: AudioTranscriptionResu
 export interface AudioRecordingStateEvent { payload: AudioRecordingStatePayload; }
 export interface AudioTranscriptionSettingsEvent { settings: AudioTranscriptionSettings; }
 export interface GlobalSettingsEvent { payload: GlobalSettingsPayload; }
-export interface ExecutionTargetSwitchedEvent { payload: ExecutionTargetSwitchPayload; }
 
 export const EVENT_NAMES = {
   CONTENT_CHUNK: 'acp-content-chunk',
@@ -75,7 +73,6 @@ export const EVENT_NAMES = {
   AUDIO_RECORDING_STATE: 'audio-recording-state',
   AUDIO_TRANSCRIPTION_SETTINGS: 'audio-transcription-settings',
   GLOBAL_SETTINGS: 'global-settings',
-  EXECUTION_TARGET_SWITCHED: 'execution-target-switched',
 } as const;
 
 export function onBridgeEvent<T>(eventName: string, callback: (e: CustomEvent<T>) => void) {

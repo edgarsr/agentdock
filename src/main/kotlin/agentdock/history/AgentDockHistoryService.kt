@@ -259,8 +259,7 @@ object AgentDockHistoryService {
             HistoryStorage.requireSafeConversationId(conversationId)
         }.getOrElse { return false }
         return HistoryStorage.readExistingProjectIndex(projectPath).any { conversation ->
-            conversation.id == cleanConversationId &&
-                HistoryEnvironment.matchesCurrentHistoryEnvironment(conversation)
+            conversation.id == cleanConversationId
         }
     }
 }

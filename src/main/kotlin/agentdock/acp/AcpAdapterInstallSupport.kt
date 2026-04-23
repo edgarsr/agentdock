@@ -143,54 +143,6 @@ internal fun downloadArchiveDistributionLocal(
     }
 }
 
-internal fun downloadArchiveDistributionInWsl(
-    targetDir: String,
-    adapterInfo: AcpAdapterConfig.AdapterInfo,
-    statusCallback: ((String) -> Unit)? = null
-): Boolean {
-    val runtime = detectRuntimePlatform(AcpExecutionTarget.WSL)
-    val rawUrl = adapterInfo.distribution.downloadUrl
-    if (rawUrl == null) {
-        statusCallback?.invoke("Error: Archive distribution for '${adapterInfo.id}' has no downloadUrl configured")
-        return false
-    }
-    val downloadUrl = resolveArchiveDownloadUrl(rawUrl, adapterInfo, runtime)
-    val tempFile = "$targetDir/tool-download.${runtime.archiveExt}"
-    val script = """
-        set -e
-        rm -rf ${quoteUnixShellArg(targetDir)}
-        mkdir -p ${quoteUnixShellArg(targetDir)}
-        curl -fsSL ${quoteUnixShellArg(downloadUrl)} -o ${quoteUnixShellArg(tempFile)}
-        first_entry=${'$'}(tar -tzf ${quoteUnixShellArg(tempFile)} | sed -n '1p')
-        case "${'$'}first_entry" in
-          */*) tar --strip-components=1 -xzf ${quoteUnixShellArg(tempFile)} -C ${quoteUnixShellArg(targetDir)} ;;
-          *) tar -xzf ${quoteUnixShellArg(tempFile)} -C ${quoteUnixShellArg(targetDir)} ;;
-        esac
-        ${buildFlattenExtractSubdirScript(targetDir, adapterInfo.distribution.extractSubdir)}
-        rm -f ${quoteUnixShellArg(tempFile)}
-    """.trimIndent()
-    statusCallback?.invoke("Downloading ${adapterInfo.name} in WSL...")
-    val result = AcpExecutionMode.runWslShell(script, timeoutSeconds = ARCHIVE_COMMAND_TIMEOUT_MINUTES * 60)
-    if (result?.exitCode != 0) {
-        statusCallback?.invoke("Error: ${result?.stderr?.trim().orEmpty().ifBlank { "Download failed" }}")
-        return false
-    }
-    val authNpmPackage = adapterInfo.authConfig?.authNpmPackage
-    if (!authNpmPackage.isNullOrBlank()) {
-        statusCallback?.invoke("Installing auth tools...")
-        val npmScript = "npm install --prefix ${quoteUnixShellArg(targetDir)} ${quoteUnixShellArg("$authNpmPackage@latest")}"
-        val authInstallResult = AcpExecutionMode.runWslShell(npmScript, timeoutSeconds = ARCHIVE_COMMAND_TIMEOUT_MINUTES * 60)
-        if (authInstallResult?.exitCode != 0) {
-            statusCallback?.invoke(
-                "Error: ${authInstallResult?.stderr?.trim().orEmpty().ifBlank { authInstallResult?.stdout?.trim().orEmpty().ifBlank { "Auth tools installation failed" } }}"
-            )
-            return false
-        }
-    }
-    statusCallback?.invoke("${adapterInfo.name} installed successfully.")
-    return true
-}
-
 internal fun prepareAdapterTargetDir(targetDir: File) {
     if (targetDir.exists()) targetDir.deleteRecursively()
     targetDir.mkdirs()
@@ -205,24 +157,6 @@ internal fun deleteLocalAdapterRuntime(
         AcpProcessUtils.stopProcessesUsingAdapterRoot(adapterId, target)
         deleteDirectoryWithRetries(runtimeDir)
     }.getOrDefault(false)
-}
-
-internal fun applyWslAdapterPatches(
-    adapterRootPath: String,
-    adapterInfo: AcpAdapterConfig.AdapterInfo,
-    statusCallback: ((String) -> Unit)? = null
-) {
-    val patchRoot = when (adapterInfo.distribution.type) {
-        AcpAdapterConfig.DistributionType.ARCHIVE -> adapterRootPath
-        AcpAdapterConfig.DistributionType.NPM -> resolveNpmPackageRootPath(adapterRootPath, adapterInfo, AcpExecutionTarget.WSL)
-    }
-    val patchRootFile = wslPathToWindowsFile(patchRoot)
-        ?: throw IllegalStateException("Unable to resolve WSL patch root")
-    adapterInfo.patches.forEach { patchContent ->
-        statusCallback?.invoke("Applying patch...")
-        val applied = AcpPatchService.applyPatch(patchRootFile, patchContent)
-        if (!applied) throw IllegalStateException("Failed to apply patch in WSL")
-    }
 }
 
 internal fun installedVersionFromRuntimeDir(
@@ -249,7 +183,7 @@ internal fun writeInstallMetadata(runtimeDir: File, version: String) {
 }
 
 private fun detectRuntimePlatform(target: AcpExecutionTarget): RuntimePlatform {
-    val os = if (target == AcpExecutionTarget.WSL) "linux" else System.getProperty("os.name").lowercase()
+    val os = System.getProperty("os.name").lowercase()
     val arch = System.getProperty("os.arch").lowercase()
     val isArm64 = arch.contains("aarch64") || arch.contains("arm64")
     val archiveArch = if (isArm64) "arm64" else "x64"
@@ -333,18 +267,6 @@ private fun runArchiveCommand(builder: ProcessBuilder, statusCallback: ((String)
         )
     }
     return exitCode
-}
-
-private fun buildFlattenExtractSubdirScript(targetDir: String, extractSubdir: String?): String {
-    val normalized = extractSubdir?.trim()?.removePrefix("/")?.removeSuffix("/").orEmpty()
-    if (normalized.isBlank()) return ":"
-    val nestedDir = "${targetDir.trimEnd('/')}/$normalized"
-    return """
-        if [ -d ${quoteUnixShellArg(nestedDir)} ]; then
-          find ${quoteUnixShellArg(nestedDir)} -mindepth 1 -maxdepth 1 -exec mv {} ${quoteUnixShellArg(targetDir)}/ \;
-          rm -rf ${quoteUnixShellArg(nestedDir)}
-        fi
-    """.trimIndent()
 }
 
 private fun readInstallMetadata(runtimeDir: File): String? {

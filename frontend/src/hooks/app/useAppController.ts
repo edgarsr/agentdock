@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ChatTab,
   HistorySessionMeta,
@@ -52,7 +52,6 @@ export function useAppController() {
     tabUi,
     initTabUi,
     cleanupTabUiState,
-    cleanupTabUiStateForIds,
     resetTabUiState,
     markTabReadIfAllowed,
     handleAssistantActivity,
@@ -79,36 +78,6 @@ export function useAppController() {
   }, [cleanupTabUiState]);
 
   useHistoryTitleSync(setTabs);
-
-  useEffect(() => {
-    return ACPBridge.onExecutionTargetSwitched(() => {
-      const activeSettingsTab = tabsRef.current.find(
-        tab => tab.id === activeTabIdRef.current && tab.type === 'settings'
-      );
-      const remainingTabs = activeSettingsTab ? [activeSettingsTab] : [];
-      const closedTabIds = tabsRef.current
-        .filter(tab => !activeSettingsTab || tab.id !== activeSettingsTab.id)
-        .map(tab => tab.id);
-
-      setTabs(remainingTabs);
-      cleanupTabUiStateForIds(closedTabIds);
-      setTabSessionState(prev => {
-        const next = { ...prev };
-        closedTabIds.forEach(id => delete next[id]);
-        return next;
-      });
-      setPendingHandoffsByTab(prev => {
-        const next = { ...prev };
-        closedTabIds.forEach(id => delete next[id]);
-        return next;
-      });
-      closedTabIds.forEach(id => {
-        delete pendingConversationContinuationsRef.current[id];
-      });
-      setPendingAgentSwitch(null);
-      setActiveTabId(activeSettingsTab?.id ?? '');
-    });
-  }, [cleanupTabUiStateForIds]);
 
   const runnableAgents = useMemo(() => availableAgents.filter(isAgentRunnable), [availableAgents]);
   const agentAvailabilityResolved = useMemo(

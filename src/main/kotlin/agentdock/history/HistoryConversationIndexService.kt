@@ -13,10 +13,8 @@ internal object HistoryConversationIndexService {
         val cleanConversationId = runCatching {
             HistoryStorage.requireSafeConversationId(conversationId)
         }.getOrElse { return false }
-        val currentWslDistributionName = HistoryEnvironment.currentWslDistributionName()
         return HistoryStorage.readExistingProjectIndex(projectPath).any { conversation ->
             conversation.id == cleanConversationId &&
-                ((conversation.wslDistributionName ?: "") == (currentWslDistributionName ?: "")) &&
                 conversation.sessions.any { session ->
                     session.sessionId == sessionId && session.adapterName == adapterName
                 }
@@ -49,15 +47,11 @@ internal object HistoryConversationIndexService {
 
         val now = Instant.now().toEpochMilli()
         val normalizedTitle = titleCandidate?.trim().orEmpty()
-        val currentWslDistributionName = HistoryEnvironment.currentWslDistributionName()
         val indexFile = HistoryStorage.ensureProjectIndexFile(cleanProjectPath)
         val conversations = HistoryStorage.readProjectIndex(indexFile).toMutableList()
 
         val sameConversationIndices = conversations.mapIndexedNotNull { index, conversation ->
-            index.takeIf {
-                conversation.id == cleanConversationId &&
-                    ((conversation.wslDistributionName ?: "") == (currentWslDistributionName ?: ""))
-            }
+            index.takeIf { conversation.id == cleanConversationId }
         }
         val insertIndex = sameConversationIndices.firstOrNull() ?: conversations.size
 
@@ -108,8 +102,7 @@ internal object HistoryConversationIndexService {
             },
             promptCount = mergePromptCounts(mergedConversation?.promptCount, promptCount),
             transcriptPath = mergedConversation?.transcriptPath,
-            sessions = updatedSessions,
-            wslDistributionName = mergedConversation?.wslDistributionName ?: currentWslDistributionName
+            sessions = updatedSessions
         )
 
         sameConversationIndices.asReversed().forEach { index -> conversations.removeAt(index) }
@@ -129,22 +122,17 @@ internal object HistoryConversationIndexService {
         val transcriptFile = HistoryStorage.conversationTranscriptFile(cleanProjectPath, cleanConversationId)
         transcriptFile.atomicWriteText(normalizedTranscript)
 
-        val currentWslDistributionName = HistoryEnvironment.currentWslDistributionName()
         val indexFile = HistoryStorage.ensureProjectIndexFile(cleanProjectPath)
         val conversations = HistoryStorage.readProjectIndex(indexFile).toMutableList()
         val sameConversationIndices = conversations.mapIndexedNotNull { index, conversation ->
-            index.takeIf {
-                conversation.id == cleanConversationId &&
-                    ((conversation.wslDistributionName ?: "") == (currentWslDistributionName ?: ""))
-            }
+            index.takeIf { conversation.id == cleanConversationId }
         }
         val insertIndex = sameConversationIndices.firstOrNull() ?: conversations.size
 
         val mergedConversation = mergeMatchingConversations(conversations, sameConversationIndices)
 
         val updatedConversation = (mergedConversation ?: HistoryConversationIndexEntry(
-            id = cleanConversationId,
-            wslDistributionName = currentWslDistributionName
+            id = cleanConversationId
         )).copy(
             transcriptPath = transcriptFile.absolutePath
         )
@@ -313,8 +301,7 @@ internal object HistoryConversationIndexService {
                 !right.transcriptPath.isNullOrBlank() -> right.transcriptPath
                 else -> null
             },
-            sessions = mergedSessionsByKey.values.toList(),
-            wslDistributionName = left.wslDistributionName ?: right.wslDistributionName
+            sessions = mergedSessionsByKey.values.toList()
         )
     }
 

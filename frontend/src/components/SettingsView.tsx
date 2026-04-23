@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AgentOption, AudioTranscriptionFeatureState, AudioTranscriptionSettings, GitCommitGenerationSettings as GitCommitGenerationSettingsValue, GlobalSettingsPayload } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -7,20 +7,16 @@ import { SettingsCardShell } from './settings/SettingsCardShell';
 import { SettingsSelectCard } from './settings/SettingsSelectCard';
 import { SettingsToggleCard } from './settings/SettingsToggleCard';
 import { Button } from './ui/Button';
-import { Checkbox } from './ui/Checkbox';
 import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
 
 const defaultGlobalSettings: GlobalSettingsPayload = {
   settings: {
-    useWslForAcpAdapters: false,
-    wslDistributionName: '',
     audioNotificationsEnabled: true,
     uiFontSizeOffsetPx: 0,
     userMessageBackgroundStyle: 'default',
     audioTranscription: { language: 'auto' },
     gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', instructions: '' },
   },
-  host: { hostOs: 'other', wslSupported: false, wslDistributions: [] },
 };
 
 function SettingsLoadingSpinner({ className = 'w-3.5 h-3.5' }: { className?: string }) {
@@ -37,20 +33,11 @@ function normalizeGitCommitGenerationSettings(payload: Partial<GitCommitGenerati
 }
 
 function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undefined): GlobalSettingsPayload {
-  const wslDistributions = Array.isArray(payload?.host?.wslDistributions)
-    ? payload!.host!.wslDistributions.filter((item): item is { name: string } => Boolean(item?.name))
-    : [];
-  const requestedDistribution = payload?.settings?.wslDistributionName?.trim() ?? '';
-  const selectedDistribution = wslDistributions.some((item) => item.name === requestedDistribution)
-    ? requestedDistribution
-    : (wslDistributions[0]?.name ?? requestedDistribution);
   const uiFontSizeOffsetPx = Number.isFinite(payload?.settings?.uiFontSizeOffsetPx)
     ? Math.max(-3, Math.min(3, Math.round(payload!.settings!.uiFontSizeOffsetPx)))
     : 0;
   return {
     settings: {
-      useWslForAcpAdapters: Boolean(payload?.settings?.useWslForAcpAdapters),
-      wslDistributionName: selectedDistribution,
       audioNotificationsEnabled: payload?.settings?.audioNotificationsEnabled ?? true,
       uiFontSizeOffsetPx,
       userMessageBackgroundStyle: userMessageBackgroundOptions.some((option) => option.id === payload?.settings?.userMessageBackgroundStyle)
@@ -58,11 +45,6 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
         : 'default',
       audioTranscription: payload?.settings?.audioTranscription ?? { language: 'auto' },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
-    },
-    host: {
-      hostOs: payload?.host?.hostOs === 'windows' ? 'windows' : 'other',
-      wslSupported: Boolean(payload?.host?.wslSupported),
-      wslDistributions,
     },
   };
 }
@@ -120,12 +102,8 @@ export function SettingsView() {
   const [settings, setSettings] = useState<AudioTranscriptionSettings>({ language: 'auto' });
   const [globalSettings, setGlobalSettings] = useState<GlobalSettingsPayload>(defaultGlobalSettings);
   const [installedAgents, setInstalledAgents] = useState<AgentOption[]>([]);
-  const pendingWslSaveRef = useRef(false);
-  const [pendingWslTarget, setPendingWslTarget] = useState<boolean | null>(null);
   const [pendingAudioInputUninstall, setPendingAudioInputUninstall] = useState(false);
-  const [switchInProgress, setSwitchInProgress] = useState(false);
   const [uiFontSizeBasePx, setUiFontSizeBasePx] = useState(() => readIdeFontSizePx());
-  const hasWslDistributions = globalSettings.host.wslDistributions.length > 0;
   const uiFontSizeOptions = Array.from({ length: 7 }, (_, index) => {
     const offset = index - 3;
     const px = uiFontSizeBasePx + offset;
@@ -134,12 +112,6 @@ export function SettingsView() {
       label: offset === 0 ? `${px}px (default)` : `${px}px`,
     };
   });
-  const wslDistributionOptions: DropdownOption[] = hasWslDistributions
-    ? globalSettings.host.wslDistributions.map((distribution) => ({
-        value: distribution.name,
-        label: distribution.name,
-      }))
-    : [{ value: '', label: 'No distributions' }];
   const uiFontSizeSelectOptions: DropdownOption[] = uiFontSizeOptions.map((option) => ({
     value: String(option.offset),
     label: option.label,
@@ -173,10 +145,6 @@ export function SettingsView() {
     });
     const cleanupGlobalSettings = ACPBridge.onGlobalSettings((e) => {
       setGlobalSettings(normalizeGlobalSettings(e.detail?.payload));
-      if (pendingWslSaveRef.current) {
-        pendingWslSaveRef.current = false;
-        setSwitchInProgress(false);
-      }
     });
     const cleanupAdapters = ACPBridge.onAdapters((e) => {
       const nextInstalledAgents = Array.isArray(e.detail.adapters)
@@ -224,35 +192,6 @@ export function SettingsView() {
     const next = { language };
     setSettings(next);
     ACPBridge.saveAudioTranscriptionSettings(next);
-  };
-
-  const handleUseWslChange = (useWslForAcpAdapters: boolean) => {
-    setPendingWslTarget(useWslForAcpAdapters);
-  };
-
-  const handleWslDistributionChange = (wslDistributionName: string) => {
-    const next = { ...globalSettings.settings, wslDistributionName };
-    setGlobalSettings(prev => ({ ...prev, settings: next }));
-    pendingWslSaveRef.current = true;
-    ACPBridge.saveGlobalSettings(next);
-  };
-
-  const confirmUseWslChange = () => {
-    if (pendingWslTarget === null) return;
-    pendingWslSaveRef.current = true;
-    setSwitchInProgress(true);
-    setGlobalSettings(prev => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        useWslForAcpAdapters: pendingWslTarget,
-      },
-    }));
-    ACPBridge.saveGlobalSettings({
-      ...globalSettings.settings,
-      useWslForAcpAdapters: pendingWslTarget,
-    });
-    setPendingWslTarget(null);
   };
 
   const handleGitCommitGenerationChange = (gitCommitGeneration: GitCommitGenerationSettingsValue) => {
@@ -337,34 +276,6 @@ export function SettingsView() {
             onChange={handleGitCommitGenerationChange}
           />
 
-          {(globalSettings.host.hostOs === 'windows') && (
-            <SettingsCardShell
-              title="Agents Environment"
-              description="Run AI agents inside WSL"
-              leading={(
-                <Checkbox
-                  checked={globalSettings.settings.useWslForAcpAdapters}
-                  onCheckedChange={handleUseWslChange}
-                  disabled={!globalSettings.host.wslSupported || !globalSettings.settings.wslDistributionName || switchInProgress}
-                />
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-ide-small text-foreground-secondary">Distribution:</span>
-                <DropdownSelect
-                  value={globalSettings.settings.wslDistributionName}
-                  onChange={handleWslDistributionChange}
-                  options={wslDistributionOptions}
-                  disabled={globalSettings.settings.useWslForAcpAdapters || switchInProgress || !hasWslDistributions}
-                  className="min-w-[180px]"
-                />
-              </div>
-              {!globalSettings.host.wslSupported && (
-                <div className="text-ide-small text-error">WSL could not be detected from the IDE process.</div>
-              )}
-            </SettingsCardShell>
-          )}
-
           {feature.supported && (
             <SettingsCardShell title="Audio Input">
               {showAudioInputDetails && (
@@ -404,17 +315,6 @@ export function SettingsView() {
         </div>
       </div>
 
-      <ConfirmationModal
-        isOpen={pendingWslTarget !== null}
-        title={pendingWslTarget ? 'Switch to WSL' : 'Switch to Windows'}
-        message={
-          pendingWslTarget
-            ? `This will close all tabs except Settings and start downloaded agents inside WSL (${globalSettings.settings.wslDistributionName}).`
-            : 'This will close all tabs except Settings and start downloaded agents in Windows.'
-        }
-        onConfirm={confirmUseWslChange}
-        onCancel={() => setPendingWslTarget(null)}
-      />
       <ConfirmationModal
         isOpen={pendingAudioInputUninstall}
         title="Uninstall Audio Input"

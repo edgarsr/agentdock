@@ -54,8 +54,6 @@ data class GitCommitGenerationSettings(
 
 @Serializable
 data class GlobalSettings(
-    val useWslForAcpAdapters: Boolean = false,
-    val wslDistributionName: String = "",
     val audioNotificationsEnabled: Boolean = true,
     val uiFontSizeOffsetPx: Int = 0,
     val userMessageBackgroundStyle: String = "default",
@@ -64,36 +62,6 @@ data class GlobalSettings(
 )
 
 @Serializable
-data class WslDistributionInfo(
-    val name: String
-)
-
-@Serializable
-data class HostSettingsInfo(
-    val hostOs: String,
-    val wslSupported: Boolean,
-    val wslDistributions: List<WslDistributionInfo>
-) {
-    companion object {
-        fun resolve(): HostSettingsInfo {
-            val isWindows = agentdock.acp.AcpExecutionMode.isWindowsHost()
-            return HostSettingsInfo(
-                hostOs = if (isWindows) "windows" else "other",
-                wslSupported = if (isWindows) agentdock.acp.AcpExecutionMode.isWslSupportedHost() else false,
-                wslDistributions = if (isWindows) agentdock.acp.AcpExecutionMode.listWslDistributions()
-                    .map { WslDistributionInfo(it) } else emptyList()
-            )
-        }
-    }
-}
-
-@Serializable
 data class GlobalSettingsPayload(
-    val settings: GlobalSettings = GlobalSettings(),
-    val host: HostSettingsInfo
-)
-
-@Serializable
-data class ExecutionTargetSwitchPayload(
-    val executionTarget: String
+    val settings: GlobalSettings = GlobalSettings()
 )

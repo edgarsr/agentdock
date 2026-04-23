@@ -24,7 +24,6 @@ internal object HistorySessionSourceResolver {
         if (projectPath.isBlank() || sessionId.isBlank() || adapterName.isBlank()) return null
         return HistoryStorage.readExistingProjectIndex(projectPath)
             .asSequence()
-            .filter { HistoryEnvironment.matchesCurrentHistoryEnvironment(it) }
             .flatMap { it.sessions.asSequence() }
             .firstOrNull { it.sessionId == sessionId && it.adapterName == adapterName }
     }

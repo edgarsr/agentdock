@@ -49,10 +49,7 @@ internal object HistorySyncService {
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return emptyList()
 
         val conversation = HistoryStorage.readExistingProjectIndex(cleanProjectPath)
-            .firstOrNull {
-                it.id == cleanConversationId &&
-                    HistoryEnvironment.matchesCurrentHistoryEnvironment(it)
-            }
+            .firstOrNull { it.id == cleanConversationId }
             ?: return emptyList()
 
         val title = conversation.title.ifBlank { "Untitled" }
@@ -81,13 +78,6 @@ internal object HistorySyncService {
         val existing = rawExisting.filter { conversation ->
             runCatching { HistoryStorage.requireSafeConversationId(conversation.id) }.isSuccess
         }
-        val currentWslDistributionName = HistoryEnvironment.currentWslDistributionName()
-        val untouchedConversations = existing.filterNot {
-            HistoryEnvironment.matchesCurrentHistoryEnvironment(it, currentWslDistributionName)
-        }
-        val targetConversations = existing.filter {
-            HistoryEnvironment.matchesCurrentHistoryEnvironment(it, currentWslDistributionName)
-        }
         val availableSessionResult = collectSyncedAvailableSessionMeta(projectPath)
         val availableSessions = availableSessionResult.sessions
         val scannedAdapters = availableSessionResult.scannedAdapters
@@ -96,7 +86,7 @@ internal object HistorySyncService {
         val keptKeys = linkedSetOf<String>()
         var changed = existing.size != rawExisting.size
 
-        val syncedExisting = targetConversations.mapNotNull { conversation ->
+        val syncedExisting = existing.mapNotNull { conversation ->
             val keptSessions = conversation.sessions.mapNotNull { session ->
                 val key = "${session.adapterName}:${session.sessionId}"
                 val meta = availableByKey[key]
@@ -163,17 +153,16 @@ internal object HistorySyncService {
                             sourceFilePath = meta.filePath.takeIf { it.isNotBlank() },
                             changes = null
                         )
-                    ),
-                    wslDistributionName = currentWslDistributionName
+                    )
                 )
             }
 
-        val combinedConversations = untouchedConversations + syncedExisting + newConversations
+        val combinedConversations = syncedExisting + newConversations
         syncedExisting.addAll(newConversations)
         if (newConversations.isNotEmpty()) {
             changed = true
         }
-        if (changed || untouchedConversations.size != existing.size - targetConversations.size) {
+        if (changed) {
             HistoryStorage.writeProjectIndex(indexFile, combinedConversations)
         }
         deleteOrphanedConversationFiles(projectPath, combinedConversations)
@@ -321,7 +310,6 @@ internal object HistorySyncService {
     ): List<SessionMeta> {
         return conversations
             .filter { runCatching { HistoryStorage.requireSafeConversationId(it.id) }.isSuccess }
-            .filter { HistoryEnvironment.matchesCurrentHistoryEnvironment(it) }
             .mapNotNull { conversation ->
                 val visibleSessions = conversation.sessions.filter { session ->
                     runCatching { AcpAdapterPaths.isDownloaded(session.adapterName) }.getOrDefault(false)

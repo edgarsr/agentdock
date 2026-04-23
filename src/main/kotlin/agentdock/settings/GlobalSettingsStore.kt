@@ -31,7 +31,6 @@ object GlobalSettingsStore {
 
     fun save(settings: GlobalSettings): GlobalSettings {
         val normalized = settings.copy(
-            wslDistributionName = settings.wslDistributionName.trim(),
             audioNotificationsEnabled = settings.audioNotificationsEnabled,
             uiFontSizeOffsetPx = normalizeUiFontSizeOffsetPx(settings.uiFontSizeOffsetPx),
             userMessageBackgroundStyle = normalizeUserMessageBackgroundStyle(settings.userMessageBackgroundStyle),

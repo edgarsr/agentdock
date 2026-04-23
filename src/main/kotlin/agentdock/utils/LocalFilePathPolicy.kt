@@ -48,7 +48,7 @@ object LocalFilePathPolicy {
     }
 
     private fun resolvePathText(project: Project, filePath: String): String {
-        val normalizedFilePath = normalizeHostPath(filePath)
+        val normalizedFilePath = filePath
         val base = project.basePath ?: return normalizedFilePath
         val inputFile = File(normalizedFilePath)
         return if (inputFile.isAbsolute) {
@@ -61,22 +61,6 @@ object LocalFilePathPolicy {
                 File(baseFile, normalizedFilePath).absolutePath
             }
         }
-    }
-
-    private fun normalizeHostPath(filePath: String): String {
-        if (File.separatorChar != '\\') return filePath
-        val normalized = filePath.replace('\\', '/')
-        Regex("^/mnt/([A-Za-z])(?:/(.*))?$").matchEntire(normalized)?.let { match ->
-            val drive = match.groupValues[1].uppercase()
-            val rest = match.groupValues.getOrNull(2).orEmpty()
-            return if (rest.isBlank()) "$drive:/" else "$drive:/$rest"
-        }
-        Regex("^/([A-Za-z])(?:/(.*))?$").matchEntire(normalized)?.let { match ->
-            val drive = match.groupValues[1].uppercase()
-            val rest = match.groupValues.getOrNull(2).orEmpty()
-            return if (rest.isBlank()) "$drive:/" else "$drive:/$rest"
-        }
-        return filePath
     }
 
     private fun Path.isSameOrChildOf(base: Path): Boolean {

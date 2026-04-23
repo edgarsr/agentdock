@@ -162,15 +162,6 @@ export function AgentManagementView({
   }, []);
 
   useEffect(() => {
-    const dispose = ACPBridge.onExecutionTargetSwitched(() => {
-      resetServiceProviderAgentSnapshots();
-      setAgents([]);
-    });
-
-    return dispose;
-  }, []);
-
-  useEffect(() => {
     const wasActive = prevIsActiveRef.current;
     prevIsActiveRef.current = isActive;
 

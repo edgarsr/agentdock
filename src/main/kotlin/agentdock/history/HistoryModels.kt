@@ -101,8 +101,7 @@ internal data class HistoryConversationIndexEntry(
     val title: String = "",
     val promptCount: Int? = null,
     val transcriptPath: String? = null,
-    val sessions: List<HistorySessionIndexEntry> = emptyList(),
-    val wslDistributionName: String? = null
+    val sessions: List<HistorySessionIndexEntry> = emptyList()
 )
 
 @Serializable

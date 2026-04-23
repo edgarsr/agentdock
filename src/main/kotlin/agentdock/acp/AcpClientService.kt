@@ -25,8 +25,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 data class PermissionRequest(
     val requestId: String,
@@ -173,7 +173,6 @@ class AcpClientService private constructor(val project: Project) {
     internal val adapterRuntimeMetadataMap = ConcurrentHashMap<String, AdapterRuntimeMetadata>()
     internal val availableCommandsByAdapter = ConcurrentHashMap<String, List<AvailableCommandPayload>>()
     internal val systemInstructionsInjectedSessionIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
-    internal val executionTargetRef = AtomicReference(AcpAdapterPaths.getExecutionTarget())
     internal val historySyncAfterInitializationInFlight = AtomicBoolean(false)
 
     fun status(chatId: String): Status = sessions[chatId]?.statusRef?.get() ?: Status.NotStarted

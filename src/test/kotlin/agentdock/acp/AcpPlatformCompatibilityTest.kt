@@ -17,15 +17,6 @@ class AcpPlatformCompatibilityTest {
     }
 
     @Test
-    fun `WSL uses unix binaries even when host OS is Windows`() = withOsName("Windows 11") {
-        val adapter = archiveAdapter()
-
-        val launchPath = resolveAdapterLaunchPath("/home/user/.agent-dock/dependencies/tool", adapter, AcpExecutionTarget.WSL)
-
-        assertEquals("/home/user/.agent-dock/dependencies/tool/tool", launchPath)
-    }
-
-    @Test
     fun `JavaScript launch files use node on unix local hosts`() = withOsName("Mac OS X") {
         val adapter = AcpAdapterConfig.AdapterInfo(
             id = "tool",
@@ -55,21 +46,6 @@ class AcpPlatformCompatibilityTest {
             launchBinary = AcpAdapterConfig.PlatformBinary(
                 win = "node_modules/.bin/tool.cmd",
                 unix = "node_modules/.bin/tool"
-            )
-        )
-    }
-
-    private fun archiveAdapter(): AcpAdapterConfig.AdapterInfo {
-        return AcpAdapterConfig.AdapterInfo(
-            id = "tool",
-            name = "Tool",
-            distribution = AcpAdapterConfig.Distribution(
-                type = AcpAdapterConfig.DistributionType.ARCHIVE,
-                version = "1.0.0",
-                binaryName = AcpAdapterConfig.PlatformBinary(
-                    win = "tool.exe",
-                    unix = "tool"
-                )
             )
         )
     }

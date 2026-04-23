@@ -160,12 +160,8 @@ internal object HistoryReplayStore {
     }
 
     private fun latestConversationSourceSessionFile(projectPath: String, conversationId: String): File? {
-        val currentWslDistributionName = HistoryEnvironment.currentWslDistributionName()
         val conversation = HistoryStorage.readExistingProjectIndex(projectPath)
-            .firstOrNull {
-                it.id == conversationId &&
-                    HistoryEnvironment.matchesCurrentHistoryEnvironment(it, currentWslDistributionName)
-            }
+            .firstOrNull { it.id == conversationId }
             ?: return null
         val latestSession = conversation.sessions.maxByOrNull { it.updatedAt } ?: return null
         val sourceFilePath = latestSession.sourceFilePath?.trim().orEmpty()

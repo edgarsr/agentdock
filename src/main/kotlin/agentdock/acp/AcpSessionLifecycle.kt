@@ -18,21 +18,14 @@ import agentdock.history.SessionMeta
 private const val PROCESS_STARTUP_TIMEOUT_MS = 300_000L
 
 internal fun AcpClientService.processKey(adapterName: String): String {
-    return "${AcpAdapterPaths.getExecutionTarget().name.lowercase()}:$adapterName"
+    return adapterName
 }
 
 internal fun AcpClientService.ensureExecutionTargetCurrent() {
-    val currentTarget = AcpAdapterPaths.getExecutionTarget()
-    val previousTarget = executionTargetRef.getAndSet(currentTarget)
-    if (previousTarget == currentTarget) return
-    resetExecutionEnvironment(previousTarget, clearSessions = false, restartDownloadedAdapters = false)
 }
 
 internal fun AcpClientService.resolveSessionCwd(path: String): String {
-    return when (AcpAdapterPaths.getExecutionTarget()) {
-        AcpExecutionTarget.LOCAL -> path
-        AcpExecutionTarget.WSL -> AcpExecutionMode.toWslPath(path) ?: path
-    }
+    return path
 }
 
 @Suppress("OPT_IN_USAGE")

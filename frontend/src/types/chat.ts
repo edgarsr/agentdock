@@ -136,7 +136,6 @@ export interface AgentOption {
   updateKnown?: boolean;
   updateAvailable?: boolean;
   cliAvailable?: boolean;
-  executionTarget?: 'local' | 'wsl';
 }
 
 export function isAgentRunnable(agent: AgentOption): boolean {
@@ -422,15 +421,7 @@ export interface GitCommitGenerationSettings {
   instructions: string;
 }
 
-export interface HostSettingsInfo {
-  hostOs: 'windows' | 'other';
-  wslSupported: boolean;
-  wslDistributions: { name: string }[];
-}
-
 export interface GlobalSettings {
-  useWslForAcpAdapters: boolean;
-  wslDistributionName: string;
   audioNotificationsEnabled: boolean;
   uiFontSizeOffsetPx: number;
   userMessageBackgroundStyle: 'default' | 'background-secondary' | 'primary' | 'secondary' | 'accent' | 'input' | 'editor-bg';
@@ -440,11 +431,6 @@ export interface GlobalSettings {
 
 export interface GlobalSettingsPayload {
   settings: GlobalSettings;
-  host: HostSettingsInfo;
-}
-
-export interface ExecutionTargetSwitchPayload {
-  executionTarget: 'local' | 'wsl';
 }
 
 declare global {
@@ -534,7 +520,6 @@ declare global {
     __loadGlobalSettings?: () => void;
     __saveGlobalSettings?: (payload: string) => void;
     __onGlobalSettings?: (payload: GlobalSettingsPayload) => void;
-    __onExecutionTargetSwitched?: (payload: ExecutionTargetSwitchPayload) => void;
     __settingsBridgeReady?: boolean;
   }
 }

@@ -12,27 +12,12 @@ internal object AcpUsageDataFetcher {
 
     fun fetchGeminiUsageData(adapterId: String): String {
         return try {
-            val target = AcpAdapterPaths.getExecutionTarget()
             val (_, commandParts) = buildAdapterCliCommandParts(adapterId, listOf("--usage-json")) ?: return ""
-            val adapterDir = AcpAdapterPaths.getDownloadPath(adapterId, target)
-            when (target) {
-                AcpExecutionTarget.LOCAL -> {
-                    val output = runLocalCliAndCaptureStdout(commandParts, adapterDir, timeoutSeconds = 60)
-                        ?: return ""
-                    val jsonLine = output.lines().find { it.startsWith("__GEMINI_USAGE_JSON__") }
-                    if (jsonLine != null) jsonLine.substring("__GEMINI_USAGE_JSON__".length).trim() else extractJsonPayload(output)
-                }
-                AcpExecutionTarget.WSL -> {
-                    val command = commandParts.joinToString(" ") { quoteUnixShellArg(it) }
-                    val result = AcpExecutionMode.runWslShell(
-                        script = "cd ${quoteUnixShellArg(adapterDir)} && $command",
-                        timeoutSeconds = 60
-                    ) ?: return ""
-                    val output = result.stdout.trim()
-                    val jsonLine = output.lines().find { it.startsWith("__GEMINI_USAGE_JSON__") }
-                    if (jsonLine != null) jsonLine.substring("__GEMINI_USAGE_JSON__".length).trim() else extractJsonPayload(output)
-                }
-            }
+            val adapterDir = AcpAdapterPaths.getDownloadPath(adapterId)
+            val output = runLocalCliAndCaptureStdout(commandParts, adapterDir, timeoutSeconds = 60)
+                ?: return ""
+            val jsonLine = output.lines().find { it.startsWith("__GEMINI_USAGE_JSON__") }
+            if (jsonLine != null) jsonLine.substring("__GEMINI_USAGE_JSON__".length).trim() else extractJsonPayload(output)
         } catch (_: Exception) { "" }
     }
 
@@ -95,8 +80,8 @@ internal object AcpUsageDataFetcher {
         val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull() ?: return ""
         val cli = adapterInfo.cli ?: return ""
         val target = AcpAdapterPaths.getExecutionTarget()
-        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
-        if (!AcpAdapterPaths.isDownloaded(adapterId, target)) return ""
+        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId)
+        if (!AcpAdapterPaths.isDownloaded(adapterId)) return ""
 
         val executable = platformBinaryForTarget(cli.executable, target)?.takeIf { it.isNotBlank() } ?: return ""
 
@@ -105,21 +90,9 @@ internal object AcpUsageDataFetcher {
         commandParts += "--usage-json"
 
         return try {
-            when (target) {
-                AcpExecutionTarget.LOCAL -> {
-                    val stdout = runLocalCliAndCaptureStdout(commandParts, adapterRoot, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
-                        ?: return ""
-                    extractJsonPayload(stdout)
-                }
-                AcpExecutionTarget.WSL -> {
-                    val command = commandParts.joinToString(" ") { quoteUnixShellArg(it) }
-                    val result = AcpExecutionMode.runWslShell(
-                        script = "cd ${quoteUnixShellArg(adapterRoot)} && $command",
-                        timeoutSeconds = 30
-                    ) ?: return ""
-                    extractJsonPayload(result.stdout)
-                }
-            }
+            val stdout = runLocalCliAndCaptureStdout(commandParts, adapterRoot, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
+                ?: return ""
+            extractJsonPayload(stdout)
         } catch (_: Exception) { "" }
     }
 
@@ -186,18 +159,8 @@ internal object AcpUsageDataFetcher {
     }
 
     private fun readTargetFile(rawPath: String): String? {
-        return when (AcpAdapterPaths.getExecutionTarget()) {
-            AcpExecutionTarget.LOCAL -> {
-                val resolved = rawPath.replace("~", System.getProperty("user.home"))
-                val file = File(resolved)
-                if (!file.exists()) null else file.readText()
-            }
-            AcpExecutionTarget.WSL -> {
-                val wslHome = AcpExecutionMode.wslHomeDir() ?: return null
-                val resolved = rawPath.replace("~", wslHome)
-                val result = AcpExecutionMode.runWslShell("cat ${quoteUnixShellArg(resolved)}", timeoutSeconds = 15) ?: return null
-                if (result.exitCode != 0) null else result.stdout
-            }
-        }
+        val resolved = rawPath.replace("~", System.getProperty("user.home"))
+        val file = File(resolved)
+        return if (!file.exists()) null else file.readText()
     }
 }

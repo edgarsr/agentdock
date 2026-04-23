@@ -135,15 +135,13 @@ internal fun AcpClientService.replaceSharedProcess(adapterName: String): AcpClie
 
 internal fun AcpClientService.teardownAdapterProcess(
     adapterName: String,
-    shared: AcpClientService.SharedProcess?,
-    target: AcpExecutionTarget = executionTargetRef.get()
+    shared: AcpClientService.SharedProcess?
 ) {
     runCatching { shared?.stop() }
-    runCatching { AcpProcessUtils.stopProcessesUsingAdapterRoot(adapterName, target) }
+    runCatching { AcpProcessUtils.stopProcessesUsingAdapterRoot(adapterName) }
 }
 
 internal fun AcpClientService.resetExecutionEnvironment(
-    teardownTarget: AcpExecutionTarget,
     clearSessions: Boolean,
     restartDownloadedAdapters: Boolean
 ) {
@@ -168,7 +166,7 @@ internal fun AcpClientService.resetExecutionEnvironment(
     val processes = activeProcesses.values.toList()
     activeProcesses.clear()
     processes.forEach { shared ->
-        runCatching { teardownAdapterProcess(shared.adapterName, shared, teardownTarget) }
+        runCatching { teardownAdapterProcess(shared.adapterName, shared) }
     }
 
     startupInitializationStarted.set(false)
@@ -177,19 +175,9 @@ internal fun AcpClientService.resetExecutionEnvironment(
     }
 }
 
-internal fun AcpClientService.switchExecutionTarget(previousTarget: AcpExecutionTarget) {
-    executionTargetRef.set(AcpAdapterPaths.getExecutionTarget())
-    resetExecutionEnvironment(
-        teardownTarget = previousTarget,
-        clearSessions = true,
-        restartDownloadedAdapters = true
-    )
-}
-
 internal fun AcpClientService.shutdown() {
     scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     resetExecutionEnvironment(
-        teardownTarget = executionTargetRef.get(),
         clearSessions = true,
         restartDownloadedAdapters = false
     )

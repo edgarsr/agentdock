@@ -103,7 +103,7 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
                         val mcpBridge = McpBridge(browser, scope)
                         val systemInstructionsBridge = SystemInstructionsBridge(browser, scope)
                         val promptLibraryBridge = PromptLibraryBridge(browser, scope)
-                        val settingsBridge = SettingsBridge(browser, scope, project, service)
+                        val settingsBridge = SettingsBridge(browser, scope)
 
                         acpBridge.install()
                         historyBridge.install()

@@ -84,11 +84,7 @@ internal class AcpBridgeCli(
         val (adapterInfo, commandParts) = buildAdapterCliCommandParts(adapterId, extraArgs) ?: return null
         val target = AcpAdapterPaths.getExecutionTarget()
         val interactiveParts = commandParts.map { normalizeInteractiveShellPart(it, shellFlavor) }
-
-        val command = when (target) {
-            AcpExecutionTarget.LOCAL -> toShellCommand(interactiveParts, shellFlavor)
-            AcpExecutionTarget.WSL -> buildWslTerminalCommand(interactiveParts, project.basePath, shellFlavor)
-        }
+        val command = toShellCommand(interactiveParts, shellFlavor)
         return adapterInfo to command
     }
 
@@ -229,21 +225,8 @@ internal fun resolveCliPath(adapterRoot: String, raw: String, target: AcpExecuti
     if (path.isEmpty()) return path
     val file = File(path)
     if (file.isAbsolute) return file.absolutePath
-    return when (target) {
-        AcpExecutionTarget.LOCAL -> {
-            val relative = File(adapterRoot, path.replace("/", File.separator).replace("\\", File.separator))
-            if (relative.exists()) relative.absolutePath else path
-        }
-        AcpExecutionTarget.WSL -> {
-            if (path.startsWith("/")) {
-                path
-            } else if (!path.contains("/") && !path.contains("\\")) {
-                path
-            } else {
-                "${adapterRoot.trimEnd('/')}/${path.replace("\\", "/")}"
-            }
-        }
-    }
+    val relative = File(adapterRoot, path.replace("/", File.separator).replace("\\", File.separator))
+    return if (relative.exists()) relative.absolutePath else path
 }
 
 internal fun toShellCommand(parts: List<String>, shellFlavor: TerminalShellFlavor): String {
@@ -289,45 +272,3 @@ internal fun normalizeInteractiveShellPart(value: String, shellFlavor: TerminalS
     }
 }
 
-internal fun buildWslTerminalCommand(
-    parts: List<String>,
-    projectPath: String?,
-    shellFlavor: TerminalShellFlavor
-): String {
-    val filtered = parts.filter { it.isNotBlank() }
-    if (filtered.isEmpty()) return ""
-    val distro = AcpExecutionMode.selectedWslDistributionName().takeIf { it.isNotBlank() }
-    val command = filtered.joinToString(" ") { quoteUnixShellArg(it) }
-    val cwd = AcpExecutionMode.toWslPath(projectPath)
-    val script = buildString {
-        cwd?.takeIf { it.isNotBlank() }?.let {
-            append("cd ")
-            append(quoteUnixShellArg(it))
-            append(" && ")
-        }
-        append("exec ")
-        append(command)
-    }
-    return buildString {
-        append("wsl.exe ")
-        if (distro != null) {
-            append("-d ")
-            append(
-                when (shellFlavor) {
-                    TerminalShellFlavor.POWERSHELL -> quotePowerShellArg(distro)
-                    TerminalShellFlavor.CMD -> quoteCmdArg(distro)
-                    TerminalShellFlavor.POSIX -> quoteUnixShellArg(distro)
-                }
-            )
-            append(" ")
-        }
-        append("--exec bash -lic ")
-        append(
-            when (shellFlavor) {
-                TerminalShellFlavor.POWERSHELL -> quotePowerShellArg(script)
-                TerminalShellFlavor.CMD -> quoteCmdArg(script)
-                TerminalShellFlavor.POSIX -> quoteUnixShellArg(script)
-            }
-        )
-    }
-}

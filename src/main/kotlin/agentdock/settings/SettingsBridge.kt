@@ -1,8 +1,6 @@
 package agentdock.settings
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
@@ -13,18 +11,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
-import agentdock.acp.AcpClientService
-import agentdock.acp.AcpExecutionMode
-import agentdock.acp.AcpExecutionTarget
-import agentdock.acp.switchExecutionTarget
-import agentdock.history.AgentDockHistoryService
 import agentdock.utils.escapeForJsString
 
 class SettingsBridge(
     private val browser: JBCefBrowser,
-    private val scope: CoroutineScope,
-    private val project: Project,
-    private val acpService: AcpClientService
+    private val scope: CoroutineScope
 ) {
     private val settingsSaveMutex = Mutex()
     private val json = Json {
@@ -196,8 +187,7 @@ class SettingsBridge(
                 scope.launch(Dispatchers.IO) {
                     pushGlobalSettings(
                         GlobalSettingsPayload(
-                            settings = GlobalSettingsStore.load(),
-                            host = HostSettingsInfo.resolve()
+                            settings = GlobalSettingsStore.load()
                         )
                     )
                 }
@@ -213,21 +203,8 @@ class SettingsBridge(
                             val requested = runCatching {
                                 json.decodeFromString<GlobalSettings>(payload)
                             }.getOrDefault(GlobalSettings())
-                            val current = GlobalSettingsStore.load()
-                            if (requested.useWslForAcpAdapters != current.useWslForAcpAdapters) {
-                                handleExecutionTargetSwitch(current, requested)
-                            } else {
-                                val saved = GlobalSettingsStore.save(requested)
-                                if (saved.wslDistributionName != current.wslDistributionName) {
-                                    AcpExecutionMode.resetWslRuntimeCaches()
-                                }
-                                pushGlobalSettings(
-                                    GlobalSettingsPayload(
-                                        settings = saved,
-                                        host = HostSettingsInfo.resolve()
-                                    )
-                                )
-                            }
+                            val saved = GlobalSettingsStore.save(requested)
+                            pushGlobalSettings(GlobalSettingsPayload(settings = saved))
                         }
                     }
                 }
@@ -256,7 +233,6 @@ class SettingsBridge(
                 window.__onAudioRecordingState = window.__onAudioRecordingState || function(state) {};
                 window.__onAudioTranscriptionSettings = window.__onAudioTranscriptionSettings || function(settings) {};
                 window.__onGlobalSettings = window.__onGlobalSettings || function(payload) {};
-                window.__onExecutionTargetSwitched = window.__onExecutionTargetSwitched || function(payload) {};
                 window.__loadAudioTranscriptionFeature = function() {
                     try { $loadInject } catch (e) { console.error('[SettingsBridge] Load error', e); }
                 };
@@ -352,94 +328,4 @@ class SettingsBridge(
         }
     }
 
-    private suspend fun handleExecutionTargetSwitch(current: GlobalSettings, requested: GlobalSettings) {
-        val normalizedRequested = requested.copy(
-            wslDistributionName = AcpExecutionMode.selectedWslDistributionName(requested.wslDistributionName)
-        )
-        if (normalizedRequested.useWslForAcpAdapters && normalizedRequested.wslDistributionName.isBlank()) {
-            showErrorDialog(
-                title = "WSL Distribution Is Not Available",
-                message = "Unable to switch agent execution to WSL because no WSL distribution is available."
-            )
-            pushGlobalSettings(
-                GlobalSettingsPayload(
-                    settings = current,
-                    host = HostSettingsInfo.resolve()
-                )
-            )
-            return
-        }
-        val previousTarget = if (current.useWslForAcpAdapters) AcpExecutionTarget.WSL else AcpExecutionTarget.LOCAL
-        val saved = GlobalSettingsStore.save(normalizedRequested)
-        val nextTarget = if (saved.useWslForAcpAdapters) AcpExecutionTarget.WSL else AcpExecutionTarget.LOCAL
-        AcpExecutionMode.resetWslRuntimeCaches()
-
-        pushExecutionTargetSwitched(nextTarget)
-
-        val switchSucceeded = runCatching {
-            acpService.switchExecutionTarget(previousTarget)
-        }.onFailure { error ->
-            GlobalSettingsStore.save(current)
-            requestAdaptersRefresh()
-            showErrorDialog(
-                title = "Unable To Switch Agent Environment",
-                message = error.message ?: "The execution environment switch failed."
-            )
-        }.isSuccess
-
-        if (switchSucceeded) {
-            requestHistoryRefresh()
-        }
-
-        pushGlobalSettings(
-            GlobalSettingsPayload(
-                settings = GlobalSettingsStore.load(),
-                host = HostSettingsInfo.resolve()
-            )
-        )
-    }
-
-    private fun showErrorDialog(title: String, message: String) {
-        ApplicationManager.getApplication().invokeAndWait {
-            Messages.showErrorDialog(project, message, title)
-        }
-    }
-
-    private fun pushExecutionTargetSwitched(target: AcpExecutionTarget) {
-        val payload = json.encodeToString(
-            ExecutionTargetSwitchPayload(
-                executionTarget = target.name.lowercase()
-            )
-        ).escapeForJsString()
-        ApplicationManager.getApplication().invokeLater {
-            browser.cefBrowser.executeJavaScript(
-                """
-                if(window.__onExecutionTargetSwitched) window.__onExecutionTargetSwitched(JSON.parse('$payload'));
-                try { window.__requestAdapters && window.__requestAdapters(); } catch (e) {}
-                """.trimIndent(),
-                browser.cefBrowser.url,
-                0
-            )
-        }
-    }
-
-    private fun requestAdaptersRefresh() {
-        ApplicationManager.getApplication().invokeLater {
-            browser.cefBrowser.executeJavaScript(
-                "try { window.__requestAdapters && window.__requestAdapters(); } catch (e) {}",
-                browser.cefBrowser.url,
-                0
-            )
-        }
-    }
-
-    private fun requestHistoryRefresh() {
-        ApplicationManager.getApplication().invokeLater {
-            browser.cefBrowser.executeJavaScript(
-                "try { window.__requestHistoryList && window.__requestHistoryList(); } catch (e) {}",
-                browser.cefBrowser.url,
-                0
-            )
-        }
-    }
 }

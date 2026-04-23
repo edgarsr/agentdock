@@ -27,7 +27,6 @@ import {
   ConversationReplayLoadedEvent,
   ConversationTranscriptSavedEvent,
   EVENT_NAMES,
-  ExecutionTargetSwitchedEvent,
   FileChangeStatsEvent,
   GlobalSettingsEvent,
   HistoryDeleteResultEvent,
@@ -245,10 +244,6 @@ export const ACPBridge = {
 
     window.__onGlobalSettings = (payload) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.GLOBAL_SETTINGS, { detail: { payload } }));
-    };
-
-    window.__onExecutionTargetSwitched = (payload) => {
-      window.dispatchEvent(new CustomEvent(EVENT_NAMES.EXECUTION_TARGET_SWITCHED, { detail: { payload } }));
     };
 
     window.__onFilesResult = (filesJson) => {
@@ -564,6 +559,4 @@ export const ACPBridge = {
   },
 
   onGlobalSettings: (callback: (e: CustomEvent<GlobalSettingsEvent>) => void) => onBridgeEvent(EVENT_NAMES.GLOBAL_SETTINGS, callback),
-
-  onExecutionTargetSwitched: (callback: (e: CustomEvent<ExecutionTargetSwitchedEvent>) => void) => onBridgeEvent(EVENT_NAMES.EXECUTION_TARGET_SWITCHED, callback),
 };

@@ -57,8 +57,6 @@ private fun AcpBridge.buildAdapterPayload(
     target: AcpExecutionTarget,
     includeRuntimeChecks: Boolean,
     runtimeChecksReady: Boolean,
-    isWslMode: Boolean,
-    wslProbeState: WslRuntimeProbeState?,
     idsToFetch: MutableList<String>
 ): AdapterPayload {
     val probeState = if (includeRuntimeChecks) {
@@ -78,14 +76,10 @@ private fun AcpBridge.buildAdapterPayload(
     val updateSupported = downloaded == true && AcpAdapterUpdates.isUpdateCheckSupported(info)
     val updateKey = "${target.name}:${info.id}"
     val updateChecking = updateCheckJobs[updateKey]?.isActive == true
-    val latestVersion = if (!runtimeChecksReady || !updateSupported) {
-        null
-    } else {
-        latestVersionStates[info.id]
-    }
+    val latestVersion = if (!runtimeChecksReady || !updateSupported) null else latestVersionStates[info.id]
     val updateKnown = updateSupported && !latestVersion.isNullOrBlank() && !installedVersion.isNullOrBlank()
     val updateAvailable = updateKnown && latestVersion != installedVersion
-    val authUiMode = if (isWslMode && hasAuthentication) "manage_terminal" else (info.authConfig?.uiMode ?: "login_logout")
+    val authUiMode = info.authConfig?.uiMode ?: "login_logout"
     val isAuthenticating = AcpAuthService.isAuthenticating(info.id)
     val cliAvailable = downloaded == true && info.cli != null && cli.isIdeTerminalAvailable()
     val rawInitError = service.adapterInitializationError(info.id) ?: ""
@@ -94,7 +88,7 @@ private fun AcpBridge.buildAdapterPayload(
     val initError = if (authRequiredByInit) "" else rawInitError
 
     val shouldFetchAuth = downloadedKnown &&
-        !isWslMode && downloaded == true && hasAuthentication && authUiMode == "login_logout" &&
+        downloaded == true && hasAuthentication && authUiMode == "login_logout" &&
         !isDownloading && !isAuthenticating
 
     val needsAuthFetch = shouldFetchAuth && !authStates.containsKey(info.id)
@@ -133,8 +127,6 @@ private fun AcpBridge.buildAdapterPayload(
     }
     val readyKnown = isReady != null
 
-    val iconBase64 = loadIconDataUrl(info.resolveIconPath())
-
     val savedPreference = AcpAgentPreferencesStore.preferenceFor(info.id)
     val rawRuntimeMetadata = service.adapterRuntimeMetadata(info.id)
         ?: AcpClientService.AdapterRuntimeMetadata(
@@ -161,7 +153,7 @@ private fun AcpBridge.buildAdapterPayload(
     return AdapterPayload(
         id = info.id,
         name = info.name,
-        iconPath = iconBase64,
+        iconPath = loadIconDataUrl(info.resolveIconPath()),
         isLastUsed = info.id == AcpAgentPreferencesStore.lastAgentId(),
         currentModelId = runtimeMetadata.currentModelId ?: "",
         availableModels = runtimeMetadata.availableModels.map {
@@ -173,9 +165,7 @@ private fun AcpBridge.buildAdapterPayload(
         },
         downloaded = downloaded,
         downloadedKnown = downloadedKnown,
-        downloadPath = if (downloaded == true) {
-            AcpAdapterPaths.getDownloadPath(info.id, target, wslProbeState?.homeDir)
-        } else "",
+        downloadPath = if (downloaded == true) AcpAdapterPaths.getDownloadPath(info.id, target) else "",
         hasAuthentication = hasAuthentication,
         authAuthenticated = authAuthenticated,
         authKnown = authKnown,
@@ -197,39 +187,13 @@ private fun AcpBridge.buildAdapterPayload(
         downloading = isDownloading,
         downloadStatus = dlStatus,
         disabledModels = info.disabledModels,
-        cliAvailable = cliAvailable,
-        executionTarget = target.name.lowercase()
+        cliAvailable = cliAvailable
     )
-}
-
-private fun AcpBridge.ensureWslRuntimeProbeStarted() {
-    if (wslRuntimeProbeState.attempted || wslRuntimeProbeJob?.isActive == true) return
-
-    wslRuntimeProbeState = WslRuntimeProbeState(attempted = true)
-    wslRuntimeProbeJob = scope.launch(Dispatchers.IO) {
-        val homeDir = AcpExecutionMode.wslHomeDir()
-        val distroName = AcpExecutionMode.selectedWslDistributionName()
-        val nextState = if (homeDir != null && distroName.isNotBlank()) {
-            WslRuntimeProbeState(
-                attempted = true,
-                ready = true,
-                homeDir = homeDir,
-                distroName = distroName
-            )
-        } else {
-            WslRuntimeProbeState(attempted = true, ready = false)
-        }
-
-        wslRuntimeProbeState = nextState
-        wslRuntimeProbeJob = null
-        pushAdapters(includeRuntimeChecks = true)
-    }
 }
 
 private fun AcpBridge.ensureDownloadProbeStarted(
     info: AcpAdapterConfig.AdapterInfo,
-    target: AcpExecutionTarget,
-    wslProbeState: WslRuntimeProbeState?
+    target: AcpExecutionTarget
 ) {
     val key = downloadProbeKey(target, info.id)
     if (downloadProbeStates[key]?.downloadedKnown == true) return
@@ -237,19 +201,9 @@ private fun AcpBridge.ensureDownloadProbeStarted(
 
     downloadProbeJobs[key] = scope.launch(Dispatchers.IO) {
         try {
-            val downloaded = AcpAdapterPaths.isDownloaded(
-                adapterName = info.id,
-                target = target,
-                wslHomeDirOverride = wslProbeState?.homeDir,
-                distroNameOverride = wslProbeState?.distroName
-            )
+            val downloaded = AcpAdapterPaths.isDownloaded(adapterName = info.id, target = target)
             val installedVersion = if (downloaded) {
-                AcpAdapterPaths.installedVersion(
-                    adapterName = info.id,
-                    target = target,
-                    wslHomeDirOverride = wslProbeState?.homeDir,
-                    distroNameOverride = wslProbeState?.distroName
-                )
+                AcpAdapterPaths.installedVersion(adapterName = info.id, target = target)
             } else {
                 null
             }
@@ -272,22 +226,11 @@ internal fun AcpBridge.pushAdapters(includeRuntimeChecks: Boolean = true) {
         val unique = linkedMapOf<String, AcpAdapterConfig.AdapterInfo>()
         AcpAdapterConfig.getAllAdapters().values.forEach { info -> unique[info.id] = info }
         val target = AcpAdapterPaths.getExecutionTarget()
-        val isWslMode = target == AcpExecutionTarget.WSL
+        val runtimeChecksReady = includeRuntimeChecks
 
-        if (includeRuntimeChecks && isWslMode) {
-            ensureWslRuntimeProbeStarted()
-        }
-
-        val wslProbeState = if (isWslMode) wslRuntimeProbeState else null
-        val runtimeChecksReady = when {
-            !includeRuntimeChecks -> false
-            !isWslMode -> true
-            else -> wslProbeState?.ready == true
-        }
-
-        if (includeRuntimeChecks && runtimeChecksReady) {
+        if (includeRuntimeChecks) {
             unique.values.forEach { info ->
-                ensureDownloadProbeStarted(info, target, wslProbeState)
+                ensureDownloadProbeStarted(info, target)
             }
         }
 
@@ -299,8 +242,6 @@ internal fun AcpBridge.pushAdapters(includeRuntimeChecks: Boolean = true) {
                 target = target,
                 includeRuntimeChecks = includeRuntimeChecks,
                 runtimeChecksReady = runtimeChecksReady,
-                isWslMode = isWslMode,
-                wslProbeState = wslProbeState,
                 idsToFetch = idsToFetch
             )
         }
@@ -353,9 +294,6 @@ internal fun AcpBridge.resetAuthStatusRefreshState() {
     downloadProbeJobs.values.forEach { it.cancel() }
     downloadProbeJobs.clear()
     downloadProbeStates.clear()
-    wslRuntimeProbeJob?.cancel()
-    wslRuntimeProbeJob = null
-    wslRuntimeProbeState = WslRuntimeProbeState()
     updateCheckJobs.values.forEach { it.cancel() }
     updateCheckJobs.clear()
     latestVersionStates.clear()

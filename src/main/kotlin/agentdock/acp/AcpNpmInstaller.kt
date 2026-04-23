@@ -4,8 +4,6 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 object AcpNpmInstaller {
-    private const val ARCHIVE_COMMAND_TIMEOUT_MINUTES = 10L
-
     fun downloadFromNpm(targetDir: File, adapterInfo: AcpAdapterConfig.AdapterInfo, statusCallback: ((String) -> Unit)? = null): Boolean {
         return try {
             if (!requireLocalCommand("node", "Node.js is required", statusCallback)) return false
@@ -56,36 +54,6 @@ object AcpNpmInstaller {
         }
     }
 
-    fun downloadFromNpmWsl(
-        targetDir: String,
-        adapterInfo: AcpAdapterConfig.AdapterInfo,
-        statusCallback: ((String) -> Unit)? = null
-    ): Boolean {
-        if (!requireWslCommand("node --version", "Linux Node.js runtime is required in WSL", statusCallback)) return false
-        if (!requireWslCommand("npm --version", "Linux npm is required in WSL", statusCallback)) return false
-
-        val packageName = adapterInfo.distribution.packageName
-            ?: throw IllegalStateException("Adapter '${adapterInfo.id}' missing distribution.packageName in configuration")
-        val version = adapterInfo.distribution.version
-        statusCallback?.invoke("Installing $packageName@$version via npm in WSL...")
-        val script = """
-            set -e
-            rm -rf ${quoteUnixShellArg(targetDir)}
-            mkdir -p ${quoteUnixShellArg(targetDir)}
-            cd ${quoteUnixShellArg(targetDir)}
-            cat > package.json <<EOF
-            {"name":"${adapterInfo.id}-runtime","private":true}
-            EOF
-            npm install ${quoteUnixShellArg("$packageName@$version")} --no-save --no-package-lock
-        """.trimIndent()
-        val result = AcpExecutionMode.runWslShell(script, timeoutSeconds = ARCHIVE_COMMAND_TIMEOUT_MINUTES * 60)
-        if (result?.exitCode != 0) {
-            statusCallback?.invoke("Error: ${result?.stderr?.trim().orEmpty().ifBlank { result?.stdout?.trim().orEmpty().ifBlank { "npm install failed in WSL" } }}")
-            return false
-        }
-        return true
-    }
-
     private fun requireLocalCommand(commandName: String, errorMessage: String, statusCallback: ((String) -> Unit)? = null): Boolean {
         val executable = when {
             System.getProperty("os.name").lowercase().contains("win") && commandName.equals("npm", ignoreCase = true) -> "npm.cmd"
@@ -115,15 +83,4 @@ object AcpNpmInstaller {
         }
     }
 
-    private fun requireWslCommand(validationCommand: String, errorMessage: String, statusCallback: ((String) -> Unit)? = null): Boolean {
-        val result = AcpExecutionMode.runWslShell(validationCommand, timeoutSeconds = 15)
-        if (result?.exitCode == 0) return true
-        val detail = result?.stderr?.trim().orEmpty().ifBlank { result?.stdout?.trim().orEmpty() }
-        statusCallback?.invoke(if (detail.isBlank()) "Error: $errorMessage" else "Error: $errorMessage. $detail")
-        return false
-    }
-
-    private fun quoteUnixShellArg(arg: String): String {
-        return "'" + arg.replace("'", "'\\''") + "'"
-    }
 }

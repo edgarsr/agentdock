@@ -15,39 +15,19 @@ internal fun platformBinaryForTarget(
 }
 
 internal fun resolveTargetDependenciesPath(
-    target: AcpExecutionTarget,
-    wslHomeDirOverride: String? = null
-): String? {
-    return when (target) {
-        AcpExecutionTarget.LOCAL -> AcpAdapterPaths.getDependenciesDir().absolutePath
-        AcpExecutionTarget.WSL -> {
-            val base = wslAdapterBaseRuntimeDir(wslHomeDirOverride) ?: return null
-            "$base/dependencies"
-        }
-    }
-}
+    target: AcpExecutionTarget
+): String = AcpAdapterPaths.getDependenciesDir().absolutePath
 
 internal fun resolveDownloadPath(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
-    target: AcpExecutionTarget,
-    wslHomeDirOverride: String? = null
-): String {
-    return when (target) {
-        AcpExecutionTarget.LOCAL -> File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id).absolutePath
-        AcpExecutionTarget.WSL -> {
-            val depsPath = resolveTargetDependenciesPath(target, wslHomeDirOverride)
-                ?: throw IllegalStateException("Unable to resolve WSL dependencies path for adapter '${adapterInfo.id}'")
-            "$depsPath/${adapterInfo.id}"
-        }
-    }
-}
+    target: AcpExecutionTarget
+): String = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id).absolutePath
 
 internal fun resolveAdapterLaunchFile(
     adapterRoot: File,
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     target: AcpExecutionTarget
 ): File? {
-    if (target == AcpExecutionTarget.WSL) return null
     return when (adapterInfo.distribution.type) {
         AcpAdapterConfig.DistributionType.ARCHIVE -> {
             val binName = platformBinaryForTarget(adapterInfo.distribution.binaryName, target)
@@ -85,32 +65,20 @@ internal fun buildAdapterLaunchCommand(
 ): List<String> {
     val launchPath = resolveAdapterLaunchPath(adapterRootPath, adapterInfo, target)
         ?: throw IllegalStateException("Missing launch target for adapter '${adapterInfo.id}'")
-    return when (target) {
-        AcpExecutionTarget.LOCAL -> {
-            val launchFile = File(launchPath)
-            val name = launchFile.name.lowercase()
-            val base = when {
-                name.endsWith(".cmd") || name.endsWith(".bat") -> mutableListOf("cmd.exe", "/c", launchFile.absolutePath)
-                name.endsWith(".ps1") -> mutableListOf(
-                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launchFile.absolutePath
-                )
-                name.endsWith(".js") || name.endsWith(".mjs") -> {
-                    mutableListOf(if (AcpExecutionMode.isWindowsHost()) "node.exe" else "node", launchFile.absolutePath)
-                }
-                else -> mutableListOf(launchFile.absolutePath)
-            }
-            base.addAll(adapterInfo.args)
-            base
+    val launchFile = File(launchPath)
+    val name = launchFile.name.lowercase()
+    val base = when {
+        name.endsWith(".cmd") || name.endsWith(".bat") -> mutableListOf("cmd.exe", "/c", launchFile.absolutePath)
+        name.endsWith(".ps1") -> mutableListOf(
+            "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launchFile.absolutePath
+        )
+        name.endsWith(".js") || name.endsWith(".mjs") -> {
+            mutableListOf(if (AcpExecutionMode.isWindowsHost()) "node.exe" else "node", launchFile.absolutePath)
         }
-        AcpExecutionTarget.WSL -> {
-            val base = when {
-                launchPath.endsWith(".js") || launchPath.endsWith(".mjs") -> mutableListOf("node", launchPath)
-                else -> mutableListOf(launchPath)
-            }
-            base.addAll(adapterInfo.args)
-            AcpExecutionMode.buildWslExecCommand(base, AcpExecutionMode.toWslPath(projectPath) ?: adapterRootPath)
-        }
+        else -> mutableListOf(launchFile.absolutePath)
     }
+    base.addAll(adapterInfo.args)
+    return base
 }
 
 internal fun resolvePatchRoot(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo): File {
@@ -118,11 +86,6 @@ internal fun resolvePatchRoot(adapterRoot: File, adapterInfo: AcpAdapterConfig.A
         AcpAdapterConfig.DistributionType.ARCHIVE -> adapterRoot
         AcpAdapterConfig.DistributionType.NPM -> resolveNpmPackageRoot(adapterRoot, adapterInfo)
     }
-}
-
-internal fun wslPathToWindowsFile(wslPath: String, distroNameOverride: String? = null): File? {
-    val uncPath = AcpExecutionMode.wslPathToWindowsUnc(wslPath, distroNameOverride) ?: return null
-    return File(uncPath)
 }
 
 private fun resolveNpmPackageRoot(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo): File {
@@ -155,16 +118,7 @@ private fun resolveNpmLaunchRelativePath(
 }
 
 private fun joinAdapterPath(base: String, relative: String, target: AcpExecutionTarget): String {
-    val separator = if (target == AcpExecutionTarget.WSL) "/" else File.separator
-    val normalizedRelative = if (target == AcpExecutionTarget.WSL) {
-        relative.replace("\\", "/")
-    } else {
-        relative.replace("/", File.separator).replace("\\", File.separator)
-    }
+    val separator = File.separator
+    val normalizedRelative = relative.replace("/", File.separator).replace("\\", File.separator)
     return if (base.endsWith(separator)) base + normalizedRelative else base + separator + normalizedRelative
-}
-
-private fun wslAdapterBaseRuntimeDir(wslHomeDirOverride: String? = null): String? {
-    val homeDir = wslHomeDirOverride ?: AcpExecutionMode.wslHomeDir() ?: return null
-    return "$homeDir/.agent-dock"
 }

@@ -88,22 +88,6 @@ class UndoFileHandlerTest {
     }
 
     @Test
-    fun `wsl drive paths resolve to windows drive paths`() {
-        if (java.io.File.separatorChar != '\\') return
-
-        val project = projectWithBasePath("C:\\www\\jetbrains\\unified_llm_plugin")
-
-        assertEquals(
-            "C:\\www\\jetbrains\\unified_llm_plugin\\frontend\\src\\App.tsx",
-            LocalFilePathPolicy.resolve(project, "/c/www/jetbrains/unified_llm_plugin/frontend/src/App.tsx").resolvedPath
-        )
-        assertEquals(
-            "C:\\www\\jetbrains\\unified_llm_plugin\\frontend\\src\\App.tsx",
-            LocalFilePathPolicy.resolve(project, "/mnt/c/www/jetbrains/unified_llm_plugin/frontend/src/App.tsx").resolvedPath
-        )
-    }
-
-    @Test
     fun `undo all intentionally restores a file outside project`() {
         val root = Files.createTempDirectory("agent-dock-root-").toFile()
         val projectDir = root.resolve("project")

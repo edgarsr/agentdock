@@ -63,23 +63,10 @@ object AcpAuthService {
             ?: return AuthStatus(authenticated = true)
         val authConfig = adapterInfo.authConfig ?: return AuthStatus(authenticated = true)
         if (authConfig.statusArgs.isEmpty()) return AuthStatus(authenticated = true)
-        val target = AcpAdapterPaths.getExecutionTarget()
 
         return runCatching {
             val cmd = buildCommand(adapterInfo, authConfig, authConfig.statusArgs).orEmpty()
             if (cmd.isEmpty()) return@runCatching AuthStatus(authenticated = true)
-            if (target == AcpExecutionTarget.WSL) {
-                val result = AcpExecutionMode.runWslExec(
-                    command = cmd,
-                    cwd = resolveWorkingDir(adapterInfo, target = target),
-                    timeoutSeconds = STATUS_COMMAND_TIMEOUT_SECONDS
-                ) ?: return@runCatching AuthStatus(authenticated = true)
-                val output = listOf(result.stdout.trim(), result.stderr.trim()).filter { it.isNotBlank() }.joinToString("\n")
-                val parsed = parseAuthenticatedFromStatusOutput(output)
-                if (parsed != null) return@runCatching AuthStatus(authenticated = parsed)
-                return@runCatching AuthStatus(authenticated = true)
-            }
-
             val proc = ProcessBuilder(cmd)
                 .directory(resolveWorkingDirFile(adapterInfo))
                 .redirectErrorStream(true)
@@ -114,22 +101,6 @@ object AcpAuthService {
             }
 
             val cmd = buildCommand(adapterInfo, authConfig, loginArgs) ?: return@withContext false
-            val target = AcpAdapterPaths.getExecutionTarget()
-            if (target == AcpExecutionTarget.WSL) {
-                val result = AcpExecutionMode.runWslExec(
-                    command = cmd,
-                    cwd = resolveWorkingDir(adapterInfo, projectPath, target),
-                    timeoutSeconds = LOGIN_COMMAND_TIMEOUT_MS / 1000
-                ) ?: return@withContext false
-                if (result.exitCode != 0) {
-                    val raw = result.stderr.trim().ifBlank { result.stdout.trim() }
-                    val tail = if (raw.length > 240) raw.takeLast(240) else raw
-                    val details = if (tail.isNotBlank()) ": $tail" else ""
-                    throw Exception("Login command failed (exit ${result.exitCode})$details")
-                }
-                return@withContext true
-            }
-
             val process = ProcessBuilder(cmd)
                 .directory(resolveWorkingDirFile(adapterInfo, projectPath))
                 .redirectErrorStream(true)
@@ -179,21 +150,11 @@ object AcpAuthService {
     suspend fun logout(adapterName: String): Boolean = withContext(Dispatchers.IO) {
         val adapterInfo = AcpAdapterConfig.getAdapterInfo(adapterName)
         val authConfig = adapterInfo.authConfig ?: return@withContext false
-        val target = AcpAdapterPaths.getExecutionTarget()
 
         if (authConfig.logoutArgs.isNotEmpty()) {
             val cmd = buildCommand(adapterInfo, authConfig, authConfig.logoutArgs)
             if (!cmd.isNullOrEmpty()) {
                 try {
-                    if (target == AcpExecutionTarget.WSL) {
-                        AcpExecutionMode.runWslExec(
-                            command = cmd,
-                            cwd = resolveWorkingDir(adapterInfo, target = target),
-                            timeoutSeconds = LOGOUT_COMMAND_TIMEOUT_SECONDS
-                        )
-                        return@withContext true
-                    }
-
                     val proc = ProcessBuilder(cmd)
                         .directory(resolveWorkingDirFile(adapterInfo))
                         .redirectErrorStream(true)
@@ -259,8 +220,6 @@ object AcpAuthService {
             if (downloadPath.isEmpty()) return null
             val binPath = if (isWindowsLocalTarget(target)) {
                 "$downloadPath${File.separator}node_modules${File.separator}.bin${File.separator}$binaryName.cmd"
-            } else if (target == AcpExecutionTarget.WSL) {
-                "$downloadPath/node_modules/.bin/$binaryName"
             } else {
                 File(downloadPath, "node_modules${File.separator}.bin${File.separator}$binaryName").absolutePath
             }
@@ -288,17 +247,10 @@ object AcpAuthService {
         if (downloadPath.isEmpty()) return null
 
         if (authScript.isNullOrBlank()) {
-            val path = when (target) {
-                AcpExecutionTarget.LOCAL -> {
-                    val adapterRoot = File(downloadPath)
-                    val file = AcpAdapterPaths.resolveLaunchFile(adapterRoot, adapterInfo, target) ?: return null
-                    if (!file.isFile) return null
-                    file.absolutePath
-                }
-                AcpExecutionTarget.WSL -> {
-                    AcpAdapterPaths.resolveLaunchPath(downloadPath, adapterInfo, target) ?: return null
-                }
-            }
+            val adapterRoot = File(downloadPath)
+            val file = AcpAdapterPaths.resolveLaunchFile(adapterRoot, adapterInfo, target) ?: return null
+            if (!file.isFile) return null
+            val path = file.absolutePath
             val useNode = path.endsWith(".js") || path.endsWith(".mjs")
             return path to useNode
         }
@@ -308,13 +260,6 @@ object AcpAuthService {
             if (isWindowsLocalTarget(target) && !relPath.endsWith(".cmd") && !relPath.endsWith(".bat")) {
                 relPath += ".cmd"
             }
-        }
-
-        if (target == AcpExecutionTarget.WSL) {
-            val normalized = relPath.replace("\\", "/")
-            val path = if (normalized.startsWith("/")) normalized else "${downloadPath.trimEnd('/')}/$normalized"
-            val useNode = normalized.endsWith(".js") || normalized.endsWith(".mjs")
-            return path to useNode
         }
 
         val adapterRoot = File(downloadPath)
@@ -338,11 +283,7 @@ object AcpAuthService {
         target: AcpExecutionTarget = AcpAdapterPaths.getExecutionTarget()
     ): String? {
         if (!projectPath.isNullOrBlank()) {
-            return if (target == AcpExecutionTarget.WSL) {
-                AcpExecutionMode.toWslPath(projectPath) ?: projectPath
-            } else {
-                projectPath
-            }
+            return projectPath
         }
         val downloadPath = AcpAdapterPaths.getDownloadPath(adapterInfo.id, target)
         return downloadPath.takeIf { it.isNotBlank() }
