@@ -1,10 +1,50 @@
+import { useEffect } from 'react';
 import TabBar from './components/TabBar';
 import { AppTabContent } from './components/AppTabContent';
 import { EmptyStateView } from './components/EmptyStateView';
 import ConfirmationModal from './components/ConfirmationModal';
 import { useAppController } from './hooks/app/useAppController';
+import { ACPBridge } from './utils/bridge';
 
 function App() {
+  useEffect(() => {
+    const userMessageBgMap: Record<string, string> = {
+      'default': 'var(--ide-user-message-default-bg)',
+      'background-secondary': 'var(--ide-background-secondary)',
+      'primary': 'var(--ide-Button-default-startBackground)',
+      'secondary': 'var(--ide-Button-startBackground)',
+      'accent': 'var(--ide-List-selectionBackground)',
+      'input': 'var(--ide-TextField-background)',
+      'editor-bg': 'var(--ide-editor-bg)',
+    };
+
+    const applyGlobalSettings = (payload: { settings?: { uiFontSizeOffsetPx?: number; userMessageBackgroundStyle?: string } } | undefined) => {
+      const offset = payload?.settings?.uiFontSizeOffsetPx ?? 0;
+      document.documentElement.style.setProperty('--ui-font-size-offset', `${offset}px`);
+
+      const styleId = payload?.settings?.userMessageBackgroundStyle ?? 'default';
+      const bg = userMessageBgMap[styleId] ?? userMessageBgMap['default'];
+      document.documentElement.style.setProperty('--user-message-bg', bg);
+    };
+
+    const cleanup = ACPBridge.onGlobalSettings((e) => {
+      applyGlobalSettings(e.detail?.payload);
+    });
+
+    const requestSettings = () => ACPBridge.loadGlobalSettings();
+
+    if (window.__settingsBridgeReady) {
+      requestSettings();
+    } else {
+      window.addEventListener('settings-bridge-ready', requestSettings);
+    }
+
+    return () => {
+      cleanup();
+      window.removeEventListener('settings-bridge-ready', requestSettings);
+    };
+  }, []);
+
   const {
     tabs,
     activeTabId,
