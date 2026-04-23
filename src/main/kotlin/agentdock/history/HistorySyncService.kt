@@ -172,8 +172,8 @@ internal object HistorySyncService {
     private fun collectSyncedAvailableSessionMeta(projectPath: String): AvailableSessionMetaResult {
         val result = mutableListOf<SessionMeta>()
         val scannedAdapters = linkedSetOf<String>()
-        val ephemeralKeys = HistoryStorage.readEphemeralSessions(projectPath)
-            .associateBy { "${it.adapterName}:${it.sessionId}" }
+        val ephemeralEntries = HistoryStorage.readEphemeralSessions(projectPath)
+        val ephemeralKeys = ephemeralEntries.associateBy { "${it.adapterName}:${it.sessionId}" }
 
         val acpSessions = collectSessionListMeta(projectPath)
         result.addAll(acpSessions.sessions)
@@ -192,14 +192,12 @@ internal object HistorySyncService {
             }
         }
 
-        val availableKeys = result.mapTo(hashSetOf()) { "${it.adapterName}:${it.sessionId}" }
-        pruneStaleEphemeralSessions(projectPath, scannedAdapters, availableKeys)
+        triggerEphemeralSessionDeletion(projectPath, ephemeralEntries, result)
 
         val visibleSessions = result
             .filterNot { meta ->
                 val key = "${meta.adapterName}:${meta.sessionId}"
                 if (ephemeralKeys[key] == null) return@filterNot false
-                scheduleEphemeralSessionDeletion(projectPath, meta)
                 true
             }
             .sortedByDescending { it.updatedAt }
@@ -239,36 +237,39 @@ internal object HistorySyncService {
         }
     }
 
-    private fun pruneStaleEphemeralSessions(
+    private fun triggerEphemeralSessionDeletion(
         projectPath: String,
-        scannedAdapters: Set<String>,
-        availableKeys: Set<String>
+        ephemeralEntries: List<EphemeralSessionEntry>,
+        availableSessions: List<SessionMeta>
     ) {
-        if (scannedAdapters.isEmpty()) return
-        val existing = HistoryStorage.readEphemeralSessions(projectPath)
-        val remaining = existing.filter { entry ->
-            entry.adapterName !in scannedAdapters || "${entry.adapterName}:${entry.sessionId}" in availableKeys
+        if (ephemeralEntries.isEmpty()) return
+
+        val sessionsByKey = availableSessions.associateBy { "${it.adapterName}:${it.sessionId}" }
+        ephemeralEntries.forEach { entry ->
+            val key = "${entry.adapterName}:${entry.sessionId}"
+            val sourceFilePath = sessionsByKey[key]?.filePath?.takeIf { it.isNotBlank() }
+            scheduleEphemeralSessionDeletion(projectPath, entry.adapterName, entry.sessionId, sourceFilePath)
         }
-        if (remaining.size != existing.size) {
-            HistoryStorage.writeEphemeralSessions(projectPath, remaining)
-        }
+        HistoryStorage.writeEphemeralSessions(projectPath, emptyList())
     }
 
-    private fun scheduleEphemeralSessionDeletion(projectPath: String, session: SessionMeta) {
-        val jobKey = HistoryEnvironment.historySyncKey(projectPath) + "||${session.adapterName}:${session.sessionId}"
+    private fun scheduleEphemeralSessionDeletion(
+        projectPath: String,
+        adapterName: String,
+        sessionId: String,
+        sourceFilePath: String?
+    ) {
+        val jobKey = HistoryEnvironment.historySyncKey(projectPath) + "||$adapterName:$sessionId"
         if (ephemeralDeletionJobs.putIfAbsent(jobKey, true) != null) return
 
         backgroundScope.launch {
             try {
-                val deleted = SessionListDeleteSupport.deleteSession(
+                SessionListDeleteSupport.deleteSession(
                     projectPath = projectPath,
-                    adapterName = session.adapterName,
-                    sessionId = session.sessionId,
-                    sourceFilePath = session.filePath.takeIf { it.isNotBlank() }
+                    adapterName = adapterName,
+                    sessionId = sessionId,
+                    sourceFilePath = sourceFilePath
                 )
-                if (deleted) {
-                    HistoryStorage.removeEphemeralSession(projectPath, session.adapterName, session.sessionId)
-                }
             } finally {
                 ephemeralDeletionJobs.remove(jobKey)
             }

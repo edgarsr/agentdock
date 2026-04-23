@@ -1,6 +1,6 @@
 {
-  "path": "bundle/gemini.js",
-  "findRegex": "(?:async function outputUsageJson\\(config\\)\\s*\\{.*?process\\.exit\\(0\\);\\s*\\}\\s*)?async function main\\(\\) \\{\\n  const cliStartupHandle = startupProfiler.start\\(\"cli_startup\"\\);",
-  "replace": "async function outputUsageJson(config) {\n  try {\n    const authType = config.getContentGeneratorConfig()?.authType;\n    if (authType !== \"oauth-personal\" && authType !== \"compute-default-credentials\") {\n      return;\n    }\n    const quota = await config.refreshUserQuota();\n    const email = new UserAccountManager().getCachedGoogleAccount();\n    process.stdout.write(\"__GEMINI_USAGE_JSON__\" + JSON.stringify({ email, userTierName: config.getUserTierName(), quota }));\n  } catch {\n  }\n  await runExitCleanup();\n  process.exit(0);\n}\nasync function main() {\n  const cliStartupHandle = startupProfiler.start(\"cli_startup\");",
-  "alreadyApplied": "const quota = await config.refreshUserQuota();"
+  "pathGlob": "bundle/gemini-*.js",
+  "find": "async function main() {\n  const cliStartupHandle = startupProfiler.start(\"cli_startup\");",
+  "replace": "async function outputUsageJson(config) {\n  try {\n    const authType = config.getContentGeneratorConfig?.()?.authType;\n    if (authType !== \"oauth-personal\" && authType !== \"compute-default-credentials\") {\n      return;\n    }\n    const quota = typeof config.refreshUserQuota === \"function\" ? await config.refreshUserQuota() : null;\n    const email = new UserAccountManager().getCachedGoogleAccount();\n    process.stdout.write(\"__GEMINI_USAGE_JSON__\" + JSON.stringify({ email, userTierName: config.getUserTierName?.(), quota }));\n  } catch {\n  }\n  await runExitCleanup();\n  process.exit(0);\n}\nasync function main() {\n  const cliStartupHandle = startupProfiler.start(\"cli_startup\");",
+  "alreadyApplied": "__GEMINI_USAGE_JSON__"
 }

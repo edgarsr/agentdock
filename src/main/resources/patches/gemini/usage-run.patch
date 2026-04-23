@@ -1,5 +1,6 @@
 {
-  "path": "bundle/gemini.js",
-  "find": "  }\n  const remoteAdminSettings = partialConfig.getRemoteAdminSettings();",
-  "replace": "  }\n  if (argv[\"usage-json\"]) {\n    await outputUsageJson(partialConfig);\n  }\n  const remoteAdminSettings = partialConfig.getRemoteAdminSettings();"
+  "pathGlob": "bundle/gemini-*.js",
+  "find": "  const remoteAdminSettings = partialConfig.getRemoteAdminSettings();",
+  "replace": "  if (argv[\"usage-json\"] || process.env[\"GEMINI_CLI_USAGE_JSON\"] === \"true\") {\n    await outputUsageJson(partialConfig);\n  }\n  const remoteAdminSettings = partialConfig.getRemoteAdminSettings();",
+  "alreadyApplied": "GEMINI_CLI_USAGE_JSON"
 }

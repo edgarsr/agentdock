@@ -70,39 +70,100 @@ object AcpPatchService {
         return try {
             val root = patchJson.parseToJsonElement(patchContent).jsonObject
             val path = root["path"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val pathGlob = root["pathGlob"]?.jsonPrimitive?.content?.trim().orEmpty()
             val replace = root["replace"]?.jsonPrimitive?.content ?: return false
             val find = root["find"]?.jsonPrimitive?.content
             val findRegex = root["findRegex"]?.jsonPrimitive?.content
             val alreadyApplied = root["alreadyApplied"]?.jsonPrimitive?.content
-            if (path.isBlank()) return false
+            if (path.isBlank() && pathGlob.isBlank()) return false
             if (find == null && findRegex == null) return false
 
-            val targetFile = File(adapterRoot, path).canonicalFile
-            if (!targetFile.canonicalPath.startsWith(adapterRoot.canonicalPath + File.separator)) return false
-            if (!targetFile.exists()) return false
-
-            val currentText = targetFile.readText()
-            if (!alreadyApplied.isNullOrEmpty() && currentText.contains(alreadyApplied)) {
-                return true
+            val targetFiles = when {
+                path.isNotBlank() -> listOf(File(adapterRoot, path).canonicalFile)
+                else -> resolveGlobTargets(adapterRoot, pathGlob)
             }
-            if (currentText.contains(replace)) return true
+            if (targetFiles.isEmpty()) return false
 
-            if (findRegex != null) {
-                val regex = Regex(findRegex, setOf(RegexOption.DOT_MATCHES_ALL))
-                val match = regex.find(currentText) ?: return false
-                targetFile.writeText(currentText.replaceRange(match.range, match.value.replace(regex, replace)))
-                return true
+            targetFiles.all { targetFile ->
+                applyStructuredPatchToFile(targetFile, adapterRoot, replace, find, findRegex, alreadyApplied)
             }
-
-            if (find == null || !currentText.contains(find)) {
-                return false
-            }
-
-            targetFile.writeText(currentText.replaceFirst(find, replace))
-            true
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun applyStructuredPatchToFile(
+        targetFile: File,
+        adapterRoot: File,
+        replace: String,
+        find: String?,
+        findRegex: String?,
+        alreadyApplied: String?
+    ): Boolean {
+        if (!targetFile.canonicalPath.startsWith(adapterRoot.canonicalPath + File.separator)) return false
+        if (!targetFile.exists()) return false
+
+        val currentText = targetFile.readText()
+        if (!alreadyApplied.isNullOrEmpty() && currentText.contains(alreadyApplied)) {
+            return true
+        }
+        if (currentText.contains(replace)) return true
+
+        if (findRegex != null) {
+            val regex = Regex(findRegex, setOf(RegexOption.DOT_MATCHES_ALL))
+            val match = regex.find(currentText) ?: return false
+            targetFile.writeText(currentText.replaceRange(match.range, match.value.replace(regex, replace)))
+            return true
+        }
+
+        if (find == null || !currentText.contains(find)) {
+            return false
+        }
+
+        targetFile.writeText(currentText.replaceFirst(find, replace))
+        return true
+    }
+
+    private fun resolveGlobTargets(adapterRoot: File, pathGlob: String): List<File> {
+        val matcher = globToRegex(pathGlob)
+        return adapterRoot.walkTopDown()
+            .filter { it.isFile }
+            .filter { file ->
+                val relativePath = file.relativeTo(adapterRoot).invariantSeparatorsPath
+                matcher.matches(relativePath)
+            }
+            .map { it.canonicalFile }
+            .toList()
+    }
+
+    private fun globToRegex(glob: String): Regex {
+        val normalized = glob.replace("\\", "/")
+        val pattern = buildString {
+            append("^")
+            var index = 0
+            while (index < normalized.length) {
+                val current = normalized[index]
+                when (current) {
+                    '*' -> {
+                        val isDoubleStar = index + 1 < normalized.length && normalized[index + 1] == '*'
+                        if (isDoubleStar) {
+                            append(".*")
+                            index++
+                        } else {
+                            append("[^/]*")
+                        }
+                    }
+                    '?' -> append("[^/]")
+                    '.', '(', ')', '+', '|', '^', '$', '@', '%' , '{', '}', '[', ']' -> {
+                        append("\\").append(current)
+                    }
+                    else -> append(current)
+                }
+                index++
+            }
+            append("$")
+        }
+        return Regex(pattern)
     }
 
     private fun normalizePath(rawPath: String): String? {

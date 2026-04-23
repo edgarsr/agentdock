@@ -64,7 +64,6 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
         Object.entries(prev).filter(([conversationId]) => list.some((item) => item.conversationId === conversationId))
       ));
       setIsLoading(false);
-      setIsDeleting(false);
     });
 
     const unsubDeleteResult = ACPBridge.onHistoryDeleteResult((e) => {

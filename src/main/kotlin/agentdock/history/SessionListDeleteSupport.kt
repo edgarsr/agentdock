@@ -16,6 +16,7 @@ internal object SessionListDeleteSupport {
             "codex" -> resolveCodexSourceFilePath(projectPath, sessionId)
             "github-copilot-cli" -> resolveGithubCopilotSourceFilePath(projectPath, sessionId)
             "cursor-cli" -> resolveCursorSourceFilePath(projectPath, sessionId)
+            "gemini-cli" -> GeminiCliHistory.resolveSourceFilePath(projectPath, sessionId)
             "qoder" -> QoderCliHistory.resolveSourceFilePath(projectPath, sessionId)
             else -> ""
         }
@@ -26,7 +27,7 @@ internal object SessionListDeleteSupport {
             "claude-code" -> deleteClaudeSession(projectPath, sessionId, sourceFilePath)
             "codex" -> deleteCodexSession(sourceFilePath)
             "cursor-cli" -> deleteCursorSession(sourceFilePath)
-            "gemini-cli" -> runAgentHistoryCliCommand("gemini-cli", projectPath, listOf("--delete-session", sessionId)) != null
+            "gemini-cli" -> GeminiCliHistory.deleteSession(projectPath, sessionId, sourceFilePath)
             "github-copilot-cli" -> deleteGithubCopilotSession(sourceFilePath)
             "kilo" -> runAgentHistoryCliCommand("kilo", projectPath, listOf("session", "delete", sessionId)) != null
             "opencode" -> runAgentHistoryCliCommand("opencode", projectPath, listOf("session", "delete", sessionId)) != null
