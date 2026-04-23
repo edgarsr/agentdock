@@ -21,7 +21,6 @@ object WhisperFeatureManager {
     private const val WINDOWS_ARCHIVE_URL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip"
     private const val MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin?download=true"
     private const val MODEL_FILE_NAME = "ggml-base.bin"
-    private const val BREW_FORMULA = "whisper-cpp"
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .followRedirects(HttpClient.Redirect.ALWAYS)
         .connectTimeout(Duration.ofSeconds(30))
@@ -34,39 +33,9 @@ object WhisperFeatureManager {
     fun featureStorageRoot(): File = featureRoot()
 
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
-    private fun isMac(): Boolean = System.getProperty("os.name").lowercase().contains("mac")
-    private fun isLinux(): Boolean = !isWindows() && !isMac()
+    private fun isSupportedPlatform(): Boolean = isWindows() && System.getProperty("os.arch").lowercase().contains("64")
 
-    private fun platformName(): String = when {
-        isWindows() -> "Windows"
-        isMac() -> "macOS"
-        else -> "Linux"
-    }
-
-    private fun brewExecutable(): String? {
-        if (isWindows()) return null
-        val envPath = System.getenv("PATH").orEmpty()
-        val separators = if (File.pathSeparatorChar == ';') ';' else ':'
-        val candidates = buildList {
-            addAll(envPath.split(separators).filter { it.isNotBlank() }.map { File(it, "brew") })
-            add(File("/opt/homebrew/bin/brew"))
-            add(File("/usr/local/bin/brew"))
-            add(File("/home/linuxbrew/.linuxbrew/bin/brew"))
-        }
-        return candidates.firstOrNull { it.isFile && it.canExecute() }?.absolutePath
-    }
-
-    private fun commandPath(): String? {
-        return when {
-            isWindows() -> findCommandUnder(runtimeRoot())
-            else -> brewPrefix()?.let { prefix ->
-                listOf(
-                    File(prefix, "bin/whisper-cli"),
-                    File(prefix, "bin/main")
-                ).firstOrNull { it.isFile && it.canExecute() }?.absolutePath ?: findCommandUnder(File(prefix))
-            }
-        }
-    }
+    private fun commandPath(): String? = findCommandUnder(runtimeRoot())
 
     private fun findCommandUnder(root: File): String? {
         if (!root.exists()) return null
@@ -81,14 +50,8 @@ object WhisperFeatureManager {
         return null
     }
 
-    private fun brewPrefix(): String? {
-        val brew = brewExecutable() ?: return null
-        return runCommand(listOf(brew, "--prefix", BREW_FORMULA)).first?.trim()?.takeIf { it.isNotBlank() }
-    }
-
-    private fun brewInstalled(): Boolean = brewPrefix()?.let { File(it).exists() } == true
-
     private fun isInstalled(): Boolean {
+        if (!isSupportedPlatform()) return false
         val commandReady = commandPath()?.let { File(it).isFile } == true
         return commandReady && modelFile().isFile
     }
@@ -96,22 +59,17 @@ object WhisperFeatureManager {
     fun isAvailable(): Boolean = isInstalled()
 
     fun currentState(statusOverride: String? = null, installing: Boolean = false): AudioTranscriptionFeatureState {
-        val supported = when {
-            isWindows() -> System.getProperty("os.arch").lowercase().contains("64")
-            else -> brewExecutable() != null
-        }
+        val supported = isSupportedPlatform()
         val installed = isInstalled()
         val status = statusOverride ?: when {
             installed -> "Installed"
-            isWindows() -> "Not Installed"
-            brewExecutable() == null -> "Homebrew Required"
-            else -> "Not Installed"
+            supported -> "Not Installed"
+            else -> "Not Supported"
         }
         val detail = when {
             installed -> commandPath().orEmpty()
-            isWindows() -> "Installs whisper.cpp runtime and the base model into the plugin runtime directory."
-            brewExecutable() == null -> "Install Homebrew first to manage whisper-cpp on ${platformName()}."
-            else -> "Installs whisper-cpp via Homebrew and downloads the base Whisper model."
+            supported -> "Installs whisper.cpp runtime and the base model into the plugin runtime directory."
+            else -> "Audio Input installer is available only on 64-bit Windows."
         }
         return AudioTranscriptionFeatureState(
             id = FEATURE_ID,
@@ -126,31 +84,23 @@ object WhisperFeatureManager {
     }
 
     fun install(statusCallback: (String) -> Unit): AudioTranscriptionFeatureState {
+        if (!isSupportedPlatform()) {
+            throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
+        }
         statusCallback("Preparing install...")
         featureRoot().mkdirs()
         modelRoot().mkdirs()
-
-        if (isWindows()) {
-            installWindowsRuntime(statusCallback)
-        } else {
-            installWithBrew(statusCallback)
-        }
-
+        installWindowsRuntime(statusCallback)
         downloadModel(statusCallback)
         return currentState("Installed")
     }
 
     fun uninstall(statusCallback: (String) -> Unit): AudioTranscriptionFeatureState {
-        statusCallback("Removing Whisper...")
-        if (isWindows()) {
-            runtimeRoot().deleteRecursively()
-        } else if (brewInstalled()) {
-            val brew = brewExecutable() ?: error("Homebrew is not available")
-            val (output, exitCode) = runCommand(listOf(brew, "uninstall", BREW_FORMULA))
-            if (exitCode != 0) {
-                throw IllegalStateException(output.ifBlank { "Unable to uninstall $BREW_FORMULA" })
-            }
+        if (!isSupportedPlatform()) {
+            throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
         }
+        statusCallback("Removing Whisper...")
+        runtimeRoot().deleteRecursively()
         featureRoot().deleteRecursively()
         return currentState("Not Installed")
     }
@@ -213,7 +163,7 @@ object WhisperFeatureManager {
     }
 
     private fun installWindowsRuntime(statusCallback: (String) -> Unit) {
-        if (!System.getProperty("os.arch").lowercase().contains("64")) {
+        if (!isSupportedPlatform()) {
             throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
         }
 
@@ -232,19 +182,6 @@ object WhisperFeatureManager {
         }
     }
 
-    private fun installWithBrew(statusCallback: (String) -> Unit) {
-        val brew = brewExecutable() ?: throw IllegalStateException("Homebrew is required on ${platformName()}.")
-        statusCallback("Installing whisper-cpp with Homebrew...")
-        val (output, exitCode) = runCommand(listOf(brew, "install", BREW_FORMULA), timeoutMinutes = 20)
-        if (exitCode != 0 && !brewInstalled()) {
-            throw IllegalStateException(output.ifBlank { "Homebrew install failed." })
-        }
-        val command = commandPath()
-        if (command.isNullOrBlank()) {
-            throw IllegalStateException("Whisper CLI was not found after Homebrew install.")
-        }
-    }
-
     private fun downloadModel(statusCallback: (String) -> Unit) {
         modelRoot().mkdirs()
         val target = modelFile()
@@ -256,12 +193,7 @@ object WhisperFeatureManager {
         downloadFile(MODEL_URL, target)
     }
 
-    private fun installLocation(): String {
-        return when {
-            isWindows() -> runtimeRoot().absolutePath
-            else -> brewPrefix() ?: featureRoot().absolutePath
-        }
-    }
+    private fun installLocation(): String = runtimeRoot().absolutePath
 
     private fun downloadFile(url: String, target: File) {
         target.parentFile?.mkdirs()
