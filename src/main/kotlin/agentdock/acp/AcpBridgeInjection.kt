@@ -11,15 +11,16 @@ import agentdock.utils.escapeForJsString
  * (injectReadySignal runs first on page load and only sets no-op stubs for __on* and __downloadAgent etc.)
  */
 internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
-    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || '') })") ?: ""
+    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || '') })") ?: ""
     val setModelInject = setModelQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), modelId: modelId })") ?: ""
     val setModeInject = setModeQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), modeId: modeId })") ?: ""
     val listAdaptersInject = listAdaptersQuery?.inject("") ?: ""
-    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ chatId: chatId, text: message })") ?: ""
-    val cancelPromptInject = cancelPromptQuery?.inject("chatId") ?: ""
+    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message })") ?: ""
+    val cancelPromptInject = cancelPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId })") ?: ""
     val stopAgentInject = stopAgentQuery?.inject("chatId") ?: ""
     val respondPermissionInject = respondPermissionQuery?.inject("JSON.stringify({ requestId: requestId, decision: decision })") ?: ""
     val loadConversationInject = loadConversationQuery?.inject("JSON.stringify({ chatId: chatId, projectPath: (projectPath || ''), conversationId: (conversationId || '') })") ?: ""
+    val recoverRuntimeInject = recoverRuntimeQuery?.inject("JSON.stringify({ requestId: (requestId || ''), reason: (reason || '') })") ?: ""
     val downloadAgentInject = downloadAgentQuery?.inject("adapterId") ?: ""
     val deleteAgentInject = deleteAgentQuery?.inject("adapterId") ?: ""
     val updateAgentInject = updateAgentQuery?.inject("adapterId") ?: ""
@@ -50,9 +51,8 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__requestAdapters = function() {
                 try { $listAdaptersInject } catch (e) { }
             };
-            window.__startAgent = function(chatId, adapterId, modelId) {
+            window.__startAgent = function(chatId, adapterId, modelId, requestId) {
                 try {
-                    if (window.__onStatus) window.__onStatus(chatId, 'initializing');
                     $startAgentInject
                 } catch (e) { }
             };
@@ -62,13 +62,12 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__setMode = function(chatId, adapterId, modeId) {
                 try { $setModeInject } catch (e) { }
             };
-            window.__sendPrompt = function(chatId, message) {
+            window.__sendPrompt = function(chatId, message, requestId) {
                 try {
-                    if (window.__onStatus) window.__onStatus(chatId, 'prompting');
                     $sendPromptInject
                 } catch (e) { }
             };
-            window.__cancelPrompt = function(chatId) {
+            window.__cancelPrompt = function(chatId, requestId) {
                 try { $cancelPromptInject } catch (e) { }
             };
             window.__stopAgent = function(chatId) {
@@ -79,6 +78,9 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             };
             window.__loadHistoryConversation = function(chatId, projectPath, conversationId) {
                 try { $loadConversationInject } catch (e) { }
+            };
+            window.__recoverRuntime = function(reason, requestId) {
+                try { $recoverRuntimeInject } catch (e) { }
             };
             window.__downloadAgent = function(adapterId) {
                 try { $downloadAgentInject } catch (e) { }
@@ -169,6 +171,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__onAcpLog = window.__onAcpLog || function(payload) {};
         window.__onContentChunk = window.__onContentChunk || function(payload) {};
         window.__onStatus = window.__onStatus || function(chatId, status) {};
+        window.__onBridgeOperationResult = window.__onBridgeOperationResult || function(payload) {};
         window.__onSessionId = window.__onSessionId || function(chatId, id) {};
         window.__onAdapters = window.__onAdapters || function(adapters) {};
         window.__onAvailableCommands = window.__onAvailableCommands || function(adapterId, commands) {};
@@ -204,6 +207,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__continueConversationWithSession = window.__continueConversationWithSession || function(payload) {};
         window.__saveConversationTranscript = window.__saveConversationTranscript || function(payload) {};
         window.__loadHistoryConversation = window.__loadHistoryConversation || function(chatId, projectPath, conversationId) {};
+        window.__recoverRuntime = window.__recoverRuntime || function(reason, requestId) {};
         window.__computeFileChangeStats = window.__computeFileChangeStats || function(payload) {};
     """.trimIndent()
     cefBrowser.executeJavaScript(script, cefBrowser.url, 0)

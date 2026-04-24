@@ -387,6 +387,14 @@ export interface ConversationTranscriptSavedPayload {
   error?: string;
 }
 
+export interface BridgeOperationResultPayload {
+  requestId: string;
+  chatId: string;
+  operation: 'start_agent' | 'send_prompt' | 'cancel_prompt' | 'recover_runtime';
+  ok: boolean;
+  error?: string;
+}
+
 export interface AudioTranscriptionFeatureState {
   id: string;
   title: string;
@@ -436,14 +444,14 @@ export interface GlobalSettingsPayload {
 declare global {
   interface Window {
     // Actions (Frontend -> Backend)
-    __startAgent?: (conversationId: string, adapterId?: string, modelId?: string) => void;
+    __startAgent?: (conversationId: string, adapterId?: string, modelId?: string, requestId?: string) => void;
     __setModel?: (conversationId: string, adapterId: string, modelId: string) => void;
     __setMode?: (conversationId: string, adapterId: string, modeId: string) => void;
-    __sendPrompt?: (conversationId: string, message: string) => void;
+    __sendPrompt?: (conversationId: string, message: string, requestId?: string) => void;
     __requestAdapters?: () => void;
     __notifyReady?: () => void;
     __respondPermission?: (requestId: string, decision: string) => void;
-    __cancelPrompt?: (conversationId: string) => void;
+    __cancelPrompt?: (conversationId: string, requestId?: string) => void;
     __stopAgent?: (conversationId: string) => void;
     __downloadAgent?: (adapterId: string) => void;
     __deleteAgent?: (adapterId: string) => void;
@@ -453,6 +461,7 @@ declare global {
     __deleteHistoryConversations?: (payload: { projectPath: string; conversationIds: string[] }) => void;
     __renameHistoryConversation?: (payload: { projectPath: string; conversationId: string; newTitle: string }) => void;
     __loadHistoryConversation?: (conversationId: string, projectPath: string, historyConversationId: string) => void;
+    __recoverRuntime?: (reason?: string, requestId?: string) => void;
     __loginAgent?: (adapterId: string) => void;
     __logoutAgent?: (adapterId: string) => void;
     __fetchAdapterUsage?: (adapterId: string) => void;
@@ -488,6 +497,7 @@ declare global {
     __onConversationReplayLoaded?: (payload: ConversationReplayLoadedPayload) => void;
     __onAttachmentsAdded?: (chatId: string, files: ChatAttachment[]) => void;
     __onConversationTranscriptSaved?: (payload: ConversationTranscriptSavedPayload) => void;
+    __onBridgeOperationResult?: (payload: BridgeOperationResultPayload) => void;
     __onUsageData?: (adapterId: string, json: string) => void;
 
     __onUndoResult?: (chatId: string, result: UndoResultPayload) => void;

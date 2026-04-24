@@ -175,6 +175,19 @@ internal fun AcpClientService.resetExecutionEnvironment(
     }
 }
 
+internal fun AcpClientService.recoverRuntime(): Boolean {
+    if (!runtimeRecoveryInProgress.compareAndSet(false, true)) return false
+    return try {
+        resetExecutionEnvironment(
+            clearSessions = true,
+            restartDownloadedAdapters = true
+        )
+        true
+    } finally {
+        runtimeRecoveryInProgress.set(false)
+    }
+}
+
 internal fun AcpClientService.shutdown() {
     scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     resetExecutionEnvironment(

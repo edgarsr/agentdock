@@ -14,6 +14,14 @@ import agentdock.utils.escapeForJsString
 
 private val LOG = logger<AcpBridge>()
 
+@kotlinx.serialization.Serializable
+internal data class BridgeOperationResultPayload(
+    val requestId: String,
+    val chatId: String,
+    val operation: String,
+    val ok: Boolean,
+    val error: String? = null
+)
 
 /**
  * Unified content delivery: ALL content (live streaming + history replay) goes
@@ -408,4 +416,16 @@ internal fun AcpBridge.pushPromptDoneChunk(
         if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)
+}
+
+internal fun AcpBridge.pushBridgeOperationResult(result: BridgeOperationResultPayload) {
+    val payloadJson = adapterJson.encodeToString(result)
+    val escaped = payloadJson.escapeForJsString()
+    runOnEdt {
+        browser.cefBrowser.executeJavaScript(
+            "if(window.__onBridgeOperationResult) window.__onBridgeOperationResult(JSON.parse('$escaped'));",
+            browser.cefBrowser.url,
+            0
+        )
+    }
 }

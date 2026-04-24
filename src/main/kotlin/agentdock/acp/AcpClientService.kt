@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -174,6 +175,7 @@ class AcpClientService private constructor(val project: Project) {
     internal val availableCommandsByAdapter = ConcurrentHashMap<String, List<AvailableCommandPayload>>()
     internal val systemInstructionsInjectedSessionIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
     internal val historySyncAfterInitializationInFlight = AtomicBoolean(false)
+    internal val runtimeRecoveryInProgress = AtomicBoolean(false)
 
     fun status(chatId: String): Status = sessions[chatId]?.statusRef?.get() ?: Status.NotStarted
     fun sessionId(chatId: String): String? = sessions[chatId]?.sessionIdRef?.get()
@@ -231,6 +233,39 @@ class AcpClientService private constructor(val project: Project) {
         return updateScopeActive && updateWorkerActive
     }
 
+    internal fun SharedProcess.failureReason(): String {
+        val runningProcess = process
+        if (runningProcess == null) {
+            return "Connection to the agent process is unavailable."
+        }
+        if (!runningProcess.isAlive) {
+            val exitCode = runCatching { runningProcess.exitValue() }.getOrNull()
+            return if (exitCode != null) {
+                "Connection to the agent process was lost (exit code $exitCode)."
+            } else {
+                "Connection to the agent process was lost."
+            }
+        }
+        if (client == null || !isInitialized) {
+            return "Agent connection is not initialized."
+        }
+
+        val protocolActive = protocolScope?.coroutineContext?.get(Job)?.isActive == true
+        if (!protocolActive) {
+            return "The ACP transport is no longer active."
+        }
+
+        if (sessionUpdateWrapped) {
+            val updateScopeActive = sessionUpdateScope?.coroutineContext?.get(Job)?.isActive == true
+            val updateWorkerActive = sessionUpdateWorker?.isActive == true
+            if (!updateScopeActive || !updateWorkerActive) {
+                return "The ACP update stream stopped unexpectedly."
+            }
+        }
+
+        return "Connection to the agent process was lost."
+    }
+
     fun getAvailableModels(adapterName: String? = null): List<AcpAdapterConfig.ModelInfo> {
         val name = adapterName ?: AcpAdapterPaths.resolveAdapterName(null)
         if (!AcpAdapterPaths.isDownloaded(name)) {
@@ -273,6 +308,18 @@ class AcpClientService private constructor(val project: Project) {
                 it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
             }
             pendingRequests.clear()
+        }
+
+        fun markBroken() {
+            session = null
+            sharedProcess = null
+            ignoreUpdatesUntilPrompt = false
+            allowReplayDelivery = true
+            pendingRequests.values.forEach {
+                it.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
+            }
+            pendingRequests.clear()
+            statusRef.set(Status.Error)
         }
     }
 
@@ -360,6 +407,32 @@ class AcpClientService private constructor(val project: Project) {
         }
     }
 
+}
+
+internal fun AcpClientService.promptDispatchFailure(chatId: String): String? {
+    val context = sessions[chatId] ?: return "No active agent session."
+    val session = context.session ?: return "No active agent session."
+    val sharedProcess = context.sharedProcess ?: return "Connection to the agent process is unavailable."
+    if (!sharedProcess.isHealthy()) {
+        return sharedProcess.failureReason()
+    }
+    return if (session.sessionId.value.isBlank()) "No active agent session." else null
+}
+
+internal fun AcpClientService.cancelDispatchFailure(chatId: String): String? {
+    val context = sessions[chatId] ?: return "No active prompt is running."
+    val sharedProcess = context.sharedProcess ?: return "Connection to the agent process is unavailable."
+    if (!sharedProcess.isHealthy()) {
+        return sharedProcess.failureReason()
+    }
+    return null
+}
+
+internal suspend fun AcpClientService.markChatSessionBroken(chatId: String) {
+    val context = sessions[chatId] ?: return
+    context.lifecycleMutex.withLock {
+        context.markBroken()
+    }
 }
 
 internal sealed interface QueuedSessionUpdate {

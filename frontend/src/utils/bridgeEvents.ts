@@ -7,6 +7,7 @@ import {
   AvailableCommand,
   ChangesState,
   ContentChunk,
+  BridgeOperationResultPayload,
   ConversationReplayLoadedPayload,
   ConversationTranscriptSavedPayload,
   FileChangeStatsResultPayload,
@@ -34,6 +35,7 @@ export interface UndoResultEvent { chatId: string; result: UndoResultPayload; }
 export interface ChangesStateEvent { chatId: string; state: ChangesState; }
 export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 export interface ConversationTranscriptSavedEvent { payload: ConversationTranscriptSavedPayload; }
+export interface BridgeOperationResultEvent { payload: BridgeOperationResultPayload; }
 export interface ConversationReplayLoadedEvent { payload: ConversationReplayLoadedPayload; }
 export interface FileChangeStatsEvent { payload: FileChangeStatsResultPayload; }
 export interface McpServersEvent { servers: McpServerConfig[]; }
@@ -64,6 +66,7 @@ export const EVENT_NAMES = {
   HISTORY_DELETE_RESULT: 'history-delete-result',
   UNDO_RESULT: 'acp-undo-result',
   CHANGES_STATE: 'acp-changes-state',
+  BRIDGE_OPERATION_RESULT: 'acp-bridge-operation-result',
   FILE_CHANGE_STATS: 'acp-file-change-stats',
   ATTACHMENTS_ADDED: 'acp-attachments-added',
   TOOL_CALL: 'acp-tool-call',

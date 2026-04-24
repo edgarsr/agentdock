@@ -2,39 +2,44 @@ package agentdock.acp
 
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.*
-import agentdock.history.AgentDockHistoryService
 
 private data class PermissionDecisionPayload(
     val requestId: String,
     val decision: String
 )
 
-private data class SessionMetadataUpdatePayload(
-    val conversationId: String,
-    val sessionId: String,
-    val adapterName: String,
-    val promptCount: Int,
-    val title: String?,
-    val touchUpdatedAt: Boolean
-)
+private const val PROMPT_HEALTH_POLL_INTERVAL_MS = 5_000L
+private const val CANCEL_REQUEST_TIMEOUT_MS = 10_000L
 
-private data class ContinueConversationPayload(
-    val previousSessionId: String,
-    val previousAdapterName: String,
-    val sessionId: String,
-    val adapterName: String,
-    val title: String?
-)
-
-private fun AcpBridge.pushConversationError(chatId: String, error: Throwable) {
+internal fun AcpBridge.pushConversationError(chatId: String, error: Throwable) {
     pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(error)}]", isReplay = false)
 }
 
-private fun AcpBridge.pushConversationError(chatId: String, message: String) {
+internal fun AcpBridge.pushConversationError(chatId: String, message: String) {
     pushContentChunk(chatId, "assistant", "text", text = "[Error: $message]", isReplay = false)
+}
+
+internal fun AcpBridge.pushBridgeOperationResult(
+    requestId: String?,
+    chatId: String?,
+    operation: String,
+    ok: Boolean,
+    error: String? = null
+) {
+    if (requestId.isNullOrBlank()) return
+    pushBridgeOperationResult(
+        BridgeOperationResultPayload(
+            requestId = requestId,
+            chatId = chatId.orEmpty(),
+            operation = operation,
+            ok = ok,
+            error = error
+        )
+    )
 }
 
 private suspend fun AcpBridge.handleScopedConfigChange(
@@ -71,44 +76,6 @@ private fun parsePermissionDecisionPayload(payload: String?): PermissionDecision
     }.getOrNull()
 }
 
-private fun parseSessionMetadataUpdatePayload(payload: String?): SessionMetadataUpdatePayload? {
-    return runCatching {
-        val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
-        val conversationId = obj["conversationId"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val sessionId = obj["sessionId"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val adapterName = obj["adapterName"]?.jsonPrimitive?.content?.trim().orEmpty()
-        if (conversationId.isBlank() || sessionId.isBlank() || adapterName.isBlank()) return@runCatching null
-        SessionMetadataUpdatePayload(
-            conversationId = conversationId,
-            sessionId = sessionId,
-            adapterName = adapterName,
-            promptCount = obj["promptCount"]?.jsonPrimitive?.intOrNull ?: 0,
-            title = obj["title"]?.jsonPrimitive?.contentOrNull,
-            touchUpdatedAt = obj["touchUpdatedAt"]?.jsonPrimitive?.booleanOrNull ?: false
-        )
-    }.getOrNull()
-}
-
-private fun parseContinueConversationPayload(payload: String?): ContinueConversationPayload? {
-    return runCatching {
-        val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
-        val previousSessionId = obj["previousSessionId"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val previousAdapterName = obj["previousAdapterName"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val sessionId = obj["sessionId"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val adapterName = obj["adapterName"]?.jsonPrimitive?.content?.trim().orEmpty()
-        if (previousSessionId.isBlank() || previousAdapterName.isBlank() || sessionId.isBlank() || adapterName.isBlank()) {
-            return@runCatching null
-        }
-        ContinueConversationPayload(
-            previousSessionId = previousSessionId,
-            previousAdapterName = previousAdapterName,
-            sessionId = sessionId,
-            adapterName = adapterName,
-            title = obj["title"]?.jsonPrimitive?.contentOrNull
-        )
-    }.getOrNull()
-}
-
 private fun AcpBridge.refreshDownloadedAdapterInitialization() {
     val target = AcpAdapterPaths.getExecutionTarget()
     AcpAdapterConfig.getAllAdapters().values.forEach { info ->
@@ -123,8 +90,12 @@ private fun AcpBridge.refreshDownloadedAdapterInitialization() {
 internal fun AcpBridge.installConversationQueries() {
     startAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { payload ->
-            val (chatId, adapterName, modelId) = parseStartPayload(payload)
+            val parsed = parseStartRequestPayload(payload)
+            val chatId = parsed.chatId
+            val adapterName = parsed.adapterId
+            val modelId = parsed.modelId
             if (chatId != null) {
+                pushBridgeOperationResult(parsed.requestId, chatId, "start_agent", ok = true)
                 scope.launch(Dispatchers.Default) {
                     pushStatus(chatId, "initializing")
                     try {
@@ -140,6 +111,8 @@ internal fun AcpBridge.installConversationQueries() {
                         pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
                     }
                 }
+            } else {
+                pushBridgeOperationResult(parsed.requestId, null, "start_agent", ok = false, error = "Invalid start request.")
             }
             JBCefJSQuery.Response("ok")
         }
@@ -185,9 +158,22 @@ internal fun AcpBridge.installConversationQueries() {
             val chatId = parsed.chatId
             val blocks = parsed.blocks
             if (chatId != null && blocks.isNotEmpty()) {
+                val dispatchFailure = service.promptDispatchFailure(chatId)
+                if (dispatchFailure != null) {
+                    pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = dispatchFailure)
+                    scope.launch(Dispatchers.Default) {
+                        service.markChatSessionBroken(chatId)
+                        pushConversationError(chatId, dispatchFailure)
+                        pushStatus(chatId, "error")
+                        recoverRuntimeAfterFailure(dispatchFailure)
+                    }
+                    return@addHandler JBCefJSQuery.Response("ok")
+                }
+
+                pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
+                val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks)
                 val job = scope.launch(Dispatchers.Default) {
                     pushStatus(chatId, "prompting")
-                    val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks)
                     try {
                         service.prompt(chatId, blocks).collect { event ->
                             when (event) {
@@ -212,7 +198,11 @@ internal fun AcpBridge.installConversationQueries() {
                             }
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
-                        pushStatus(chatId, "ready")
+                        if (service.status(chatId) == AcpClientService.Status.Error) {
+                            pushStatus(chatId, "error")
+                        } else {
+                            pushStatus(chatId, "ready")
+                        }
                         throw e
                     } catch (e: Exception) {
                         val message = "[Error: ${formatAcpError(e)}]"
@@ -226,30 +216,83 @@ internal fun AcpBridge.installConversationQueries() {
                         promptJobs.remove(chatId)
                     }
                 }
+                val watcher = scope.launch(Dispatchers.Default) {
+                    while (job.isActive) {
+                        delay(PROMPT_HEALTH_POLL_INTERVAL_MS)
+                        if (!job.isActive) break
+                        if (service.status(chatId) != AcpClientService.Status.Prompting) break
+                        val failure = service.promptDispatchFailure(chatId) ?: continue
+                        val message = "[Error: $failure]"
+                        service.markChatSessionBroken(chatId)
+                        pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
+                        appendLivePromptTextEvent(chatId, message, captureId)
+                        flushLivePromptCapture(chatId, captureId)?.let {
+                            pushPromptDoneChunk(chatId, it, outcome = "error")
+                        }
+                        pushStatus(chatId, "error")
+                        job.cancel(kotlinx.coroutines.CancellationException(failure))
+                        recoverRuntimeAfterFailure(failure)
+                        break
+                    }
+                }
+                job.invokeOnCompletion {
+                    watcher.cancel()
+                }
                 promptJobs[chatId] = job
+            } else {
+                pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = "Invalid prompt request.")
             }
             JBCefJSQuery.Response("ok")
         }
     }
 
     cancelPromptQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { chatIdPayload ->
-            val chatId = chatIdPayload?.trim().orEmpty()
+        addHandler { payload ->
+            val parsed = parseCancelPayload(payload)
+            val chatId = parsed.chatId.orEmpty()
             if (chatId.isNotEmpty()) {
-                promptJobs[chatId]?.cancel()
-                scope.launch(Dispatchers.Default) {
-                    service.cancel(chatId)
-                    pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
-                    appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
-                    flushLivePromptCapture(chatId)?.let {
-                        pushPromptDoneChunk(chatId, it, outcome = "cancelled")
+                val dispatchFailure = service.cancelDispatchFailure(chatId)
+                if (dispatchFailure != null) {
+                    val message = "Cancel request could not be delivered. $dispatchFailure"
+                    pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
+                    scope.launch(Dispatchers.Default) {
+                        service.markChatSessionBroken(chatId)
+                        pushConversationError(chatId, message)
+                        pushStatus(chatId, "error")
+                        recoverRuntimeAfterFailure(message)
                     }
-                    pushStatus(chatId, "ready")
+                    return@addHandler JBCefJSQuery.Response("ok")
                 }
+
+                pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
+                scope.launch(Dispatchers.Default) {
+                    try {
+                        withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
+                            service.cancel(chatId)
+                        }
+                        promptJobs[chatId]?.cancel()
+                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
+                        appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
+                        flushLivePromptCapture(chatId)?.let {
+                            pushPromptDoneChunk(chatId, it, outcome = "cancelled")
+                        }
+                        pushStatus(chatId, "ready")
+                    } catch (e: Exception) {
+                        val message = "Cancel request failed. ${formatAcpError(e)}"
+                        service.markChatSessionBroken(chatId)
+                        pushConversationError(chatId, message)
+                        pushStatus(chatId, "error")
+                        recoverRuntimeAfterFailure(message)
+                    }
+                }
+            } else {
+                pushBridgeOperationResult(parsed.requestId, parsed.chatId, "cancel_prompt", ok = false, error = "Invalid cancel request.")
             }
             JBCefJSQuery.Response("ok")
         }
     }
+
+    installRuntimeRecoveryQuery()
 
     stopAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { chatIdPayload ->
@@ -276,163 +319,5 @@ internal fun AcpBridge.installConversationQueries() {
         }
     }
 
-    loadConversationQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val (chatId, projectPath, conversationId) = parseConversationLoadPayload(payload)
-            if (chatId != null && projectPath != null && conversationId != null) {
-                scope.launch(Dispatchers.Default) {
-                    replaySeqByChatId[chatId] = 0
-                    try {
-                        val storedConversation = AgentDockHistoryService.loadConversationReplay(projectPath, conversationId)
-                        if (storedConversation != null) {
-                            pushConversationReplayLoaded(chatId, storedConversation)
-
-                            val lastStoredSession = storedConversation.sessions.lastOrNull()
-                                ?: throw IllegalStateException("Conversation replay '$conversationId' is empty")
-                            pushSessionId(chatId, lastStoredSession.sessionId)
-
-                            scope.launch(Dispatchers.Default) {
-                                try {
-                                    suppressReplayForChatIds.add(chatId)
-                                    try {
-                                        withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                                            service.loadSession(
-                                                chatId = chatId,
-                                                adapterName = lastStoredSession.adapterName,
-                                                sessionId = lastStoredSession.sessionId,
-                                                deliverReplay = false
-                                            )
-                                        }
-                                    } finally {
-                                        suppressReplayForChatIds.remove(chatId)
-                                    }
-                                    pushAdapters()
-                                    pushStatus(chatId, service.status(chatId).name.lowercase())
-                                    pushSessionId(chatId, service.sessionId(chatId))
-                                    pushMode(chatId, service.activeModeId(chatId))
-                                } catch (e: Exception) {
-                                    pushStatus(chatId, "error")
-                                    pushConversationError(chatId, e)
-                                }
-                            }
-                        } else {
-                            val sessionsChain = AgentDockHistoryService.getConversationSessions(projectPath, conversationId)
-                            if (sessionsChain.isEmpty()) {
-                                throw IllegalStateException("Conversation '$conversationId' not found")
-                            }
-                            pushStatus(chatId, "initializing")
-                            startHistoryReplayCapture(chatId, projectPath, conversationId)
-                            sessionsChain.forEach { session ->
-                                beginImportedReplaySession(chatId, session.sessionId, session.adapterName, session.modelId, session.modeId)
-                                withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                                    service.loadSession(
-                                        chatId,
-                                        session.adapterName,
-                                        session.sessionId,
-                                        session.modelId,
-                                        session.modeId
-                                    )
-                                }
-                            }
-                            flushHistoryReplayCapture(chatId)
-                            pushAdapters()
-                            val refreshedConversation = AgentDockHistoryService.loadConversationReplay(projectPath, conversationId)
-                            if (refreshedConversation != null) {
-                                pushConversationReplayLoaded(chatId, refreshedConversation)
-                            }
-
-                            val lastSession = sessionsChain.last()
-                            pushStatus(chatId, service.status(chatId).name.lowercase())
-                            pushSessionId(chatId, service.sessionId(chatId))
-                            pushMode(chatId, service.activeModeId(chatId))
-                        }
-                    } catch (e: Exception) {
-                        discardHistoryReplayCapture(chatId)
-                        replaySeqByChatId.remove(chatId)
-                        pushStatus(chatId, "error")
-                        pushConversationError(chatId, e)
-                    }
-                }
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-
-    updateSessionMetadataQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            scope.launch(Dispatchers.IO) {
-                parseSessionMetadataUpdatePayload(payload)?.let { request ->
-                    AgentDockHistoryService.upsertRuntimeSessionMetadata(
-                        projectPath = service.project.basePath,
-                        conversationId = request.conversationId,
-                        sessionId = request.sessionId,
-                        adapterName = request.adapterName,
-                        promptCount = request.promptCount,
-                        titleCandidate = request.title,
-                        touchUpdatedAt = request.touchUpdatedAt
-                    )
-                }
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    continueConversationQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            scope.launch(Dispatchers.IO) {
-                parseContinueConversationPayload(payload)?.let { request ->
-                    AgentDockHistoryService.appendSessionToConversation(
-                        projectPath = service.project.basePath,
-                        previousSessionId = request.previousSessionId,
-                        previousAdapterName = request.previousAdapterName,
-                        sessionId = request.sessionId,
-                        adapterName = request.adapterName,
-                        titleCandidate = request.title
-                    )
-                }
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    saveConversationTranscriptQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            scope.launch(Dispatchers.IO) {
-                val result = runCatching {
-                    val request = Json.decodeFromString<SaveConversationTranscriptPayload>(payload ?: "{}")
-                    val filePath = AgentDockHistoryService.saveConversationTranscript(
-                        projectPath = service.project.basePath,
-                        conversationId = request.conversationId,
-                        transcriptText = request.text
-                    )
-                    if (filePath.isNullOrBlank()) {
-                        SaveConversationTranscriptResultPayload(
-                            requestId = request.requestId,
-                            conversationId = request.conversationId,
-                            success = false,
-                            error = "Failed to persist transcript file."
-                        )
-                    } else {
-                        SaveConversationTranscriptResultPayload(
-                            requestId = request.requestId,
-                            conversationId = request.conversationId,
-                            success = true,
-                            filePath = filePath
-                        )
-                    }
-                }.getOrElse { error ->
-                    val request = runCatching { Json.decodeFromString<SaveConversationTranscriptPayload>(payload ?: "{}") }.getOrNull()
-                    SaveConversationTranscriptResultPayload(
-                        requestId = request?.requestId.orEmpty(),
-                        conversationId = request?.conversationId.orEmpty(),
-                        success = false,
-                        error = formatAcpError(error)
-                    )
-                }
-                pushConversationTranscriptSaved(result)
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
+    installConversationHistoryQueries()
 }

@@ -67,6 +67,7 @@ export function useChatSession(
   const touchUpdatedAtRef = useRef(!historySession);
   const ignoreReplayChunksRef = useRef(!!historySession);
   const pinnedAgentSnapshotRef = useRef<PinnedAgentSnapshot | null>(null);
+  const recoveryInFlightRef = useRef(false);
 
   const {
     applyBufferedChunks,
@@ -149,6 +150,88 @@ export function useChatSession(
     [availableModes, selectedModeId]
   );
 
+  const failActivePromptLocally = useCallback((message: string) => {
+    const text = message.startsWith('[Error:') ? message : `[Error: ${message}]`;
+    const startedAt = startTimeRef.current ?? Date.now();
+    pendingPromptRef.current = null;
+    setPermissionQueue([]);
+    statusRef.current = 'error';
+    setStatus('error');
+    setIsSending(false);
+    markFlushUnscheduled();
+    applyBufferedChunks('bridge-error');
+
+    setLiveMessages((prev) => {
+      const duration = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+      const lastMessage = prev[prev.length - 1];
+
+      if (lastMessage?.role === 'assistant' && !lastMessage.metaComplete) {
+        const existingBlocks = [...(lastMessage.contentBlocks || [])];
+        const lastBlock = existingBlocks[existingBlocks.length - 1];
+        if (lastBlock?.type === 'text') {
+          existingBlocks[existingBlocks.length - 1] = {
+            ...lastBlock,
+            text: `${lastBlock.text}${text}`,
+          };
+        } else {
+          existingBlocks.push({ type: 'text', text });
+        }
+
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...lastMessage,
+            content: `${lastMessage.content || ''}${text}`,
+            contentBlocks: existingBlocks,
+            duration,
+            metaComplete: true,
+          },
+        ];
+      }
+
+      return [
+        ...prev,
+        {
+          id: nextMessageId('assistant'),
+          role: 'assistant',
+          content: text,
+          contentBlocks: [{ type: 'text', text }],
+          timestamp: Date.now(),
+          agentId: selectedAgentId,
+          agentName: adapterDisplayName,
+          modelName: selectedModelId,
+          modeName: selectedModeId,
+          promptStartedAtMillis: startedAt,
+          duration,
+          metaComplete: true,
+        },
+      ];
+    });
+    startTimeRef.current = null;
+  }, [
+    adapterDisplayName,
+    applyBufferedChunks,
+    markFlushUnscheduled,
+    selectedAgentId,
+    selectedModelId,
+    selectedModeId,
+  ]);
+
+  const requestRuntimeRecovery = useCallback((reason: string) => {
+    if (recoveryInFlightRef.current) return;
+    recoveryInFlightRef.current = true;
+    ACPBridge.recoverRuntime(reason)
+      .then(() => {
+        ACPBridge.requestAdapters();
+      })
+      .catch((error) => {
+        console.warn('[useChatSession] Runtime recovery failed:', error);
+      })
+      .finally(() => {
+        recoveryInFlightRef.current = false;
+      });
+  }, []);
+
   useEffect(() => {
     allowMetadataUpdateRef.current = false;
     lastMetadataFingerprintRef.current = '';
@@ -171,7 +254,7 @@ export function useChatSession(
   }, [historySession]);
 
   const startSelectedAgent = useCallback(() => {
-    if (!selectedAgentId || typeof window.__startAgent !== 'function') return false;
+    if (!selectedAgentId) return false;
     if (historySession) return false;
     if (!selectedAgent?.downloaded) {
       return false;
@@ -188,13 +271,20 @@ export function useChatSession(
       startedModeIdRef.current = selectedAgent?.currentModeId || '';
 
       clearBufferedChunks();
-      window.__startAgent(conversationId, selectedAgentId, modelId || undefined);
+      statusRef.current = 'initializing';
+      setStatus('initializing');
+      ACPBridge.startAgent(conversationId, selectedAgentId, modelId || undefined).catch((error) => {
+        console.warn('[useChatSession] Failed to start agent:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        failActivePromptLocally(`Prompt was not sent because the agent start request failed. ${message}`);
+        requestRuntimeRecovery(message);
+      });
       return true;
     } catch (e) {
       console.warn('[useChatSession] Failed to auto-start agent:', e);
       return false;
     }
-  }, [clearBufferedChunks, conversationId, historySession, modelIdForStart, selectedAgent, selectedAgentId]);
+  }, [clearBufferedChunks, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId]);
 
   useEffect(() => {
     if (!pendingHandoff) return;
@@ -262,21 +352,21 @@ export function useChatSession(
         finishActivePromptAfterError();
       }
 
-      if (s === 'ready' && pendingPromptRef.current && typeof window.__sendPrompt === 'function') {
+      if (s === 'ready' && pendingPromptRef.current) {
         const blocksToSend = pendingPromptRef.current;
         pendingPromptRef.current = null;
 
         setIsSending(true);
         
         // Assistant message is already added in handleSend, we just need to trigger the actual send
-        try {
-          window.__sendPrompt(conversationId, JSON.stringify(blocksToSend));
+        ACPBridge.sendPrompt(conversationId, JSON.stringify(blocksToSend)).then(() => {
           consumeHandoff();
-        } catch (err) {
-          pendingPromptRef.current = blocksToSend;
+        }).catch((err) => {
           console.warn('[useChatSession] Failed to send pending blocks:', err);
-          setIsSending(false);
-        }
+          const message = err instanceof Error ? err.message : String(err);
+          failActivePromptLocally(`Prompt was not sent. ${message}`);
+          requestRuntimeRecovery(message);
+        });
       }
     });
 
@@ -307,7 +397,7 @@ export function useChatSession(
       unsubMode();
       unsubPermission();
     };
-  }, [conversationId, enqueueChunk, applyBufferedChunks, clearBufferedChunks, markFlushUnscheduled, consumeHandoff, finishActivePromptAfterError]);
+  }, [conversationId, enqueueChunk, applyBufferedChunks, clearBufferedChunks, markFlushUnscheduled, consumeHandoff, failActivePromptLocally, finishActivePromptAfterError, requestRuntimeRecovery]);
 
   useEffect(() => {
     if (!isSending || isHistoryReplaying) return;
@@ -398,8 +488,6 @@ export function useChatSession(
     const text = inputValue.trim();
     if ((!text && attachments.length === 0) || isSending || status === 'prompting') return;
 
-    if (typeof window.__sendPrompt !== 'function') return;
-
     const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
     if (normalizedBlocks.length === 0) return;
     const outgoingBlocks = pendingHandoffRef.current
@@ -437,7 +525,7 @@ export function useChatSession(
     };
     setLiveMessages((prev) => [...prev, assistantMessage]);
 
-    if (status !== 'ready' && status !== 'error') {
+    if (status !== 'ready') {
       // Queue it up
       pendingPromptRef.current = outgoingBlocks;
       if (status === 'not started' || status === 'error') {
@@ -446,26 +534,46 @@ export function useChatSession(
       return;
     }
 
-    try {
-      window.__sendPrompt(conversationId, JSON.stringify(outgoingBlocks));
+    ACPBridge.sendPrompt(conversationId, JSON.stringify(outgoingBlocks)).then(() => {
       consumeHandoff();
       setPermissionQueue([]);
-    } catch (e) {
+    }).catch((e) => {
       console.warn('[useChatSession] Failed to send prompt:', e);
-      setIsSending(false);
-    }
+      const message = e instanceof Error ? e.message : String(e);
+      failActivePromptLocally(`Prompt was not sent. ${message}`);
+      requestRuntimeRecovery(message);
+    });
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
   }, [inputValue, attachments, isSending, status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, onUserMessageSent]);
+      adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
   const handleStop = () => {
-    if (typeof window.__cancelPrompt === 'function') {
+    if (pendingPromptRef.current && status !== 'prompting') {
+      pendingPromptRef.current = null;
+      setPermissionQueue([]);
+      startTimeRef.current = null;
+      setIsSending(false);
+      setLiveMessages((prev) => {
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage?.role === 'assistant' && !lastMessage.metaComplete && !(lastMessage.content || '').trim()) {
+          return prev.slice(0, -1);
+        }
+        return prev;
+      });
+      return;
+    }
+
+    if (status === 'prompting') {
       const liveUserMessageCount = liveMessages.filter((message) => message.role === 'user').length;
       resetSessionAfterInitialCancelRef.current = !historySession && liveUserMessageCount === 1;
-      pendingPromptRef.current = null;
-      window.__cancelPrompt(conversationId);
       setPermissionQueue([]);
+      ACPBridge.cancelPrompt(conversationId).catch((error) => {
+        console.warn('[useChatSession] Failed to cancel prompt:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        failActivePromptLocally(`Cancel request was not delivered. ${message}`);
+        requestRuntimeRecovery(message);
+      });
     }
   };
 

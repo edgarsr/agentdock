@@ -2,6 +2,7 @@ import {
   AvailableCommand,
   AudioTranscriptionResultPayload,
   AudioTranscriptionSettings,
+  BridgeOperationResultPayload,
   ChatAttachment,
   ContinueConversationPayload,
   ConversationTranscriptSavedPayload,
@@ -23,6 +24,7 @@ import {
   AudioTranscriptionResultEvent,
   AudioTranscriptionSettingsEvent,
   AvailableCommandsEvent,
+  BridgeOperationResultEvent,
   ChangesStateEvent,
   ContentChunkEvent,
   ConversationReplayLoadedEvent,
@@ -47,10 +49,12 @@ import {
 let saveTranscriptCounter = 0;
 let audioTranscriptionCounter = 0;
 let fileChangeStatsCounter = 0;
+let bridgeOperationCounter = 0;
 const availableCommandsByAdapter = new Map<string, AvailableCommand[]>();
 const pendingRpcMethodsById = new Map<string | number, string>();
 const toolCallRawInputById = new Map<string, Record<string, any>>();
 const BRIDGE_REQUEST_TIMEOUT_MS = 120_000;
+const BRIDGE_OPERATION_TIMEOUT_MS = 10_000;
 
 function nextSaveTranscriptRequestId(): string {
   saveTranscriptCounter += 1;
@@ -65,6 +69,42 @@ function nextAudioTranscriptionRequestId(): string {
 function nextFileChangeStatsRequestId(): string {
   fileChangeStatsCounter += 1;
   return `file-change-stats-${fileChangeStatsCounter}-${Date.now()}`;
+}
+
+function nextBridgeOperationRequestId(operation: string): string {
+  bridgeOperationCounter += 1;
+  return `${operation}-${bridgeOperationCounter}-${Date.now()}`;
+}
+
+function awaitBridgeOperation(operation: BridgeOperationResultPayload['operation'], invoke: (requestId: string) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const requestId = nextBridgeOperationRequestId(operation);
+    let cleanup = () => {};
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Bridge request '${operation}' was not acknowledged. Connection to the agent may be broken.`));
+    }, BRIDGE_OPERATION_TIMEOUT_MS);
+
+    cleanup = ACPBridge.onBridgeOperationResult((e) => {
+      const payload = e.detail.payload;
+      if (payload.requestId !== requestId) return;
+      window.clearTimeout(timeout);
+      cleanup();
+      if (payload.ok) {
+        resolve();
+        return;
+      }
+      reject(new Error(payload.error || `Bridge request '${operation}' failed.`));
+    });
+
+    try {
+      invoke(requestId);
+    } catch (error) {
+      window.clearTimeout(timeout);
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
 }
 
 export const ACPBridge = {
@@ -118,6 +158,10 @@ export const ACPBridge = {
 
     window.__onStatus = (chatId, status) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.STATUS, { detail: { chatId, status } }));
+    };
+
+    window.__onBridgeOperationResult = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.BRIDGE_OPERATION_RESULT, { detail: { payload } }));
     };
 
     window.__onSessionId = (chatId, id) => {
@@ -268,6 +312,8 @@ export const ACPBridge = {
 
   onStatus: (callback: (e: CustomEvent<StatusEvent>) => void) => onBridgeEvent(EVENT_NAMES.STATUS, callback),
 
+  onBridgeOperationResult: (callback: (e: CustomEvent<BridgeOperationResultEvent>) => void) => onBridgeEvent(EVENT_NAMES.BRIDGE_OPERATION_RESULT, callback),
+
   onSessionId: (callback: (e: CustomEvent<SessionIdEvent>) => void) => onBridgeEvent(EVENT_NAMES.SESSION_ID, callback),
 
   onMode: (callback: (e: CustomEvent<ModeEvent>) => void) => onBridgeEvent(EVENT_NAMES.MODE, callback),
@@ -284,6 +330,42 @@ export const ACPBridge = {
 
   requestAdapters: () => {
     window.__requestAdapters?.();
+  },
+
+  startAgent: (conversationId: string, adapterId?: string, modelId?: string) => {
+    if (typeof window.__startAgent !== 'function') {
+      return Promise.reject(new Error('Start agent bridge is not available.'));
+    }
+    return awaitBridgeOperation('start_agent', (requestId) => {
+      window.__startAgent?.(conversationId, adapterId, modelId, requestId);
+    });
+  },
+
+  sendPrompt: (conversationId: string, message: string) => {
+    if (typeof window.__sendPrompt !== 'function') {
+      return Promise.reject(new Error('Send prompt bridge is not available.'));
+    }
+    return awaitBridgeOperation('send_prompt', (requestId) => {
+      window.__sendPrompt?.(conversationId, message, requestId);
+    });
+  },
+
+  cancelPrompt: (conversationId: string) => {
+    if (typeof window.__cancelPrompt !== 'function') {
+      return Promise.reject(new Error('Cancel prompt bridge is not available.'));
+    }
+    return awaitBridgeOperation('cancel_prompt', (requestId) => {
+      window.__cancelPrompt?.(conversationId, requestId);
+    });
+  },
+
+  recoverRuntime: (reason?: string) => {
+    if (typeof window.__recoverRuntime !== 'function') {
+      return Promise.reject(new Error('Runtime recovery bridge is not available.'));
+    }
+    return awaitBridgeOperation('recover_runtime', (requestId) => {
+      window.__recoverRuntime?.(reason, requestId);
+    });
   },
 
   fetchAdapterUsage: (adapterId: string) => {

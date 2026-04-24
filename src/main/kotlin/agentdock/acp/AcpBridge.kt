@@ -29,6 +29,7 @@ class AcpBridge(
     internal var respondPermissionQuery: JBCefJSQuery? = null
     internal var readyQuery: JBCefJSQuery? = null
     internal var loadConversationQuery: JBCefJSQuery? = null
+    internal var recoverRuntimeQuery: JBCefJSQuery? = null
     internal var downloadAgentQuery: JBCefJSQuery? = null
     internal var deleteAgentQuery: JBCefJSQuery? = null
     internal var updateAgentQuery: JBCefJSQuery? = null

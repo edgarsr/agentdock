@@ -3,10 +3,23 @@ package agentdock.acp
 import com.agentclientprotocol.model.*
 import kotlinx.serialization.json.*
 
+internal data class ParsedStartPayload(
+    val requestId: String?,
+    val chatId: String?,
+    val adapterId: String?,
+    val modelId: String?
+)
+
 internal data class ParsedBlocksPayload(
+    val requestId: String?,
     val chatId: String?,
     val blocks: List<ContentBlock>,
     val rawBlocks: List<JsonObject>
+)
+
+internal data class ParsedCancelPayload(
+    val requestId: String?,
+    val chatId: String?
 )
 
 internal fun parseIdOnlyPayload(payload: String?): String? {
@@ -14,15 +27,21 @@ internal fun parseIdOnlyPayload(payload: String?): String? {
 }
 
 internal fun parseStartPayload(payload: String?): Triple<String?, String?, String?> {
+    val parsed = parseStartRequestPayload(payload)
+    return Triple(parsed.chatId, parsed.adapterId, parsed.modelId)
+}
+
+internal fun parseStartRequestPayload(payload: String?): ParsedStartPayload {
     val raw = payload?.trim().orEmpty()
-    if (raw.isEmpty()) return Triple(null, null, null)
+    if (raw.isEmpty()) return ParsedStartPayload(null, null, null, null)
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
+        val requestId = obj["requestId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val chatId = obj["chatId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val adapterId = obj["adapterId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val modelId = obj["modelId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
-        Triple(chatId, adapterId, modelId)
-    } catch (_: Exception) { Triple(null, null, null) }
+        ParsedStartPayload(requestId, chatId, adapterId, modelId)
+    } catch (_: Exception) { ParsedStartPayload(null, null, null, null) }
 }
 
 internal fun parseScopedIdPayload(payload: String?, idKey: String): Triple<String?, String?, String?> {
@@ -64,15 +83,17 @@ internal fun parseHistoryConversationCliPayload(payload: String?): Pair<String?,
 
 internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
     val raw = payload?.trim().orEmpty()
-    if (raw.isEmpty()) return ParsedBlocksPayload(null, emptyList(), emptyList())
+    if (raw.isEmpty()) return ParsedBlocksPayload(null, null, emptyList(), emptyList())
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
+        val requestId = obj["requestId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val chatId = obj["chatId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
 
         // 1. Try to get blocks directly if present
         val blocksElement = obj["blocks"]
         if (blocksElement != null) {
             return ParsedBlocksPayload(
+                requestId = requestId,
                 chatId = chatId,
                 blocks = parseContentBlocks(blocksElement),
                 rawBlocks = blocksElement.jsonArray.mapNotNull { it as? JsonObject }
@@ -87,7 +108,7 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
             runCatching {
                 val rawBlocks = Json.parseToJsonElement(textValue).jsonArray.mapNotNull { it as? JsonObject }
                 val blocks = parseContentBlocks(JsonArray(rawBlocks))
-                ParsedBlocksPayload(chatId = chatId, blocks = blocks, rawBlocks = rawBlocks)
+                ParsedBlocksPayload(requestId = requestId, chatId = chatId, blocks = blocks, rawBlocks = rawBlocks)
             }.getOrNull()?.takeIf { it.blocks.isNotEmpty() }?.let { parsed ->
                 return parsed
             }
@@ -95,6 +116,7 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
 
         // 4. Final fallback: treat as plain text
         ParsedBlocksPayload(
+            requestId = requestId,
             chatId = chatId,
             blocks = listOf(ContentBlock.Text(textValue)),
             rawBlocks = listOf(
@@ -104,7 +126,21 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
                 }
             )
         )
-    } catch (_: Exception) { ParsedBlocksPayload(null, emptyList(), emptyList()) }
+    } catch (_: Exception) { ParsedBlocksPayload(null, null, emptyList(), emptyList()) }
+}
+
+internal fun parseCancelPayload(payload: String?): ParsedCancelPayload {
+    val raw = payload?.trim().orEmpty()
+    if (raw.isEmpty()) return ParsedCancelPayload(null, null)
+    return try {
+        val obj = Json.parseToJsonElement(raw).jsonObject
+        ParsedCancelPayload(
+            requestId = obj["requestId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() },
+            chatId = obj["chatId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        )
+    } catch (_: Exception) {
+        ParsedCancelPayload(null, raw.takeIf { it.isNotBlank() })
+    }
 }
 
 internal fun parseContentBlocks(blocksElement: JsonElement): List<ContentBlock> {
