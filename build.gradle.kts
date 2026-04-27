@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.2.20"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
@@ -16,27 +18,38 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity("2024.3.1")
+        intellijIdeaCommunity("2025.1")
         jetbrainsRuntime()
     }
-    implementation("com.agentclientprotocol:acp:0.18.0")
+    implementation("com.agentclientprotocol:acp:0.18.0") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
+    }
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("io.github.java-diff-utils:java-diff-utils:4.15")
     testImplementation(kotlin("test-junit"))
 }
 
 kotlin {
     jvmToolchain(21)
+    compilerOptions {
+        freeCompilerArgs.add("-Xjvm-default=all")
+    }
     sourceSets["main"].kotlin.srcDir(layout.buildDirectory.dir("generated/buildConfig"))
 }
 
 intellijPlatform {
     buildSearchableOptions = false
-    pluginConfiguration {
-        version = providers.gradleProperty("pluginVersion")
-        name = "AgentDock"
-        description = "Provides widely used AI coding agents such as Codex, Claude Code, Copilot, and others with a rich GUI that follows your JetBrains IDE theme."
-        vendor {
-            name = "E"
+    signing {
+        privateKeyFile.set(layout.projectDirectory.file("signing/private.pem"))
+        certificateChainFile.set(layout.projectDirectory.file("signing/chain.crt"))
+    }
+    pluginVerification {
+        ides {
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.1")
+            create(IntelliJPlatformType.PhpStorm, "2026.1")
         }
     }
 }
@@ -69,4 +82,5 @@ tasks {
     processResources {
         dependsOn(npmBuild)
     }
+
 }

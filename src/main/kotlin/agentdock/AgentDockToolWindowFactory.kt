@@ -13,6 +13,7 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
+import com.intellij.util.net.ProxySettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,8 +58,8 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
         val content = ContentFactory.getInstance().createContent(rootPanel, "", false)
         toolWindow.contentManager.addContent(content)
 
-        // Initialize proxy settings before JCEF starts. In 2026.1, JBCefApp startup reads
-        // HttpConfigurable, which can initialize ProxyMigrationService from JBCefApp$Holder.<clinit>.
+        // Initialize proxy settings before JCEF starts. JBCefApp startup reads proxy state,
+        // and touching the service here keeps proxy migration outside JBCefApp static init.
         ApplicationManager.getApplication().executeOnPooledThread {
             var startupError: Exception? = null
             val supported = try {
@@ -237,9 +238,8 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun initializeProxySettings() {
-        com.intellij.util.net.HttpConfigurable.getInstance()
+        ProxySettings.getInstance().getProxyConfiguration()
     }
 
     private fun createBrowserPanel(browser: JBCefBrowser): JPanel {

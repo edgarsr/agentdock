@@ -488,6 +488,7 @@ internal fun AcpClientService.resolveAdapterProcessWorkingDirectory(adapterRoot:
     return projectBase ?: adapterRoot
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientService.SharedProcess) {
     synchronized(sharedProc) {
         if (sharedProc.sessionUpdateWrapped) return

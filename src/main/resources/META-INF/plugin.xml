@@ -1,11 +1,52 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>AgentDock</name>
-    <vendor>E</vendor>
+    <version>1.0.0</version>
+    <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
-    Provides widely used AI coding agents such as Codex, Claude Code, Copilot, and others with a rich GUI that follows your JetBrains IDE theme.
+        <p>AgentDock brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
+        <b>Supported AI agents:</b>
+        <ul>
+            <li>Claude Code</li>
+            <li>Codex</li>
+            <li>Cursor</li>
+            <li>Gemini CLI</li>
+            <li>GitHub Copilot</li>
+            <li>Kilo</li>
+            <li>OpenCode</li>
+            <li>Qoder</li>
+        </ul>
+        <b>Features:</b>
+        <ul>
+            <li>Installation, update, and uninstall flows for supported AI agents inside the plugin.</li>
+            <li>Communication with supported AI agents through ACP (Agent Client Protocol) in a GUI.</li>
+            <li>Structured display of agent output, including tool use, thinking blocks, terminal commands, plans, file edits, and diffs.</li>
+            <li>Review of files changed by an agent, with options to accept selected changes or revert them from the IDE.</li>
+            <li>Audio notifications for important chat and agent events.</li>
+            <li>Slash commands and @ mentions backed by JetBrains project file search.</li>
+            <li>Code selections and file references can be added to chat from the editor and project view.</li>
+            <li>Images can be pasted into chat and previewed inline.</li>
+            <li>Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it.</li>
+            <li>Voice input for prompts (Windows only).</li>
+            <li>Conversations can be continued in the IDE terminal when CLI mode is a better fit.</li>
+            <li>Conversation history supports opening, renaming, deleting, and bulk deletion.</li>
+            <li>AI agents can be switched within the same chat while preserving the session context.</li>
+            <li>MCP server configuration for additional agent tools and external resources.</li>
+            <li>Reusable prompts can be saved in the prompt library and inserted into chat when needed.</li>
+            <li>System instructions can be managed and applied to agent sessions.</li>
+            <li>Git commit messages can be generated from the current changes.</li>
+        </ul>
+        <b>Requirements:</b>
+        <ul>
+            <li>JetBrains IDE based on IntelliJ Platform 2025.1 or newer.</li>
+            <li>Node.js and npm available on PATH (version must be compatible with the selected AI agents).</li>
+            <li>On macOS and Linux, installing some agents requires curl and tar.</li>
+            <li>Some agents use JetBrains IDE terminal for authentication.</li>
+        </ul>
     ]]></description>
+
+    <change-notes><![CDATA[Initial release]]></change-notes>
 
      <depends>com.intellij.modules.platform</depends>
      <extensions defaultExtensionNs="com.intellij">

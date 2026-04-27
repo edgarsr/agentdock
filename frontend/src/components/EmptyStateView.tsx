@@ -248,7 +248,7 @@ export function EmptyStateView({
                             type="button"
                             onClick={() => onStartWithAgent(agent.id)}
                             className="flex h-14 w-14 items-center justify-center opacity-80 rounded-xl border
-                              border-[var(--ide-Button-startBorderColor)] bg-background transition-colors duration-150
+                              border-[var(--ide-Button-startBorderColor)] bg-background transition-all duration-150
                               hover:bg-hover focus:outline-none focus:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
                           >
                             <AgentIcon agent={agent} size="lg" />

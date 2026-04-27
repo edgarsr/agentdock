@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.Dispatchers
@@ -219,11 +220,6 @@ internal fun AcpBridge.installMiscQueries() {
                 val project = service.project
                 val basePath = project.basePath ?: ""
                 
-                // 1. Get matcher for fuzzy matching
-                val matcher = if (rawQuery.isNotEmpty()) {
-                    com.intellij.psi.codeStyle.NameUtil.buildMatcher("*" + rawQuery, com.intellij.psi.codeStyle.NameUtil.MatchingCaseSensitivity.NONE)
-                } else null
-
                 fun addIfMatch(virtualFile: com.intellij.openapi.vfs.VirtualFile): Boolean {
                     if (virtualFile.isDirectory) return false
                     val path = virtualFile.path
@@ -232,8 +228,8 @@ internal fun AcpBridge.installMiscQueries() {
                     val name = virtualFile.name
                     val relPath = path.removePrefix(basePath).trimStart('/', '\\')
                     
-                    val matches = if (matcher != null) {
-                        matcher.matches(name) || matcher.matches(relPath) || relPath.lowercase().contains(query)
+                    val matches = if (rawQuery.isNotEmpty()) {
+                        fuzzyFileMatch(name, query) || fuzzyFileMatch(relPath, query) || relPath.lowercase().contains(query)
                     } else true
                     
                     if (matches) {
@@ -244,7 +240,7 @@ internal fun AcpBridge.installMiscQueries() {
                     return false
                 }
 
-                com.intellij.openapi.application.runReadAction {
+                readAction {
                     // Priority 1: Open files
                     com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles?.forEach {
                         if (results.size < 50) addIfMatch(it)
@@ -374,6 +370,18 @@ private data class OpenFileRequest(
     val filePath: String,
     val line: Int
 )
+
+private fun fuzzyFileMatch(candidate: String, lowercaseQuery: String): Boolean {
+    if (lowercaseQuery.isEmpty()) return true
+    var queryIndex = 0
+    for (char in candidate) {
+        if (char.lowercaseChar() == lowercaseQuery[queryIndex]) {
+            queryIndex += 1
+            if (queryIndex == lowercaseQuery.length) return true
+        }
+    }
+    return false
+}
 
 private fun AcpBridge.openRequestedFile(request: OpenFileRequest): Boolean {
     return runCatching {

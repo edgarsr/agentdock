@@ -183,7 +183,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
             {renderTrailingAttachments()}
 
             {showFooter && (
-              <div className={`mt-1 flex items-center gap-3 ${showCollapseToggle ? 'justify-between' : 'justify-end'}`}>
+              <div className={`mt-2 flex items-center gap-3 ${showCollapseToggle ? 'justify-between' : 'justify-end'}`}>
                 {showCollapseToggle && (
                   <button type="button" onClick={() => setIsExpanded(!isExpanded)}
                     className="inline-flex items-center gap-1 text-xs text-foreground hover:underline
@@ -194,7 +194,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
                   </button>
                 )}
 
-                <div className="flex items-center gap-1.5 text-xs text-foreground">
+                <div className="flex items-center gap-1.5 text-xs text-foreground opacity-80">
                   {promptNumber !== undefined && <span>{`#${promptNumber}`}</span>}
                   {promptNumber !== undefined && formattedTime && <span aria-hidden="true">•</span>}
                   {formattedTime && <span>{formattedTime}</span>}

@@ -5,3 +5,4 @@ build/
 /src/main/resources/webview/
 .idea
 .kotlin
+/signing/

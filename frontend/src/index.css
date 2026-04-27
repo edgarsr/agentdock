@@ -141,8 +141,8 @@
   }
   
   .user-message-bubble .code-refrence-chip {
-    margin: 2px;
-    top: -2px;
+    margin: 1px;
+    top: -1px;
   }
 }
 
