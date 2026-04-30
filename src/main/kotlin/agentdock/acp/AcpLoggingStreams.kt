@@ -51,15 +51,22 @@ internal class LineLoggingOutputStream(
 /**
  * InputStream wrapper that intercepts line-by-line input for logging
  * while providing data to the consumer.
+ *
+ * Lines exceeding MAX_LINE_BYTES are split into chunks so the consumer
+ * receives all bytes, but only a preview is passed to onLine.
  */
 internal class LineLoggingInputStream(
     delegate: java.io.InputStream,
-    private val transform: ((String) -> String)? = null,
     private val onLine: (String) -> Unit
 ) : java.io.InputStream() {
     private val input = delegate
     private var currentChunk = ByteArray(0)
     private var currentIndex = 0
+    private var inLargeLine = false
+
+    companion object {
+        private const val MAX_LINE_BYTES = 256 * 1024
+    }
 
     override fun read(): Int {
         if (!ensureChunk()) return -1
@@ -82,32 +89,44 @@ internal class LineLoggingInputStream(
     private fun ensureChunk(): Boolean {
         if (currentIndex < currentChunk.size) return true
 
-        while (true) {
-            val rawLine = readRawLine() ?: return false
-            var line = rawLine.removeSuffix("\r")
-            if (transform != null) {
-                line = transform(line)
+        val (bytes, hitLimit) = readRawLine() ?: return false
+
+        when {
+            !inLargeLine && !hitLimit -> {
+                val line = bytes.toString(Charsets.UTF_8).trimEnd('\r', '\n')
+                if (line.isNotBlank()) onLine(line)
             }
-            if (line.isNotBlank()) {
-                onLine(line)
+            !inLargeLine && hitLimit -> {
+                val preview = bytes.toString(Charsets.UTF_8).take(200)
+                onLine("[large message truncated, preview: $preview]")
+                inLargeLine = true
             }
-            currentChunk = (line + "\n").toByteArray(Charsets.UTF_8)
-            currentIndex = 0
-            return true
+            inLargeLine && !hitLimit -> inLargeLine = false
+            // inLargeLine && hitLimit: middle of large line, do nothing
         }
+
+        currentChunk = bytes
+        currentIndex = 0
+        return true
     }
 
-    private fun readRawLine(): String? {
+    // Returns (bytes, hitSizeLimit). When hitSizeLimit=true the line continues
+    // in the underlying stream; when false the '\n' was consumed and is included.
+    private fun readRawLine(): Pair<ByteArray, Boolean>? {
         val buffer = ByteArrayOutputStream()
         while (true) {
             val next = input.read()
             if (next == -1) {
-                return if (buffer.size() == 0) null else buffer.toString(Charsets.UTF_8)
+                return if (buffer.size() == 0) null else Pair(buffer.toByteArray(), false)
             }
             if (next == '\n'.code) {
-                return buffer.toString(Charsets.UTF_8)
+                buffer.write(next)
+                return Pair(buffer.toByteArray(), false)
             }
             buffer.write(next)
+            if (buffer.size() >= MAX_LINE_BYTES) {
+                return Pair(buffer.toByteArray(), true)
+            }
         }
     }
 }

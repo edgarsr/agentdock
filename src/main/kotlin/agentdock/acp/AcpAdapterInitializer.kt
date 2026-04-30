@@ -37,6 +37,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.Collections
+import agentdock.BuildConfig
 import agentdock.history.AgentDockHistoryService
 
 // Keep this aligned with the broader ACP startup budget.
@@ -292,25 +293,21 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
             }
         }.apply { isDaemon = true; start() }
 
-        val input = LineLoggingInputStream(
-            proc.inputStream,
-            transform = { line ->
-                // Fix protocol version mismatch: Codex 0.10.x sends AuthMethod env_var objects
-                // with "vars":[{"name":"VAR"}] instead of the flat "varName":"VAR" that ACP SDK
-                // 0.16.6 requires. Extract the first var name and add it as "varName" after the
-                // vars array, inside the same env_var object.
-                if (!line.contains("\"env_var\"")) line
-                else line.replace(
-                    Regex(""""vars"\s*:\s*\[(\{"name"\s*:\s*"([^"]+)"[^\]]*)\]""")
-                ) { m -> "\"vars\":[${m.groupValues[1]}],\"varName\":\"${m.groupValues[2]}\"" }
-            }
-        ) { line ->
-            startupOutput.add(line)
-            onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line))
-        }.asSource().buffered()
-        val output = LineLoggingOutputStream(proc.outputStream) { line ->
-            onLogEntry(AcpLogEntry(AcpLogEntry.Direction.SENT, line))
-        }.asSink().buffered()
+        val input = if (BuildConfig.IS_DEV) {
+            LineLoggingInputStream(proc.inputStream) { line ->
+                startupOutput.add(line)
+                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line))
+            }.asSource().buffered()
+        } else {
+            proc.inputStream.asSource().buffered()
+        }
+        val output = if (BuildConfig.IS_DEV) {
+            LineLoggingOutputStream(proc.outputStream) { line ->
+                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.SENT, line))
+            }.asSink().buffered()
+        } else {
+            proc.outputStream.asSink().buffered()
+        }
 
         val protocolScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         sharedProc.protocolScope = protocolScope
