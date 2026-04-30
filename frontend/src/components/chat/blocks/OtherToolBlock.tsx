@@ -120,7 +120,7 @@ export const OtherToolBlock: React.FC<Props> = ({ block }) => {
                 {promptText && (<div className="mb-2"><b>Prompt: </b>{promptText}<hr /></div>)}
                 {bodyText && (
                   markdownBody
-                    ? <MarkdownMessage content={markdownBody} />
+                    ? <MarkdownMessage content={markdownBody} enableCodeCopy={false} />
                     : <div className="text-sm font-mono whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: sanitizedHtmlBody || '' }} />
                 )}
               </div>

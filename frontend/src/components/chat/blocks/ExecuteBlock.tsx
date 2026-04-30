@@ -92,7 +92,7 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false, t
                 <span className="text-foreground-secondary mr-1 select-none">$</span>{command}
               </div>
               {block.entry.result ? (
-                <div className="mt-4">{isFencedCodeAtStart ? (<MarkdownMessage content={sanitizedResultText} />) : (
+                <div className="mt-4">{isFencedCodeAtStart ? (<MarkdownMessage content={sanitizedResultText} enableCodeCopy={false} />) : (
                     <pre className="whitespace-pre-wrap break-words font-mono text-sm m-0">{sanitizedResultText}</pre>
                   )}
                 </div>

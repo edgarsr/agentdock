@@ -157,6 +157,10 @@
         background-color: var(--ide-editor-bg);
     }
 
+    & .markdown-code-block pre {
+        @apply my-0;
+    }
+
     & pre code {
         @apply block overflow-x-auto bg-transparent p-3 rounded-none;
     }

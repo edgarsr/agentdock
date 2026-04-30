@@ -14,7 +14,7 @@ export const ThinkingActivity: React.FC<Props> = ({ entry }) => {
         <Brain size={13} strokeWidth={1.8} />
       </div>
       <div className="flex-1 min-w-0 overflow-hidden [&_.markdown-body]:my-0">
-        <MarkdownMessage content={entry.text || 'Thinking...'} />
+        <MarkdownMessage content={entry.text || 'Thinking...'} enableCodeCopy={false} />
       </div>
     </div>
   );

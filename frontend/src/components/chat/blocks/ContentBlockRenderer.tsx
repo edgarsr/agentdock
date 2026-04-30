@@ -17,7 +17,7 @@ interface Props {
 export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = false }) => {
   switch (block.type) {
     case 'text':
-      return <MarkdownMessage content={block.text} />;
+      return <MarkdownMessage content={block.text} enableCodeCopy />;
     case 'exploring':
       return <ExploringBlock block={block} isActivePrompt={isActivePrompt} />;
     case 'tool_call':

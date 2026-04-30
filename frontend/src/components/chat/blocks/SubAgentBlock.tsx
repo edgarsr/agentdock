@@ -59,7 +59,7 @@ export const SubAgentBlock: React.FC<Props> = ({ block }) => {
             <div className="leading-relaxed">
               {promptText && (<div className="mb-2"><b>Prompt: </b>{promptText}<hr /></div>)}
               {block.entry.result ? (
-                <MarkdownMessage content={block.entry.result} />
+                <MarkdownMessage content={block.entry.result} enableCodeCopy={false} />
               ) : (
                 <span className="opacity-40 italic">
                   {isFinished ? 'Subagent finished.' : 'Waiting for response...'}

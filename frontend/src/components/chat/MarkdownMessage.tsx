@@ -1,9 +1,12 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, Copy } from 'lucide-react';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from '../../utils/highlight';
 import { openFile } from '../../utils/openFile';
 import { sanitizeMarkdownHtml } from '../../utils/sanitizeHtml';
+import { Tooltip } from './shared/Tooltip';
 import '../../styles/markdown.css';
 
 // Configure marked with highlight.js integration
@@ -23,13 +26,22 @@ marked.setOptions({
 
 interface MarkdownMessageProps {
   content: string;
+  enableCodeCopy?: boolean;
 }
+
+const codeBlockClassName = 'markdown-code-block';
+const codeCopySlotClassName = 'absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-200 ease-out delay-0 group-hover:opacity-100 group-hover:delay-300 group-focus-within:opacity-100 group-focus-within:delay-0';
 
 /**
  * Minimalist Markdown rendering component for chat messages.
  * Adheres to IDE theme using Tailwind arbitrary variants and CSS variables.
  */
-export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => {
+export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, enableCodeCopy = true }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copySlots, setCopySlots] = useState<HTMLElement[]>([]);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
   const html = useMemo(() => {
     try {
       let processed = content;
@@ -38,12 +50,34 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
         processed += '\n```';
       }
       const parsed = marked.parse(processed);
-      return sanitizeMarkdownHtml(typeof parsed === 'string' ? parsed : '');
+      const sanitizedHtml = sanitizeMarkdownHtml(typeof parsed === 'string' ? parsed : '');
+      return enableCodeCopy ? decorateCodeBlocks(sanitizedHtml) : sanitizedHtml;
     } catch (e) {
       console.error('[MarkdownMessage] Parse error:', e);
-      return sanitizeMarkdownHtml(content);
+      const sanitizedHtml = sanitizeMarkdownHtml(content);
+      return enableCodeCopy ? decorateCodeBlocks(sanitizedHtml) : sanitizedHtml;
     }
-  }, [content]);
+  }, [content, enableCodeCopy]);
+
+  useEffect(() => {
+    if (!enableCodeCopy) {
+      setCopySlots([]);
+      return;
+    }
+
+    const nextSlots = Array.from(
+      containerRef.current?.querySelectorAll<HTMLElement>('[data-code-copy-slot]') ?? []
+    );
+    setCopySlots(nextSlots);
+  }, [html, enableCodeCopy]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedResetTimerRef.current) {
+        window.clearTimeout(copiedResetTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
@@ -68,14 +102,79 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content }) => 
     }
   }, []);
 
+  const handleCopyCodeBlock = useCallback(async (slot: HTMLElement, index: number) => {
+    const code = slot.closest(`.${codeBlockClassName}`)?.querySelector('pre code')?.textContent;
+    if (!code || !navigator.clipboard?.writeText) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedIndex(index);
+      if (copiedResetTimerRef.current) {
+        window.clearTimeout(copiedResetTimerRef.current);
+      }
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        setCopiedIndex(null);
+      }, 1400);
+    } catch (error) {
+      console.warn('[MarkdownMessage] Failed to copy code block:', error);
+    }
+  }, []);
+
   return (
-    <div
-      className="markdown-body"
-      onClick={handleClick}
-      dangerouslySetInnerHTML={{ __html: html as string }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="markdown-body"
+        onClick={handleClick}
+        dangerouslySetInnerHTML={{ __html: html as string }}
+      />
+      {enableCodeCopy && copySlots.map((slot, index) => createPortal(
+        <Tooltip key={index} content={copiedIndex === index ? 'Copied' : 'Copy'} variant="minimal">
+          <button
+            type="button"
+            aria-label={copiedIndex === index ? 'Copied code' : 'Copy code'}
+            className="flex h-7 w-7 items-center justify-center rounded-[4px] border border-border bg-background
+              text-foreground-secondary transition-colors hover:bg-hover hover:text-foreground focus:outline-none"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleCopyCodeBlock(slot, index);
+            }}
+          >
+            {copiedIndex === index ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </Tooltip>,
+        slot
+      ))}
+    </>
   );
 };
+
+function decorateCodeBlocks(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  Array.from(template.content.querySelectorAll('pre')).forEach((pre, index) => {
+    if (!pre.querySelector('code') || pre.parentElement?.classList.contains(codeBlockClassName)) {
+      return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `${codeBlockClassName} group relative my-3`;
+
+    const copySlot = document.createElement('span');
+    copySlot.className = codeCopySlotClassName;
+    copySlot.setAttribute('data-code-copy-slot', String(index));
+
+    pre.parentNode?.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(copySlot);
+  });
+
+  const container = document.createElement('div');
+  container.appendChild(template.content.cloneNode(true));
+  return container.innerHTML;
+}
 
 function decodeHtmlHref(href: string): string {
   const textarea = document.createElement('textarea');
