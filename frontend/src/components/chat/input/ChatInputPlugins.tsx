@@ -109,17 +109,19 @@ export function PasteLogPlugin({ onImagePaste }: { onImagePaste: (file: File, ed
         const plainText = event.clipboardData?.getData('text/plain');
         if (!plainText) return false;
 
+        const normalizedText = plainText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
         event.preventDefault();
         editor.update(() => {
           const selection = $getSelection();
           if ($isRangeSelection(selection)) {
-            selection.insertText(plainText);
+            selection.insertText(normalizedText);
             return;
           }
           $getRoot().selectEnd();
           const nextSelection = $getSelection();
           if ($isRangeSelection(nextSelection)) {
-            nextSelection.insertText(plainText);
+            nextSelection.insertText(normalizedText);
           }
         });
         return true;
