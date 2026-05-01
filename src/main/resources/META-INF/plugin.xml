@@ -1,12 +1,12 @@
 <idea-plugin>
     <id>agentdock</id>
-    <name>AgentDock</name>
-    <version>1.0.0</version>
+    <name>AgentDock for JetBrains</name>
+    <version>1.1.0</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
-        <p>AgentDock brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
-        <b>Supported AI agents:</b>
+        <p>AgentDock for JetBrains brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
+        <h4>Supported AI agents:</h4>
         <ul>
             <li>Claude Code</li>
             <li>Codex</li>
@@ -17,7 +17,7 @@
             <li>OpenCode</li>
             <li>Qoder</li>
         </ul>
-        <b>Features:</b>
+        <h4>Features:</h4>
         <ul>
             <li>Installation, update, and uninstall flows for supported AI agents inside the plugin.</li>
             <li>Communication with supported AI agents through ACP (Agent Client Protocol) in a GUI.</li>
@@ -27,17 +27,17 @@
             <li>Slash commands and @ mentions backed by JetBrains project file search.</li>
             <li>Code selections and file references can be added to chat from the editor and project view.</li>
             <li>Images can be pasted into chat and previewed inline.</li>
-            <li>Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it.</li>
+            <li>Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it. For Claude Code and Codex, quota data is fetched using the OAuth credentials.</li>
             <li>Voice input for prompts (Windows only).</li>
-            <li>Conversations can be continued in the IDE terminal when CLI mode is a better fit.</li>
-            <li>Conversation history supports opening, renaming, deleting, and bulk deletion.</li>
+            <li>Chats can be continued in the IDE terminal when CLI mode is a better fit.</li>
+            <li>Chat history supports opening, renaming, deleting, and bulk deletion.</li>
             <li>AI agents can be switched within the same chat while preserving the session context.</li>
             <li>MCP server configuration for additional agent tools and external resources.</li>
             <li>Reusable prompts can be saved in the prompt library and inserted into chat when needed.</li>
             <li>System instructions can be managed and applied to agent sessions.</li>
             <li>Git commit messages can be generated from the current changes.</li>
         </ul>
-        <b>Requirements:</b>
+        <h4>Requirements:</h4>
         <ul>
             <li>JetBrains IDE based on IntelliJ Platform 2025.1 or newer.</li>
             <li>Node.js and npm available on PATH (version must be compatible with the selected AI agents).</li>
@@ -46,12 +46,19 @@
         </ul>
     ]]></description>
 
-    <change-notes><![CDATA[Initial release]]></change-notes>
+    <change-notes><![CDATA[
+        <ul>
+          <li>Fixed minor bugs and made UI refinements.</li>
+          <li>Added chat forking.</li>
+          <li>Added an IDE diff view button for edit blocks.</li>
+          <li>Renamed the plugin to AgentDock for JetBrains to avoid a naming conflict with another product.</li>
+        </ul>
+    ]]></change-notes>
 
      <depends>com.intellij.modules.platform</depends>
      <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="agentdock.acp.AcpStartupActivity"/>
-         <toolWindow id="AgentDock" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
+         <toolWindow id="AgentDock for JetBrains" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
                      factoryClass="agentdock.AgentDockToolWindowFactory"/>
      </extensions>
 

@@ -1,6 +1,6 @@
-# AgentDock
+# AgentDock for JetBrains
 
-AgentDock brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme. 
+AgentDock for JetBrains brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.
 
 The project's goal is to deliver a rich GUI experience for AI agents within JetBrains IDEs, including features absent from other JetBrains AI plugins, such as live token usage updates directly in the chat interface and switching between AI agents within the same chat while preserving session context.
 
@@ -28,8 +28,8 @@ Currently supported AI agents:
 - Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it.
   For Claude Code and Codex, quota data is fetched using the OAuth credentials.
 - Voice input for prompts (Windows only).
-- Conversations can be continued in the IDE terminal when CLI mode is a better fit.
-- Conversation history supports opening, renaming, deleting, and bulk deletion.
+- Chats can be continued in the IDE terminal when CLI mode is a better fit.
+- Chat history supports opening, renaming, deleting, and bulk deletion.
 - AI agents can be switched within the same chat while preserving the session context.
 - MCP server configuration for additional agent tools and external resources.
 - Reusable prompts can be saved in the prompt library and inserted into chat when needed.
@@ -51,4 +51,4 @@ Currently supported AI agents:
 
 ## Screenshot
 
-![AgentDock chat interface](docs/images/agent-dock-chat.png)
+![AgentDock for JetBrains chat interface](docs/images/agent-dock-chat.png)
