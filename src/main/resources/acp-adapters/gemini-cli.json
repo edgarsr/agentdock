@@ -17,8 +17,7 @@
   ],
   "disabledModels": [
     "-2.",
-    "3.1-flash-lite",
-    "auto"
+    "3.1-flash-lite"
   ],
   "disabledModes": [],
   "patches": [

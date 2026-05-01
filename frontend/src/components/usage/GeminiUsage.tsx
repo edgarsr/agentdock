@@ -18,6 +18,7 @@ interface GeminiUsageData {
 const AGENT_ID = 'gemini-cli';
 
 function matchesModel(bucketModelId: string, modelId: string): boolean {
+  if (modelId.toLowerCase().startsWith('auto')) return true;
   const bucket = bucketModelId.toLowerCase();
   const model = modelId.toLowerCase();
   return bucket === model || bucket === model.replace('gemini-', '') || model === bucket.replace('gemini-', '');
