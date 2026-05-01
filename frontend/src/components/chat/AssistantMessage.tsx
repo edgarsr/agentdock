@@ -3,6 +3,7 @@ import type { ExploringBlock, Message, RichContentBlock, TextBlock } from '../..
 import { MarkdownMessage } from './MarkdownMessage';
 import { ContentBlockRenderer } from './blocks/ContentBlockRenderer';
 import { Tooltip } from './shared/Tooltip';
+import { GitFork } from 'lucide-react';
 
 interface AssistantMessageProps {
   message: Message;
@@ -10,6 +11,7 @@ interface AssistantMessageProps {
   showBorder: boolean;
   agentIconPath?: string;
   isActivePrompt?: boolean;
+  onFork?: () => void;
 }
 
 function formatDuration(seconds?: number): string | null {
@@ -66,7 +68,7 @@ function groupAssistantBlocks(blocks: RichContentBlock[]) {
   return groups;
 }
 
-export const AssistantMessage = memo(({ message, onImageClick, showBorder, agentIconPath, isActivePrompt = false }: AssistantMessageProps) => {
+export const AssistantMessage = memo(({ message, onImageClick, showBorder, agentIconPath, isActivePrompt = false, onFork }: AssistantMessageProps) => {
   const renderContent = () => {
     if (message.contentBlocks && message.contentBlocks.length > 0) {
       const groupedBlocks = groupAssistantBlocks(message.contentBlocks);
@@ -146,10 +148,24 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
         </div>
       </div>
 
-      <div className={showMeta || showBorder ? 'mt-8' : ''}>
-        {showMeta && (
+      <div className={showMeta || onFork || showBorder ? 'mt-8' : ''}>
+        {(showMeta || onFork) && (
           <div className="flex justify-end items-center gap-2 mb-4 text-foreground-secondary">
-            {hasMetaTooltip ? (
+            {onFork && (
+              <Tooltip content="Fork from here" variant="minimal">
+                <button
+                  type="button"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-foreground-secondary
+                  hover:bg-hover hover:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]
+                  focus-visible:outline-none"
+                  onClick={onFork}
+                  aria-label="Fork from here"
+                >
+                  <GitFork size={13} />
+                </button>
+              </Tooltip>
+            )}
+            {showMeta && (hasMetaTooltip ? (
               <Tooltip
                 content={
                   <div className="min-w-[190px] space-y-1.5">
@@ -166,7 +182,7 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
               </Tooltip>
             ) : (
               agentBadge
-            )}
+            ))}
           </div>
         )}
 

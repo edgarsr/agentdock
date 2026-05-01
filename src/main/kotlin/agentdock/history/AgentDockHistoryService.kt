@@ -33,7 +33,8 @@ object AgentDockHistoryService {
         adapterName: String,
         promptCount: Int,
         titleCandidate: String?,
-        touchUpdatedAt: Boolean = false
+        touchUpdatedAt: Boolean = false,
+        forceTitle: Boolean = false
     ): Boolean {
         return HistoryConversationIndexService.upsertRuntimeSessionMetadata(
             projectPath,
@@ -42,7 +43,8 @@ object AgentDockHistoryService {
             adapterName,
             promptCount,
             titleCandidate,
-            touchUpdatedAt
+            touchUpdatedAt,
+            forceTitle
         )
     }
 

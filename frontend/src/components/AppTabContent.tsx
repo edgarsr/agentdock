@@ -21,7 +21,9 @@ interface AppTabContentProps {
   onAtBottomChange: (isAtBottom: boolean) => void;
   onCanMarkReadChange: (canMarkRead: boolean) => void;
   onPermissionRequestChange: (hasPendingPermission: boolean) => void;
+  onProcessingChange: (isProcessing: boolean) => void;
   onAgentChangeRequest: Parameters<typeof ChatSessionView>[0]['onAgentChangeRequest'];
+  onForkRequest: Parameters<typeof ChatSessionView>[0]['onForkRequest'];
   onHandoffConsumed: (handoffId: string) => void;
   onSessionStateChange: Parameters<typeof ChatSessionView>[0]['onSessionStateChange'];
 }
@@ -38,7 +40,9 @@ export function AppTabContent({
   onAtBottomChange,
   onCanMarkReadChange,
   onPermissionRequestChange,
+  onProcessingChange,
   onAgentChangeRequest,
+  onForkRequest,
   onHandoffConsumed,
   onSessionStateChange,
 }: AppTabContentProps) {
@@ -57,6 +61,8 @@ export function AppTabContent({
           conversationId={tab.conversationId}
           historySession={tab.historySession}
           pendingHandoff={pendingHandoff}
+          initialMessages={tab.initialMessages}
+          metadataTitleOverride={tab.metadataTitleOverride}
           availableAgents={runnableAgents}
           isActive={isActive}
           onUserMessageSent={onUserMessageSent}
@@ -64,7 +70,9 @@ export function AppTabContent({
           onAtBottomChange={onAtBottomChange}
           onCanMarkReadChange={onCanMarkReadChange}
           onPermissionRequestChange={onPermissionRequestChange}
+          onProcessingChange={onProcessingChange}
           onAgentChangeRequest={onAgentChangeRequest}
+          onForkRequest={onForkRequest}
           onHandoffConsumed={onHandoffConsumed}
           onSessionStateChange={onSessionStateChange}
         />

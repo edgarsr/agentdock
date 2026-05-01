@@ -164,6 +164,7 @@ export interface TabUiFlags {
   atBottom: boolean;
   canMarkRead: boolean;
   warning: boolean;
+  processing: boolean;
 }
 
 export type TabType = 'chat' | 'management' | 'design' | 'history' | 'mcp' | 'system-instructions' | 'prompt-library' | 'settings';
@@ -175,6 +176,8 @@ export interface ChatTab {
   conversationId: string;
   agentId?: string; // If pre-selected
   historySession?: HistorySessionMeta;
+  initialMessages?: Message[];
+  metadataTitleOverride?: string;
 }
 
 export interface HistoryDeleteFailure {
@@ -363,6 +366,7 @@ export interface SessionMetadataUpdatePayload {
   promptCount: number;
   title?: string;
   touchUpdatedAt?: boolean;
+  forceTitle?: boolean;
 }
 
 export interface ContinueConversationPayload {

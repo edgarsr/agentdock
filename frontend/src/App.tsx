@@ -68,8 +68,10 @@ function App() {
     handleAtBottomChange,
     handleCanMarkReadChange,
     handlePermissionRequestChange,
+    handleProcessingChange,
     requestAgentSwitch,
     handleHandoffConsumed,
+    handleForkRequest,
     handleChatSessionStateChange,
     handleContinueInNewTab,
     handleContinueInCurrentConversation,
@@ -117,7 +119,9 @@ function App() {
               onAtBottomChange={(isAtBottom) => handleAtBottomChange(tab.id, isAtBottom)}
               onCanMarkReadChange={(canMarkRead) => handleCanMarkReadChange(tab.id, canMarkRead)}
               onPermissionRequestChange={(hasPendingPermission) => handlePermissionRequestChange(tab.id, hasPendingPermission)}
+              onProcessingChange={(isProcessing) => handleProcessingChange(tab.id, isProcessing)}
               onAgentChangeRequest={(payload) => requestAgentSwitch(tab.id, payload)}
+              onForkRequest={(payload) => handleForkRequest(tab.id, payload)}
               onHandoffConsumed={(handoffId) => handleHandoffConsumed(tab.id, handoffId)}
               onSessionStateChange={(state) => handleChatSessionStateChange(tab.id, state)}
             />

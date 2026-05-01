@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useChatSession } from '../../hooks/useChatSession';
 import { useFileChanges } from '../../hooks/useFileChanges';
-import { AgentOption, FileChangeSummary, HistorySessionMeta, PendingHandoffContext } from '../../types/chat';
+import { AgentOption, FileChangeSummary, HistorySessionMeta, Message, PendingHandoffContext } from '../../types/chat';
 import { Check, Copy, Download, X } from 'lucide-react';
 import { acquireJcefLivePromptRepaint } from '../../utils/jcefHostRepaint';
+import {
+  buildConversationHandoffFromTranscriptFile,
+  buildConversationHandoffSaveFailureContext,
+  prepareConversationHandoff,
+} from '../../utils/conversationHandoff';
+import { ACPBridge } from '../../utils/bridge';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import PermissionBar from './PermissionBar';
@@ -21,13 +27,17 @@ interface ChatSessionProps {
   availableAgents: AgentOption[];
   historySession?: HistorySessionMeta;
   pendingHandoff?: PendingHandoffContext;
+  initialMessages?: Message[];
+  metadataTitleOverride?: string;
   isActive?: boolean;
   onUserMessageSent?: () => void;
   onAssistantActivity?: () => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
   onCanMarkReadChange?: (canMarkRead: boolean) => void;
   onPermissionRequestChange?: (hasPendingPermission: boolean) => void;
+  onProcessingChange?: (isProcessing: boolean) => void;
   onAgentChangeRequest?: (payload: { agentId: string; handoffText: string }) => void;
+  onForkRequest?: (payload: { agentId: string; messages: Message[]; handoffText: string }) => void;
   onHandoffConsumed?: (handoffId: string) => void;
   onSessionStateChange?: (state: { acpSessionId: string; adapterName: string }) => void;
 }
@@ -38,13 +48,17 @@ export default function ChatSessionView({
   availableAgents,
   historySession,
   pendingHandoff,
+  initialMessages,
+  metadataTitleOverride,
   isActive = false,
   onUserMessageSent,
   onAssistantActivity,
   onAtBottomChange,
   onCanMarkReadChange,
   onPermissionRequestChange,
+  onProcessingChange,
   onAgentChangeRequest,
+  onForkRequest,
   onHandoffConsumed,
   onSessionStateChange
 }: ChatSessionProps) {
@@ -80,6 +94,8 @@ export default function ChatSessionView({
     initialAgentId,
     historySession,
     pendingHandoff,
+    initialMessages,
+    metadataTitleOverride,
     onHandoffConsumed,
     onUserMessageSent
   );
@@ -156,6 +172,7 @@ export default function ChatSessionView({
     onAtBottomChange,
     onCanMarkReadChange,
     onPermissionRequestChange,
+    onProcessingChange,
     onSessionStateChange,
   });
 
@@ -171,6 +188,43 @@ export default function ChatSessionView({
     fileChanges,
     onAgentChangeRequest,
   });
+
+  const handleForkFromMessage = useCallback((messageId: string) => {
+    if (!onForkRequest || !selectedAgentId || messages.length === 0) return;
+
+    const messageIndex = messages.findIndex((message) => message.id === messageId);
+    if (messageIndex < 0) return;
+
+    let endExclusive = messageIndex + 1;
+    if (messages[messageIndex].role === 'user' && messages[messageIndex + 1]?.role === 'assistant') {
+      endExclusive += 1;
+    }
+
+    const forkMessages = messages.slice(0, endExclusive);
+    const prepared = prepareConversationHandoff(forkMessages, []);
+
+    const finish = (handoffText: string) => {
+      onForkRequest({
+        agentId: selectedAgentId,
+        messages: forkMessages,
+        handoffText,
+      });
+    };
+
+    if (!prepared.exceedsInlineLimit) {
+      finish(prepared.handoffText);
+      return;
+    }
+
+    ACPBridge.saveConversationTranscript(conversationId, prepared.normalizedTranscript)
+      .then((saved) => {
+        finish(buildConversationHandoffFromTranscriptFile(prepared, saved.filePath || ''));
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        finish(buildConversationHandoffSaveFailureContext(prepared, message));
+      });
+  }, [conversationId, messages, onForkRequest, selectedAgentId]);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
@@ -189,6 +243,8 @@ export default function ChatSessionView({
             agentIconPath={adapterIconPath}
             availableAgents={availableAgents}
             isHistoryReplaying={isHistoryReplaying}
+            onForkFromMessage={handleForkFromMessage}
+            scrollToBottomOnInitialMessages={Boolean(initialMessages?.length) && !historySession}
           />
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChatTab,
   HistorySessionMeta,
+  Message,
   PendingHandoffContext,
   TabType,
   isAgentRunnable,
@@ -34,6 +35,13 @@ interface PendingConversationContinuation {
   targetAgentId: string;
 }
 
+function forkedTitle(sourceTitle?: string): string {
+  const normalized = (sourceTitle || '').trim();
+  if (!normalized || normalized === 'New') return 'Forked conversation';
+  const title = normalized.startsWith('Forked:') ? normalized : `Forked: ${normalized}`;
+  return title.length <= 80 ? title : `${title.slice(0, 77)}...`;
+}
+
 export function useAppController() {
   const [tabs, setTabs] = useState<ChatTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
@@ -59,6 +67,7 @@ export function useAppController() {
     handleAtBottomChange,
     handleCanMarkReadChange,
     handlePermissionRequestChange,
+    handleProcessingChange,
   } = useAppTabUiState(activeTabId, activeTabIdRef);
 
   const cleanupTabUi = useCallback((id: string) => {
@@ -269,6 +278,45 @@ export function useAppController() {
     });
   }, []);
 
+  const handleForkRequest = useCallback((tabId: string, payload: { agentId: string; messages: Message[]; handoffText: string }) => {
+    const sourceTab = tabsRef.current.find(item => item.id === tabId);
+    if (!sourceTab || sourceTab.type !== 'chat') return;
+    const resolvedAgentId = runnableAgents.some(agent => agent.id === payload.agentId)
+      ? payload.agentId
+      : runnableAgents[0]?.id;
+    if (!resolvedAgentId) return;
+
+    const newId = nextId('tab');
+    const newConversationId = nextId('conv');
+    const title = forkedTitle(sourceTab.title);
+    const handoffContext: PendingHandoffContext = {
+      id: nextId('handoff'),
+      sourceSessionId: tabSessionState[tabId]?.acpSessionId || '',
+      sourceAgentId: tabSessionState[tabId]?.adapterName || sourceTab.agentId || '',
+      targetAgentId: resolvedAgentId,
+      text: payload.handoffText,
+    };
+
+    setTabs(prev => [
+      ...prev,
+      {
+        id: newId,
+        type: 'chat',
+        title,
+        conversationId: newConversationId,
+        agentId: resolvedAgentId,
+        initialMessages: payload.messages,
+        metadataTitleOverride: title,
+      }
+    ]);
+    initTabUi(newId);
+    setPendingHandoffsByTab(prev => ({
+      ...prev,
+      [newId]: handoffContext,
+    }));
+    setActiveTabId(newId);
+  }, [initTabUi, runnableAgents, tabSessionState]);
+
   const openSingletonTab = useCallback((type: TabType, title: string) => {
     const existing = tabsRef.current.find(t => t.type === type);
     if (existing) {
@@ -409,8 +457,10 @@ export function useAppController() {
     handleAtBottomChange,
     handleCanMarkReadChange,
     handlePermissionRequestChange,
+    handleProcessingChange,
     requestAgentSwitch,
     handleHandoffConsumed,
+    handleForkRequest,
     handleChatSessionStateChange,
     handleContinueInNewTab,
     handleContinueInCurrentConversation,

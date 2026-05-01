@@ -35,10 +35,12 @@ export function useChatSession(
   initialAgentId?: string,
   historySession?: HistorySessionMeta,
   pendingHandoff?: PendingHandoffContext,
+  initialMessages: Message[] = [],
+  metadataTitleOverride?: string,
   onHandoffConsumed?: (handoffId: string) => void,
   onUserMessageSent?: () => void
 ) {
-  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+  const [historyMessages, setHistoryMessages] = useState<Message[]>(initialMessages);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [status, setStatus] = useState<string>('not started');
@@ -68,6 +70,7 @@ export function useChatSession(
   const ignoreReplayChunksRef = useRef(!!historySession);
   const pinnedAgentSnapshotRef = useRef<PinnedAgentSnapshot | null>(null);
   const recoveryInFlightRef = useRef(false);
+  const initialUserMessageCountRef = useRef(initialMessages.filter((message) => message.role === 'user').length);
 
   const {
     applyBufferedChunks,
@@ -463,10 +466,13 @@ export function useChatSession(
     if (!acpSessionId || !selectedAgentId) return;
     if (!allowMetadataUpdateRef.current) return;
 
-    const promptCount = messages.filter((message) => message.role === 'user').length;
+    const promptCount = Math.max(
+      0,
+      messages.filter((message) => message.role === 'user').length - initialUserMessageCountRef.current
+    );
     if (promptCount <= 0) return;
 
-    const title = titleFromFirstPrompt(messages);
+    const title = metadataTitleOverride?.trim() || titleFromFirstPrompt(messages);
     const fingerprint = `${acpSessionId}|${selectedAgentId}|${promptCount}|${title || ''}`;
     if (lastMetadataFingerprintRef.current === fingerprint) return;
 
@@ -476,13 +482,14 @@ export function useChatSession(
       adapterName: selectedAgentId,
       promptCount,
       title,
-      touchUpdatedAt: touchUpdatedAtRef.current
+      touchUpdatedAt: touchUpdatedAtRef.current,
+      forceTitle: Boolean(metadataTitleOverride?.trim()),
     });
     window.setTimeout(() => {
       ACPBridge.requestHistoryList();
     }, 100);
     lastMetadataFingerprintRef.current = fingerprint;
-  }, [conversationId, status, acpSessionId, selectedAgentId, messages]);
+  }, [conversationId, status, acpSessionId, selectedAgentId, messages, metadataTitleOverride]);
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();

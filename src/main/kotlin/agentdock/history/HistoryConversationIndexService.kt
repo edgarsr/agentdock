@@ -4,6 +4,11 @@ import agentdock.utils.atomicWriteText
 import java.time.Instant
 
 internal object HistoryConversationIndexService {
+    fun isAutomaticTagTitleCandidate(title: String?): Boolean {
+        val normalized = title?.trim().orEmpty()
+        return Regex("^\\[[^\\]\\r\\n]+]").containsMatchIn(normalized)
+    }
+
     fun hasIndexedConversationSession(
         projectPath: String,
         conversationId: String,
@@ -29,7 +34,8 @@ internal object HistoryConversationIndexService {
         adapterName: String,
         promptCount: Int,
         titleCandidate: String?,
-        touchUpdatedAt: Boolean = false
+        touchUpdatedAt: Boolean = false,
+        forceTitle: Boolean = false
     ): Boolean {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = runCatching {
@@ -94,9 +100,15 @@ internal object HistoryConversationIndexService {
         }
 
         val existingTitle = mergedConversation?.title?.takeIf { it.isNotBlank() }
+        val shouldBlockTagTitle = existingTitle != null && isAutomaticTagTitleCandidate(normalizedTitle)
+        val shouldForceTitle = forceTitle &&
+            normalizedTitle.isNotBlank() &&
+            !shouldBlockTagTitle &&
+            mergedConversation?.titleUserSet != true
         val updatedConversation = HistoryConversationIndexEntry(
             id = cleanConversationId,
             title = when {
+                shouldForceTitle -> normalizedTitle
                 existingTitle != null -> existingTitle
                 normalizedTitle.isNotBlank() -> normalizedTitle
                 else -> "Untitled Session"

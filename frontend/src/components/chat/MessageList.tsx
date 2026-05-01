@@ -44,6 +44,8 @@ interface MessageListProps {
   agentIconPath?: string;
   availableAgents: AgentOption[];
   isHistoryReplaying?: boolean;
+  onForkFromMessage?: (messageId: string) => void;
+  scrollToBottomOnInitialMessages?: boolean;
 }
 
 function MessageList({ 
@@ -56,7 +58,9 @@ function MessageList({
   agentName,
   agentIconPath,
   availableAgents,
-  isHistoryReplaying = false
+  isHistoryReplaying = false,
+  onForkFromMessage,
+  scrollToBottomOnInitialMessages = false
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const atBottomChangeRef = useRef(onAtBottomChange);
@@ -66,6 +70,7 @@ function MessageList({
   const prevIsReplaying = useRef(isHistoryReplaying);
   const prevIsSendingForScroll = useRef(isSending);
   const prevIsSendingForCollapse = useRef(isSending);
+  const initialMessagesScrolledRef = useRef(false);
 
   const [revealedPromptCount, setRevealedPromptCount] = useState(0);
 
@@ -226,6 +231,21 @@ function MessageList({
     const el = containerRef.current;
     if (!el) return;
 
+    if (
+      scrollToBottomOnInitialMessages &&
+      !initialMessagesScrolledRef.current &&
+      messages.length > 0 &&
+      !isHistoryReplaying
+    ) {
+      initialMessagesScrolledRef.current = true;
+      el.style.scrollBehavior = 'auto';
+      el.scrollTop = el.scrollHeight;
+      lastAtBottomRef.current = true;
+      lastCanMarkReadRef.current = true;
+      publishViewportState(el);
+      return;
+    }
+
     const historyJustFinished = prevIsReplaying.current && !isHistoryReplaying;
     const sendingJustStarted = !prevIsSendingForScroll.current && isSending;
     const shouldKeepBottomPinned = !isHistoryReplaying && Boolean(isSending) && lastAtBottomRef.current;
@@ -240,7 +260,7 @@ function MessageList({
     publishViewportState(el);
     prevIsReplaying.current = isHistoryReplaying;
     prevIsSendingForScroll.current = isSending;
-  }, [messages, revealedPromptCount, isHistoryReplaying, isSending]);
+  }, [messages, revealedPromptCount, isHistoryReplaying, isSending, scrollToBottomOnInitialMessages]);
 
   useEffect(() => {
     const wasSending = prevIsSendingForCollapse.current;
@@ -299,6 +319,7 @@ function MessageList({
                 showBorder={!isLast}
                 agentIconPath={resolvedAgentIconPath}
                 isActivePrompt={Boolean(isSending) && isLast}
+                onFork={!isSending && onForkFromMessage ? () => onForkFromMessage(message.id) : undefined}
               />
             );
           }

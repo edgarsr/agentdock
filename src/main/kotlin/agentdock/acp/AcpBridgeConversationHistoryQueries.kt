@@ -18,7 +18,8 @@ private data class SessionMetadataUpdatePayload(
     val adapterName: String,
     val promptCount: Int,
     val title: String?,
-    val touchUpdatedAt: Boolean
+    val touchUpdatedAt: Boolean,
+    val forceTitle: Boolean
 )
 
 private data class ContinueConversationPayload(
@@ -42,7 +43,8 @@ private fun parseSessionMetadataUpdatePayload(payload: String?): SessionMetadata
             adapterName = adapterName,
             promptCount = obj["promptCount"]?.jsonPrimitive?.intOrNull ?: 0,
             title = obj["title"]?.jsonPrimitive?.contentOrNull,
-            touchUpdatedAt = obj["touchUpdatedAt"]?.jsonPrimitive?.booleanOrNull ?: false
+            touchUpdatedAt = obj["touchUpdatedAt"]?.jsonPrimitive?.booleanOrNull ?: false,
+            forceTitle = obj["forceTitle"]?.jsonPrimitive?.booleanOrNull ?: false
         )
     }.getOrNull()
 }
@@ -161,7 +163,8 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                         adapterName = request.adapterName,
                         promptCount = request.promptCount,
                         titleCandidate = request.title,
-                        touchUpdatedAt = request.touchUpdatedAt
+                        touchUpdatedAt = request.touchUpdatedAt,
+                        forceTitle = request.forceTitle
                     )
                 }
             }
