@@ -16,6 +16,7 @@ export function GeminiChatUsage({ modelId }: { modelId?: string }) {
 
   const matchesActiveModel = (bucketModelId: string) => {
     if (!activeModelId) return false;
+    if (activeModelId.toLowerCase().startsWith('auto')) return true;
     const bucket = bucketModelId.toLowerCase();
     const model = activeModelId.toLowerCase();
     return bucket === model || bucket === model.replace('gemini-', '') || model === bucket.replace('gemini-', '');
@@ -50,10 +51,11 @@ export function GeminiChatUsage({ modelId }: { modelId?: string }) {
         hasDisplayableQuotaReset(b.resetTime)
       );
 
-      const activeBucket = activeModelId ? displayBuckets.find(b => matchesActiveModel(b.modelId)) : null;
+      const isAuto = activeModelId?.toLowerCase().startsWith('auto');
+      const activeBucket = (activeModelId && !isAuto) ? displayBuckets.find(b => matchesActiveModel(b.modelId)) : null;
       if (activeBucket && typeof activeBucket.remainingFraction === 'number') {
         displayPct = (1 - activeBucket.remainingFraction) * 100;
-      } else if (!activeModelId) {
+      } else if (!activeModelId || isAuto) {
         const vals = displayBuckets
           .map((b: any) => b.remainingFraction)
           .filter((v: any) => typeof v === 'number')
