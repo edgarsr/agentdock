@@ -1,7 +1,7 @@
 import { MutableRefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { TabUiFlags } from '../../types/chat';
 
-const DEFAULT_TAB_UI: TabUiFlags = { unread: false, atBottom: true, canMarkRead: true, warning: false };
+const DEFAULT_TAB_UI: TabUiFlags = { unread: false, atBottom: true, canMarkRead: true, warning: false, processing: false };
 
 export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRefObject<string>) {
   const [tabUi, setTabUi] = useState<Record<string, TabUiFlags>>({});
@@ -91,7 +91,8 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
         current.atBottom === next.atBottom &&
         current.canMarkRead === next.canMarkRead &&
         current.unread === next.unread &&
-        current.warning === next.warning
+        current.warning === next.warning &&
+        current.processing === next.processing
       ) {
         return prev;
       }
@@ -114,7 +115,8 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
         current.atBottom === next.atBottom &&
         current.canMarkRead === next.canMarkRead &&
         current.unread === next.unread &&
-        current.warning === next.warning
+        current.warning === next.warning &&
+        current.processing === next.processing
       ) {
         return prev;
       }
@@ -122,6 +124,14 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
       return { ...prev, [tabId]: next };
     });
   }, [activeTabIdRef]);
+
+  const handleProcessingChange = useCallback((tabId: string, isProcessing: boolean) => {
+    setTabUi(prev => {
+      const current = prev[tabId];
+      if (!current || current.processing === isProcessing) return prev;
+      return { ...prev, [tabId]: { ...current, processing: isProcessing } };
+    });
+  }, []);
 
   const handlePermissionRequestChange = useCallback((tabId: string, hasPendingPermission: boolean) => {
     pendingPermissionRef.current[tabId] = hasPendingPermission;
@@ -161,5 +171,6 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     handleAtBottomChange,
     handleCanMarkReadChange,
     handlePermissionRequestChange,
+    handleProcessingChange,
   };
 }

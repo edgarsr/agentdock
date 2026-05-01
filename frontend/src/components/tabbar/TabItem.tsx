@@ -9,6 +9,7 @@ interface TabItemProps {
   isKeyboardFocused: boolean;
   hasWarning: boolean;
   hasUnread: boolean;
+  hasProcessing: boolean;
   titleClassName: string;
   onSelectTab: (id: string) => void;
   onPointerDown: (id: string, event: React.PointerEvent<HTMLDivElement>) => void;
@@ -26,6 +27,7 @@ export function TabItem({
   isKeyboardFocused,
   hasWarning,
   hasUnread,
+  hasProcessing,
   titleClassName,
   onSelectTab,
   onPointerDown,
@@ -78,7 +80,7 @@ export function TabItem({
         className="w-full h-full px-1 pb-0.5 relative z-10 flex min-w-0 flex-1 items-center gap-2 overflow-hidden
           rounded-[4px] text-left cursor-default focus:outline-none"
       >
-        <div className="flex shrink-0 items-center relative left-[1px] opacity-80">
+        <div className={`flex shrink-0 items-center relative left-[1px] ${hasProcessing ? 'animate-pulse' : 'opacity-80'}`}>
           {getTabIcon(tab, agents)}
         </div>
         <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>

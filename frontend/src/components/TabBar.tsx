@@ -219,6 +219,7 @@ export default function TabBar({
           const flags = tabUi[tab.id];
           const hasWarning = flags?.warning;
           const hasUnread = flags?.unread;
+          const hasProcessing = !!flags?.processing;
           return (
             <TabItem
               key={tab.id}
@@ -228,6 +229,7 @@ export default function TabBar({
               isKeyboardFocused={focusedTabId === tab.id}
               hasWarning={hasWarning}
               hasUnread={hasUnread}
+              hasProcessing={hasProcessing}
               titleClassName={titleClassName}
               onSelectTab={onSelectTab}
               onPointerDown={handleTabPointerDown}

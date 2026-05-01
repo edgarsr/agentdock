@@ -86,7 +86,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
     <div className="mb-2 border border-border rounded-md overflow-hidden">
       <button onClick={toggleExpanded} className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}>
         <div className="flex-shrink-0 text-foreground-secondary">
-          <ClipboardList size={14} />
+          <ClipboardList className="text-foreground" size={14} />
         </div>
         
         <div className="flex-1 truncate pr-2 text-left">{renderHeaderText()}</div>
@@ -106,7 +106,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
           <div className="p-3 bg-editor-bg space-y-2 border-t border-border">
             {entries.map((entry, idx) => (
               <div key={idx} className="flex gap-3 items-start group">
-                <div className="relative top-1 flex-shrink-0">{getStatusIcon(entry.status)}</div>
+                <div className="relative top-1 flex-shrink-0 grayscale">{getStatusIcon(entry.status)}</div>
                 <div className={`leading-relaxed ${entry.status === 'completed' ? 'text-foreground-secondary' : ''}`}>
                   {entry.content}
                 </div>

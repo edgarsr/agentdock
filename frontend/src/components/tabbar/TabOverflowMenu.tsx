@@ -68,6 +68,7 @@ export function TabOverflowMenu({
             const flags = tabUi[tab.id];
             const hasWarning = !!flags?.warning;
             const hasUnread = !!flags?.unread;
+            const hasProcessing = !!flags?.processing;
             const activeClassName = tab.id === activeTabId
               ? 'bg-accent text-accent-foreground'
               : 'text-foreground hover:bg-accent hover:text-accent-foreground';
@@ -85,7 +86,7 @@ export function TabOverflowMenu({
                     focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
                   role="menuitem"
                 >
-                  <span className="mr-2 flex items-center justify-center">
+                  <span className={`mr-2 flex items-center justify-center ${hasProcessing ? 'animate-pulse' : ''}`}>
                     {getTabIcon(tab, agents)}
                   </span>
                   <span className="flex-1 truncate min-w-0">{tab.title}</span>

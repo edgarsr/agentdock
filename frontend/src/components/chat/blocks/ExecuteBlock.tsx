@@ -6,7 +6,7 @@ import { useAutoCollapse } from '../../../hooks/useAutoCollapse';
 import { MarkdownMessage } from '../MarkdownMessage';
 import { chatInsetFocusClassName } from '../shared/focusStyles';
 
-const TerminalIcon = () => (<SquareTerminal size={16} className="text-primary" />);
+const TerminalIcon = () => (<SquareTerminal size={16} className="text-foreground" />);
 
 interface Props {
   block: ToolCallBlock;

@@ -12,6 +12,7 @@ interface UseChatSessionNotificationsOptions {
   onAtBottomChange?: (isAtBottom: boolean) => void;
   onCanMarkReadChange?: (canMarkRead: boolean) => void;
   onPermissionRequestChange?: (hasPendingPermission: boolean) => void;
+  onProcessingChange?: (isProcessing: boolean) => void;
   onSessionStateChange?: (state: { acpSessionId: string; adapterName: string }) => void;
 }
 
@@ -26,6 +27,7 @@ export function useChatSessionNotifications({
   onAtBottomChange,
   onCanMarkReadChange,
   onPermissionRequestChange,
+  onProcessingChange,
   onSessionStateChange,
 }: UseChatSessionNotificationsOptions) {
   const lastReportedSessionStateRef = useRef('');
@@ -84,6 +86,10 @@ export function useChatSessionNotifications({
     pendingAssistantActivityRef.current = false;
     onAssistantActivity?.();
   }, [permissionRequest, isSending, isHistoryReplaying, messages, onAssistantActivity]);
+
+  useEffect(() => {
+    onProcessingChange?.(isSending);
+  }, [isSending, onProcessingChange]);
 
   useEffect(() => {
     onPermissionRequestChange?.(!!permissionRequest);

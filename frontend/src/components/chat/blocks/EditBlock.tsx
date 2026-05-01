@@ -157,7 +157,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
       >
         <div className="flex-shrink-0 text-foreground-secondary">
-          <FileCode size={14} />
+          <FileCode className="text-foreground" size={14} />
         </div>
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <span
