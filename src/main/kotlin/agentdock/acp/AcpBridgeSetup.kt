@@ -536,6 +536,9 @@ internal fun AcpBridge.installAdapterQueries() {
                     "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapterId)
                     else -> ""
                 }
+                if (result.isNotBlank()) {
+                    AcpQuotaService.updateQuotaForAdapter(adapterId, result)
+                }
                 val escapedAdapterId = jsStringLiteral(adapterId)
                 val escapedResult = jsStringLiteral(result)
                 runOnEdt {
