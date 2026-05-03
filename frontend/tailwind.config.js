@@ -80,7 +80,7 @@ export default {
       },
       fontFamily: {
         mono: ['var(--ide-code-font-family)', 'monospace'],
-      }
+      },
     },
   },
   plugins: [

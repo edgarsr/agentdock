@@ -113,6 +113,8 @@ object IdeTheme {
         // 6. Dynamic background variations
         val isDark = isDarkTheme()
         sb.append("  --ide-theme-is-dark: ${if (isDark) "1" else "0"};\n")
+        val shimmerHighlightColor = if (isDark) Color(255, 255, 255) else Color(0, 0, 0)
+        sb.append("  --ide-shimmer-highlight-color: ${toCssColor(shimmerHighlightColor)};\n")
         val blueUserMessageBackground = if (isDark) Color(0x25, 0x32, 0x4d) else Color(225, 235, 253, 220)
         val defaultUserMessageBackground = if (isDark) Color(100, 100, 100, 65) else Color(100, 100, 100, 18)
 
@@ -141,7 +143,7 @@ object IdeTheme {
             // Border is too similar to backgrounds - adjust it
             // In dark theme: make lighter than both backgrounds
             // In light theme: make darker than both backgrounds
-            adjustBrightness(baseBackground, if (isDark) 1.9 else 0.85)
+            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.85)
         } else {
             // Border is distinct - use original
             originalBorder

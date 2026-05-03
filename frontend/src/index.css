@@ -156,3 +156,24 @@
     translate: 0 0;
   }
 }
+
+@keyframes tab-shimmer-sweep {
+  from { background-position: 100% 50%; }
+  to   { background-position:   0% 50%; }
+}
+
+.tab-shimmer-text {
+  background: linear-gradient(
+          90deg,
+          var(--ide-Label-foreground) 0%,
+          var(--ide-Label-foreground) 46%,
+          color-mix(in srgb, var(--ide-Label-foreground), var(--ide-shimmer-highlight-color) 95%) 50%,
+          var(--ide-Label-foreground) 54%,
+          var(--ide-Label-foreground) 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: tab-shimmer-sweep 2.5s linear infinite;
+}

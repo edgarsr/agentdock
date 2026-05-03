@@ -43,7 +43,7 @@ export function CodeReferenceChip({
 
   const chip = (
     <div contentEditable={false}
-      className={`code-refrence-chip inline-flex min-h-[22px] items-center gap-1.5 px-2 py-1 rounded-[6px] border bg-background
+      className={`code-refrence-chip inline-flex min-h-[22px] items-center gap-1.5 px-2 py-1 rounded-[6px] border bg-background-secondary
         border-[var(--ide-Button-startBorderColor)] mt-[-0.4rem] relative top-[2px] align-middle transition-all group 
         focus-within:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] mx-0.5`}
     >

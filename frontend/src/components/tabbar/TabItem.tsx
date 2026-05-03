@@ -80,11 +80,11 @@ export function TabItem({
         className="w-full h-full px-1 pb-0.5 relative z-10 flex min-w-0 flex-1 items-center gap-2 overflow-hidden
           rounded-[4px] text-left cursor-default focus:outline-none"
       >
-        <div className={`flex shrink-0 items-center relative left-[1px] ${hasProcessing ? 'animate-pulse' : 'opacity-80'}`}>
+        <div className="flex shrink-0 items-center relative left-[1px] opacity-80">
           {getTabIcon(tab, agents)}
         </div>
         <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
-          <div className="truncate text-ide-small relative top-[1px]">{tab.title}</div>
+          <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
         </div>
       </button>
       {hasWarning ? (
