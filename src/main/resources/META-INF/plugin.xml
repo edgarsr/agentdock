@@ -1,11 +1,11 @@
 <idea-plugin>
     <id>agentdock</id>
-    <name>AgentDock for JetBrains</name>
-    <version>1.1.0</version>
+    <name>Agent Dock for JetBrains</name>
+    <version>1.1.1</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
-        <p>AgentDock for JetBrains brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
+        <p>Agent Dock for JetBrains brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
         <h4>Supported AI agents:</h4>
         <ul>
             <li>Claude Code</li>
@@ -47,18 +47,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
-        <ul>
-          <li>Fixed minor bugs and made UI refinements.</li>
-          <li>Added chat forking.</li>
-          <li>Added an IDE diff view button for edit blocks.</li>
-          <li>Renamed the plugin to AgentDock for JetBrains to avoid a naming conflict with another product.</li>
-        </ul>
+        Fixed minor bugs and made UI refinements.
     ]]></change-notes>
 
      <depends>com.intellij.modules.platform</depends>
      <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="agentdock.acp.AcpStartupActivity"/>
-         <toolWindow id="AgentDock for JetBrains" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
+         <toolWindow id="Agent Dock for JetBrains" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
                      factoryClass="agentdock.AgentDockToolWindowFactory"/>
      </extensions>
 
