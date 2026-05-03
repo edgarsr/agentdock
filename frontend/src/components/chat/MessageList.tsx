@@ -254,7 +254,6 @@ function MessageList({
       el.style.scrollBehavior = 'auto';
       el.scrollTop = el.scrollHeight;
       lastAtBottomRef.current = true;
-      lastCanMarkReadRef.current = true;
     }
 
     publishViewportState(el);

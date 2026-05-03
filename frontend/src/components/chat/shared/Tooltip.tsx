@@ -95,12 +95,18 @@ export const Tooltip: React.FC<TooltipProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    setVisible(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, [content]);
+
   return (
     <div 
       ref={triggerRef}
       className={cx('block w-fit max-w-full align-middle', className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseLeave}
       onFocus={handleFocus}
       onBlur={handleBlur}
     >

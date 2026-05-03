@@ -88,9 +88,9 @@ export function TabItem({
         </div>
       </button>
       {hasWarning ? (
-        <span className="relative z-10 ml-2 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning" />
+        <span className="relative z-10 ml-1 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning" />
       ) : hasUnread ? (
-        <span className="relative z-10 ml-2 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />
+        <span className="relative z-10 ml-1 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />
       ) : null}
 
       <button
