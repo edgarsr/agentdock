@@ -95,11 +95,6 @@ export const Tooltip: React.FC<TooltipProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    setVisible(false);
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, [content]);
-
   return (
     <div 
       ref={triggerRef}
