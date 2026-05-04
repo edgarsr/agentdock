@@ -60,7 +60,6 @@
         <postStartupActivity implementation="agentdock.acp.AcpStartupActivity"/>
          <toolWindow id="AgentDock for JetBrains" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
                      factoryClass="agentdock.AgentDockToolWindowFactory"/>
-         <statusBarWidgetFactory id="AgentDockQuotaWidget" implementation="agentdock.ui.AgentDockQuotaWidgetFactory"/>
      </extensions>
 
     <actions>

@@ -96,8 +96,12 @@ object AcpQuotaService : Disposable {
                     val fiveHourPct = fiveHour?.get("utilization")?.jsonPrimitive?.doubleOrNull?.toInt()
                     val sevenDayPct = sevenDay?.get("utilization")?.jsonPrimitive?.doubleOrNull?.toInt()
                     
-                    fiveHourPct?.let { details.add("5h: $it%") }
-                    sevenDayPct?.let { details.add("7d: $it%") }
+                    fiveHour?.get("resets_at")?.jsonPrimitive?.content?.let { reset ->
+                        formatResetTime(reset)?.let { details.add("5h reset: $it ($fiveHourPct%)") }
+                    }
+                    sevenDay?.get("resets_at")?.jsonPrimitive?.content?.let { reset ->
+                        formatResetTime(reset)?.let { details.add("7d reset: $it ($sevenDayPct%)") }
+                    }
                     
                     mainPercent = listOfNotNull(fiveHourPct, sevenDayPct).maxOrNull() ?: 0
                 }
@@ -105,11 +109,16 @@ object AcpQuotaService : Disposable {
                     val buckets = json["quota"]?.jsonObject?.get("buckets")?.jsonArray ?: emptyList()
                     val usages = buckets.mapNotNull { b ->
                         val obj = b.jsonObject
-                        val modelId = obj["modelId"]?.jsonPrimitive?.content ?: "Model"
+                        val modelId = obj["modelId"]?.jsonPrimitive?.content?.replace("gemini-", "") ?: "Model"
                         val remaining = obj["remainingFraction"]?.jsonPrimitive?.doubleOrNull
-                        remaining?.let { modelId to ((1.0 - it) * 100).toInt() }
+                        val reset = obj["resetTime"]?.jsonPrimitive?.content
+                        val pct = remaining?.let { ((1.0 - it) * 100).toInt() }
+                        if (pct != null && reset != null) {
+                            val formattedReset = formatResetTime(reset) ?: "Soon"
+                            "$modelId: $pct% (Reset: $formattedReset)" to pct
+                        } else null
                     }
-                    usages.forEach { details.add("${it.first}: ${it.second}%") }
+                    usages.forEach { details.add(it.first) }
                     mainPercent = usages.map { it.second }.maxOrNull() ?: 0
                 }
                 "codex" -> {
@@ -119,8 +128,14 @@ object AcpQuotaService : Disposable {
                     val pPct = primary?.get("remaining_fraction")?.jsonPrimitive?.doubleOrNull?.let { (1.0 - it) * 100 }?.toInt()
                     val sPct = secondary?.get("remaining_fraction")?.jsonPrimitive?.doubleOrNull?.let { (1.0 - it) * 100 }?.toInt()
                     
-                    pPct?.let { details.add("Primary: $it%") }
-                    sPct?.let { details.add("Secondary: $it%") }
+                    primary?.get("reset_after_seconds")?.jsonPrimitive?.longOrNull?.let { seconds ->
+                        val resetTime = java.time.Instant.now().plusSeconds(seconds).toString()
+                        formatResetTime(resetTime)?.let { details.add("Primary reset: $it ($pPct%)") }
+                    }
+                    secondary?.get("reset_after_seconds")?.jsonPrimitive?.longOrNull?.let { seconds ->
+                        val resetTime = java.time.Instant.now().plusSeconds(seconds).toString()
+                        formatResetTime(resetTime)?.let { details.add("Secondary reset: $it ($sPct%)") }
+                    }
                     
                     mainPercent = listOfNotNull(pPct, sPct).maxOrNull() ?: 0
                 }
@@ -136,6 +151,17 @@ object AcpQuotaService : Disposable {
             }
             
             QuotaDetail(adapterId, adapterName, mainPercent, details, rawJson)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun formatResetTime(isoString: String): String? {
+        return try {
+            val instant = java.time.Instant.parse(isoString)
+            val dateTime = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm")
+            dateTime.format(formatter)
         } catch (_: Exception) {
             null
         }
