@@ -268,10 +268,13 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
             detail = "Starting adapter process..."
         )
 
-        val commandLine = com.intellij.execution.configurations.GeneralCommandLine(command)
+        var commandLine = com.intellij.execution.configurations.GeneralCommandLine(command)
             .withWorkDirectory(resolveAdapterProcessWorkingDirectory(File(adapterRoot)))
             .withEnvironment(System.getenv())
             .withRedirectErrorStream(false)
+        AcpNodeRuntimeResolver.resolveAvailable()?.let { runtime ->
+            commandLine = AcpNodeRuntimeResolver.applyTo(commandLine, runtime)
+        }
 
         val proc = withContext(Dispatchers.IO) { commandLine.createProcess() }
         sharedProc.process = proc

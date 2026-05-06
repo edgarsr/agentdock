@@ -73,7 +73,9 @@ internal fun buildAdapterLaunchCommand(
             "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launchFile.absolutePath
         )
         name.endsWith(".js") || name.endsWith(".mjs") -> {
-            mutableListOf(if (AcpExecutionMode.isWindowsHost()) "node.exe" else "node", launchFile.absolutePath)
+            val node = AcpNodeRuntimeResolver.resolveAvailable()?.node
+                ?: if (AcpExecutionMode.isWindowsHost()) "node.exe" else "node"
+            mutableListOf(node, launchFile.absolutePath)
         }
         else -> mutableListOf(launchFile.absolutePath)
     }

@@ -13,8 +13,11 @@ object AcpNpmInstaller {
     ): Boolean {
         return try {
             cancellation?.throwIfCancelled()
-            if (!requireLocalCommand("node", "Node.js is required", statusCallback, cancellation)) return false
-            if (!requireLocalCommand("npm", "Node.js is required", statusCallback, cancellation)) return false
+            val nodeRuntime = AcpNodeRuntimeResolver.resolveOrInstall(statusCallback, cancellation)
+            if (nodeRuntime == null) {
+                statusCallback?.invoke("Error: Node.js is required")
+                return false
+            }
 
             val packageName = adapterInfo.distribution.packageName
                 ?: throw IllegalStateException("Adapter '${adapterInfo.id}' missing distribution.packageName in configuration")
@@ -23,16 +26,17 @@ object AcpNpmInstaller {
             statusCallback?.invoke("Installing $packageName@$version via npm...")
             File(targetDir, "package.json").writeText("""{"name":"${adapterInfo.id}-runtime","private":true}""")
 
-            val npm = if (System.getProperty("os.name").lowercase().contains("win")) "npm.cmd" else "npm"
-            val installProc = ProcessBuilder(npm, "install", "$packageName@$version", "--no-save", "--no-package-lock")
+            val installProc = ProcessBuilder(nodeRuntime.npm, "install", "$packageName@$version", "--no-save", "--no-package-lock")
                 .directory(targetDir)
                 .redirectErrorStream(true)
+            AcpNodeRuntimeResolver.applyTo(installProc, nodeRuntime)
+            val startedInstallProc = installProc
                 .start()
-            cancellation?.register(installProc)
+            cancellation?.register(startedInstallProc)
 
             val recentOutput = java.util.Collections.synchronizedList(mutableListOf<String>())
             val outputDrainer = Thread {
-                installProc.inputStream.bufferedReader().useLines { lines ->
+                startedInstallProc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { line ->
                         val trimmed = line.trim()
                         if (trimmed.isNotBlank()) {
@@ -54,19 +58,19 @@ object AcpNpmInstaller {
             try {
                 while (true) {
                     cancellation?.throwIfCancelled()
-                    if (installProc.waitFor(250, TimeUnit.MILLISECONDS)) break
+                    if (startedInstallProc.waitFor(250, TimeUnit.MILLISECONDS)) break
                 }
             } catch (e: CancellationException) {
-                installProc.destroyForcibly()
+                startedInstallProc.destroyForcibly()
                 outputDrainer.join(1000)
                 throw e
             } finally {
-                cancellation?.unregister(installProc)
+                cancellation?.unregister(startedInstallProc)
             }
 
             cancellation?.throwIfCancelled()
             outputDrainer.join(1000)
-            val exitCode = installProc.exitValue()
+            val exitCode = startedInstallProc.exitValue()
             if (exitCode == 0) {
                 true
             } else {
@@ -78,53 +82,6 @@ object AcpNpmInstaller {
             throw e
         } catch (e: Exception) {
             statusCallback?.invoke("Error: ${e.message ?: "npm install failed"}")
-            false
-        }
-    }
-
-    private fun requireLocalCommand(
-        commandName: String,
-        errorMessage: String,
-        statusCallback: ((String) -> Unit)? = null,
-        cancellation: AcpAdapterInstallCancellation? = null
-    ): Boolean {
-        val executable = when {
-            System.getProperty("os.name").lowercase().contains("win") && commandName.equals("npm", ignoreCase = true) -> "npm.cmd"
-            System.getProperty("os.name").lowercase().contains("win") && commandName.equals("npx", ignoreCase = true) -> "npx.cmd"
-            System.getProperty("os.name").lowercase().contains("win") && commandName.equals("node", ignoreCase = true) -> "node.exe"
-            else -> commandName
-        }
-        return try {
-            cancellation?.throwIfCancelled()
-            val process = ProcessBuilder(executable, "--version")
-                .redirectErrorStream(true)
-                .start()
-            cancellation?.register(process)
-            try {
-                val deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-                while (true) {
-                    cancellation?.throwIfCancelled()
-                    if (process.waitFor(250, TimeUnit.MILLISECONDS)) break
-                    if (System.nanoTime() >= deadlineNanos) {
-                        process.destroyForcibly()
-                        statusCallback?.invoke("Error: $errorMessage")
-                        return false
-                    }
-                }
-            } finally {
-                cancellation?.unregister(process)
-            }
-            cancellation?.throwIfCancelled()
-            if (process.exitValue() == 0) {
-                true
-            } else {
-                statusCallback?.invoke("Error: $errorMessage")
-                false
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            statusCallback?.invoke("Error: $errorMessage")
             false
         }
     }

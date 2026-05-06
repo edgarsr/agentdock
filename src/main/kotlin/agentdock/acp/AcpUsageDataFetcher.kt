@@ -115,10 +115,14 @@ internal object AcpUsageDataFetcher {
         } else {
             executable to args
         }
-        return com.intellij.execution.configurations.GeneralCommandLine(exe)
+        var commandLine = com.intellij.execution.configurations.GeneralCommandLine(exe)
             .withParameters(allArgs)
             .withEnvironment(System.getenv())
             .withParentEnvironmentType(com.intellij.execution.configurations.GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+        AcpNodeRuntimeResolver.resolveAvailable()?.let { runtime ->
+            commandLine = AcpNodeRuntimeResolver.applyTo(commandLine, runtime)
+        }
+        return commandLine
     }
 
     private fun runLocalCliAndCaptureStdout(

@@ -73,10 +73,11 @@ object AcpAuthService {
         return runCatching {
             val cmd = buildCommand(adapterInfo, authConfig, authConfig.statusArgs).orEmpty()
             if (cmd.isEmpty()) return@runCatching AuthStatus(authenticated = true)
-            val proc = ProcessBuilder(cmd)
+            val builder = ProcessBuilder(cmd)
                 .directory(resolveWorkingDirFile(adapterInfo))
                 .redirectErrorStream(true)
-                .start()
+            AcpNodeRuntimeResolver.resolveAvailable()?.let { AcpNodeRuntimeResolver.applyTo(builder, it) }
+            val proc = builder.start()
             val output = proc.inputStream.bufferedReader().use { it.readText() }.trim()
             val finished = proc.waitFor(STATUS_COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             if (!finished) {
@@ -107,10 +108,11 @@ object AcpAuthService {
             }
 
             val cmd = buildCommand(adapterInfo, authConfig, loginArgs) ?: return@withContext false
-            val process = ProcessBuilder(cmd)
+            val builder = ProcessBuilder(cmd)
                 .directory(resolveWorkingDirFile(adapterInfo, projectPath))
                 .redirectErrorStream(true)
-                .start()
+            AcpNodeRuntimeResolver.resolveAvailable()?.let { AcpNodeRuntimeResolver.applyTo(builder, it) }
+            val process = builder.start()
 
             val outputBuilder = java.lang.StringBuilder()
             Thread {
@@ -161,10 +163,11 @@ object AcpAuthService {
             val cmd = buildCommand(adapterInfo, authConfig, authConfig.logoutArgs)
             if (!cmd.isNullOrEmpty()) {
                 try {
-                    val proc = ProcessBuilder(cmd)
+                    val builder = ProcessBuilder(cmd)
                         .directory(resolveWorkingDirFile(adapterInfo))
                         .redirectErrorStream(true)
-                        .start()
+                    AcpNodeRuntimeResolver.resolveAvailable()?.let { AcpNodeRuntimeResolver.applyTo(builder, it) }
+                    val proc = builder.start()
                     val drainer = Thread {
                         try {
                             proc.inputStream.bufferedReader().useLines { lines ->
@@ -205,17 +208,27 @@ object AcpAuthService {
     ): List<String>? {
         val target = AcpAdapterPaths.getExecutionTarget()
         if (authConfig.command.isNotEmpty()) {
+            val runtime = AcpNodeRuntimeResolver.resolveAvailable()
             return if (isWindowsLocalTarget(target)) {
                 authConfig.command.mapIndexed { i, s ->
                     when {
                         i != 0 -> s
-                        s == "node" -> "node.exe"
-                        s == "npm" || s == "npx" -> "$s.cmd"
+                        s == "node" -> runtime?.node ?: "node.exe"
+                        s == "npm" -> runtime?.npm ?: "npm.cmd"
+                        s == "npx" -> runtime?.npx ?: "npx.cmd"
                         else -> s
                     }
                 }
             } else {
-                authConfig.command.toList()
+                authConfig.command.mapIndexed { i, s ->
+                    when {
+                        i != 0 -> s
+                        s == "node" -> runtime?.node ?: "node"
+                        s == "npm" -> runtime?.npm ?: "npm"
+                        s == "npx" -> runtime?.npx ?: "npx"
+                        else -> s
+                    }
+                }
             }
         }
 
@@ -303,6 +316,7 @@ object AcpAuthService {
     }
 
     private fun findNodeExecutable(target: AcpExecutionTarget): String {
+        AcpNodeRuntimeResolver.resolveAvailable()?.node?.let { return it }
         return if (isWindowsLocalTarget(target)) {
             "node.exe"
         } else {

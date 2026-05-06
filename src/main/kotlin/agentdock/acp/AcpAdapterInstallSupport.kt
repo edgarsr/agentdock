@@ -132,10 +132,16 @@ internal fun downloadArchiveDistributionLocal(
         if (!authNpmPackage.isNullOrBlank()) {
             cancellation?.throwIfCancelled()
             statusCallback?.invoke("Installing auth tools...")
-            val npm = if (runtime.platform == "windows") "npm.cmd" else "npm"
+            val nodeRuntime = AcpNodeRuntimeResolver.resolveOrInstall(statusCallback, cancellation)
+            if (nodeRuntime == null) {
+                statusCallback?.invoke("Error: Node.js is required")
+                return false
+            }
+            val builder = ProcessBuilder(nodeRuntime.npm, "install", "--prefix", targetDir.absolutePath, "$authNpmPackage@latest")
+                .directory(targetDir)
+            AcpNodeRuntimeResolver.applyTo(builder, nodeRuntime)
             val authInstallExitCode = runArchiveCommand(
-                ProcessBuilder(npm, "install", "--prefix", targetDir.absolutePath, "$authNpmPackage@latest")
-                    .directory(targetDir),
+                builder,
                 statusCallback,
                 cancellation
             )

@@ -314,10 +314,11 @@ internal fun AcpBridge.pushAdapters(includeRuntimeChecks: Boolean = true) {
                     if (!cmd.isNullOrEmpty()) {
                         val downloadPath = AcpAdapterPaths.getDownloadPath(info.id, target)
                         val workDir = if (downloadPath.isNotBlank()) File(downloadPath) else null
-                        val proc = ProcessBuilder(cmd)
+                        val builder = ProcessBuilder(cmd)
                             .also { pb -> if (workDir != null) pb.directory(workDir) }
                             .redirectErrorStream(true)
-                            .start()
+                        AcpNodeRuntimeResolver.resolveAvailable()?.let { AcpNodeRuntimeResolver.applyTo(builder, it) }
+                        val proc = builder.start()
                         val output = proc.inputStream.bufferedReader().use { it.readText() }.trim()
                         val finished = proc.waitFor(10L, TimeUnit.SECONDS)
                         if (!finished) proc.destroyForcibly()

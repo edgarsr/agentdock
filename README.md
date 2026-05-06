@@ -39,7 +39,7 @@ Currently supported AI agents:
 ## Requirements
 
 - JetBrains IDE based on IntelliJ Platform 2025.1 or newer.
-- Node.js and npm available on PATH (version must be compatible with the selected AI agents).
+- Node.js version must be compatible with the selected AI agents.
 - On macOS and Linux, installing some agents requires `curl` and `tar`.
 - Some agents use JetBrains IDE terminal for authentication.
 
