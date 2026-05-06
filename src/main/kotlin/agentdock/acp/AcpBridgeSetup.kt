@@ -537,7 +537,7 @@ internal fun AcpBridge.installAdapterQueries() {
                     else -> ""
                 }
                 if (result.isNotBlank()) {
-                    AcpQuotaService.updateQuotaForAdapter(adapterId, result)
+                    AcpQuotaService.getInstance().updateQuotaForAdapter(adapterId, result)
                 }
                 val escapedAdapterId = jsStringLiteral(adapterId)
                 val escapedResult = jsStringLiteral(result)

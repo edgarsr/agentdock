@@ -441,6 +441,7 @@ export interface GlobalSettings {
   userMessageBackgroundStyle: 'default' | 'blue' | 'background-secondary' | 'primary' | 'secondary' | 'accent' | 'input' | 'editor-bg';
   audioTranscription: AudioTranscriptionSettings;
   gitCommitGeneration: GitCommitGenerationSettings;
+  quotaWidgetEnabled: boolean;
 }
 
 export interface GlobalSettingsPayload {

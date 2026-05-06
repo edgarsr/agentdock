@@ -16,6 +16,7 @@ const defaultGlobalSettings: GlobalSettingsPayload = {
     userMessageBackgroundStyle: 'default',
     audioTranscription: { language: 'auto' },
     gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', instructions: '' },
+    quotaWidgetEnabled: false,
   },
 };
 
@@ -45,6 +46,7 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
         : 'default',
       audioTranscription: payload?.settings?.audioTranscription ?? { language: 'auto' },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
+      quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false,
     },
   };
 }
@@ -207,6 +209,12 @@ export function SettingsView() {
     ACPBridge.saveGlobalSettings(next);
   };
 
+  const handleQuotaWidgetEnabledChange = (quotaWidgetEnabled: boolean) => {
+    const next = { ...globalSettings.settings, quotaWidgetEnabled };
+    setGlobalSettings(prev => ({ ...prev, settings: next }));
+    ACPBridge.saveGlobalSettings(next);
+  };
+
   const handleUiFontSizeChange = (uiFontSizeOffsetPx: number) => {
     const next = { ...globalSettings.settings, uiFontSizeOffsetPx };
     setGlobalSettings(prev => ({ ...prev, settings: next }));
@@ -269,6 +277,14 @@ export function SettingsView() {
             enabled={globalSettings.settings.audioNotificationsEnabled}
             onToggle={() => handleAudioNotificationsChange(!globalSettings.settings.audioNotificationsEnabled)}
             ariaLabel="Enable audio notifications"
+          />
+
+          <SettingsToggleCard
+            title="Status Bar Quota Widget"
+            description="Display real-time agent usage quotas in the IDE status bar"
+            enabled={globalSettings.settings.quotaWidgetEnabled}
+            onToggle={() => handleQuotaWidgetEnabledChange(!globalSettings.settings.quotaWidgetEnabled)}
+            ariaLabel="Enable status bar quota widget"
           />
 
           <GitCommitGenerationSettings

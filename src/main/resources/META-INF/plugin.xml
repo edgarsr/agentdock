@@ -51,6 +51,7 @@
 
      <depends>com.intellij.modules.platform</depends>
      <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="agentdock.acp.AcpQuotaService"/>
         <postStartupActivity implementation="agentdock.acp.AcpStartupActivity"/>
          <toolWindow id="Agent Dock" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
                      factoryClass="agentdock.AgentDockToolWindowFactory"/>
