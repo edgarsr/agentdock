@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -40,9 +40,8 @@
         <h4>Requirements:</h4>
         <ul>
             <li>JetBrains IDE based on IntelliJ Platform 2025.1 or newer.</li>
-            <li>Node.js and npm available on PATH (version must be compatible with the selected AI agents).</li>
-            <li>On macOS and Linux, installing some agents requires curl and tar.</li>
             <li>Some agents use JetBrains IDE terminal for authentication.</li>
+            <li>On macOS and Linux, installing some agents requires curl and tar.</li>
         </ul>
     ]]></description>
 
