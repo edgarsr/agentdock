@@ -31,7 +31,7 @@ class AddFileReferenceToChatAction : AnAction(), DumbAware {
             fileName = virtualFile.name
         )
 
-        ToolWindowManager.getInstance(project).getToolWindow("AgentDock")?.activate(
+        ToolWindowManager.getInstance(project).getToolWindow("Agent Dock")?.activate(
             { ExternalCodeReferenceDispatcher.dispatch(project, reference) },
             true
         )

@@ -1,6 +1,6 @@
-# Agent Dock for JetBrains
+# Agent Dock
 
-Agent Dock for JetBrains brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.
+Agent Dock brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.
 
 The project's goal is to deliver a rich GUI experience for AI agents within JetBrains IDEs, including features absent from other JetBrains AI plugins, such as live token usage updates directly in the chat interface and switching between AI agents within the same chat while preserving session context.
 
@@ -51,4 +51,4 @@ Currently supported AI agents:
 
 ## Screenshot
 
-![Agent Dock for JetBrains chat interface](docs/images/agent-dock-chat.png)
+![Agent Dock chat interface](docs/images/agent-dock-chat.png)

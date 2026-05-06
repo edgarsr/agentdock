@@ -37,7 +37,7 @@ class AddCodeReferenceToChatAction : AnAction(), DumbAware {
             endLine = endLine
         )
 
-        ToolWindowManager.getInstance(project).getToolWindow("AgentDock")?.activate(
+        ToolWindowManager.getInstance(project).getToolWindow("Agent Dock")?.activate(
             { ExternalCodeReferenceDispatcher.dispatch(project, reference) },
             true
         )
