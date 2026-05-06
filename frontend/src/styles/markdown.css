@@ -161,6 +161,10 @@
         @apply my-0;
     }
 
+    & .markdown-code-block pre code {
+        @apply overflow-visible whitespace-pre-wrap break-words [overflow-wrap:anywhere];
+    }
+
     & pre code {
         @apply block overflow-x-auto bg-transparent p-3 rounded-none;
     }

@@ -11,7 +11,8 @@ export function isExploringChunk(chunk: ContentChunk): boolean {
       'rm', 'mv', 'cp', 'mkdir', 'touch', 'chmod', 'chown',
       'del', 'erase', 'rd', 'rmdir', 'move', 'copy', 'ren', 'rename',
       'new-item', 'remove-item', 'move-item', 'copy-item',
-      'curl', 'wget', 'scp', 'rsync', 'ssh', 'ftp', 'npm', 'yarn', 'git'
+      'curl', 'wget', 'scp', 'rsync', 'ssh', 'ftp', 'npm', 'yarn',
+      'add', 'commit', 'push', 'revert', 'restore'
     ];
 
     const tokens = cmd.split(/[\s"'/\\;|=&]+/);

@@ -69,7 +69,6 @@ internal fun normalizeToolRawJson(
     forceSearchInput: JsonObject? = null
 ): JsonObject? {
     normalizeExecuteReadToolRawJson(parsed, forceReadPath)?.let { return it }
-    normalizeExecuteFileListToolRawJson(parsed)?.let { return it }
     return normalizeExecuteSearchToolRawJson(parsed, forceSearchInput)
 }
 
@@ -126,7 +125,6 @@ private fun normalizedReadLocations(locations: JsonElement?, filePath: String): 
 }
 
 private data class SearchCommand(val pattern: String, val path: String?)
-private data class FileListCommand(val query: String, val path: String?)
 
 private fun normalizeExecuteSearchToolRawJson(parsed: JsonObject, forceSearchInput: JsonObject? = null): JsonObject? {
     val kind = parsed["kind"]?.jsonPrimitive?.contentOrNull?.lowercase()
@@ -176,36 +174,6 @@ private fun buildSearchRawInput(pattern: String, path: String?): JsonObject = bu
 
 private fun normalizedSearchRawOutput(rawOutput: JsonObject?): JsonObject = buildJsonObject {
     rawOutput?.get("parsed_cmd")?.let { put("parsed_cmd", it) }
-}
-
-private fun normalizeExecuteFileListToolRawJson(parsed: JsonObject): JsonObject? {
-    val kind = parsed["kind"]?.jsonPrimitive?.contentOrNull?.lowercase()
-    if (kind != "execute") return null
-
-    val command = parsed.stringAt("rawInput", "command")
-        ?: parsed.parsedCommandString()
-        ?: parsed.stringAt("title")
-        ?: return null
-    val fileList = extractFileListCommand(command) ?: return null
-    val searchInput = buildJsonObject {
-        put("query", fileList.query)
-        put("pattern", "files")
-        fileList.path?.let { put("path", it) }
-    }
-
-    return buildJsonObject {
-        parsed.forEach { (key, value) ->
-            when (key) {
-                "kind" -> put("kind", "search")
-                "title" -> put("title", "List files")
-                "content", "text" -> Unit
-                "rawInput" -> put("rawInput", searchInput)
-                "rawOutput" -> put("rawOutput", normalizedSearchRawOutput(value as? JsonObject))
-                else -> put(key, value)
-            }
-        }
-        if (parsed["title"] == null) put("title", "List files")
-    }
 }
 
 private fun JsonObject.parsedCommandString(): String? {
@@ -318,42 +286,10 @@ private fun extractSearchCommand(command: String): SearchCommand? {
     return SearchCommand(pattern, path)
 }
 
-private fun extractFileListCommand(command: String): FileListCommand? {
-    val trimmed = command.trim()
-    if (trimmed.isBlank() || hasShellControlOperator(trimmed)) return null
-
-    val tokens = shellTokens(trimmed)
-    if (tokens.isEmpty()) return null
-    val commandName = tokens.first().lowercase()
-
-    if (commandName == "rg" && tokens.any { it == "--files" }) {
-        val path = tokens.drop(1).firstOrNull { !it.startsWith("-") && it != "--files" }
-        return FileListCommand(query = "List files", path = path)
-    }
-
-    return null
-}
-
 private fun hasShellControlOperator(command: String): Boolean =
-    hasUnquotedShellControlOperator(command)
-
-private fun hasUnquotedShellControlOperator(command: String): Boolean {
-    var quote: Char? = null
-    var index = 0
-    while (index < command.length) {
-        val char = command[index]
-        val currentQuote = quote
-        when {
-            currentQuote != null && char == currentQuote -> quote = null
-            currentQuote != null -> Unit
-            char == '\'' || char == '"' -> quote = char
-            char == '|' || char == '<' || char == '>' || char == ';' -> return true
-            char == '&' && command.getOrNull(index + 1) == '&' -> return true
-        }
-        index++
-    }
-    return false
-}
+    command.any { it == '|' || it == '<' || it == '>' || it == ';' } ||
+        command.contains("&&") ||
+        command.contains("||")
 
 private fun shellTokens(command: String): List<String> {
     val tokens = mutableListOf<String>()

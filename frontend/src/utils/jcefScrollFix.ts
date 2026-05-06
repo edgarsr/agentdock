@@ -47,11 +47,10 @@ function animate() {
 function getProgressiveDelta(delta: number): number {
   const absDelta = Math.abs(delta);
   
-  let multiplier = 2;
+  let multiplier = 1.5;
 
   if (absDelta > 30) {
-    // Aggressive acceleration
-    multiplier = 2 + (absDelta - 30) * 0.1
+    multiplier = 1.5 + (absDelta - 30) * 0.75
   }
 
   // Increased cap for maximum speed

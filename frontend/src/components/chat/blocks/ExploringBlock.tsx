@@ -5,7 +5,7 @@ import { ReadActivity } from './ReadActivity';
 import { FetchActivity } from './FetchActivity';
 import { SearchActivity } from './SearchActivity';
 import { ThinkingActivity } from './ThinkingActivity';
-import { ExecuteBlock } from './ExecuteBlock';
+import { ExecuteActivity } from './ExecuteActivity';
 import { chatFocusClassName } from '../shared/focusStyles';
 
 interface Props {
@@ -86,7 +86,7 @@ export const ExploringBlock: React.FC<Props> = ({ block, isActivePrompt = false 
   };
 
   const renderEntries = () => (
-    <div className="flex flex-col gap-1 py-1 w-full min-w-0">
+    <div className="flex flex-col gap-1 px-[1px] py-1 w-full min-w-0">
       {block.entries.map((entry, i) => {
         if (entry.kind === 'thinking') {
           return <ThinkingActivity key={entry.toolCallId || i} entry={entry} />;
@@ -101,12 +101,7 @@ export const ExploringBlock: React.FC<Props> = ({ block, isActivePrompt = false 
           return <SearchActivity key={entry.toolCallId || i} entry={entry} />;
         }
         if (entry.kind === 'execute') {
-          let type = block.entries.length > 1 ? 'exploring' : 'single-exploring';
-          return (
-            <div key={entry.toolCallId || i} className="py-1">
-              <ExecuteBlock type={type} block={{ type: 'tool_call', entry, isReplay: block.isReplay }} isActivePrompt={isActivePrompt} />
-            </div>
-          );
+          return <ExecuteActivity key={entry.toolCallId || i} entry={entry} isActivePrompt={isActivePrompt} />;
         }
         return null;
       })}
@@ -137,7 +132,7 @@ export const ExploringBlock: React.FC<Props> = ({ block, isActivePrompt = false 
         </span>
       </button>
 
-      <div className={`grid transition-[grid-template-rows,opacity,transform] duration-300 ease-in-out w-full min-w-0 
+      <div className={`grid px-[1px] duration-300 ease-in-out w-full min-w-0 
         ${isExpanded ? 'opacity-100 translate-y-0 overflow-visible' : 'opacity-0 -translate-y-2 overflow-hidden'}`}
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >

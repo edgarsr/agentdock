@@ -109,25 +109,24 @@ private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: Json
         ?.let(::parseStoredToolRawJson)
 
     val mergedRaw = mergeJsonObjects(existingRaw, incomingRaw)
-    val normalizedMergedRaw = normalizeToolRawJson(mergedRaw) ?: mergedRaw
-    val mergedKind = normalizedMergedRaw["kind"]?.jsonPrimitive?.contentOrNull
+    val mergedKind = event["toolKind"]?.jsonPrimitive?.contentOrNull
         ?: incomingRaw["kind"]?.jsonPrimitive?.contentOrNull
-        ?: event["toolKind"]?.jsonPrimitive?.contentOrNull
         ?: existing?.get("toolKind")?.jsonPrimitive?.contentOrNull
         ?: existingRaw?.get("kind")?.jsonPrimitive?.contentOrNull
+        ?: mergedRaw["kind"]?.jsonPrimitive?.contentOrNull
         ?: ""
     val mergedRawFinal = if (mergedKind == "edit") {
-        preserveEditDiffContent(existingRaw, incomingRaw, normalizedMergedRaw)
+        preserveEditDiffContent(existingRaw, incomingRaw, mergedRaw)
     } else {
-        normalizedMergedRaw
+        mergedRaw
     }
     val mergedRawJson = storedToolRawJson(mergedRawFinal.toString())
 
-    val mergedTitle = mergedRawFinal["title"]?.jsonPrimitive?.contentOrNull
-        ?: event["toolTitle"]?.jsonPrimitive?.contentOrNull
+    val mergedTitle = event["toolTitle"]?.jsonPrimitive?.contentOrNull
         ?: incomingRaw["title"]?.jsonPrimitive?.contentOrNull
         ?: existing?.get("toolTitle")?.jsonPrimitive?.contentOrNull
         ?: existingRaw?.get("title")?.jsonPrimitive?.contentOrNull
+        ?: mergedRawFinal["title"]?.jsonPrimitive?.contentOrNull
         ?: ""
 
     val mergedStatus = event["toolStatus"]?.jsonPrimitive?.contentOrNull
@@ -290,8 +289,7 @@ internal fun AcpBridge.buildAssistantMetadata(
 }
 
 internal fun AcpBridge.buildStoredToolCallChunk(rawJson: String): JsonObject {
-    val storedRawJson = storedToolRawJson(rawJson)
-    val parsed = runCatching { Json.parseToJsonElement(storedRawJson).jsonObject }.getOrNull()
+    val parsed = runCatching { Json.parseToJsonElement(rawJson).jsonObject }.getOrNull()
     return buildJsonObject {
         put("role", "assistant")
         put("type", "tool_call")
@@ -299,7 +297,7 @@ internal fun AcpBridge.buildStoredToolCallChunk(rawJson: String): JsonObject {
         put("toolKind", parsed?.get("kind")?.jsonPrimitive?.contentOrNull ?: "")
         put("toolTitle", parsed?.get("title")?.jsonPrimitive?.contentOrNull ?: "")
         put("toolStatus", parsed?.get("status")?.jsonPrimitive?.contentOrNull ?: "")
-        put("toolRawJson", storedRawJson)
+        put("toolRawJson", storedToolRawJson(rawJson))
     }
 }
 
