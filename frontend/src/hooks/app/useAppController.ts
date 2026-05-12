@@ -42,6 +42,17 @@ function forkedTitle(sourceTitle?: string): string {
   return title.length <= 80 ? title : `${title.slice(0, 77)}...`;
 }
 
+function normalizeAdapterNames(adapterNames: Array<string | undefined>): string[] {
+  const result = new Map<string, string>();
+  adapterNames.forEach((adapterName) => {
+    const clean = (adapterName || '').trim();
+    if (!clean) return;
+    result.delete(clean);
+    result.set(clean, clean);
+  });
+  return Array.from(result.values());
+}
+
 export function useAppController() {
   const [tabs, setTabs] = useState<ChatTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
@@ -166,6 +177,16 @@ export function useAppController() {
       }
       return { ...prev, [tabId]: state };
     });
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== tabId || tab.type !== 'chat') return tab;
+      const inherited = tab.historySession?.allAdapterNames || tab.inheritedAdapterNames || [];
+      const inheritedAdapterNames = normalizeAdapterNames([
+        ...inherited,
+        tab.agentId,
+        state.adapterName,
+      ]);
+      return { ...tab, inheritedAdapterNames };
+    }));
 
     const pendingContinuation = pendingConversationContinuationsRef.current[tabId];
     if (!pendingContinuation) return;
@@ -289,10 +310,18 @@ export function useAppController() {
     const newId = nextId('tab');
     const newConversationId = nextId('conv');
     const title = forkedTitle(sourceTab.title);
+    const sourceSessionState = tabSessionState[tabId];
+    const forkPromptCount = payload.messages.filter((message) => message.role === 'user').length;
+    const inheritedAdapterNames = normalizeAdapterNames([
+      ...(sourceTab.historySession?.allAdapterNames || []),
+      ...(sourceTab.inheritedAdapterNames || []),
+      sourceTab.agentId,
+      sourceSessionState?.adapterName,
+    ]);
     const handoffContext: PendingHandoffContext = {
       id: nextId('handoff'),
-      sourceSessionId: tabSessionState[tabId]?.acpSessionId || '',
-      sourceAgentId: tabSessionState[tabId]?.adapterName || sourceTab.agentId || '',
+      sourceSessionId: sourceSessionState?.acpSessionId || '',
+      sourceAgentId: sourceSessionState?.adapterName || sourceTab.agentId || '',
       targetAgentId: resolvedAgentId,
       text: payload.handoffText,
     };
@@ -307,6 +336,11 @@ export function useAppController() {
         agentId: resolvedAgentId,
         initialMessages: payload.messages,
         metadataTitleOverride: title,
+        inheritedAdapterNames,
+        forkBase: {
+          sourceConversationId: sourceTab.historySession?.conversationId || sourceTab.conversationId,
+          promptCount: forkPromptCount,
+        },
       }
     ]);
     initTabUi(newId);
@@ -419,7 +453,8 @@ export function useAppController() {
         title,
         conversationId: conversationKey,
         agentId: item.adapterName,
-        historySession: item
+        historySession: item,
+        inheritedAdapterNames: item.allAdapterNames || [item.adapterName]
       }
     ]);
     initTabUi(newId);

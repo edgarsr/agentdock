@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import agentdock.history.ConversationAssistantMetadata
+import agentdock.history.ForkConversationBase
 
 @Serializable
 internal data class AdapterModelPayload(
@@ -127,6 +128,7 @@ internal data class LivePromptCapture(
     val sessionId: String,
     val adapterName: String,
     val blocks: List<JsonObject>,
+    val forkBase: ForkConversationBase?,
     val startedAtMillis: Long,
     val assistantMeta: ConversationAssistantMetadata?,
     @Volatile var closed: Boolean = false,

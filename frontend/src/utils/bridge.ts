@@ -8,6 +8,7 @@ import {
   ConversationTranscriptSavedPayload,
   FileChangeOperation,
   FileChangeStatsResultPayload,
+  ForkConversationBase,
   GlobalSettingsPayload,
   SessionMetadataUpdatePayload,
   ToolCallEvent,
@@ -341,12 +342,12 @@ export const ACPBridge = {
     });
   },
 
-  sendPrompt: (conversationId: string, message: string) => {
+  sendPrompt: (conversationId: string, message: string, forkBase?: ForkConversationBase) => {
     if (typeof window.__sendPrompt !== 'function') {
       return Promise.reject(new Error('Send prompt bridge is not available.'));
     }
     return awaitBridgeOperation('send_prompt', (requestId) => {
-      window.__sendPrompt?.(conversationId, message, requestId);
+      window.__sendPrompt?.(conversationId, message, requestId, forkBase);
     });
   },
 

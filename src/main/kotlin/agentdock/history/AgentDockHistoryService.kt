@@ -33,6 +33,7 @@ object AgentDockHistoryService {
         adapterName: String,
         promptCount: Int,
         titleCandidate: String?,
+        inheritedAdapterNames: List<String> = emptyList(),
         touchUpdatedAt: Boolean = false,
         forceTitle: Boolean = false
     ): Boolean {
@@ -43,6 +44,7 @@ object AgentDockHistoryService {
             adapterName,
             promptCount,
             titleCandidate,
+            inheritedAdapterNames,
             touchUpdatedAt,
             forceTitle
         )
@@ -103,7 +105,8 @@ object AgentDockHistoryService {
         adapterName: String,
         blocks: List<JsonObject>,
         events: List<JsonObject>,
-        assistantMeta: ConversationAssistantMetadata? = null
+        assistantMeta: ConversationAssistantMetadata? = null,
+        forkBase: ForkConversationBase? = null
     ): Boolean {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = runCatching {
@@ -115,7 +118,12 @@ object AgentDockHistoryService {
         if (cleanConversationId.isBlank() || cleanSessionId.isBlank() || cleanAdapterName.isBlank()) return false
 
         val file = HistoryStorage.conversationDataFile(cleanProjectPath, cleanConversationId)
-        val current = HistoryReplayStore.readConversationData(file) ?: ConversationReplayData()
+        val current = conversationDataWithForkBase(
+            projectPath = cleanProjectPath,
+            targetConversationId = cleanConversationId,
+            targetFile = file,
+            forkBase = forkBase
+        )
         val prompt = ConversationPromptReplayEntry(
             blocks = HistoryReplayStore.normalizeReplayBlocks(blocks),
             events = HistoryReplayStore.normalizeReplayBlocks(events),
@@ -145,25 +153,37 @@ object AgentDockHistoryService {
         val updatedData = current.copy(sessions = updatedSessions)
         HistoryReplayStore.writeConversationData(file, updatedData)
 
-        if (
-            !HistoryConversationIndexService.hasIndexedConversationSession(
-                cleanProjectPath,
-                cleanConversationId,
-                cleanSessionId,
-                cleanAdapterName
-            )
-        ) {
-            upsertRuntimeSessionMetadata(
-                projectPath = cleanProjectPath,
-                conversationId = cleanConversationId,
-                sessionId = cleanSessionId,
-                adapterName = cleanAdapterName,
-                promptCount = HistoryReplayStore.replayPromptCount(updatedData),
-                titleCandidate = HistoryReplayStore.titleCandidateFromReplayData(updatedData),
-                touchUpdatedAt = true
-            )
-        }
+        upsertRuntimeSessionMetadata(
+            projectPath = cleanProjectPath,
+            conversationId = cleanConversationId,
+            sessionId = cleanSessionId,
+            adapterName = cleanAdapterName,
+            promptCount = HistoryReplayStore.replayPromptCount(updatedData),
+            titleCandidate = HistoryReplayStore.titleCandidateFromReplayData(updatedData),
+            touchUpdatedAt = true
+        )
         return true
+    }
+
+    private fun conversationDataWithForkBase(
+        projectPath: String,
+        targetConversationId: String,
+        targetFile: java.io.File,
+        forkBase: ForkConversationBase?
+    ): ConversationReplayData {
+        val current = HistoryReplayStore.readConversationData(targetFile)
+        if (current != null) return current
+        if (targetFile.exists() && targetFile.length() > 0L) return ConversationReplayData()
+
+        val base = forkBase ?: return ConversationReplayData()
+        val cleanSourceConversationId = runCatching {
+            HistoryStorage.requireSafeConversationId(base.sourceConversationId)
+        }.getOrNull() ?: return ConversationReplayData()
+        if (cleanSourceConversationId == targetConversationId) return ConversationReplayData()
+
+        val sourceFile = HistoryStorage.conversationDataFile(projectPath, cleanSourceConversationId)
+        val source = HistoryReplayStore.readConversationData(sourceFile) ?: return ConversationReplayData()
+        return HistoryReplayStore.copyPromptPrefix(source, base.promptCount)
     }
 
     fun deleteConversationReplay(projectPath: String?, conversationId: String?): Boolean {

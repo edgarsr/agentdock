@@ -63,6 +63,8 @@ export function AppTabContent({
           pendingHandoff={pendingHandoff}
           initialMessages={tab.initialMessages}
           metadataTitleOverride={tab.metadataTitleOverride}
+          inheritedAdapterNames={tab.inheritedAdapterNames}
+          forkBase={tab.forkBase}
           availableAgents={runnableAgents}
           isActive={isActive}
           onUserMessageSent={onUserMessageSent}

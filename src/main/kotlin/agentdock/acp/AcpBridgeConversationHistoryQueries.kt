@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -19,6 +20,7 @@ private data class SessionMetadataUpdatePayload(
     val adapterName: String,
     val promptCount: Int,
     val title: String?,
+    val inheritedAdapterNames: List<String>,
     val touchUpdatedAt: Boolean,
     val forceTitle: Boolean
 )
@@ -44,6 +46,9 @@ private fun parseSessionMetadataUpdatePayload(payload: String?): SessionMetadata
             adapterName = adapterName,
             promptCount = obj["promptCount"]?.jsonPrimitive?.intOrNull ?: 0,
             title = obj["title"]?.jsonPrimitive?.contentOrNull,
+            inheritedAdapterNames = obj["inheritedAdapterNames"]?.jsonArray
+                ?.mapNotNull { it.jsonPrimitive.contentOrNull?.trim()?.takeIf(String::isNotBlank) }
+                ?: emptyList(),
             touchUpdatedAt = obj["touchUpdatedAt"]?.jsonPrimitive?.booleanOrNull ?: false,
             forceTitle = obj["forceTitle"]?.jsonPrimitive?.booleanOrNull ?: false
         )
@@ -161,6 +166,7 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                         adapterName = request.adapterName,
                         promptCount = request.promptCount,
                         titleCandidate = request.title,
+                        inheritedAdapterNames = request.inheritedAdapterNames,
                         touchUpdatedAt = request.touchUpdatedAt,
                         forceTitle = request.forceTitle
                     )

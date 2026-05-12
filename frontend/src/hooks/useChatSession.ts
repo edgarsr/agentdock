@@ -5,7 +5,8 @@ import {
   PermissionRequest,
   HistorySessionMeta,
   ChatAttachment,
-  PendingHandoffContext
+  PendingHandoffContext,
+  ForkConversationBase
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayMessages } from '../utils/replay';
@@ -29,6 +30,8 @@ import { useAgentRuntimeOptions } from './chatSession/useAgentRuntimeOptions';
 import { useAvailableCommands } from './chatSession/useAvailableCommands';
 import { useBufferedMessageChunks } from './chatSession/useBufferedMessageChunks';
 
+const EMPTY_ADAPTER_NAMES: string[] = [];
+
 export function useChatSession(
   conversationId: string,
   availableAgents: AgentOption[],
@@ -37,6 +40,8 @@ export function useChatSession(
   pendingHandoff?: PendingHandoffContext,
   initialMessages: Message[] = [],
   metadataTitleOverride?: string,
+  inheritedAdapterNames: string[] = EMPTY_ADAPTER_NAMES,
+  forkBase?: ForkConversationBase,
   onHandoffConsumed?: (handoffId: string) => void,
   onUserMessageSent?: () => void
 ) {
@@ -71,6 +76,7 @@ export function useChatSession(
   const pinnedAgentSnapshotRef = useRef<PinnedAgentSnapshot | null>(null);
   const recoveryInFlightRef = useRef(false);
   const initialUserMessageCountRef = useRef(initialMessages.filter((message) => message.role === 'user').length);
+  const forkBaseRef = useRef<ForkConversationBase | undefined>(forkBase);
 
   const {
     applyBufferedChunks,
@@ -362,7 +368,9 @@ export function useChatSession(
         setIsSending(true);
         
         // Assistant message is already added in handleSend, we just need to trigger the actual send
-        ACPBridge.sendPrompt(conversationId, JSON.stringify(blocksToSend)).then(() => {
+        const forkBaseToPersist = forkBaseRef.current;
+        ACPBridge.sendPrompt(conversationId, JSON.stringify(blocksToSend), forkBaseToPersist).then(() => {
+          forkBaseRef.current = undefined;
           consumeHandoff();
         }).catch((err) => {
           console.warn('[useChatSession] Failed to send pending blocks:', err);
@@ -473,7 +481,7 @@ export function useChatSession(
     if (promptCount <= 0) return;
 
     const title = metadataTitleOverride?.trim() || titleFromFirstPrompt(messages);
-    const fingerprint = `${acpSessionId}|${selectedAgentId}|${promptCount}|${title || ''}`;
+    const fingerprint = `${acpSessionId}|${selectedAgentId}|${promptCount}|${title || ''}|${inheritedAdapterNames.join(',')}`;
     if (lastMetadataFingerprintRef.current === fingerprint) return;
 
     ACPBridge.updateSessionMetadata({
@@ -482,6 +490,7 @@ export function useChatSession(
       adapterName: selectedAgentId,
       promptCount,
       title,
+      inheritedAdapterNames,
       touchUpdatedAt: touchUpdatedAtRef.current,
       forceTitle: Boolean(metadataTitleOverride?.trim()),
     });
@@ -489,7 +498,7 @@ export function useChatSession(
       ACPBridge.requestHistoryList();
     }, 100);
     lastMetadataFingerprintRef.current = fingerprint;
-  }, [conversationId, status, acpSessionId, selectedAgentId, messages, metadataTitleOverride]);
+  }, [conversationId, status, acpSessionId, selectedAgentId, messages, metadataTitleOverride, inheritedAdapterNames]);
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();
@@ -541,7 +550,9 @@ export function useChatSession(
       return;
     }
 
-    ACPBridge.sendPrompt(conversationId, JSON.stringify(outgoingBlocks)).then(() => {
+    const forkBaseToPersist = forkBaseRef.current;
+    ACPBridge.sendPrompt(conversationId, JSON.stringify(outgoingBlocks), forkBaseToPersist).then(() => {
+      forkBaseRef.current = undefined;
       consumeHandoff();
       setPermissionQueue([]);
     }).catch((e) => {

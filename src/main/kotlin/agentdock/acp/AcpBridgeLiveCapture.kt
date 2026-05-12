@@ -3,8 +3,13 @@ package agentdock.acp
 import kotlinx.serialization.json.JsonObject
 import agentdock.history.ConversationAssistantMetadata
 import agentdock.history.AgentDockHistoryService
+import agentdock.history.ForkConversationBase
 
-internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonObject>): String? {
+internal fun AcpBridge.beginLivePromptCapture(
+    chatId: String,
+    blocks: List<JsonObject>,
+    forkBase: ForkConversationBase?
+): String? {
     val projectPath = service.project.basePath.orEmpty()
     val sessionId = service.sessionId(chatId).orEmpty()
     val adapterName = service.activeAdapterName(chatId).orEmpty()
@@ -18,6 +23,7 @@ internal fun AcpBridge.beginLivePromptCapture(chatId: String, blocks: List<JsonO
         sessionId = sessionId,
         adapterName = adapterName,
         blocks = blocks,
+        forkBase = forkBase,
         startedAtMillis = System.currentTimeMillis(),
         assistantMeta = buildAssistantMetadata(
             adapterName = adapterName,
@@ -82,6 +88,7 @@ internal fun AcpBridge.flushLivePromptCapture(
             sessionId = capture.sessionId,
             adapterName = capture.adapterName,
             blocks = capture.blocks,
+            forkBase = capture.forkBase,
             events = capture.events.toList(),
             startedAtMillis = capture.startedAtMillis,
             assistantMeta = capture.assistantMeta,
@@ -113,7 +120,8 @@ internal fun AcpBridge.flushLivePromptCapture(
         adapterName = snapshot.adapterName,
         blocks = snapshot.blocks,
         events = snapshot.events,
-        assistantMeta = assistantMeta
+        assistantMeta = assistantMeta,
+        forkBase = snapshot.forkBase
     )
     return assistantMeta
 }
@@ -124,6 +132,7 @@ private data class LivePromptCaptureSnapshot(
     val sessionId: String,
     val adapterName: String,
     val blocks: List<JsonObject>,
+    val forkBase: ForkConversationBase?,
     val events: List<JsonObject>,
     val startedAtMillis: Long,
     val assistantMeta: ConversationAssistantMetadata?,

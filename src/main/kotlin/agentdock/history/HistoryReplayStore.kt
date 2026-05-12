@@ -23,6 +23,22 @@ internal object HistoryReplayStore {
         file.atomicWriteText(HistoryStorage.json.encodeToString(data))
     }
 
+    fun copyPromptPrefix(data: ConversationReplayData, promptCount: Int): ConversationReplayData {
+        if (promptCount <= 0) return ConversationReplayData()
+        var remaining = promptCount
+        val sessions = data.sessions.mapNotNull { session ->
+            if (remaining <= 0) return@mapNotNull null
+            val prompts = session.prompts.take(remaining)
+            remaining -= prompts.size
+            if (prompts.isEmpty()) {
+                null
+            } else {
+                session.copy(prompts = prompts)
+            }
+        }
+        return ConversationReplayData(sessions = sessions)
+    }
+
     fun normalizeReplayBlocks(blocks: List<JsonObject>): List<JsonObject> {
         if (blocks.size < 2) return blocks
         val normalized = ArrayList<JsonObject>(blocks.size)

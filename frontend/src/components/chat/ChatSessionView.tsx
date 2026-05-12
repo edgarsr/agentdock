@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useChatSession } from '../../hooks/useChatSession';
 import { useFileChanges } from '../../hooks/useFileChanges';
-import { AgentOption, FileChangeSummary, HistorySessionMeta, Message, PendingHandoffContext } from '../../types/chat';
+import { AgentOption, FileChangeSummary, ForkConversationBase, HistorySessionMeta, Message, PendingHandoffContext } from '../../types/chat';
 import { Check, Copy, Download, X } from 'lucide-react';
 import { acquireJcefLivePromptRepaint } from '../../utils/jcefHostRepaint';
 import {
@@ -29,6 +29,8 @@ interface ChatSessionProps {
   pendingHandoff?: PendingHandoffContext;
   initialMessages?: Message[];
   metadataTitleOverride?: string;
+  inheritedAdapterNames?: string[];
+  forkBase?: ForkConversationBase;
   isActive?: boolean;
   onUserMessageSent?: () => void;
   onAssistantActivity?: () => void;
@@ -50,6 +52,8 @@ export default function ChatSessionView({
   pendingHandoff,
   initialMessages,
   metadataTitleOverride,
+  inheritedAdapterNames,
+  forkBase,
   isActive = false,
   onUserMessageSent,
   onAssistantActivity,
@@ -96,6 +100,8 @@ export default function ChatSessionView({
     pendingHandoff,
     initialMessages,
     metadataTitleOverride,
+    inheritedAdapterNames,
+    forkBase,
     onHandoffConsumed,
     onUserMessageSent
   );

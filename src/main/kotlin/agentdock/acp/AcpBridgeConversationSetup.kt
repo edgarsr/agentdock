@@ -171,7 +171,7 @@ internal fun AcpBridge.installConversationQueries() {
                 }
 
                 pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
-                val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks)
+                val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks, parsed.forkBase)
                 val job = scope.launch(Dispatchers.Default) {
                     pushStatus(chatId, "prompting")
                     try {

@@ -66,6 +66,11 @@ data class ConversationReplayData(
     val sessions: List<ConversationSessionReplayEntry> = emptyList()
 )
 
+data class ForkConversationBase(
+    val sourceConversationId: String,
+    val promptCount: Int
+)
+
 @Serializable
 data class DeleteConversationFailure(
     val conversationId: String,
@@ -102,6 +107,7 @@ internal data class HistoryConversationIndexEntry(
     val titleUserSet: Boolean = false,
     val promptCount: Int? = null,
     val transcriptPath: String? = null,
+    val usedAdapterNames: List<String> = emptyList(),
     val sessions: List<HistorySessionIndexEntry> = emptyList()
 )
 

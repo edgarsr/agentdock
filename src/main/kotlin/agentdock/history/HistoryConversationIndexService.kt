@@ -9,23 +9,6 @@ internal object HistoryConversationIndexService {
         return Regex("^\\[[^\\]\\r\\n]+]").containsMatchIn(normalized)
     }
 
-    fun hasIndexedConversationSession(
-        projectPath: String,
-        conversationId: String,
-        sessionId: String,
-        adapterName: String
-    ): Boolean {
-        val cleanConversationId = runCatching {
-            HistoryStorage.requireSafeConversationId(conversationId)
-        }.getOrElse { return false }
-        return HistoryStorage.readExistingProjectIndex(projectPath).any { conversation ->
-            conversation.id == cleanConversationId &&
-                conversation.sessions.any { session ->
-                    session.sessionId == sessionId && session.adapterName == adapterName
-                }
-        }
-    }
-
     @Synchronized
     fun upsertRuntimeSessionMetadata(
         projectPath: String?,
@@ -34,6 +17,7 @@ internal object HistoryConversationIndexService {
         adapterName: String,
         promptCount: Int,
         titleCandidate: String?,
+        inheritedAdapterNames: List<String> = emptyList(),
         touchUpdatedAt: Boolean = false,
         forceTitle: Boolean = false
     ): Boolean {
@@ -114,8 +98,16 @@ internal object HistoryConversationIndexService {
                 else -> "Untitled Session"
             },
             titleUserSet = mergedConversation?.titleUserSet ?: false,
-            promptCount = mergePromptCounts(mergedConversation?.promptCount, promptCount),
+            promptCount = promptCountForConversation(
+                projectPath = cleanProjectPath,
+                conversationId = cleanConversationId,
+                fallback = mergePromptCounts(mergedConversation?.promptCount, promptCount)
+            ),
             transcriptPath = mergedConversation?.transcriptPath,
+            usedAdapterNames = moveAdapterNameToEnd(
+                base = effectiveUsedAdapterNames(mergedConversation, inheritedAdapterNames),
+                adapterName = cleanAdapterName
+            ),
             sessions = updatedSessions
         )
 
@@ -238,6 +230,10 @@ internal object HistoryConversationIndexService {
         conversations[normalizedConversationIndex] = existingConversation.copy(
             title = existingConversation.title.ifBlank { titleCandidate?.trim().orEmpty() },
             promptCount = mergePromptCounts(existingConversation.promptCount, extractedPromptCount),
+            usedAdapterNames = moveAdapterNameToEnd(
+                base = effectiveUsedAdapterNames(existingConversation),
+                adapterName = cleanAdapterName
+            ),
             sessions = existingConversation.sessions + newSession
         )
         HistoryStorage.writeProjectIndex(indexFile, conversations)
@@ -319,6 +315,9 @@ internal object HistoryConversationIndexService {
                 !right.transcriptPath.isNullOrBlank() -> right.transcriptPath
                 else -> null
             },
+            usedAdapterNames = normalizeAdapterNames(
+                adapterNamesForConversation(left) + adapterNamesForConversation(right)
+            ),
             sessions = mergedSessionsByKey.values.toList()
         )
     }
@@ -341,5 +340,43 @@ internal object HistoryConversationIndexService {
             incoming == null -> current
             else -> maxOf(current, incoming)
         }
+    }
+
+    private fun promptCountForConversation(projectPath: String, conversationId: String, fallback: Int?): Int? {
+        val replayFile = HistoryStorage.conversationDataFile(projectPath, conversationId)
+        val replayData = HistoryReplayStore.readConversationData(replayFile)
+        return replayData?.let { HistoryReplayStore.replayPromptCount(it) } ?: fallback
+    }
+
+    internal fun adapterNamesForConversation(conversation: HistoryConversationIndexEntry): List<String> {
+        val stored = normalizeAdapterNames(conversation.usedAdapterNames)
+        if (stored.isNotEmpty()) return stored
+        return normalizeAdapterNames(conversation.sessions.map { it.adapterName })
+    }
+
+    internal fun normalizeAdapterNames(adapterNames: List<String>): List<String> {
+        val result = linkedMapOf<String, String>()
+        adapterNames.forEach { adapterName ->
+            val clean = adapterName.trim()
+            if (clean.isBlank()) return@forEach
+            result.remove(clean)
+            result[clean] = clean
+        }
+        return result.values.toList()
+    }
+
+    internal fun moveAdapterNameToEnd(base: List<String>, adapterName: String): List<String> {
+        return normalizeAdapterNames(base + adapterName)
+    }
+
+    private fun effectiveUsedAdapterNames(
+        conversation: HistoryConversationIndexEntry?,
+        inheritedAdapterNames: List<String> = emptyList()
+    ): List<String> {
+        return normalizeAdapterNames(
+            inheritedAdapterNames + (
+                conversation?.let(::adapterNamesForConversation) ?: emptyList()
+            )
+        )
     }
 }

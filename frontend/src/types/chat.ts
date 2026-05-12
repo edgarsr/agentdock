@@ -178,6 +178,8 @@ export interface ChatTab {
   historySession?: HistorySessionMeta;
   initialMessages?: Message[];
   metadataTitleOverride?: string;
+  inheritedAdapterNames?: string[];
+  forkBase?: ForkConversationBase;
 }
 
 export interface HistoryDeleteFailure {
@@ -365,8 +367,14 @@ export interface SessionMetadataUpdatePayload {
   adapterName: string;
   promptCount: number;
   title?: string;
+  inheritedAdapterNames?: string[];
   touchUpdatedAt?: boolean;
   forceTitle?: boolean;
+}
+
+export interface ForkConversationBase {
+  sourceConversationId: string;
+  promptCount: number;
 }
 
 export interface ContinueConversationPayload {
@@ -454,7 +462,12 @@ declare global {
     __startAgent?: (conversationId: string, adapterId?: string, modelId?: string, requestId?: string) => void;
     __setModel?: (conversationId: string, adapterId: string, modelId: string) => void;
     __setMode?: (conversationId: string, adapterId: string, modeId: string) => void;
-    __sendPrompt?: (conversationId: string, message: string, requestId?: string) => void;
+    __sendPrompt?: (
+      conversationId: string,
+      message: string,
+      requestId?: string,
+      forkBase?: ForkConversationBase
+    ) => void;
     __requestAdapters?: () => void;
     __notifyReady?: () => void;
     __respondPermission?: (requestId: string, decision: string) => void;

@@ -53,6 +53,7 @@ internal object HistorySyncService {
             ?: return emptyList()
 
         val title = conversation.title.ifBlank { "Untitled" }
+        val usedAdapterNames = HistoryConversationIndexService.adapterNamesForConversation(conversation)
         return conversation.sessions.map { session ->
             SessionMeta(
                 sessionId = session.sessionId,
@@ -65,7 +66,7 @@ internal object HistorySyncService {
                 filePath = session.sourceFilePath.orEmpty(),
                 createdAt = session.createdAt,
                 updatedAt = session.updatedAt,
-                allAdapterNames = conversation.sessions.map { it.adapterName }.distinct()
+                allAdapterNames = usedAdapterNames
             )
         }
     }
@@ -132,11 +133,22 @@ internal object HistorySyncService {
                     && !conversation.titleUserSet
                     && !blocksExistingTitle
                     && syncedTitle != conversation.title
+                val normalizedUsedAdapterNames = HistoryConversationIndexService.adapterNamesForConversation(conversation)
+                if (normalizedUsedAdapterNames != conversation.usedAdapterNames) {
+                    changed = true
+                }
                 val updatedConversation = if (needsTitleUpdate) {
                     changed = true
-                    conversation.copy(title = syncedTitle, sessions = keptSessions)
+                    conversation.copy(
+                        title = syncedTitle,
+                        usedAdapterNames = normalizedUsedAdapterNames,
+                        sessions = keptSessions
+                    )
                 } else {
-                    conversation.copy(sessions = keptSessions)
+                    conversation.copy(
+                        usedAdapterNames = normalizedUsedAdapterNames,
+                        sessions = keptSessions
+                    )
                 }
                 updatedConversation
             }
@@ -148,6 +160,7 @@ internal object HistorySyncService {
                 HistoryConversationIndexEntry(
                     id = HistoryEnvironment.conversationId(meta.adapterName, meta.sessionId),
                     title = meta.title,
+                    promptCount = meta.promptCount,
                     sessions = listOf(
                         HistorySessionIndexEntry(
                             sessionId = meta.sessionId,
@@ -157,7 +170,8 @@ internal object HistorySyncService {
                             sourceFilePath = meta.filePath.takeIf { it.isNotBlank() },
                             changes = null
                         )
-                    )
+                    ),
+                    usedAdapterNames = listOf(meta.adapterName)
                 )
             }
 
@@ -320,6 +334,10 @@ internal object HistorySyncService {
                     runCatching { AcpAdapterPaths.isDownloaded(session.adapterName) }.getOrDefault(false)
                 }
                 val latestSession = visibleSessions.maxByOrNull { it.updatedAt } ?: return@mapNotNull null
+                val visibleAdapterNames = HistoryConversationIndexService.adapterNamesForConversation(conversation)
+                    .filter { adapterName ->
+                        runCatching { AcpAdapterPaths.isDownloaded(adapterName) }.getOrDefault(false)
+                    }
                 SessionMeta(
                     sessionId = latestSession.sessionId,
                     adapterName = latestSession.adapterName,
@@ -331,7 +349,9 @@ internal object HistorySyncService {
                     filePath = latestSession.sourceFilePath.orEmpty(),
                     createdAt = latestSession.createdAt,
                     updatedAt = latestSession.updatedAt,
-                    allAdapterNames = visibleSessions.map { it.adapterName }.distinct()
+                    allAdapterNames = visibleAdapterNames.ifEmpty {
+                        visibleSessions.map { it.adapterName }.distinct()
+                    }
                 )
             }.sortedByDescending { it.updatedAt }
     }

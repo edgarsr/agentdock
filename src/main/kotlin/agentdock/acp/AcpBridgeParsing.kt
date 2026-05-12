@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import com.agentclientprotocol.model.*
+import agentdock.history.ForkConversationBase
 import kotlinx.serialization.json.*
 
 internal data class ParsedStartPayload(
@@ -14,7 +15,8 @@ internal data class ParsedBlocksPayload(
     val requestId: String?,
     val chatId: String?,
     val blocks: List<ContentBlock>,
-    val rawBlocks: List<JsonObject>
+    val rawBlocks: List<JsonObject>,
+    val forkBase: ForkConversationBase?
 )
 
 internal data class ParsedCancelPayload(
@@ -83,11 +85,12 @@ internal fun parseHistoryConversationCliPayload(payload: String?): Pair<String?,
 
 internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
     val raw = payload?.trim().orEmpty()
-    if (raw.isEmpty()) return ParsedBlocksPayload(null, null, emptyList(), emptyList())
+    if (raw.isEmpty()) return ParsedBlocksPayload(null, null, emptyList(), emptyList(), null)
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
         val requestId = obj["requestId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val chatId = obj["chatId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val forkBase = parseForkConversationBase(obj["forkBase"])
 
         // 1. Try to get blocks directly if present
         val blocksElement = obj["blocks"]
@@ -96,7 +99,8 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
                 requestId = requestId,
                 chatId = chatId,
                 blocks = parseContentBlocks(blocksElement),
-                rawBlocks = blocksElement.jsonArray.mapNotNull { it as? JsonObject }
+                rawBlocks = blocksElement.jsonArray.mapNotNull { it as? JsonObject },
+                forkBase = forkBase
             )
         }
 
@@ -108,7 +112,13 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
             runCatching {
                 val rawBlocks = Json.parseToJsonElement(textValue).jsonArray.mapNotNull { it as? JsonObject }
                 val blocks = parseContentBlocks(JsonArray(rawBlocks))
-                ParsedBlocksPayload(requestId = requestId, chatId = chatId, blocks = blocks, rawBlocks = rawBlocks)
+                ParsedBlocksPayload(
+                    requestId = requestId,
+                    chatId = chatId,
+                    blocks = blocks,
+                    rawBlocks = rawBlocks,
+                    forkBase = forkBase
+                )
             }.getOrNull()?.takeIf { it.blocks.isNotEmpty() }?.let { parsed ->
                 return parsed
             }
@@ -124,9 +134,18 @@ internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
                     put("type", "text")
                     put("text", textValue)
                 }
-            )
+            ),
+            forkBase = forkBase
         )
-    } catch (_: Exception) { ParsedBlocksPayload(null, null, emptyList(), emptyList()) }
+    } catch (_: Exception) { ParsedBlocksPayload(null, null, emptyList(), emptyList(), null) }
+}
+
+private fun parseForkConversationBase(element: JsonElement?): ForkConversationBase? {
+    val obj = element as? JsonObject ?: return null
+    val sourceConversationId = obj["sourceConversationId"]?.jsonPrimitive?.content?.trim().orEmpty()
+    val promptCount = obj["promptCount"]?.jsonPrimitive?.intOrNull ?: 0
+    if (sourceConversationId.isBlank() || promptCount <= 0) return null
+    return ForkConversationBase(sourceConversationId = sourceConversationId, promptCount = promptCount)
 }
 
 internal fun parseCancelPayload(payload: String?): ParsedCancelPayload {
