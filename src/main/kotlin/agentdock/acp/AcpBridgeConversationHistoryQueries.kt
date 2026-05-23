@@ -122,23 +122,20 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                             }
                             pushStatus(chatId, "initializing")
                             startHistoryReplayCapture(chatId, projectPath, conversationId)
-                            sessionsChain.forEach { session ->
-                                beginImportedReplaySession(chatId, session.sessionId, session.adapterName, session.modelId, session.modeId)
-                                withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                                    service.loadSession(
-                                        chatId,
-                                        session.adapterName,
-                                        session.sessionId,
-                                        session.modelId,
-                                        session.modeId
-                                    )
-                                }
+                            val lastSession = sessionsChain.last()
+                            beginImportedReplaySession(chatId, lastSession.sessionId, lastSession.adapterName, lastSession.modelId, lastSession.modeId)
+                            withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
+                                service.loadSession(
+                                    chatId,
+                                    lastSession.adapterName,
+                                    lastSession.sessionId,
+                                    lastSession.modelId,
+                                    lastSession.modeId
+                                )
                             }
                             val capturedConversation = flushHistoryReplayCapture(chatId)
                             pushAdapters()
                             pushConversationReplayLoaded(chatId, capturedConversation ?: ConversationReplayData())
-
-                            val lastSession = sessionsChain.last()
                             pushStatus(chatId, service.status(chatId).name.lowercase())
                             pushSessionId(chatId, service.sessionId(chatId))
                             pushMode(chatId, service.activeModeId(chatId))

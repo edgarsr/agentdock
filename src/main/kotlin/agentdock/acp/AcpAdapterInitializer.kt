@@ -333,6 +333,13 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
         var lastInitializeError: Exception? = null
 
         while (!initialized && attempts < maxAttempts) {
+            if (!proc.isAlive) {
+                val exitValue = runCatching { proc.exitValue() }.getOrNull()
+                throw normalizeAdapterStartupException(
+                    lastInitializeError ?: IllegalStateException("Agent process exited immediately with code $exitValue"),
+                    startupOutput
+                )
+            }
             try {
                 attempts++
                 updateAdapterInitializationState(
@@ -340,12 +347,15 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
                     AcpClientService.AdapterInitializationStatus.Initializing,
                     detail = "Waiting for ACP initialize... (attempt $attempts)"
                 )
-                withTimeout(10_000L) {
+                val initResult = kotlinx.coroutines.withTimeoutOrNull(10_000L) {
                     c.initialize(ClientInfo(LATEST_PROTOCOL_VERSION, ClientCapabilities()))
+                }
+                if (initResult == null) {
+                    throw java.util.concurrent.TimeoutException("Timed out waiting for 10000 ms")
                 }
                 initialized = true
             } catch (e: Exception) {
-                if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                if (e is CancellationException) throw e
                 val normalized = normalizeAdapterStartupException(e, startupOutput)
                 if (normalized !== e) throw normalized
                 lastInitializeError = e
