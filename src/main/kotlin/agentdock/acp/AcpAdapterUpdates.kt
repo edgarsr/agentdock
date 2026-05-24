@@ -17,6 +17,7 @@ internal object AcpAdapterUpdates {
         .build()
 
     fun isUpdateCheckSupported(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean {
+        if (adapterInfo.id == "cursor-cli") return true
         if (adapterInfo.distribution.version.firstOrNull()?.isDigit() == true) return false
         return when (adapterInfo.distribution.type) {
             AcpAdapterConfig.DistributionType.NPM -> !adapterInfo.distribution.packageName.isNullOrBlank()
@@ -25,10 +26,19 @@ internal object AcpAdapterUpdates {
     }
 
     fun latestAvailableVersion(adapterInfo: AcpAdapterConfig.AdapterInfo): String? {
+        if (adapterInfo.id == "cursor-cli") {
+            return latestCursorVersion()
+        }
         return when (adapterInfo.distribution.type) {
             AcpAdapterConfig.DistributionType.NPM -> latestNpmVersion(adapterInfo.distribution.packageName)
             AcpAdapterConfig.DistributionType.ARCHIVE -> latestArchiveVersion(adapterInfo.distribution.updateSource)
         }
+    }
+
+    private fun latestCursorVersion(): String? {
+        val body = httpGet("https://cursor.com/install") ?: return null
+        val match = Regex("""/lab/([^/]+)/""").find(body)
+        return match?.groupValues?.get(1)?.trim()
     }
 
     private fun latestNpmVersion(packageName: String?): String? {

@@ -7,7 +7,7 @@
   "supportsSessionList": true,
   "distribution": {
     "type": "archive",
-    "version": "2026.04.16-2d20146",
+    "version": "latest",
     "downloadUrl": "https://downloads.cursor.com/lab/{version}/{platform}/{arch}/agent-cli-package.{ext}",
     "extractSubdir": "dist-package",
     "binaryName": {

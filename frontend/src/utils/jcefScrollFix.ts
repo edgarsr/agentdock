@@ -54,7 +54,7 @@ function getProgressiveDelta(delta: number): number {
   }
 
   // Increased cap for maximum speed
-  const finalMultiplier = Math.min(multiplier, 4.0);
+  const finalMultiplier = Math.min(multiplier, 3.0);
   
   return delta * finalMultiplier;
 }

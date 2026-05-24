@@ -87,10 +87,20 @@ private fun AcpBridge.buildAdapterPayload(
     val installedVersion = probeState?.installedVersion
     val rawAgentVersion = agentVersionStates[info.id]
     val agentVersion = rawAgentVersion?.takeIf { it != installedVersion }
-    val updateSupported = downloaded == true && AcpAdapterUpdates.isUpdateCheckSupported(info)
+    val isStaticUpdateAvailable = downloaded == true &&
+        !installedVersion.isNullOrBlank() &&
+        installedVersion != info.getConfiguredVersion()
+    val updateSupported = downloaded == true &&
+        (AcpAdapterUpdates.isUpdateCheckSupported(info) || isStaticUpdateAvailable)
     val updateKey = "${target.name}:${info.id}"
     val updateChecking = updateCheckJobs[updateKey]?.isActive == true
-    val latestVersion = if (!runtimeChecksReady || !updateSupported) null else latestVersionStates[info.id]
+    val latestVersion = if (!runtimeChecksReady || !updateSupported) {
+        null
+    } else if (AcpAdapterUpdates.isUpdateCheckSupported(info)) {
+        latestVersionStates[info.id]
+    } else {
+        info.getConfiguredVersion()
+    }
     val updateKnown = updateSupported && !latestVersion.isNullOrBlank() && !installedVersion.isNullOrBlank()
     val updateAvailable = updateKnown && latestVersion != installedVersion
     val authUiMode = info.authConfig?.uiMode ?: "login_logout"

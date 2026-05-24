@@ -378,13 +378,21 @@ internal fun AcpBridge.installAdapterQueries() {
                     var replacingRuntime = false
                     try {
                         val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterId)
-                        if (!AcpAdapterUpdates.isUpdateCheckSupported(adapterInfo)) {
+                        val isUpdateCheckSupported = AcpAdapterUpdates.isUpdateCheckSupported(adapterInfo)
+                        val installedVersion = AcpAdapterPaths.installedVersion(adapterId, AcpAdapterPaths.getExecutionTarget())
+                        val isStaticUpdateAvailable = installedVersion != null && installedVersion != adapterInfo.getConfiguredVersion()
+
+                        if (!isUpdateCheckSupported && !isStaticUpdateAvailable) {
                             return@launch
                         }
 
-                        val latestVersion = latestVersionStates[adapterId]
-                            ?: AcpAdapterUpdates.latestAvailableVersion(adapterInfo)
-                            ?: throw IllegalStateException("Unable to resolve latest version")
+                        val latestVersion = if (isUpdateCheckSupported) {
+                            latestVersionStates[adapterId]
+                                ?: AcpAdapterUpdates.latestAvailableVersion(adapterInfo)
+                                ?: throw IllegalStateException("Unable to resolve latest version")
+                        } else {
+                            adapterInfo.getConfiguredVersion()
+                        }
                         cancellation.throwIfCancelled()
                         latestVersionStates[adapterId] = latestVersion
 
