@@ -11,7 +11,7 @@
   },
   "launchBinary": {
     "win": "node_modules/.bin/opencode.cmd",
-    "unix": "node_modules/opencode-ai/bin/opencode"
+    "unix": "node_modules/opencode-ai/bin/opencode.exe"
   },
   "args": [
     "acp"
@@ -19,7 +19,7 @@
   "cli": {
     "executable": {
       "win": "node_modules/.bin/opencode.cmd",
-      "unix": "node_modules/opencode-ai/bin/opencode"
+      "unix": "node_modules/opencode-ai/bin/opencode.exe"
     },
     "resumeArgs": [
       "--session",
