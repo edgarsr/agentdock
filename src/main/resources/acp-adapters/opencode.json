@@ -19,7 +19,7 @@
   "cli": {
     "executable": {
       "win": "node_modules/.bin/opencode.cmd",
-      "unix": "node_modules/pencode-linux-x64/bin/opencode"
+      "unix": "node_modules/opencode-linux-x64/bin/opencode"
     },
     "resumeArgs": [
       "--session",
