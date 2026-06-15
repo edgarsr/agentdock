@@ -48,7 +48,7 @@ export default function PopupMenu({
                 isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
-              <span className="w-40 shrink-0 truncate font-mono leading-5">
+              <span className="shrink-0 font-mono leading-5">
                 {item.primary}
               </span>
               {item.secondary && (
