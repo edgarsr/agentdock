@@ -245,7 +245,7 @@ export default function ChatDropdown({
           <>
             {renderIcon(selectedOption, "w-4 h-4 shrink-0 mr-0.5 opacity-80")}
             {!collapsed && (<span className="min-w-0 max-w-[120px] truncate">
-              <Tooltip variant="default" content={selectedText} delay={300}>
+              <Tooltip variant="minimal" content={selectedText} delay={300}>
                 {selectedText}
               </Tooltip>
             </span>)}

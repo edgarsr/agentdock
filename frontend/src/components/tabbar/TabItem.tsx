@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { AgentOption, ChatTab } from '../../types/chat';
+import { Tooltip } from '../chat/shared/Tooltip';
 import { getTabIcon } from './TabIcons';
 
 interface TabItemProps {
@@ -84,7 +85,9 @@ export function TabItem({
           {getTabIcon(tab, agents)}
         </div>
         <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
-          <div title={tab.title} className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
+          <Tooltip variant="minimal" content={tab.title} className="min-w-0" position="bottom" delay={300}>
+            <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
+          </Tooltip>
         </div>
       </button>
       {hasWarning ? (

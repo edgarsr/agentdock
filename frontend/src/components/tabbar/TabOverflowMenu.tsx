@@ -88,7 +88,9 @@ export function TabOverflowMenu({
                   <span className="mr-2 flex items-center justify-center">
                     {getTabIcon(tab, agents)}
                   </span>
-                  <span title={tab.title} className="flex-1 truncate min-w-0">{tab.title}</span>
+                  <Tooltip variant="minimal" content={tab.title} className="flex-1 min-w-0" delay={300}>
+                    <span className="flex-1 truncate min-w-0">{tab.title}</span>
+                  </Tooltip>
                   {hasWarning ? (
                     <span className="ml-2 w-2 h-2 rounded-full bg-warning flex-shrink-0" />
                   ) : hasUnread ? (
