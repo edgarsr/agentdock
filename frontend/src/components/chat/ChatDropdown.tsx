@@ -244,7 +244,11 @@ export default function ChatDropdown({
         {customTrigger ? (customTrigger) : (
           <>
             {renderIcon(selectedOption, "w-4 h-4 shrink-0 mr-0.5 opacity-80")}
-            {!collapsed && (<span className="min-w-0 max-w-[120px] truncate">{selectedText}</span>)}
+            {!collapsed && (<span className="min-w-0 max-w-[120px] truncate">
+              <Tooltip variant="default" content={selectedText} delay={300}>
+                {selectedText}
+              </Tooltip>
+            </span>)}
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
               className="flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
