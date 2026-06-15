@@ -35,9 +35,13 @@ import agentdock.systeminstructions.SystemInstructionsBridge
 import java.awt.BorderLayout
 import java.awt.Cursor
 import java.awt.FlowLayout
+import java.awt.KeyEventDispatcher
+import java.awt.KeyboardFocusManager
+import java.awt.event.KeyEvent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JProgressBar
+import javax.swing.SwingUtilities
 
 
 class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
@@ -188,17 +192,30 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
                             }
                         }, browser.cefBrowser)
 
-                        browser.component.addKeyListener(object : java.awt.event.KeyAdapter() {
-                            override fun keyPressed(e: java.awt.event.KeyEvent) {
-                                if (e.keyCode == java.awt.event.KeyEvent.VK_F12) {
-                                    browser.openDevtools()
+                        var devtoolsDispatcher: KeyEventDispatcher? = null
+                        if (IS_DEV_MODE) {
+                            devtoolsDispatcher = KeyEventDispatcher { event ->
+                                if (event.id == KeyEvent.KEY_PRESSED && event.keyCode == KeyEvent.VK_F12) {
+                                    val focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+                                    if (focusOwner == browser.component || SwingUtilities.isDescendingFrom(focusOwner, browser.component)) {
+                                        browser.openDevtools()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
                                 }
                             }
-                        })
+                            KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(devtoolsDispatcher)
+                        }
 
                         Disposer.register(content, browser)
                         Disposer.register(content, object : Disposable {
                             override fun dispose() {
+                                devtoolsDispatcher?.let {
+                                    KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(it)
+                                }
                                 ExternalCodeReferenceDispatcher.unregister(project, browser)
                                 dropTarget.component = null
                             }
