@@ -7,31 +7,6 @@ import java.nio.charset.StandardCharsets
  */
 object AssetLoader {
 
-    private var fontFaceCssCache: String? = null
-
-    fun generateFontFaceCss(resourceClass: Class<*>): String {
-        return fontFaceCssCache ?: run {
-            val regularFontBase64 = readBinaryResourceAsBase64(resourceClass, "/fonts/Inter-Regular.woff2")
-            val boldFontBase64 = readBinaryResourceAsBase64(resourceClass, "/fonts/Inter-Bold.woff2")
-            val css = """
-                @font-face {
-                    font-family: 'Inter';
-                    src: url(data:font/woff2;base64,$regularFontBase64) format('woff2');
-                    font-weight: 400;
-                    font-style: normal;
-                }
-                @font-face {
-                    font-family: 'Inter';
-                    src: url(data:font/woff2;base64,$boldFontBase64) format('woff2');
-                    font-weight: 700;
-                    font-style: normal;
-                }
-            """.trimIndent()
-            fontFaceCssCache = css
-            css
-        }
-    }
-
     fun loadAndInlineAssets(resourceClass: Class<*>): String {
         return try {
             val indexHtml = readResource(resourceClass, "/webview/index.html")
@@ -47,11 +22,8 @@ object AssetLoader {
             // Generate dynamic CSS from current theme
             val themeCss = IdeTheme.generateCssBlock()
 
-            val fontFaceCss = generateFontFaceCss(resourceClass)
-
             val injection = """
                 <style>
-                $fontFaceCss
                 $cssContent
                 </style>
                 <style id="ide-theme-style">
@@ -73,12 +45,5 @@ object AssetLoader {
         val stream = resourceClass.getResourceAsStream(path) 
             ?: throw Exception("Resource not found: $path.")
         return stream.use { it.readBytes().toString(StandardCharsets.UTF_8) }
-    }
-
-    private fun readBinaryResourceAsBase64(resourceClass: Class<*>, path: String): String {
-        val stream = resourceClass.getResourceAsStream(path) 
-            ?: throw Exception("Binary resource not found: $path.")
-        val bytes = stream.use { it.readBytes() }
-        return java.util.Base64.getEncoder().encodeToString(bytes)
     }
 }
