@@ -1,5 +1,3 @@
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.2.20"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
@@ -44,20 +42,29 @@ kotlin {
 
 intellijPlatform {
     buildSearchableOptions = false
-    signing {
-        privateKeyFile.set(layout.projectDirectory.file("signing/private.pem"))
-        certificateChainFile.set(layout.projectDirectory.file("signing/chain.crt"))
-    }
-    pluginVerification {
-        ides {
-            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.1")
-            create(IntelliJPlatformType.PhpStorm, "2026.1")
-            create(IntelliJPlatformType.IntellijIdea, "261.24374.34")
-        }
-    }
 }
 
 val devMode = providers.gradleProperty("devMode").map { it.toBoolean() }.getOrElse(false)
+
+val unusedIntellijPlatformTasks = setOf(
+    "buildSearchableOptions",
+    "checkSigningConfiguration",
+    "generatePgpKeys",
+    "jarSearchableOptions",
+    "prepareJarSearchableOptions",
+    "prepareTestIdePerformanceSandbox",
+    "publishPlugin",
+    "signPlugin",
+    "testIdePerformance",
+    "uploadPublicPgpKey",
+    "verifyPlugin",
+    "verifyPluginSignature",
+)
+
+tasks.matching { it.name in unusedIntellijPlatformTasks }.configureEach {
+    enabled = false
+    group = null
+}
 
 val generateBuildConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/buildConfig")

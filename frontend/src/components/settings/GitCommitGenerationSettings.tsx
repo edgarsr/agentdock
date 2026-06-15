@@ -1,5 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
 import { GitCommitHorizontal } from 'lucide-react';
-import { AgentOption, GitCommitGenerationSettings as GitCommitGenerationSettingsValue, ModelOption } from '../../types/chat';
+import {
+  AgentOption,
+  GitCommitGenerationSettings as GitCommitGenerationSettingsValue,
+  ModelOption
+} from '../../types/chat';
 import { SettingsToggleCard } from './SettingsToggleCard';
 import { DropdownOption, DropdownSelect } from '../ui/DropdownSelect';
 
@@ -28,11 +33,7 @@ function selectedModelValue(models: ModelOption[], modelId: string): string {
   return models[0]?.modelId ?? '';
 }
 
-export function GitCommitGenerationSettings({
-  settings,
-  installedAgents,
-  onChange,
-}: GitCommitGenerationSettingsProps) {
+export function GitCommitGenerationSettings({ settings, installedAgents, onChange }: GitCommitGenerationSettingsProps) {
   if (installedAgents.length === 0) {
     return null;
   }
@@ -43,19 +44,29 @@ export function GitCommitGenerationSettings({
   const activeModelId = selectedModelValue(models, settings.modelId);
   const agentOptions: DropdownOption[] = installedAgents.map((agent) => ({
     value: agent.id,
-    label: agent.name,
+    label: agent.name
   }));
-  const modelOptions: DropdownOption[] = models.length === 0
-    ? [{ value: '', label: 'No models available' }]
-    : models.map((model) => ({
-        value: model.modelId,
-        label: model.name,
-      }));
+  const modelOptions: DropdownOption[] =
+    models.length === 0
+      ? [{ value: '', label: 'No models available' }]
+      : models.map((model) => ({
+          value: model.modelId,
+          label: model.name
+        }));
+
+  const [localInstructions, setLocalInstructions] = useState(settings.instructions);
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalInstructions(settings.instructions);
+    }
+  }, [settings.instructions]);
 
   const update = (next: Partial<GitCommitGenerationSettingsValue>) => {
     onChange({
       ...settings,
-      ...next,
+      ...next
     });
   };
 
@@ -68,7 +79,7 @@ export function GitCommitGenerationSettings({
     update({
       enabled: true,
       adapterId: activeAgent?.id ?? '',
-      modelId: resolveModelId(activeAgent, settings.modelId),
+      modelId: resolveModelId(activeAgent, settings.modelId)
     });
   };
 
@@ -76,35 +87,41 @@ export function GitCommitGenerationSettings({
     const nextAgent = installedAgents.find((agent) => agent.id === adapterId) ?? installedAgents[0];
     update({
       adapterId,
-      modelId: resolveModelId(nextAgent, settings.modelId),
+      modelId: resolveModelId(nextAgent, settings.modelId)
     });
+  };
+
+  const handleInstructionsBlur = () => {
+    isFocusedRef.current = false;
+    update({ instructions: localInstructions });
   };
 
   return (
     <SettingsToggleCard
       icon={GitCommitHorizontal}
-      title="Git Commit Message Generation"
-      description="Enable the button for AI commit message generation"
+      title='Git Commit Message Generation'
+      description='Enable the button for AI commit message generation'
       enabled={settings.enabled}
       onToggle={handleToggle}
-      ariaLabel="Enable Git commit generation"
+      ariaLabel='Enable Git commit generation'
+      className='justify-center'
     >
       {settings.enabled && (
-        <div className="flex flex-col gap-3 mt-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+        <div className='flex flex-col gap-3 mt-2'>
+          <div className='flex flex-wrap items-center gap-2'>
+            <div className='flex items-center gap-1.5 text-ide-small text-foreground-secondary'>
               <span>AI Agent:</span>
             </div>
             <DropdownSelect
               value={activeAgent?.id ?? ''}
               onChange={handleAgentChange}
               options={agentOptions}
-              className="min-w-[180px]"
+              className='min-w-[180px]'
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+          <div className='flex flex-wrap items-center gap-2'>
+            <div className='flex items-center gap-1.5 text-ide-small text-foreground-secondary'>
               <span>Model:</span>
             </div>
             <DropdownSelect
@@ -112,20 +129,22 @@ export function GitCommitGenerationSettings({
               onChange={(modelId) => update({ modelId })}
               disabled={models.length === 0}
               options={modelOptions}
-              className="min-w-[180px]"
+              className='min-w-[180px]'
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5 text-ide-small text-foreground-secondary">
+          <div className='flex flex-col gap-1.5'>
+            <div className='flex items-center gap-1.5 text-ide-small text-foreground-secondary'>
               <span>Custom Instructions (optional): </span>
             </div>
             <textarea
-              value={settings.instructions}
-              onChange={(event) => update({ instructions: event.target.value })}
+              value={localInstructions}
+              onChange={(event) => setLocalInstructions(event.target.value)}
+              onFocus={() => { isFocusedRef.current = true; }}
+              onBlur={handleInstructionsBlur}
               rows={5}
-              placeholder="Describe how commit messages should be written."
-              className="w-full max-w-[400px] resize-y rounded-[4px] px-3 py-2 text-ide-small"
+              placeholder='Describe how commit messages should be written.'
+              className='w-full max-w-[400px] resize-y rounded-[4px] px-3 py-2 text-ide-small'
             />
           </div>
         </div>
