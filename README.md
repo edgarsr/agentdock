@@ -4,6 +4,22 @@ Agent Dock brings widely used AI coding agents into a unified GUI that follows t
 
 The project's goal is to deliver a rich GUI experience for AI agents within JetBrains IDEs, including features absent from other JetBrains AI plugins, such as live token usage updates directly in the chat interface and switching between AI agents within the same chat while preserving session context.
 
+## Fork Notice
+
+This repository is a personal fork of Agent Dock and includes my own modifications, fixes, and adjustments. Changes in this fork may differ from the upstream project.
+
+### Personal Changes
+
+This fork currently includes:
+
+- Fix for the commit message textarea deleting some text as you typed.
+- Fixed agent crash when more than one project window is open.
+- Removed scroll acceleration in chat window.
+- Improved popup menus so full filenames can be displayed without truncation.
+- Fixed tooltips for certain UI items.
+- Removed bundled fonts.
+- Enabled CEF devtools with F12 in development mode.
+
 Currently supported AI agents:
 
 - Claude Code
