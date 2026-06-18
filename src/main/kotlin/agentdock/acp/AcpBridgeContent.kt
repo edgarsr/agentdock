@@ -243,6 +243,16 @@ internal fun AcpBridge.pushStatus(chatId: String, status: String) {
     }
 }
 
+internal fun AcpBridge.pushPromptIdle(chatId: String) {
+    val escapedChatId = jsStringLiteral(chatId)
+    runOnEdt {
+        browser.cefBrowser.executeJavaScript(
+            "if(window.__onPromptIdle) window.__onPromptIdle($escapedChatId);",
+            browser.cefBrowser.url, 0
+        )
+    }
+}
+
 internal fun AcpBridge.pushMode(chatId: String, modeId: String?) {
     if (modeId == null) return
     val escapedModeId = jsStringLiteral(modeId)
