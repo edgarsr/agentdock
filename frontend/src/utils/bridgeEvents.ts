@@ -24,6 +24,7 @@ import { SystemInstruction } from '../types/systemInstructions';
 
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
+export interface PromptIdleEvent { chatId: string; }
 export interface SessionIdEvent { chatId: string; sessionId: string; }
 export interface ModeEvent { chatId: string; modeId: string; }
 export interface AdaptersEvent { adapters: AgentOption[]; }
@@ -55,6 +56,7 @@ export const EVENT_NAMES = {
   PROMPT_LIBRARY: 'prompt-library',
   SYSTEM_INSTRUCTIONS: 'system-instructions',
   STATUS: 'acp-status',
+  PROMPT_IDLE: 'acp-prompt-idle',
   SESSION_ID: 'acp-session-id',
   MODE: 'acp-mode',
   ADAPTERS: 'acp-adapters',

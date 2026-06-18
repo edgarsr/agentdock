@@ -253,6 +253,7 @@ internal fun AcpBridge.installConversationQueries() {
                 }
                 job.invokeOnCompletion {
                     watcher.cancel()
+                    pushPromptIdle(chatId)
                 }
                 promptJobs[chatId] = job
             } else {
