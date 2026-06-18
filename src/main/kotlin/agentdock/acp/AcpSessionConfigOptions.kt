@@ -8,7 +8,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -165,15 +164,15 @@ internal suspend fun Protocol.setSessionConfigOptionRaw(
     sessionId: String,
     configId: String,
     value: String
-) {
-    sendRequestRaw(
+): JsonObject {
+    return sendRequestRaw(
         MethodName("session/set_config_option"),
         buildJsonObject {
             put("sessionId", sessionId)
             put("configId", configId)
             put("value", JsonPrimitive(value))
         }
-    )
+    ).jsonObject
 }
 
 internal fun extractConfigOptionsUpdate(params: JsonElement?): Pair<String, JsonElement>? {
