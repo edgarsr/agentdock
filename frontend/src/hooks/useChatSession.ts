@@ -1,16 +1,18 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  Message,
   AgentOption,
-  PermissionRequest,
-  HistorySessionMeta,
   ChatAttachment,
+  ForkConversationBase,
+  HistorySessionMeta,
+  Message,
   PendingHandoffContext,
-  ForkConversationBase
+  PermissionRequest,
+  QueuedPrompt,
+  RichContentBlock,
 } from '../types/chat';
-import { ACPBridge } from '../utils/bridge';
-import { buildReplayMessages } from '../utils/replay';
-import { lastAssistantMessageHasMeta } from './chatSession/messageProcessing';
+import {ACPBridge} from '../utils/bridge';
+import {buildReplayMessages} from '../utils/replay';
+import {lastAssistantMessageHasMeta} from './chatSession/messageProcessing';
 import {
   nextMessageId,
   normalizeOutgoingBlocks,
@@ -18,18 +20,18 @@ import {
   prependHandoffContext,
   titleFromFirstPrompt,
 } from './chatSession/messageBasics';
-import { buildPromptBlocks } from './chatSession/promptBlocks';
+import {buildPromptBlocks} from './chatSession/promptBlocks';
 import {
-  PinnedAgentSnapshot,
   buildAgentOptions,
   buildModeOptions,
   buildReasoningEffortOptions,
+  PinnedAgentSnapshot,
   resolveSelectedAgent,
   toPinnedAgentSnapshot,
 } from './chatSession/agentSelection';
-import { useAgentRuntimeOptions } from './chatSession/useAgentRuntimeOptions';
-import { useAvailableCommands } from './chatSession/useAvailableCommands';
-import { useBufferedMessageChunks } from './chatSession/useBufferedMessageChunks';
+import {useAgentRuntimeOptions} from './chatSession/useAgentRuntimeOptions';
+import {useAvailableCommands} from './chatSession/useAvailableCommands';
+import {useBufferedMessageChunks} from './chatSession/useBufferedMessageChunks';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
 
@@ -55,6 +57,7 @@ export function useChatSession(
   const [permissionQueue, setPermissionQueue] = useState<PermissionRequest[]>([]);
   const permissionRequest = permissionQueue[0] ?? null;
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [queuedPrompts, setQueuedPromptsState] = useState<QueuedPrompt[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
@@ -79,6 +82,9 @@ export function useChatSession(
   const recoveryInFlightRef = useRef(false);
   const initialUserMessageCountRef = useRef(initialMessages.filter((message) => message.role === 'user').length);
   const forkBaseRef = useRef<ForkConversationBase | undefined>(forkBase);
+  const suppressQueueDrainRef = useRef(false);
+  const queuedPromptsRef = useRef<QueuedPrompt[]>([]);
+  const drainNextQueuedPromptRef = useRef<() => boolean>(() => false);
 
   const {
     applyBufferedChunks,
@@ -87,8 +93,16 @@ export function useChatSession(
     markFlushUnscheduled,
   } = useBufferedMessageChunks({ setHistoryMessages, setLiveMessages });
 
+  const updateQueuedPrompts = useCallback((updater: (prev: QueuedPrompt[]) => QueuedPrompt[]) => {
+    const next = updater(queuedPromptsRef.current);
+    queuedPromptsRef.current = next;
+    setQueuedPromptsState(next);
+    return next;
+  }, []);
+
   const finishActivePromptAfterError = useCallback(() => {
     pendingPromptRef.current = null;
+    suppressQueueDrainRef.current = true;
     setPermissionQueue([]);
     setIsSending(false);
 
@@ -394,6 +408,11 @@ export function useChatSession(
       }
     });
 
+    const unsubPromptIdle = ACPBridge.onPromptIdle((e) => {
+      if (e.detail.chatId !== conversationId) return;
+      drainNextQueuedPromptRef.current();
+    });
+
     const unsubSessionId = ACPBridge.onSessionId((e) => {
       if (e.detail.chatId !== conversationId) return;
       setAcpSessionId(e.detail.sessionId);
@@ -417,17 +436,12 @@ export function useChatSession(
       unsubContent();
       unsubConversationReplayLoaded();
       unsubStatus();
+      unsubPromptIdle();
       unsubSessionId();
       unsubMode();
       unsubPermission();
     };
   }, [conversationId, enqueueChunk, applyBufferedChunks, clearBufferedChunks, markFlushUnscheduled, consumeHandoff, failActivePromptLocally, finishActivePromptAfterError, requestRuntimeRecovery]);
-
-  useEffect(() => {
-    if (!isSending || isHistoryReplaying) return;
-    if (!lastAssistantMessageHasMeta(messages)) return;
-    setIsSending(false);
-  }, [messages, isSending, isHistoryReplaying]);
 
   // Handle native attachments from backend
   useEffect(() => {
@@ -514,16 +528,7 @@ export function useChatSession(
     lastMetadataFingerprintRef.current = fingerprint;
   }, [conversationId, status, acpSessionId, selectedAgentId, messages, metadataTitleOverride, inheritedAdapterNames]);
 
-  const handleSend = useCallback(() => {
-    const text = inputValue.trim();
-    if ((!text && attachments.length === 0) || isSending || status === 'prompting') return;
-
-    const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
-    if (normalizedBlocks.length === 0) return;
-    const outgoingBlocks = pendingHandoffRef.current
-      ? prependHandoffContext(normalizedBlocks, pendingHandoffRef.current.text)
-      : normalizedBlocks;
-
+  const dispatchPrompt = useCallback((blocks: RichContentBlock[], text: string) => {
     allowMetadataUpdateRef.current = true;
     touchUpdatedAtRef.current = true;
     onUserMessageSent?.();
@@ -531,13 +536,11 @@ export function useChatSession(
     const userMessage: Message = {
       id: nextMessageId('user'),
       role: 'user',
-      content: plainTextFromBlocks(normalizedBlocks),
-      blocks: normalizedBlocks,
+      content: text,
+      blocks,
       timestamp: Date.now(),
     };
     setLiveMessages((prev) => [...prev, userMessage]);
-    setInputValue('');
-    setAttachments([]);
     const promptStartedAt = Date.now();
     startTimeRef.current = promptStartedAt;
     const assistantMessage: Message = {
@@ -555,17 +558,17 @@ export function useChatSession(
     };
     setLiveMessages((prev) => [...prev, assistantMessage]);
 
-    if (status !== 'ready') {
-      // Queue it up
-      pendingPromptRef.current = outgoingBlocks;
-      if (status === 'not started' || status === 'error') {
+    const currentStatus = statusRef.current;
+    if (currentStatus !== 'ready') {
+      pendingPromptRef.current = blocks;
+      if (currentStatus === 'not started' || currentStatus === 'error') {
         startSelectedAgent();
       }
       return;
     }
 
     const forkBaseToPersist = forkBaseRef.current;
-    ACPBridge.sendPrompt(conversationId, JSON.stringify(outgoingBlocks), forkBaseToPersist).then(() => {
+    ACPBridge.sendPrompt(conversationId, JSON.stringify(blocks), forkBaseToPersist).then(() => {
       forkBaseRef.current = undefined;
       consumeHandoff();
       setPermissionQueue([]);
@@ -575,10 +578,52 @@ export function useChatSession(
       failActivePromptLocally(`Prompt was not sent. ${message}`);
       requestRuntimeRecovery(message);
     });
-  // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
-  // are intentionally excluded — their identity is stable across renders.
-  }, [inputValue, attachments, isSending, status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+  }, [conversationId, selectedAgentId, adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+
+  drainNextQueuedPromptRef.current = useCallback(() => {
+    if (suppressQueueDrainRef.current) {
+      suppressQueueDrainRef.current = false;
+      return false;
+    }
+    const next = queuedPromptsRef.current[0];
+    if (!next) return false;
+    updateQueuedPrompts((prev) => prev.slice(1));
+    window.setTimeout(() => dispatchPrompt(next.blocks, next.text), 75);
+    return true;
+  }, [dispatchPrompt]);
+
+  const handleSend = useCallback(() => {
+    const text = inputValue.trim();
+    if (!text && attachments.length === 0) return;
+
+    const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
+    if (normalizedBlocks.length === 0) return;
+    const outgoingBlocks = pendingHandoffRef.current
+      ? prependHandoffContext(normalizedBlocks, pendingHandoffRef.current.text)
+      : normalizedBlocks;
+
+    if (isSending || status === 'prompting') {
+      updateQueuedPrompts((prev) => [...prev, {
+        id: nextMessageId('queued'),
+        text: plainTextFromBlocks(normalizedBlocks),
+        blocks: outgoingBlocks,
+        attachments: [...attachments],
+      }]);
+      setInputValue('');
+      setAttachments([]);
+      return;
+    }
+
+    setInputValue('');
+    setAttachments([]);
+    dispatchPrompt(outgoingBlocks, plainTextFromBlocks(normalizedBlocks));
+  }, [inputValue, attachments, isSending, status, dispatchPrompt, updateQueuedPrompts]);
+
+  useEffect(() => {
+    if (!isSending || isHistoryReplaying) return;
+    if (!lastAssistantMessageHasMeta(messages)) return;
+    setIsSending(false);
+  }, [messages, isSending, isHistoryReplaying]);
 
   const handleStop = () => {
     if (pendingPromptRef.current && status !== 'prompting') {
@@ -597,6 +642,7 @@ export function useChatSession(
     }
 
     if (status === 'prompting') {
+      suppressQueueDrainRef.current = true;
       const liveUserMessageCount = liveMessages.filter((message) => message.role === 'user').length;
       resetSessionAfterInitialCancelRef.current = !historySession && liveUserMessageCount === 1;
       setPermissionQueue([]);
@@ -608,6 +654,35 @@ export function useChatSession(
       });
     }
   };
+
+  const removeQueuedPrompt = useCallback((id: string) => {
+    updateQueuedPrompts((prev) => prev.filter((q) => q.id !== id));
+  }, [updateQueuedPrompts]);
+
+  const updateQueuedPromptText = useCallback((id: string, text: string) => {
+    updateQueuedPrompts((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      return {
+        ...item,
+        text,
+        blocks: normalizeOutgoingBlocks(buildPromptBlocks(text, item.attachments)),
+      };
+    }));
+  }, [updateQueuedPrompts]);
+
+  const sendQueuedPromptNow = useCallback((id: string) => {
+    updateQueuedPrompts((prev) => {
+      const item = prev.find((q) => q.id === id);
+      if (!item) return prev;
+      const rest = prev.filter((q) => q.id !== id);
+      if (status === 'prompting') {
+        ACPBridge.cancelPrompt(conversationId).catch(() => {});
+        return [item, ...rest];
+      }
+      queueMicrotask(() => dispatchPrompt(item.blocks, item.text));
+      return rest;
+    });
+  }, [status, conversationId, dispatchPrompt, updateQueuedPrompts]);
 
   const handlePermissionDecision = (decision: string) => {
     if (!permissionRequest) return;
@@ -629,6 +704,10 @@ export function useChatSession(
     status,
     isSending,
     isHistoryReplaying,
+    queuedPrompts,
+    removeQueuedPrompt,
+    updateQueuedPromptText,
+    sendQueuedPromptNow,
     selectedAgentId,
     agentOptions,
     selectedModelId,
