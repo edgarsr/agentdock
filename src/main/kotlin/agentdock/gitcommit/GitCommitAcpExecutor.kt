@@ -17,7 +17,7 @@ import com.intellij.openapi.vcs.changes.Change
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
@@ -32,6 +32,9 @@ import agentdock.acp.resolveModelToApply
 import agentdock.acp.resolveSessionCwd
 import agentdock.acp.serializeContentBlock
 import agentdock.history.AgentDockHistoryService
+import com.agentclientprotocol.annotations.UnstableApi
+import com.agentclientprotocol.model.AcpCreatedSessionResponse
+import java.util.UUID
 
 internal class GitCommitAcpExecutor(
     private val project: Project,
@@ -41,7 +44,7 @@ internal class GitCommitAcpExecutor(
         private const val GENERATION_TIMEOUT_MS = 120_000L
     }
 
-    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    @OptIn(UnstableApi::class)
     suspend fun generateMessage(
         config: GitCommitGenerationConfig,
         changes: Collection<Change>
@@ -66,14 +69,16 @@ internal class GitCommitAcpExecutor(
         val blockedPermissionTitles = ConcurrentLinkedQueue<String>()
 
         var ephemeralSessionId: String? = null
-        var session: ClientSession? = null
+        var session: ClientSession?
+        val commitChatId = "git-commit:${UUID.randomUUID()}"
         try {
             val factory = object : ClientOperationsFactory {
                 override suspend fun createClientOperations(
                     sessionId: SessionId,
-                    sessionResponse: com.agentclientprotocol.model.AcpCreatedSessionResponse
+                    sessionResponse: AcpCreatedSessionResponse
                 ): ClientSessionOperations {
                     ephemeralSessionId = sessionId.value
+                    acpService.bindLiveSessionOwner(commitChatId, sessionId.value)
                     return object : ClientSessionOperations {
                         override suspend fun requestPermissions(
                             toolCall: SessionUpdate.ToolCallUpdate,
@@ -95,6 +100,7 @@ internal class GitCommitAcpExecutor(
                 factory
             )
             ephemeralSessionId = session.sessionId.value
+            AgentDockHistoryService.registerEphemeralSession(project.basePath, adapterInfo.id, ephemeralSessionId)
 
             if (!selectedModelId.isNullOrBlank()) {
                 runCatching { session.setModel(ModelId(selectedModelId)) }
@@ -128,10 +134,15 @@ internal class GitCommitAcpExecutor(
             }
             parsed
         } finally {
+            acpService.bindLiveSessionOwner(commitChatId, null)
             val sessionId = ephemeralSessionId
+            val projectBasePath = project.basePath
+            val adapterId = adapterInfo.id
             if (!sessionId.isNullOrBlank()) {
-                runCatching {
-                    AgentDockHistoryService.deleteSessionImmediately(project.basePath, sessionId, adapterInfo.id)
+                acpService.scope.launch {
+                    runCatching {
+                        AgentDockHistoryService.deleteSessionImmediately(projectBasePath, sessionId, adapterId)
+                    }
                 }
             }
         }
