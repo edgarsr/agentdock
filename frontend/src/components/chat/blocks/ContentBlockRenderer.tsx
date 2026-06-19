@@ -7,7 +7,9 @@ import { SimpleActivityBlock } from './SimpleActivityBlock';
 import { EditBlock } from './EditBlock';
 import { OtherToolBlock } from './OtherToolBlock';
 import { PlanBlockComponent } from './PlanBlock';
+import { TodoBlock } from './TodoBlock';
 import { MarkdownMessage } from '../MarkdownMessage';
+import { safeParseJson } from '../../../utils/toolCallUtils';
 
 interface Props {
   block: RichContentBlock;
@@ -20,7 +22,7 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       return <MarkdownMessage content={block.text} enableCodeCopy />;
     case 'exploring':
       return <ExploringBlock block={block} isActivePrompt={isActivePrompt} />;
-    case 'tool_call':
+    case 'tool_call': {
       if (block.entry.kind === 'execute') {
         return <ExecuteBlock block={block} isActivePrompt={isActivePrompt} />;
       }
@@ -33,7 +35,15 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       if (block.entry.kind === 'edit') {
         return <EditBlock block={block} />;
       }
+      if (block.entry.kind === 'todowrite') {
+        return <TodoBlock block={block} />;
+      }
+      const rawToolJson = safeParseJson(block.entry.rawJson);
+      if (Array.isArray(rawToolJson?.rawInput?.todos)) {
+        return <TodoBlock block={block} />;
+      }
       return <OtherToolBlock block={block} />;
+    }
     case 'plan':
       return <PlanBlockComponent block={block} />;
     case 'image':
