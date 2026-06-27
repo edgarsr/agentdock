@@ -4,6 +4,21 @@ import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.SessionModeId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+
+internal fun AcpClientService.updateMetadataFromConfigOptionResponse(
+    adapterName: String,
+    response: JsonObject,
+    context: AcpClientService.AgentContext
+) {
+    val configOptions = response["configOptions"] ?: return
+    val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
+    val metadata = runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
+    adapterRuntimeMetadataMap[adapterName] = metadata
+    context.activeModelIdRef.set(metadata.currentModelId)
+    context.activeModeIdRef.set(metadata.currentModeId)
+    context.activeReasoningEffortIdRef.set(metadata.currentReasoningEffortId)
+}
 
 @Suppress("OPT_IN_USAGE")
 internal suspend fun AcpClientService.setModel(chatId: String, modelId: String): Boolean {
@@ -34,16 +49,17 @@ internal suspend fun AcpClientService.setModel(chatId: String, modelId: String):
                     val protocol = context.sharedProcess?.protocol
                     val sessionId = context.sessionIdRef.get()
                     if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-                        protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedModelId)
+                        val response = protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedModelId)
+                        updateMetadataFromConfigOptionResponse(adapterName, response, context)
                     } else {
                         session.setModel(ModelId(trimmedModelId))
+                        context.activeModelIdRef.set(trimmedModelId)
+                        adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
+                            adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = trimmedModelId)
+                        }
                     }
                 }
-                context.activeModelIdRef.set(trimmedModelId)
                 AcpAgentPreferencesStore.rememberModel(adapterName, trimmedModelId)
-                adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-                    adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = trimmedModelId)
-                }
                 true
             }.getOrDefault(false)
             if (applied) {
@@ -71,33 +87,27 @@ internal suspend fun AcpClientService.setModel(chatId: String, modelId: String):
 internal suspend fun AcpClientService.setMode(chatId: String, modeId: String): Boolean {
     val context = sessions[chatId] ?: return false
     val trimmedModeId = modeId.trim()
-    val adapterName = context.activeAdapterNameRef.get()
+    val adapterName = context.activeAdapterNameRef.get() ?: return false
     if (context.activeModeIdRef.get() == trimmedModeId) {
-        if (!adapterName.isNullOrBlank()) {
-            AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
-        }
+        AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
         return true
     }
 
     val session = context.session ?: return false
     val applied = runCatching {
         withContext(Dispatchers.IO) {
-            val configId = if (!adapterName.isNullOrBlank()) adapterRuntimeMetadataMap[adapterName]?.modeConfigId else null
+            val configId = adapterRuntimeMetadataMap[adapterName]?.modeConfigId
             val protocol = context.sharedProcess?.protocol
             val sessionId = context.sessionIdRef.get()
             if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-                protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedModeId)
+                val response = protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedModeId)
+                updateMetadataFromConfigOptionResponse(adapterName, response, context)
             } else {
                 session.setMode(SessionModeId(trimmedModeId))
+                context.activeModeIdRef.set(trimmedModeId)
             }
         }
-        context.activeModeIdRef.set(trimmedModeId)
-        if (!adapterName.isNullOrBlank()) {
-            AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
-            adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-                adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = trimmedModeId)
-            }
-        }
+        AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
         true
     }.getOrDefault(false)
     if (applied) return true
@@ -108,11 +118,9 @@ internal suspend fun AcpClientService.setMode(chatId: String, modeId: String): B
             session.setMode(SessionModeId(trimmedModeId))
         }
         context.activeModeIdRef.set(trimmedModeId)
-        if (!adapterName.isNullOrBlank()) {
-            AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
-            adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-                adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = trimmedModeId)
-            }
+        AcpAgentPreferencesStore.rememberMode(adapterName, trimmedModeId)
+        adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
+            adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = trimmedModeId)
         }
         true
     }.getOrDefault(false)
@@ -135,11 +143,10 @@ internal suspend fun AcpClientService.setReasoningEffort(chatId: String, reasoni
 
     return runCatching {
         withContext(Dispatchers.IO) {
-            protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedReasoningEffortId)
+            val response = protocol.setSessionConfigOptionRaw(sessionId, configId, trimmedReasoningEffortId)
+            updateMetadataFromConfigOptionResponse(adapterName, response, context)
         }
-        context.activeReasoningEffortIdRef.set(trimmedReasoningEffortId)
         AcpAgentPreferencesStore.rememberReasoningEffort(adapterName, trimmedReasoningEffortId)
-        adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentReasoningEffortId = trimmedReasoningEffortId)
         true
     }.getOrDefault(false)
 }

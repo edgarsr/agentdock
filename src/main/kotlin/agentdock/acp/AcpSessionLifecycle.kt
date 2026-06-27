@@ -351,7 +351,8 @@ private suspend fun AcpClientService.applyRequestedSessionPreferences(
             val protocol = context.sharedProcess?.protocol
             val sessionId = context.sessionIdRef.get()
             if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-                protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
+                val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
+                updateMetadataFromConfigOptionResponse(adapterName, response, context)
             } else {
                 session.setModel(ModelId(selectedModelId))
             }
