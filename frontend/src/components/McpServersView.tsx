@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { McpServerConfig, McpStatus, McpStatusUpdate, McpTransport } from '../types/mcp';
 import { ACPBridge } from '../utils/bridge';
@@ -58,6 +58,32 @@ function nextId(): string {
   return `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function statusSignature(s: McpServerConfig): string {
+  return JSON.stringify({
+    enabled: s.enabled,
+    transport: s.transport,
+    command: s.command ?? '',
+    args: s.args ?? [],
+    env: s.env ?? [],
+    url: s.url ?? '',
+    headers: s.headers ?? [],
+  });
+}
+
+function buildStatusSignatures(servers: McpServerConfig[]): Record<string, string> {
+  return Object.fromEntries(servers.map(s => [s.id, statusSignature(s)]));
+}
+
+function retainStatuses(
+  previous: Record<string, McpStatusUpdate>,
+  previousSignatures: Record<string, string>,
+  nextSignatures: Record<string, string>
+): Record<string, McpStatusUpdate> {
+  return Object.fromEntries(
+    Object.entries(previous).filter(([id]) => previousSignatures[id] === nextSignatures[id])
+  );
+}
+
 interface StatusVisual {
   dotClass: string;
   pulse: boolean;
@@ -91,25 +117,37 @@ function McpStatusDot({ status, message }: { status: McpStatus; message?: string
 export function McpServersView() {
   const [servers, setServers] = useState<McpServerConfig[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, McpStatusUpdate>>({});
+  const statusSignaturesRef = useRef<Record<string, string>>({});
+  const latestStatusRunRef = useRef(0);
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<McpServerConfig | null>(null);
 
   useEffect(() => {
-    const cleanupServers = ACPBridge.onMcpServers(e => setServers(e.detail.servers));
+    const cleanupServers = ACPBridge.onMcpServers(e => {
+      const nextServers = e.detail.servers;
+      const nextSignatures = buildStatusSignatures(nextServers);
+      setStatusMap(prev => retainStatuses(prev, statusSignaturesRef.current, nextSignatures));
+      statusSignaturesRef.current = nextSignatures;
+      setServers(nextServers);
+    });
     const cleanupStatus = ACPBridge.onMcpStatus(e => {
       const update = e.detail.update;
+      const runId = update.runId ?? 0;
+      if (runId < latestStatusRunRef.current) return;
+      latestStatusRunRef.current = runId;
       setStatusMap(prev => ({ ...prev, [update.id]: update }));
     });
     ACPBridge.loadMcpServers();
-    ACPBridge.checkMcpStatus();
     return () => { cleanupServers(); cleanupStatus(); };
   }, []);
 
   const save = (updated: McpServerConfig[]) => {
+    const nextSignatures = buildStatusSignatures(updated);
+    setStatusMap(prev => retainStatuses(prev, statusSignaturesRef.current, nextSignatures));
+    statusSignaturesRef.current = nextSignatures;
     setServers(updated);
     ACPBridge.saveMcpServers(updated);
-    ACPBridge.checkMcpStatus();
   };
 
   const toggle = (id: string) =>
@@ -146,7 +184,7 @@ export function McpServersView() {
           leftIcon={<RefreshCw size={14} />}
           className="max-h-8"
         >
-          Refresh
+          Check Status
         </Button>
         <Button
           onClick={openAdd}

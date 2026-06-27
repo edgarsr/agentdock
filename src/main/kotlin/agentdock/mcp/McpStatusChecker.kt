@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import java.io.IOException
+import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URI
@@ -47,7 +48,7 @@ object McpStatusChecker {
         put("id", INITIALIZE_REQUEST_ID)
         put("method", "initialize")
         putJsonObject("params") {
-            put("protocolVersion", "2025-11-25")
+            put("protocolVersion", McpProtocol.VERSION)
             putJsonObject("capabilities") {}
             putJsonObject("clientInfo") {
                 put("name", "agentdock-healthcheck")
@@ -86,11 +87,6 @@ object McpStatusChecker {
 
         val process = try {
             ProcessBuilder(listOf(command) + server.args.orEmpty())
-                /*
-                 * Drain stderr together with stdout so a noisy process cannot block
-                 * after filling its stderr pipe. Non-JSON log lines are ignored.
-                 */
-                .redirectErrorStream(true)
                 .apply {
                     server.env.orEmpty()
                         .filter { it.name.isNotBlank() }
@@ -105,7 +101,8 @@ object McpStatusChecker {
             )
         }
 
-        val readerExecutor = Executors.newSingleThreadExecutor { runnable ->
+        val output = ProcessOutputBuffer()
+        val readerExecutor = Executors.newFixedThreadPool(2) { runnable ->
             Thread(runnable, "mcp-status-${server.id}").apply {
                 isDaemon = true
             }
@@ -115,7 +112,10 @@ object McpStatusChecker {
 
         try {
             val responseFuture = readerExecutor.submit<InitializeResponse> {
-                readInitializeResponse(process)
+                readInitializeResponse(process.inputStream, output)
+            }
+            readerExecutor.submit<Unit> {
+                readDiagnostics(process.errorStream, output, "stderr")
             }
 
             try {
@@ -126,7 +126,10 @@ object McpStatusChecker {
                 return@withContext status(
                     server,
                     McpStatus.ERROR,
-                    "Failed to write initialize request: ${exceptionMessage(e)}"
+                    withDiagnostics(
+                        "Failed to write initialize request: ${exceptionMessage(e)}",
+                        output
+                    )
                 )
             }
 
@@ -136,21 +139,26 @@ object McpStatusChecker {
                 return@withContext status(
                     server,
                     McpStatus.ERROR,
-                    "No initialize response within ${STDIO_TIMEOUT_MS / 1_000}s"
+                    withDiagnostics(
+                        "No initialize response within ${STDIO_TIMEOUT_MS / 1_000}s",
+                        output
+                    )
                 )
             } catch (e: ExecutionException) {
                 return@withContext status(
                     server,
                     McpStatus.ERROR,
-                    "Failed to read initialize response: " +
-                            exceptionMessage(e.cause ?: e)
+                    withDiagnostics(
+                        "Failed to read initialize response: ${exceptionMessage(e.cause ?: e)}",
+                        output
+                    )
                 )
             }
 
             status(
                 server,
                 if (response.success) McpStatus.CONNECTED else McpStatus.ERROR,
-                response.detail
+                withExitCode(process, response.detail)
             )
         } finally {
             runCatching { stdin.close() }
@@ -168,10 +176,11 @@ object McpStatusChecker {
         }
     }
 
-    private fun readInitializeResponse(process: Process): InitializeResponse {
-        var lastOutput: String? = null
-
-        process.inputStream
+    private fun readInitializeResponse(
+        inputStream: InputStream,
+        output: ProcessOutputBuffer
+    ): InitializeResponse {
+        inputStream
             .bufferedReader(StandardCharsets.UTF_8)
             .useLines { lines ->
                 for (line in lines) {
@@ -180,7 +189,7 @@ object McpStatusChecker {
                         continue
                     }
 
-                    lastOutput = trimmed
+                    output.add("stdout", trimmed)
 
                     val response = parseInitializeResponse(trimmed)
                     if (response != null) {
@@ -191,10 +200,25 @@ object McpStatusChecker {
 
         return InitializeResponse(
             success = false,
-            detail = lastOutput
-                ?.takeLast(500)
-                ?: "Process exited without an initialize response"
+            detail = withDiagnostics(
+                "Process exited without an initialize response",
+                output
+            )
         )
+    }
+
+    private fun readDiagnostics(
+        inputStream: InputStream,
+        output: ProcessOutputBuffer,
+        source: String
+    ) {
+        inputStream
+            .bufferedReader(StandardCharsets.UTF_8)
+            .useLines { lines ->
+                for (line in lines) {
+                    output.add(source, line)
+                }
+            }
     }
 
     private fun parseInitializeResponse(line: String): InitializeResponse? {
@@ -296,6 +320,44 @@ object McpStatusChecker {
 
     private fun exceptionMessage(error: Throwable): String =
         error.message ?: error.javaClass.simpleName
+
+    private fun withDiagnostics(message: String, output: ProcessOutputBuffer): String {
+        val diagnostics = output.summary() ?: return message
+        return "$message. Diagnostics: $diagnostics"
+    }
+
+    private fun withExitCode(process: Process, detail: String): String {
+        if (process.isAlive) return detail
+        return "$detail (exit code ${process.exitValue()})"
+    }
+
+    private class ProcessOutputBuffer(
+        private val maxLines: Int = 20,
+        private val maxChars: Int = 500
+    ) {
+        private val lines = ArrayDeque<String>()
+
+        @Synchronized
+        fun add(source: String, line: String) {
+            val trimmed = line.trim()
+            if (!isUsefulDiagnostic(trimmed)) return
+
+            lines.addLast("$source: $trimmed")
+            while (lines.size > maxLines) {
+                lines.removeFirst()
+            }
+        }
+
+        @Synchronized
+        fun summary(): String? {
+            val text = lines.joinToString(" | ")
+            if (text.isBlank()) return null
+            return text.takeLast(maxChars)
+        }
+
+        private fun isUsefulDiagnostic(line: String): Boolean =
+            line.isNotBlank() && line !in setOf("{", "}", "[", "]", ",")
+    }
 
     private data class InitializeResponse(
         val success: Boolean,

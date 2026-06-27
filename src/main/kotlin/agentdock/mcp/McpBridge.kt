@@ -5,7 +5,11 @@ import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -21,6 +25,9 @@ class McpBridge(
     private var loadQuery: JBCefJSQuery? = null
     private var saveQuery: JBCefJSQuery? = null
     private var checkStatusQuery: JBCefJSQuery? = null
+    private val statusJobMutex = Mutex()
+    private var statusJob: Job? = null
+    private var nextStatusRunId = 0L
 
     fun install() {
         loadQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
@@ -51,9 +58,7 @@ class McpBridge(
 
         checkStatusQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
             addHandler {
-                scope.launch(Dispatchers.IO) {
-                    runStatusCheck()
-                }
+                requestStatusCheck()
                 JBCefJSQuery.Response("ok")
             }
         }
@@ -83,25 +88,40 @@ class McpBridge(
         cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
     }
 
-    private suspend fun runStatusCheck() {
-        val servers = McpConfigStore.load()
+    private fun requestStatusCheck(serversSnapshot: List<McpServerConfig>? = null) {
+        scope.launch(Dispatchers.IO) {
+            statusJobMutex.withLock {
+                val servers = serversSnapshot ?: McpConfigStore.load()
+                val runId = nextStatusRunId++
+                pushInitialStatus(servers, runId)
+                statusJob?.cancelAndJoin()
+                statusJob = scope.launch(Dispatchers.IO) {
+                    runStatusCheck(servers, runId)
+                }
+            }
+        }
+    }
+
+    private suspend fun runStatusCheck(servers: List<McpServerConfig>, runId: Long) {
         if (servers.isEmpty()) return
 
+        // Probe each server sequentially so we never spawn many processes / sockets at once.
+        servers.forEach { server ->
+            val result = McpStatusChecker.check(server).copy(runId = runId)
+            pushStatus(result)
+        }
+    }
+
+    private fun pushInitialStatus(servers: List<McpServerConfig>, runId: Long) {
         // Announce a loading state for enabled servers and disabled for the rest, so the UI can
         // show the yellow indicator immediately before each probe completes.
         servers.forEach { server ->
             val initial = if (server.enabled) {
-                McpStatusUpdate(server.id, McpStatus.LOADING, "Checking…")
+                McpStatusUpdate(server.id, McpStatus.LOADING, "Checking…", runId)
             } else {
-                McpStatusUpdate(server.id, McpStatus.DISABLED, "Disabled")
+                McpStatusUpdate(server.id, McpStatus.DISABLED, "Disabled", runId)
             }
             pushStatus(initial)
-        }
-
-        // Probe each server sequentially so we never spawn many processes / sockets at once.
-        servers.forEach { server ->
-            val result = McpStatusChecker.check(server)
-            pushStatus(result)
         }
     }
 

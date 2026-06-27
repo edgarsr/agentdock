@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import agentdock.acp.AcpAdapterPaths
+import agentdock.acp.AcpExecutionMode
 import agentdock.utils.atomicWriteText
 import java.io.File
 
@@ -53,15 +54,26 @@ object McpConfigStore {
         val file = configFile
         if (!file.exists()) return emptyList()
         return try {
-            json.decodeFromString<List<McpServerConfig>>(file.readText())
+            normalizeServers(json.decodeFromString<List<McpServerConfig>>(file.readText()))
         } catch (_: Exception) {
             emptyList()
         }
     }
 
     fun save(servers: List<McpServerConfig>) {
-        configFile.atomicWriteText(json.encodeToString(ListSerializer(McpServerConfig.serializer()), servers))
+        val normalized = normalizeServers(servers)
+        configFile.atomicWriteText(json.encodeToString(ListSerializer(McpServerConfig.serializer()), normalized))
     }
 
     fun loadEnabled(): List<McpServerConfig> = load().filter { it.enabled }
+
+    private fun normalizeServers(servers: List<McpServerConfig>): List<McpServerConfig> =
+        servers.map(::normalizeServer)
+
+    private fun normalizeServer(server: McpServerConfig): McpServerConfig {
+        if (!AcpExecutionMode.isWindowsHost()) return server
+        if (!server.transport.equals("stdio", ignoreCase = true)) return server
+        if (!server.command.equals("npx", ignoreCase = true)) return server
+        return server.copy(command = "npx.cmd")
+    }
 }

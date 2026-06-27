@@ -22,5 +22,6 @@ enum class McpStatus {
 data class McpStatusUpdate(
     val id: String,
     val status: McpStatus,
-    val message: String = ""
+    val message: String = "",
+    val runId: Long = 0
 )

@@ -35,4 +35,5 @@ export interface McpStatusUpdate {
   id: string;
   status: McpStatus;
   message?: string;
+  runId?: number;
 }
