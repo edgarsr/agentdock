@@ -75,6 +75,8 @@ class AcpBridge(
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
     internal val suppressReplayForChatIds: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+    internal val todoToolCallKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+    internal val emittedTodoPlanKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
     internal val cli = AcpBridgeCli(service.project) { action -> runOnEdt(action) }
     internal val audio = AcpAudioPlayer(scope)

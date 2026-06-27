@@ -123,6 +123,49 @@ internal fun AcpBridge.pushToolCallUpdateChunk(chatId: String, toolCallId: Strin
     dispatchContentChunkJson(json)
 }
 
+internal fun extractTodoPlanEntriesFromToolRawJson(rawJson: String): JsonArray? {
+    val parsed = runCatching { Json.parseToJsonElement(rawJson).jsonObject }.getOrNull() ?: return null
+    val rawInput = parsed["rawInput"] as? JsonObject ?: return null
+    val todos = rawInput["todos"] as? JsonArray ?: return null
+
+    val entries = buildJsonArray {
+        todos.forEach { item ->
+            val todo = item as? JsonObject ?: return@forEach
+            val content = todo["content"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            if (content.isBlank()) return@forEach
+            add(buildJsonObject {
+                put("content", content)
+                put("status", normalizeTodoPlanStatus(todo["status"]?.jsonPrimitive?.contentOrNull))
+                todo["priority"]?.jsonPrimitive?.contentOrNull?.let { priority ->
+                    put("priority", priority)
+                }
+            })
+        }
+    }
+
+    return entries.takeIf { it.isNotEmpty() }
+}
+
+internal fun isTodoWriteToolCallJson(rawJson: String): Boolean {
+    val parsed = runCatching { Json.parseToJsonElement(rawJson).jsonObject }.getOrNull() ?: return false
+    val kind = parsed["kind"]?.jsonPrimitive?.contentOrNull
+    val title = parsed["title"]?.jsonPrimitive?.contentOrNull
+    if (kind == "todowrite") return true
+    if (title == "todowrite") return true
+    val rawInput = parsed["rawInput"] as? JsonObject ?: return false
+    return rawInput["todos"] is JsonArray
+}
+
+private fun normalizeTodoPlanStatus(status: String?): String {
+    return when (status?.lowercase()) {
+        "completed", "complete", "done" -> "completed"
+        "in_progress", "in-progress", "running", "active" -> "in_progress"
+        "cancelled", "canceled" -> "cancelled"
+        "failed", "error" -> "failed"
+        else -> "pending"
+    }
+}
+
 internal fun AcpBridge.recordUsageUpdate(
     chatId: String,
     sessionId: String,
@@ -204,7 +247,6 @@ internal fun AcpBridge.extractPlanEntries(plan: SessionUpdate, _meta: JsonElemen
 }
 
 internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, isReplay: Boolean = false, _meta: JsonElement? = null) {
-    val replaySeq = nextReplaySeq(chatId, isReplay)
     val entries = try {
         extractPlanEntries(plan, _meta)
     } catch (e: Exception) {
@@ -215,6 +257,15 @@ internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, isRepl
         return
     }
 
+    pushPlanChunk(chatId, entries, isReplay)
+}
+
+internal fun AcpBridge.pushPlanChunk(chatId: String, entries: JsonArray, isReplay: Boolean = false) {
+    if (entries.isEmpty()) {
+        return
+    }
+
+    val replaySeq = nextReplaySeq(chatId, isReplay)
     val chunk = buildJsonObject {
         put("chatId", chatId)
         put("role", "assistant")

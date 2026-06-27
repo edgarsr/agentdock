@@ -432,6 +432,10 @@ private fun isDiffLikePayload(element: JsonElement): Boolean {
 internal fun AcpBridge.buildStoredPlanChunk(plan: SessionUpdate, meta: JsonElement?): JsonObject? {
     val entries = extractPlanEntries(plan, meta) ?: return null
     if (entries.isEmpty()) return null
+    return buildStoredPlanChunk(entries)
+}
+
+internal fun AcpBridge.buildStoredPlanChunk(entries: JsonArray): JsonObject {
     return buildJsonObject {
         put("role", "assistant")
         put("type", "plan")
