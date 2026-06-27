@@ -36,6 +36,7 @@ import {
   HistoryDeleteResultEvent,
   HistoryListEvent,
   McpServersEvent,
+  McpStatusEvent,
   ModeEvent,
   PermissionRequestEvent,
   PromptLibraryEvent,
@@ -262,6 +263,10 @@ export const ACPBridge = {
 
     window.__onMcpServers = (servers) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.MCP_SERVERS, { detail: { servers } }));
+    };
+
+    window.__onMcpStatus = (update) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.MCP_STATUS, { detail: { update } }));
     };
 
     window.__onPromptLibrary = (items) => {
@@ -522,6 +527,12 @@ export const ACPBridge = {
   },
 
   onMcpServers: (callback: (e: CustomEvent<McpServersEvent>) => void) => onBridgeEvent(EVENT_NAMES.MCP_SERVERS, callback),
+
+  checkMcpStatus: () => {
+    window.__checkMcpStatus?.();
+  },
+
+  onMcpStatus: (callback: (e: CustomEvent<McpStatusEvent>) => void) => onBridgeEvent(EVENT_NAMES.MCP_STATUS, callback),
 
   loadPromptLibrary: () => {
     window.__loadPromptLibrary?.();

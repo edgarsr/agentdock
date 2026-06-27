@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
 import agentdock.utils.escapeForJsString
@@ -19,6 +20,7 @@ class McpBridge(
 ) {
     private var loadQuery: JBCefJSQuery? = null
     private var saveQuery: JBCefJSQuery? = null
+    private var checkStatusQuery: JBCefJSQuery? = null
 
     fun install() {
         loadQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
@@ -46,15 +48,26 @@ class McpBridge(
                 JBCefJSQuery.Response("ok")
             }
         }
+
+        checkStatusQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+            addHandler {
+                scope.launch(Dispatchers.IO) {
+                    runStatusCheck()
+                }
+                JBCefJSQuery.Response("ok")
+            }
+        }
     }
 
     fun injectApi(cefBrowser: CefBrowser) {
         val loadInject = loadQuery?.inject("") ?: "console.error('[McpBridge] Load query not ready')"
         val saveInject = saveQuery?.inject("json") ?: "console.error('[McpBridge] Save query not ready')"
+        val checkStatusInject = checkStatusQuery?.inject("") ?: "console.error('[McpBridge] Status query not ready')"
 
         val script = """
             (function() {
                 window.__onMcpServers = window.__onMcpServers || function(servers) {};
+                window.__onMcpStatus = window.__onMcpStatus || function(update) {};
                 window.__loadMcpServers = function() {
                     try { $loadInject } catch(e) { console.error('[McpBridge] Load error', e); }
                 };
@@ -62,9 +75,34 @@ class McpBridge(
                     if (!json) return;
                     try { $saveInject } catch(e) { console.error('[McpBridge] Save error', e); }
                 };
+                window.__checkMcpStatus = function() {
+                    try { $checkStatusInject } catch(e) { console.error('[McpBridge] Status check error', e); }
+                };
             })();
         """.trimIndent()
         cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
+    }
+
+    private suspend fun runStatusCheck() {
+        val servers = McpConfigStore.load()
+        if (servers.isEmpty()) return
+
+        // Announce a loading state for enabled servers and disabled for the rest, so the UI can
+        // show the yellow indicator immediately before each probe completes.
+        servers.forEach { server ->
+            val initial = if (server.enabled) {
+                McpStatusUpdate(server.id, McpStatus.LOADING, "Checking…")
+            } else {
+                McpStatusUpdate(server.id, McpStatus.DISABLED, "Disabled")
+            }
+            pushStatus(initial)
+        }
+
+        // Probe each server sequentially so we never spawn many processes / sockets at once.
+        servers.forEach { server ->
+            val result = McpStatusChecker.check(server)
+            pushStatus(result)
+        }
     }
 
     private fun push(servers: List<McpServerConfig>) {
@@ -72,6 +110,16 @@ class McpBridge(
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
                 "if(window.__onMcpServers) window.__onMcpServers(JSON.parse('$escaped'));",
+                browser.cefBrowser.url, 0
+            )
+        }
+    }
+
+    private fun pushStatus(update: McpStatusUpdate) {
+        val escaped = json.encodeToString(update).escapeForJsString()
+        ApplicationManager.getApplication().invokeLater {
+            browser.cefBrowser.executeJavaScript(
+                "if(window.__onMcpStatus) window.__onMcpStatus(JSON.parse('$escaped'));",
                 browser.cefBrowser.url, 0
             )
         }

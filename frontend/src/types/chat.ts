@@ -535,10 +535,12 @@ declare global {
     __onFileChangeStats?: (payload: FileChangeStatsResultPayload) => void;
 
     __onMcpServers?: (servers: unknown) => void;
+    __onMcpStatus?: (update: unknown) => void;
     __onFilesResult?: (filesJson: unknown) => void;
     __searchFiles?: (query: string) => void;
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;
+    __checkMcpStatus?: () => void;
     __onPromptLibrary?: (items: unknown) => void;
     __loadPromptLibrary?: () => void;
     __savePromptLibrary?: (json: string) => void;

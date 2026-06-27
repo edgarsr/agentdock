@@ -18,10 +18,9 @@ import {
   ToolCallEvent,
   UndoResultPayload,
 } from '../types/chat';
-import { McpServerConfig } from '../types/mcp';
+import { McpServerConfig, McpStatusUpdate } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
-
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
 export interface SessionIdEvent { chatId: string; sessionId: string; }
@@ -39,6 +38,7 @@ export interface BridgeOperationResultEvent { payload: BridgeOperationResultPayl
 export interface ConversationReplayLoadedEvent { payload: ConversationReplayLoadedPayload; }
 export interface FileChangeStatsEvent { payload: FileChangeStatsResultPayload; }
 export interface McpServersEvent { servers: McpServerConfig[]; }
+export interface McpStatusEvent { update: McpStatusUpdate; }
 export interface PromptLibraryEvent { items: PromptLibraryItem[]; }
 export interface SystemInstructionsEvent { instructions: SystemInstruction[]; }
 export interface AudioTranscriptionFeatureEvent { state: AudioTranscriptionFeatureState; }
@@ -52,6 +52,7 @@ export const EVENT_NAMES = {
   ADAPTER_DELETED: 'acp-adapter-deleted',
   CONTENT_CHUNK: 'acp-content-chunk',
   MCP_SERVERS: 'mcp-servers',
+  MCP_STATUS: 'mcp-status',
   PROMPT_LIBRARY: 'prompt-library',
   SYSTEM_INSTRUCTIONS: 'system-instructions',
   STATUS: 'acp-status',
