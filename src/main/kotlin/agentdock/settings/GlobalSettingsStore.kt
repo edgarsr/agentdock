@@ -6,8 +6,11 @@ import agentdock.acp.AcpAdapterPaths
 import agentdock.gitcommit.GitCommitFeatureRuntimeState
 import agentdock.utils.atomicWriteText
 import java.io.File
+import java.io.RandomAccessFile
 
 object GlobalSettingsStore {
+    private val storeLock = Any()
+
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
@@ -16,20 +19,24 @@ object GlobalSettingsStore {
 
     private fun settingsFile(): File = File(AcpAdapterPaths.getBaseRuntimeDir(), "settings.json")
 
-    fun load(): GlobalSettings {
+    fun load(): GlobalSettings = withStoreLock {
         val file = settingsFile()
         if (!file.isFile) {
-            return save(GlobalSettings())
+            return@withStoreLock saveLocked(GlobalSettings())
         }
 
         val loaded = runCatching {
             json.decodeFromString<GlobalSettings>(file.readText())
         }.getOrDefault(GlobalSettings())
         GitCommitFeatureRuntimeState.setEnabled(loaded.gitCommitGeneration.enabled)
-        return loaded
+        loaded
     }
 
-    fun save(settings: GlobalSettings): GlobalSettings {
+    fun save(settings: GlobalSettings): GlobalSettings = withStoreLock {
+        saveLocked(settings)
+    }
+
+    private fun saveLocked(settings: GlobalSettings): GlobalSettings {
         val normalized = settings.copy(
             audioNotificationsEnabled = settings.audioNotificationsEnabled,
             uiFontSizeOffsetPx = normalizeUiFontSizeOffsetPx(settings.uiFontSizeOffsetPx),
@@ -62,14 +69,41 @@ object GlobalSettingsStore {
     }
 
     fun saveAudioTranscriptionSettings(settings: AudioTranscriptionSettings): AudioTranscriptionSettings {
-        val current = load()
-        return save(
-            current.copy(
-                audioTranscription = current.audioTranscription.copy(
-                    language = normalizeLanguage(settings.language)
+        return withStoreLock {
+            val current = loadLocked()
+            saveLocked(
+                current.copy(
+                    audioTranscription = current.audioTranscription.copy(
+                        language = normalizeLanguage(settings.language)
+                    )
                 )
-            )
-        ).audioTranscription
+            ).audioTranscription
+        }
+    }
+
+    private fun loadLocked(): GlobalSettings {
+        val file = settingsFile()
+        if (!file.isFile) {
+            return saveLocked(GlobalSettings())
+        }
+
+        val loaded = runCatching {
+            json.decodeFromString<GlobalSettings>(file.readText())
+        }.getOrDefault(GlobalSettings())
+        GitCommitFeatureRuntimeState.setEnabled(loaded.gitCommitGeneration.enabled)
+        return loaded
+    }
+
+    private inline fun <T> withStoreLock(action: () -> T): T = synchronized(storeLock) {
+        val lockFile = File(AcpAdapterPaths.getBaseRuntimeDir(), "settings.lock")
+        lockFile.parentFile?.mkdirs()
+        RandomAccessFile(lockFile, "rw").use { raf ->
+            raf.channel.use { channel ->
+                channel.lock().use {
+                    action()
+                }
+            }
+        }
     }
 
     private fun normalizeLanguage(language: String?): String {

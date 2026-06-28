@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { GitCommitHorizontal } from 'lucide-react';
 import { AgentOption, GitCommitGenerationSettings as GitCommitGenerationSettingsValue, ModelOption } from '../../types/chat';
 import { SettingsToggleCard } from './SettingsToggleCard';
@@ -33,6 +34,15 @@ export function GitCommitGenerationSettings({
   installedAgents,
   onChange,
 }: GitCommitGenerationSettingsProps) {
+  const [draftInstructions, setDraftInstructions] = useState(settings.instructions);
+  const instructionsFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!instructionsFocusedRef.current) {
+      setDraftInstructions(settings.instructions);
+    }
+  }, [settings.instructions]);
+
   if (installedAgents.length === 0) {
     return null;
   }
@@ -121,8 +131,17 @@ export function GitCommitGenerationSettings({
               <span>Custom Instructions (optional): </span>
             </div>
             <textarea
-              value={settings.instructions}
-              onChange={(event) => update({ instructions: event.target.value })}
+              value={draftInstructions}
+              onFocus={() => {
+                instructionsFocusedRef.current = true;
+              }}
+              onChange={(event) => setDraftInstructions(event.target.value)}
+              onBlur={() => {
+                instructionsFocusedRef.current = false;
+                if (draftInstructions !== settings.instructions) {
+                  update({ instructions: draftInstructions });
+                }
+              }}
               rows={5}
               placeholder="Describe how commit messages should be written."
               className="w-full max-w-[400px] resize-y rounded-[4px] px-3 py-2 text-ide-small"
