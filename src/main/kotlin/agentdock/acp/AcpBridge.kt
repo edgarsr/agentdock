@@ -82,7 +82,7 @@ class AcpBridge(
     internal val audio = AcpAudioPlayer(scope)
 
     companion object {
-        // Keep this aligned with the service startup budget. Cold Gemini starts can exceed 45s.
+        // Keep this aligned with the service startup budget. Cold agent starts can exceed 45s.
         const val START_AGENT_TIMEOUT_MS = 300_000L
     }
 

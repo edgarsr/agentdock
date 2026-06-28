@@ -6,7 +6,6 @@ import { RefreshCw } from 'lucide-react';
 import { ClaudeUsage } from './usage/ClaudeUsage';
 import { CopilotUsage } from './usage/CopilotUsage';
 import { CodexUsage } from './usage/CodexUsage';
-import { GeminiUsage } from './usage/GeminiUsage';
 import { CursorUsage } from './usage/CursorUsage';
 import { QoderUsage } from './usage/QoderUsage';
 import { Button } from './ui/Button';
@@ -360,11 +359,6 @@ export function AgentManagementView({
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'claude-code' && (
                         <UsageSection>
                           <ClaudeUsage key={refreshKey} />
-                        </UsageSection>
-                      )}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'gemini-cli' && (
-                        <UsageSection>
-                          <GeminiUsage key={refreshKey} disabledModels={agent.disabledModels} />
                         </UsageSection>
                       )}
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (

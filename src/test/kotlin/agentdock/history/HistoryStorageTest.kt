@@ -3,10 +3,12 @@ package agentdock.history
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import java.io.File
 import java.nio.file.Files
 
@@ -79,10 +81,10 @@ class HistoryStorageTest {
                 projectPath = projectPath,
                 conversationId = "conv-used-adapters",
                 sessionId = "session-1",
-                adapterName = "gemini",
+                adapterName = "beta",
                 promptCount = 1,
                 titleCandidate = "First prompt",
-                inheritedAdapterNames = listOf("claude", "gemini", "claude"),
+                inheritedAdapterNames = listOf("claude", "beta", "claude"),
                 touchUpdatedAt = true
             )
             AgentDockHistoryService.upsertRuntimeSessionMetadata(
@@ -97,7 +99,7 @@ class HistoryStorageTest {
 
             val conversation = HistoryStorage.readExistingProjectIndex(projectPath)
                 .single { it.id == "conv-used-adapters" }
-            assertEquals(listOf("claude", "gemini", "openai"), conversation.usedAdapterNames)
+            assertEquals(listOf("claude", "beta", "openai"), conversation.usedAdapterNames)
         }
     }
 
@@ -118,7 +120,7 @@ class HistoryStorageTest {
                         ),
                         ConversationSessionReplayEntry(
                             sessionId = "source-session-2",
-                            adapterName = "gemini",
+                            adapterName = "beta",
                             prompts = listOf(replayPrompt("three"))
                         )
                     )
@@ -176,6 +178,48 @@ class HistoryStorageTest {
             val conversation = HistoryStorage.readExistingProjectIndex(projectPath)
                 .single { it.id == "fork-conversation" }
             assertEquals(4, conversation.promptCount)
+        }
+    }
+
+    @Test
+    fun `conversation deletion tolerates sessions from removed adapters`() {
+        withIsolatedHistoryStorage("agent-dock-history-retired-adapter-delete") { projectDir ->
+            val projectPath = projectDir.absolutePath
+
+            AgentDockHistoryService.upsertRuntimeSessionMetadata(
+                projectPath = projectPath,
+                conversationId = "retired-conversation",
+                sessionId = "retired-session",
+                adapterName = "retired-adapter",
+                promptCount = 1,
+                titleCandidate = "Retired adapter chat",
+                touchUpdatedAt = true
+            )
+            AgentDockHistoryService.saveConversationReplay(
+                projectPath = projectPath,
+                conversationId = "retired-conversation",
+                data = ConversationReplayData(
+                    sessions = listOf(
+                        ConversationSessionReplayEntry(
+                            sessionId = "retired-session",
+                            adapterName = "retired-adapter",
+                            prompts = listOf(replayPrompt("old"))
+                        )
+                    )
+                )
+            )
+
+            val replayFile = HistoryStorage.conversationDataFile(projectPath, "retired-conversation")
+            assertTrue(replayFile.isFile)
+
+            val result = runBlocking {
+                AgentDockHistoryService.deleteConversations(projectPath, listOf("retired-conversation"))
+            }
+
+            assertTrue(result.success)
+            assertEquals(emptyList(), result.failures)
+            assertEquals(emptyList(), HistoryStorage.readExistingProjectIndex(projectPath))
+            assertFalse(replayFile.exists())
         }
     }
 

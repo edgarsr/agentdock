@@ -10,17 +10,6 @@ import java.util.concurrent.TimeUnit
 internal object AcpUsageDataFetcher {
     private const val LOCAL_USAGE_TIMEOUT_SECONDS = 30L
 
-    fun fetchGeminiUsageData(adapterId: String): String {
-        return try {
-            val (_, commandParts) = buildAdapterCliCommandParts(adapterId, listOf("--usage-json")) ?: return ""
-            val adapterDir = AcpAdapterPaths.getDownloadPath(adapterId)
-            val output = runLocalCliAndCaptureStdout(commandParts, adapterDir, timeoutSeconds = 60)
-                ?: return ""
-            val jsonLine = output.lines().find { it.startsWith("__GEMINI_USAGE_JSON__") }
-            if (jsonLine != null) jsonLine.substring("__GEMINI_USAGE_JSON__".length).trim() else extractJsonPayload(output)
-        } catch (_: Exception) { "" }
-    }
-
     fun fetchClaudeUsageData(): String {
         val accessToken = try {
             readTargetFile("~/.claude/.credentials.json")

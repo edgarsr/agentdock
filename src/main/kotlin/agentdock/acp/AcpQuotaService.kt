@@ -69,7 +69,6 @@ class AcpQuotaService : Disposable {
                         val rawJson = when (adapter.id) {
                             "claude-code" -> AcpUsageDataFetcher.fetchClaudeUsageData()
                             "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
-                            "gemini-cli" -> AcpUsageDataFetcher.fetchGeminiUsageData(adapter.id)
                             "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapter.id)
                             else -> null
                         }
@@ -160,40 +159,6 @@ class AcpQuotaService : Disposable {
                             sevenDayPct != null && sevenDayPct > 89 && (fiveHourPct == null || fiveHourPct < 89) -> sevenDayPct
                             fiveHourPct != null -> fiveHourPct
                             else -> sevenDayPct ?: 0
-                        }
-                    }
-                }
-                "gemini-cli" -> {
-                    val buckets = (root["quota"] as? JsonObject)?.get("buckets") as? JsonArray ?: emptyList()
-                    val disabledModels = adapter.disabledModels
-                    val prefModelId = AcpAgentPreferencesStore.preferenceFor("gemini-cli")?.modelId?.trim()?.lowercase()
-                    val isAuto = prefModelId.isNullOrBlank() || prefModelId.startsWith("auto")
-
-                    val displayBuckets = buckets.mapNotNull { b ->
-                        val obj = b as? JsonObject ?: return@mapNotNull null
-                        val mId = (obj["modelId"] as? JsonPrimitive)?.content ?: return@mapNotNull null
-                        if (disabledModels.any { mId.contains(it) }) return@mapNotNull null
-                        val resetTime = (obj["resetTime"] as? JsonPrimitive)?.contentOrNull
-                        if (!hasDisplayableQuotaReset(resetTime)) return@mapNotNull null
-                        val remaining = (obj["remainingFraction"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
-                        val pct = roundPercent((1.0 - remaining) * 100) ?: return@mapNotNull null
-                        mId to pct
-                    }
-
-                    if (displayBuckets.isNotEmpty()) {
-                        val nonNullPrefId = prefModelId ?: ""
-                        fun matchesModel(bucketModelId: String): Boolean {
-                            val b = bucketModelId.lowercase()
-                            return b == nonNullPrefId || b == nonNullPrefId.removePrefix("gemini-") || nonNullPrefId == b.removePrefix("gemini-")
-                        }
-
-                        val activeBucket = if (!isAuto) displayBuckets.find { matchesModel(it.first) } else null
-                        mainPercent = activeBucket?.second ?: (displayBuckets.maxOfOrNull { it.second } ?: 0)
-
-                        if (activeBucket != null) {
-                            details.add("${activeBucket.first.removePrefix("gemini-")}: ${activeBucket.second}%")
-                        } else {
-                            displayBuckets.forEach { (mId, pct) -> details.add("${mId.removePrefix("gemini-")}: $pct%") }
                         }
                     }
                 }

@@ -10,7 +10,6 @@ internal interface AdapterHistory {
 
 internal object AdapterHistoryRegistry {
     private val histories: Map<String, AdapterHistory> = listOf(
-        GeminiCliHistory,
         QoderCliHistory
     ).associateBy { it.adapterId }
 

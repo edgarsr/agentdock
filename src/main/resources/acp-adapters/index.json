@@ -1,7 +1,6 @@
 {
   "files": [
     "acp-adapters/claude-code.json",
-    "acp-adapters/gemini-cli.json",
     "acp-adapters/cursor-cli.json",
     "acp-adapters/codex.json",
     "acp-adapters/github-copilot-cli.json",

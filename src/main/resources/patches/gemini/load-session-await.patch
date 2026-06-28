@@ -1,6 +1,0 @@
-{
-  "pathGlob": "bundle/gemini-*.js",
-  "find": "    session.streamHistory(sessionData.messages);",
-  "replace": "    await session.streamHistory(sessionData.messages);",
-  "alreadyApplied": "await session.streamHistory(sessionData.messages);"
-}

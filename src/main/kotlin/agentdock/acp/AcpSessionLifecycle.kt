@@ -14,7 +14,7 @@ import kotlinx.coroutines.withTimeout
 import agentdock.history.SessionMeta
 
 // Max time to wait for the agent process to start and respond to ACP initialize.
-// The retry loop in initializeSharedProcessAtStartup can take up to this long for slow agents (e.g. Gemini).
+// The retry loop in initializeSharedProcessAtStartup can take up to this long for slow agents.
 private const val PROCESS_STARTUP_TIMEOUT_MS = 300_000L
 
 internal fun AcpClientService.processKey(adapterName: String): String {

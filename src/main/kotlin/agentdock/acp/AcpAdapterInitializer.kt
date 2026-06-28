@@ -38,7 +38,7 @@ import agentdock.BuildConfig
 import agentdock.history.AgentDockHistoryService
 
 // Keep this aligned with the broader ACP startup budget.
-// A freshly updated adapter, especially Gemini CLI, can need materially longer than 60s
+// A freshly updated adapter can need materially longer than 60s
 // on the first cold initialization after install/update.
 private const val ADAPTER_INITIALIZATION_TIMEOUT_MS = 300_000L
 

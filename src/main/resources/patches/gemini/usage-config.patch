@@ -1,6 +1,0 @@
-{
-  "path": "bundle/gemini.js",
-  "find": "async function run() {\n",
-  "replace": "const usageJsonRequested = process.argv.slice(2).includes(\"--usage-json\");\nif (usageJsonRequested) {\n  process.argv = [...process.argv.slice(0, 2), ...process.argv.slice(2).filter((arg) => arg !== \"--usage-json\")];\n  process.env[\"GEMINI_CLI_USAGE_JSON\"] = \"true\";\n}\nasync function run() {\n",
-  "alreadyApplied": "GEMINI_CLI_USAGE_JSON"
-}

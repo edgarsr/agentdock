@@ -561,7 +561,6 @@ internal fun AcpBridge.installAdapterQueries() {
                 val result = when (adapterId) {
                     "claude-code" -> AcpUsageDataFetcher.fetchClaudeUsageData()
                     "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
-                    "gemini-cli" -> AcpUsageDataFetcher.fetchGeminiUsageData(adapterId)
                     "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapterId)
                     else -> ""
                 }
