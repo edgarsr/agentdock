@@ -491,7 +491,6 @@ internal fun AcpClientService.resolveAdapterProcessWorkingDirectory(adapterRoot:
     return projectBase ?: adapterRoot
 }
 
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientService.SharedProcess) {
     synchronized(sharedProc) {
         if (sharedProc.sessionUpdateWrapped) return
@@ -507,7 +506,7 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProc: AcpClientSer
             val handlers = field.get(protocol) as AtomicRef<PersistentMap<MethodName, suspend (JsonRpcNotification) -> Unit>>
             val methodName = AcpMethod.ClientMethods.SessionUpdate.methodName
             val original = handlers.value[methodName] ?: return
-            val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+            val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             sharedProc.sessionUpdateScope = updateScope
             val queue = Channel<QueuedSessionUpdate>(Channel.UNLIMITED)
             sharedProc.sessionUpdateQueue = queue
