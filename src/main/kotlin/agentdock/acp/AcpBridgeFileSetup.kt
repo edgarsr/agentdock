@@ -2,7 +2,11 @@ package agentdock.acp
 
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.psi.codeStyle.NameUtil
+import com.intellij.psi.search.FilenameIndex
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -213,54 +217,83 @@ internal fun AcpBridge.installMiscQueries() {
     searchFilesQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { payload ->
             val rawQuery = payload?.trim() ?: ""
-            val query = rawQuery.lowercase()
             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val results = mutableListOf<FileSearchItem>()
+                val results = mutableListOf<RankedFileSearchItem>()
                 val seenPaths = mutableSetOf<String>()
                 val project = service.project
                 val basePath = project.basePath ?: ""
+                val fileIndex = com.intellij.openapi.roots.ProjectFileIndex.getInstance(project)
+                val fileTypeManager = FileTypeManager.getInstance()
+                val searchScope = GlobalSearchScope.projectScope(project)
+                val matcher = rawQuery.takeIf { it.isNotEmpty() }?.let { NameUtil.buildMatcher("*$it").build() }
                 
-                fun addIfMatch(virtualFile: com.intellij.openapi.vfs.VirtualFile): Boolean {
+                fun addCandidate(virtualFile: com.intellij.openapi.vfs.VirtualFile): Boolean {
                     if (virtualFile.isDirectory) return false
                     val path = virtualFile.path
                     if (seenPaths.contains(path)) return false
+                    if (!fileIndex.isInContent(virtualFile) || fileIndex.isExcluded(virtualFile) || fileTypeManager.isFileIgnored(virtualFile)) return false
                     
                     val name = virtualFile.name
                     val relPath = path.removePrefix(basePath).trimStart('/', '\\')
-                    
-                    val matches = if (rawQuery.isNotEmpty()) {
-                        fuzzyFileMatch(name, query) || fuzzyFileMatch(relPath, query) || relPath.lowercase().contains(query)
-                    } else true
-                    
-                    if (matches) {
-                        results.add(FileSearchItem(relPath, name))
-                        seenPaths.add(path)
-                        return true
-                    }
-                    return false
+                    if (isHiddenDirectoryFileSearchPath(relPath, rawQuery)) return false
+                    if (matcher != null && !matcher.matches(name)) return false
+                    val matchingDegree = matcher?.matchingDegree(name).takeIf { it != null && it > 0 } ?: 0
+
+                    results.add(
+                        RankedFileSearchItem(
+                            item = FileSearchItem(relPath, name),
+                            matchingDegree = matchingDegree,
+                            isSourceContent = fileIndex.isInSourceContent(virtualFile),
+                            isBinary = virtualFile.fileType.isBinary
+                        )
+                    )
+                    seenPaths.add(path)
+                    return true
                 }
 
                 readAction {
                     // Priority 1: Open files
                     com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles?.forEach {
-                        if (results.size < 50) addIfMatch(it)
+                        if (results.size < 50) addCandidate(it)
                     }
                     
                     // Priority 2: Recent files
                     com.intellij.openapi.fileEditor.impl.EditorHistoryManager.getInstance(project).fileList?.reversed()?.forEach {
-                        if (results.size < 50) addIfMatch(it)
+                        if (results.size < 50) addCandidate(it)
                     }
                     
-                    // Priority 3: Index iteration (the rest)
-                    if (results.size < 50 && basePath.isNotEmpty()) {
-                        com.intellij.openapi.roots.ProjectFileIndex.getInstance(project).iterateContent { virtualFile ->
+                    if (matcher != null && results.size < 50) {
+                        val activeMatcher = matcher
+                        FilenameIndex.processAllFileNames({ fileName ->
+                            if (results.size >= FILE_SEARCH_MAX_CANDIDATES) return@processAllFileNames false
+                            if (!activeMatcher.matches(fileName)) return@processAllFileNames true
+
+                            FilenameIndex.getVirtualFilesByName(fileName, searchScope).forEach { virtualFile ->
+                                if (results.size >= FILE_SEARCH_MAX_CANDIDATES) return@processAllFileNames false
+                                addCandidate(virtualFile)
+                            }
+                            true
+                        }, searchScope, null)
+                    } else if (rawQuery.isEmpty() && results.size < 50 && basePath.isNotEmpty()) {
+                        fileIndex.iterateContent { virtualFile ->
                             if (results.size >= 50) return@iterateContent false
-                            addIfMatch(virtualFile)
+                            addCandidate(virtualFile)
                             true
                         }
                     }
                 }
-                val list = results.toList()
+                val list = if (matcher == null) {
+                    results.map { it.item }.take(50)
+                } else {
+                    results.sortedWith(
+                        compareByDescending<RankedFileSearchItem> { it.isSourceContent }
+                            .thenBy { it.isBinary }
+                            .thenByDescending { it.matchingDegree }
+                            .thenBy { it.item.path }
+                    )
+                        .map { it.item }
+                        .take(50)
+                }
                 val json = try { kotlinx.serialization.json.Json.encodeToString<List<FileSearchItem>>(list) } catch (e: Exception) { "[]" }
                 runOnEdt {
                     browser.cefBrowser.executeJavaScript(
@@ -371,16 +404,24 @@ private data class OpenFileRequest(
     val line: Int
 )
 
-private fun fuzzyFileMatch(candidate: String, lowercaseQuery: String): Boolean {
-    if (lowercaseQuery.isEmpty()) return true
-    var queryIndex = 0
-    for (char in candidate) {
-        if (char.lowercaseChar() == lowercaseQuery[queryIndex]) {
-            queryIndex += 1
-            if (queryIndex == lowercaseQuery.length) return true
-        }
-    }
-    return false
+private data class RankedFileSearchItem(
+    val item: FileSearchItem,
+    val matchingDegree: Int,
+    val isSourceContent: Boolean,
+    val isBinary: Boolean
+)
+
+private const val FILE_SEARCH_MAX_CANDIDATES = 500
+
+internal fun isHiddenDirectoryFileSearchPath(relPath: String, rawQuery: String): Boolean {
+    if (rawQuery.trim().startsWith(".")) return false
+
+    val segments = relPath.replace('\\', '/')
+        .trimStart('/')
+        .split('/')
+        .filter { it.isNotBlank() }
+
+    return segments.dropLast(1).any { it.startsWith(".") }
 }
 
 private fun AcpBridge.openRequestedFile(request: OpenFileRequest): Boolean {

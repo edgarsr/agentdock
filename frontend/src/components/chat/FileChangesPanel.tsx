@@ -47,8 +47,8 @@ const FileChangesPanel = memo(({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] border-t border-border px-4 py-2">
-      <div className="border border-border rounded-[6px] overflow-hidden bg-editor-bg">
+    <div className="border-t border-border px-4 py-2">
+      <div className="mx-auto w-full max-w-[1200px] border border-border rounded-[6px] overflow-hidden bg-editor-bg">
           <div
             role="button"
             tabIndex={0}

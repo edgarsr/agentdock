@@ -38,6 +38,7 @@ export function buildPromptLibrarySlashItems(prompts: PromptLibraryItem[]): Slas
 }
 
 export interface SlashMenuLayout {
+  left: number;
   width: number;
   maxHeight: number;
 }
@@ -67,8 +68,12 @@ export function calculateSlashMenuLayout(
   viewportTopInset: number
 ): SlashMenuLayout {
   const rootRect = rootElement.getBoundingClientRect();
-  const horizontalPadding = 12;
-  const width = Math.max(320, rootRect.width - horizontalPadding * 2);
+  const contentElement = rootElement.firstElementChild instanceof HTMLElement
+    ? rootElement.firstElementChild
+    : rootElement;
+  const contentRect = contentElement.getBoundingClientRect();
+  const left = Math.max(0, Math.floor(contentRect.left - rootRect.left));
+  const width = Math.max(320, Math.floor(contentRect.width));
   const rowHeight = 34;
   const naturalHeight = Math.max(48, commandCount * rowHeight + 8);
   const gap = 8;
@@ -77,6 +82,7 @@ export function calculateSlashMenuLayout(
   const preferAbove = availableAbove >= naturalHeight || availableAbove >= availableBelow;
 
   return {
+    left,
     width,
     maxHeight: preferAbove ? availableAbove : availableBelow,
   };
