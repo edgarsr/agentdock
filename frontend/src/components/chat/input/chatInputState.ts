@@ -13,8 +13,10 @@ export interface ChatInputProps {
   inputValue: string;
   onInputChange: (val: string) => void;
   onSend: () => void;
+  onQueueDraft?: () => void;
   onStop: () => void;
   isSending: boolean;
+  promptQueueEnabled?: boolean;
   agentOptions: DropdownOption[];
   selectedAgentId: string;
   onAgentChange: (id: string) => void;

@@ -55,6 +55,7 @@ internal class AcpProcessRegistryStore(
     private val ownersDir = File(baseDir, "owners")
     private val rootsDir = File(baseDir, "roots")
     private val lockFile = File(baseDir, "registry.lock")
+    private val localLock = Any()
     private val ownerFile: File get() = File(ownersDir, "$currentOwnerId.json")
 
     fun registerOwner() = withRegistryLock {
@@ -192,11 +193,13 @@ internal class AcpProcessRegistryStore(
     }
 
     private fun <T> withRegistryLock(action: () -> T): T {
-        baseDir.mkdirs()
-        RandomAccessFile(lockFile, "rw").use { file ->
-            file.channel.use { channel ->
-                channel.lock().use {
-                    return action()
+        synchronized(localLock) {
+            baseDir.mkdirs()
+            RandomAccessFile(lockFile, "rw").use { file ->
+                file.channel.use { channel ->
+                    channel.lock().use {
+                        return action()
+                    }
                 }
             }
         }

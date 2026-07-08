@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import com.intellij.ui.jcef.JBCefJSQuery
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -280,25 +281,27 @@ internal fun AcpBridge.installConversationQueries() {
                     return@addHandler JBCefJSQuery.Response("ok")
                 }
 
-                pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
                 scope.launch(Dispatchers.Default) {
                     try {
+                        val promptJob = promptJobs[chatId]
                         withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
                             service.cancel(chatId)
+                            promptJob?.cancelAndJoin()
                         }
-                        promptJobs[chatId]?.cancel()
                         pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
                         appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
                         flushLivePromptCapture(chatId)?.let {
                             pushPromptDoneChunk(chatId, it, outcome = "cancelled")
                         }
                         pushStatus(chatId, "ready")
+                        pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
                     } catch (e: Exception) {
                         val message = "Cancel request failed. ${formatAcpError(e)}"
                         service.markChatSessionBroken(chatId)
                         pushConversationError(chatId, message)
                         pushStatus(chatId, "error")
                         recoverRuntimeAfterFailure(message)
+                        pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
                     }
                 }
             } else {

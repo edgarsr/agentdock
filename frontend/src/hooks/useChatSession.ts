@@ -7,7 +7,8 @@ import {
   HistorySessionMeta,
   ChatAttachment,
   PendingHandoffContext,
-  ForkConversationBase
+  ForkConversationBase,
+  RichContentBlock
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayMessages } from '../utils/replay';
@@ -31,6 +32,8 @@ import {
 import { useAgentRuntimeOptions } from './chatSession/useAgentRuntimeOptions';
 import { useAvailableCommands } from './chatSession/useAvailableCommands';
 import { useBufferedMessageChunks } from './chatSession/useBufferedMessageChunks';
+import { usePromptQueue } from './chatSession/usePromptQueue';
+import { QueuedPrompt } from './chatSession/promptQueueTypes';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
 const APPROVAL_MODE_STORAGE_KEY = 'chat-approval-mode';
@@ -495,12 +498,11 @@ export function useChatSession(
 
   // Handle native attachments from backend
   useEffect(() => {
-    const unsub = ACPBridge.onAttachmentsAdded((e) => {
+    return ACPBridge.onAttachmentsAdded((e) => {
       const { chatId: cid, files } = e.detail;
       if (cid !== conversationId) return;
       setAttachments((prev) => [...prev, ...files]);
     });
-    return unsub;
   }, [conversationId]);
 
   useEffect(() => {
@@ -578,16 +580,11 @@ export function useChatSession(
     lastMetadataFingerprintRef.current = fingerprint;
   }, [conversationId, status, acpSessionId, selectedAgentId, messages, metadataTitleOverride, inheritedAdapterNames]);
 
-  const handleSend = useCallback(() => {
-    const text = inputValue.trim();
-    if ((!text && attachments.length === 0) || isSending || status === 'prompting') return;
-
-    const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
-    if (normalizedBlocks.length === 0) return;
-    const outgoingBlocks = pendingHandoffRef.current
-      ? prependHandoffContext(normalizedBlocks, pendingHandoffRef.current.text)
-      : normalizedBlocks;
-
+  const sendPreparedPrompt = useCallback((
+    displayBlocks: RichContentBlock[],
+    outgoingBlocks: RichContentBlock[],
+    displayText: string
+  ) => {
     allowMetadataUpdateRef.current = true;
     touchUpdatedAtRef.current = true;
     onUserMessageSent?.();
@@ -595,13 +592,11 @@ export function useChatSession(
     const userMessage: Message = {
       id: nextMessageId('user'),
       role: 'user',
-      content: plainTextFromBlocks(normalizedBlocks),
-      blocks: normalizedBlocks,
+      content: displayText,
+      blocks: displayBlocks,
       timestamp: Date.now(),
     };
     setLiveMessages((prev) => [...prev, userMessage]);
-    setInputValue('');
-    setAttachments([]);
     const promptStartedAt = Date.now();
     startTimeRef.current = promptStartedAt;
     const assistantMessage: Message = {
@@ -620,7 +615,7 @@ export function useChatSession(
     setLiveMessages((prev) => [...prev, assistantMessage]);
 
     if (status !== 'ready') {
-      // Queue it up
+      // Defer the active prompt until the agent finishes starting.
       pendingPromptRef.current = outgoingBlocks;
       if (status === 'not started' || status === 'error') {
         startSelectedAgent();
@@ -641,10 +636,92 @@ export function useChatSession(
     });
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
-  }, [inputValue, attachments, isSending, status, conversationId, selectedAgentId,
+  }, [status, conversationId, selectedAgentId,
       adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
+  const rebuildQueuedPromptBlocks = useCallback((text: string, queuedAttachments: ChatAttachment[]) => {
+    return normalizeOutgoingBlocks(buildPromptBlocks(text, queuedAttachments));
+  }, []);
+
+  const canDrainQueuedPrompts = status === 'ready'
+    && !isSending
+    && !isHistoryReplaying
+    && !pendingPromptRef.current;
+
+  const canPreemptQueuedPrompts = status === 'prompting'
+    && isSending
+    && !isHistoryReplaying
+    && !pendingPromptRef.current;
+
+  const handleDrainQueuedPrompt = useCallback((prompt: QueuedPrompt) => {
+    sendPreparedPrompt(prompt.blocks, prompt.blocks, prompt.text);
+  }, [sendPreparedPrompt]);
+
+  const preemptActivePromptForQueue = useCallback(() => {
+    if (!canPreemptQueuedPrompts) return Promise.resolve(false);
+    setPermissionQueue([]);
+    return ACPBridge.cancelPrompt(conversationId).then(() => true).catch((error) => {
+      console.warn('[useChatSession] Failed to preempt active prompt:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      failActivePromptLocally(`Cancel request was not delivered. ${message}`);
+      requestRuntimeRecovery(message);
+      return false;
+    });
+  }, [canPreemptQueuedPrompts, conversationId, failActivePromptLocally, requestRuntimeRecovery]);
+
+  const {
+    queuedPrompts,
+    enqueuePrompt,
+    clearQueue,
+    removeQueuedPrompt,
+    updateQueuedPromptText,
+    sendQueuedPromptNow,
+  } = usePromptQueue({
+    enabled: true,
+    canDrain: canDrainQueuedPrompts,
+    canPreempt: canPreemptQueuedPrompts,
+    onDrain: handleDrainQueuedPrompt,
+    onPreempt: preemptActivePromptForQueue,
+    rebuildBlocks: rebuildQueuedPromptBlocks,
+  });
+
+  const handleSend = useCallback(() => {
+    const text = inputValue.trim();
+    if ((!text && attachments.length === 0) || isSending || status === 'prompting') return;
+
+    const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
+    if (normalizedBlocks.length === 0) return;
+    const outgoingBlocks = pendingHandoffRef.current
+      ? prependHandoffContext(normalizedBlocks, pendingHandoffRef.current.text)
+      : normalizedBlocks;
+
+    sendPreparedPrompt(normalizedBlocks, outgoingBlocks, plainTextFromBlocks(normalizedBlocks));
+    setInputValue('');
+    setAttachments([]);
+  }, [inputValue, attachments, isSending, status, sendPreparedPrompt]);
+
+  const handleQueueDraft = useCallback(() => {
+    const text = inputValue.trim();
+    if (!isSending && status !== 'prompting') return;
+    if (!text && attachments.length === 0) return;
+
+    const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
+    if (normalizedBlocks.length === 0) return;
+
+    const enqueued = enqueuePrompt({
+      text: plainTextFromBlocks(normalizedBlocks),
+      blocks: normalizedBlocks,
+      attachments: [...attachments],
+    });
+    if (!enqueued) return;
+
+    setInputValue('');
+    setAttachments([]);
+  }, [attachments, enqueuePrompt, inputValue, isSending, status]);
+
   const handleStop = () => {
+    clearQueue();
+
     if (pendingPromptRef.current && status !== 'prompting') {
       pendingPromptRef.current = null;
       setPermissionQueue([]);
@@ -706,6 +783,10 @@ export function useChatSession(
     status,
     isSending,
     isHistoryReplaying,
+    queuedPrompts,
+    removeQueuedPrompt,
+    updateQueuedPromptText,
+    sendQueuedPromptNow,
     selectedAgentId,
     agentOptions,
     selectedModelId,
@@ -720,6 +801,7 @@ export function useChatSession(
     setApprovalMode,
     permissionRequest,
     handleSend,
+    handleQueueDraft,
     handleStop,
     handlePermissionDecision,
     hasSelectedAgent: !!resolvedSelectedAgent,

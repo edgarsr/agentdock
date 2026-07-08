@@ -12,6 +12,7 @@ import {
 import { ACPBridge } from '../../utils/bridge';
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
+import { PromptQueueList } from './input/PromptQueueList';
 import PermissionBar from './PermissionBar';
 import FileChangesPanel from './FileChangesPanel';
 import ConfirmationModal from '../ConfirmationModal';
@@ -73,6 +74,10 @@ export default function ChatSessionView({
     status,
     isSending,
     isHistoryReplaying,
+    queuedPrompts,
+    removeQueuedPrompt,
+    updateQueuedPromptText,
+    sendQueuedPromptNow,
     agentOptions,
     selectedAgentId,
     selectedModelId,
@@ -87,6 +92,7 @@ export default function ChatSessionView({
     setApprovalMode,
     permissionRequest,
     handleSend,
+    handleQueueDraft,
     handleStop,
     handlePermissionDecision,
     hasSelectedAgent,
@@ -295,6 +301,20 @@ export default function ChatSessionView({
             group-hover:shadow-[0_0_6px_color-mix(in_srgb,var(--ide-Button-default-focusColor),transparent_45%)]" />
         </div>
 
+        {queuedPrompts.length > 0 && (
+          <div className="px-4 pt-2 pb-2">
+            <div className="mx-auto w-full max-w-[1200px] rounded-ide border border-[var(--ide-Button-startBorderColor)] bg-editor-bg">
+              <PromptQueueList
+                items={queuedPrompts}
+                onRemove={removeQueuedPrompt}
+                onChangeText={updateQueuedPromptText}
+                onSendNow={sendQueuedPromptNow}
+                sendNowCancelsCurrent={status === 'prompting' && isSending}
+              />
+            </div>
+          </div>
+        )}
+
         <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
           <ChatInput
             conversationId={conversationId}
@@ -303,8 +323,10 @@ export default function ChatSessionView({
             inputValue={inputValue}
             onInputChange={setInputValue}
             onSend={handleSend}
+            onQueueDraft={handleQueueDraft}
             onStop={handleStop}
             isSending={isSending}
+            promptQueueEnabled
             usageSessionKey={acpSessionId || undefined}
             status={status}
             
@@ -406,5 +428,3 @@ export default function ChatSessionView({
     </div>
   );
 }
-
-

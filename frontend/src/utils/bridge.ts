@@ -57,6 +57,7 @@ const pendingRpcMethodsById = new Map<string | number, string>();
 const toolCallRawInputById = new Map<string, Record<string, any>>();
 const BRIDGE_REQUEST_TIMEOUT_MS = 120_000;
 const BRIDGE_OPERATION_TIMEOUT_MS = 10_000;
+const CANCEL_PROMPT_OPERATION_TIMEOUT_MS = 15_000;
 
 function nextSaveTranscriptRequestId(): string {
   saveTranscriptCounter += 1;
@@ -78,14 +79,18 @@ function nextBridgeOperationRequestId(operation: string): string {
   return `${operation}-${bridgeOperationCounter}-${Date.now()}`;
 }
 
-function awaitBridgeOperation(operation: BridgeOperationResultPayload['operation'], invoke: (requestId: string) => void): Promise<void> {
+function awaitBridgeOperation(
+  operation: BridgeOperationResultPayload['operation'],
+  invoke: (requestId: string) => void,
+  timeoutMs = BRIDGE_OPERATION_TIMEOUT_MS,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const requestId = nextBridgeOperationRequestId(operation);
     let cleanup = () => {};
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error(`Bridge request '${operation}' was not acknowledged. Connection to the agent may be broken.`));
-    }, BRIDGE_OPERATION_TIMEOUT_MS);
+    }, timeoutMs);
 
     cleanup = ACPBridge.onBridgeOperationResult((e) => {
       const payload = e.detail.payload;
@@ -360,9 +365,13 @@ export const ACPBridge = {
     if (typeof window.__cancelPrompt !== 'function') {
       return Promise.reject(new Error('Cancel prompt bridge is not available.'));
     }
-    return awaitBridgeOperation('cancel_prompt', (requestId) => {
-      window.__cancelPrompt?.(conversationId, requestId);
-    });
+    return awaitBridgeOperation(
+      'cancel_prompt',
+      (requestId) => {
+        window.__cancelPrompt?.(conversationId, requestId);
+      },
+      CANCEL_PROMPT_OPERATION_TIMEOUT_MS,
+    );
   },
 
   recoverRuntime: (reason?: string) => {
