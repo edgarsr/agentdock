@@ -179,10 +179,10 @@ export function useAppController() {
     });
     setTabs(prev => prev.map(tab => {
       if (tab.id !== tabId || tab.type !== 'chat') return tab;
+      if (!state.acpSessionId.trim() || !state.adapterName.trim()) return tab;
       const inherited = tab.historySession?.allAdapterNames || tab.inheritedAdapterNames || [];
       const inheritedAdapterNames = normalizeAdapterNames([
         ...inherited,
-        tab.agentId,
         state.adapterName,
       ]);
       return { ...tab, inheritedAdapterNames };
@@ -315,7 +315,6 @@ export function useAppController() {
     const inheritedAdapterNames = normalizeAdapterNames([
       ...(sourceTab.historySession?.allAdapterNames || []),
       ...(sourceTab.inheritedAdapterNames || []),
-      sourceTab.agentId,
       sourceSessionState?.adapterName,
     ]);
     const handoffContext: PendingHandoffContext = {
