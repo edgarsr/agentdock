@@ -112,6 +112,10 @@ function CopilotUsageSection({ refreshKey }: { refreshKey: number }) {
   );
 }
 
+function usesOpenAiModel(agent: AgentOption): boolean {
+  return agent.currentModelId?.trim().toLowerCase().startsWith('openai/') === true;
+}
+
 export function AgentManagementView({
   initialAgents = [],
   isActive = false,
@@ -362,6 +366,11 @@ export function AgentManagementView({
                         </UsageSection>
                       )}
                       {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (
+                        <UsageSection>
+                          <CodexUsage key={refreshKey} />
+                        </UsageSection>
+                      )}
+                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'opencode' && usesOpenAiModel(agent) && (
                         <UsageSection>
                           <CodexUsage key={refreshKey} />
                         </UsageSection>
