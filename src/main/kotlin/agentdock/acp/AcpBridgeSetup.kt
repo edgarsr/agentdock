@@ -295,6 +295,7 @@ internal fun AcpBridge.installAdapterQueries() {
                         pushAdapters()
 
                         service.stopSharedProcess(adapterId)
+                        AcpConfigOptionsCache.remove(adapterId)
                         latestVersionStates.remove(adapterId)
                         val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterId)
                         val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id)
@@ -364,6 +365,7 @@ internal fun AcpBridge.installAdapterQueries() {
             if (adapterId != null) {
                 scope.launch(Dispatchers.IO) {
                     service.stopSharedProcess(adapterId)
+                    AcpConfigOptionsCache.remove(adapterId)
                     latestVersionStates.remove(adapterId)
                     resetDownloadProbeState(adapterId)
                     val deleted = AcpAdapterPaths.deleteAdapter(adapterId, AcpAdapterPaths.getExecutionTarget())
@@ -422,6 +424,7 @@ internal fun AcpBridge.installAdapterQueries() {
                         pushAdapters()
 
                         service.stopSharedProcess(adapterId)
+                        AcpConfigOptionsCache.remove(adapterId)
                         val target = AcpAdapterPaths.getExecutionTarget()
                         val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id)
                         val deleted = AcpAdapterPaths.deleteAdapter(adapterId, target)

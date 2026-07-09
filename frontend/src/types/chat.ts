@@ -117,8 +117,10 @@ export interface AgentOption {
   availableModels?: ModelOption[];
   currentModeId?: string;
   availableModes?: ModeOption[];
+  availableModesByModel?: Record<string, ModeOption[]>;
   currentReasoningEffortId?: string;
   availableReasoningEfforts?: ReasoningEffortOption[];
+  reasoningEffortsByModel?: Record<string, ReasoningEffortOption[]>;
   downloaded?: boolean;
   downloadedKnown?: boolean;
   downloadPath?: string;
@@ -469,15 +471,23 @@ export interface GlobalSettingsPayload {
 declare global {
   interface Window {
     // Actions (Frontend -> Backend)
-    __startAgent?: (conversationId: string, adapterId?: string, modelId?: string, requestId?: string) => void;
-    __setModel?: (conversationId: string, adapterId: string, modelId: string) => void;
-    __setMode?: (conversationId: string, adapterId: string, modeId: string) => void;
-    __setReasoningEffort?: (conversationId: string, adapterId: string, reasoningEffortId: string) => void;
+    __startAgent?: (
+      conversationId: string,
+      adapterId?: string,
+      modelId?: string,
+      modeId?: string,
+      requestId?: string,
+      reasoningEffortId?: string
+    ) => void;
     __sendPrompt?: (
       conversationId: string,
       message: string,
       requestId?: string,
-      forkBase?: ForkConversationBase
+      forkBase?: ForkConversationBase,
+      adapterId?: string,
+      modelId?: string,
+      modeId?: string,
+      reasoningEffortId?: string
     ) => void;
     __requestAdapters?: () => void;
     __notifyReady?: () => void;
@@ -568,7 +578,3 @@ declare global {
     __settingsBridgeReady?: boolean;
   }
 }
-
-
-
-

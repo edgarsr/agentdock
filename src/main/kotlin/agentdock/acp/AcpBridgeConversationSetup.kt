@@ -1,11 +1,13 @@
 package agentdock.acp
 
 import com.intellij.ui.jcef.JBCefJSQuery
-import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 
 private data class PermissionDecisionPayload(
@@ -15,6 +17,8 @@ private data class PermissionDecisionPayload(
 
 private const val PROMPT_HEALTH_POLL_INTERVAL_MS = 5_000L
 private const val CANCEL_REQUEST_TIMEOUT_MS = 10_000L
+private const val CANCELLED_PROMPT_RESPONSE_TIMEOUT_MS = 10_000L
+private const val PREVIOUS_PROMPT_SETTLE_TIMEOUT_MS = 30_000L
 
 internal fun AcpBridge.pushConversationError(chatId: String, error: Throwable) {
     pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(error)}]", isReplay = false)
@@ -43,31 +47,6 @@ internal fun AcpBridge.pushBridgeOperationResult(
     )
 }
 
-private suspend fun AcpBridge.handleScopedConfigChange(
-    chatId: String?,
-    adapterId: String?,
-    valueId: String?,
-    kind: String,
-    applyChange: suspend (String, String) -> Boolean
-) {
-    if (chatId == null || adapterId == null || valueId == null) return
-    if (service.activeAdapterName(chatId) != adapterId) return
-
-    pushStatus(chatId, "initializing")
-    try {
-        val ok = applyChange(chatId, valueId)
-        if (!ok) {
-            pushConversationError(chatId, "Failed to set $kind '$valueId'")
-        } else {
-            pushAdapters()
-        }
-    } catch (e: Exception) {
-        pushConversationError(chatId, e)
-    } finally {
-        pushStatus(chatId, service.status(chatId).name.lowercase())
-    }
-}
-
 private fun parsePermissionDecisionPayload(payload: String?): PermissionDecisionPayload? {
     return runCatching {
         val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
@@ -87,6 +66,34 @@ private fun AcpBridge.refreshDownloadedAdapterInitialization() {
     }
 }
 
+private fun AcpBridge.completeCancelledPromptWhenAgentSettles(chatId: String, cancelledJob: Job?) {
+    scope.launch(Dispatchers.Default) {
+        val promptSettled = if (cancelledJob == null) {
+            true
+        } else {
+            withTimeoutOrNull(CANCELLED_PROMPT_RESPONSE_TIMEOUT_MS) {
+                cancelledJob.join()
+                true
+            } ?: false
+        }
+
+        if (!promptSettled) {
+            val message = "\n\n[Warning: The cancel request was sent, but the AI agent did not finish the cancelled prompt within 10 seconds.]\n\n"
+            pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
+            appendLivePromptTextEvent(chatId, message)
+            service.markChatSessionBroken(chatId)
+            if (cancelledJob != null) {
+                promptJobs.remove(chatId, cancelledJob)
+            }
+        }
+
+        flushLivePromptCapture(chatId)?.let {
+            pushPromptDoneChunk(chatId, it, outcome = if (promptSettled) "cancelled" else "error")
+        }
+        pushStatus(chatId, if (promptSettled) "ready" else "error")
+    }
+}
+
 
 internal fun AcpBridge.installConversationQueries() {
     startAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
@@ -95,13 +102,21 @@ internal fun AcpBridge.installConversationQueries() {
             val chatId = parsed.chatId
             val adapterName = parsed.adapterId
             val modelId = parsed.modelId
+            val modeId = parsed.modeId
+            val reasoningEffortId = parsed.reasoningEffortId
             if (chatId != null) {
                 pushBridgeOperationResult(parsed.requestId, chatId, "start_agent", ok = true)
                 scope.launch(Dispatchers.Default) {
                     pushStatus(chatId, "initializing")
                     try {
                         withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                            service.startAgent(chatId, adapterName, modelId)
+                            service.startAgent(
+                                chatId,
+                                adapterName,
+                                modelId,
+                                preferredModeId = modeId,
+                                preferredReasoningEffortId = reasoningEffortId
+                            )
                         }
                         pushAdapters()
                         pushStatus(chatId, service.status(chatId).name.lowercase())
@@ -114,42 +129,6 @@ internal fun AcpBridge.installConversationQueries() {
                 }
             } else {
                 pushBridgeOperationResult(parsed.requestId, null, "start_agent", ok = false, error = "Invalid start request.")
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    setModelQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val (chatId, adapterId, modelId) = parseScopedIdPayload(payload, "modelId")
-            scope.launch(Dispatchers.Default) {
-                handleScopedConfigChange(chatId, adapterId, modelId, "model", service::setModel)
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    setModeQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val (chatId, adapterId, modeId) = parseScopedIdPayload(payload, "modeId")
-            scope.launch(Dispatchers.Default) {
-                handleScopedConfigChange(chatId, adapterId, modeId, "mode", service::setMode)
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    setReasoningEffortQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val (chatId, adapterId, reasoningEffortId) = parseScopedIdPayload(payload, "reasoningEffortId")
-            scope.launch(Dispatchers.Default) {
-                handleScopedConfigChange(
-                    chatId,
-                    adapterId,
-                    reasoningEffortId,
-                    "reasoning effort",
-                    service::setReasoningEffort
-                )
             }
             JBCefJSQuery.Response("ok")
         }
@@ -189,9 +168,31 @@ internal fun AcpBridge.installConversationQueries() {
 
                 pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
                 val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks, parsed.forkBase)
-                val job = scope.launch(Dispatchers.Default) {
-                    pushStatus(chatId, "prompting")
+                val previousPromptJob = promptJobs[chatId]?.takeIf { it.isActive }
+                lateinit var job: Job
+                job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
                     try {
+                        if (previousPromptJob != null) {
+                            val previousPromptSettled = withTimeoutOrNull(PREVIOUS_PROMPT_SETTLE_TIMEOUT_MS) {
+                                previousPromptJob.join()
+                                true
+                            } ?: false
+                            if (!previousPromptSettled) {
+                                throw IllegalStateException(
+                                    "Previous prompt did not finish after cancellation. Start a new session or restart the agent."
+                                )
+                            }
+                        }
+                        // Prompt dispatch is the final configuration barrier: anything shown as
+                        // selected in the UI must be applied before the agent receives the prompt.
+                        service.startAgent(
+                            chatId = chatId,
+                            adapterName = parsed.adapterId,
+                            preferredModelId = parsed.modelId,
+                            preferredModeId = parsed.modeId,
+                            preferredReasoningEffortId = parsed.reasoningEffortId
+                        )
+                        pushStatus(chatId, "prompting")
                         service.prompt(chatId, blocks).collect { event ->
                             when (event) {
                                 is AcpEvent.PromptDone -> {
@@ -223,6 +224,9 @@ internal fun AcpBridge.installConversationQueries() {
                         throw e
                     } catch (e: Exception) {
                         val message = "[Error: ${formatAcpError(e)}]"
+                        if (previousPromptJob != null) {
+                            service.markChatSessionBroken(chatId)
+                        }
                         pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
                         appendLivePromptTextEvent(chatId, message, captureId)
                         flushLivePromptCapture(chatId, captureId)?.let {
@@ -230,9 +234,11 @@ internal fun AcpBridge.installConversationQueries() {
                         }
                         pushStatus(chatId, "error")
                     } finally {
-                        promptJobs.remove(chatId)
+                        promptJobs.remove(chatId, job)
                     }
                 }
+                promptJobs[chatId] = job
+                job.start()
                 val watcher = scope.launch(Dispatchers.Default) {
                     while (job.isActive) {
                         delay(PROMPT_HEALTH_POLL_INTERVAL_MS)
@@ -255,7 +261,6 @@ internal fun AcpBridge.installConversationQueries() {
                 job.invokeOnCompletion {
                     watcher.cancel()
                 }
-                promptJobs[chatId] = job
             } else {
                 pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = "Invalid prompt request.")
             }
@@ -274,33 +279,25 @@ internal fun AcpBridge.installConversationQueries() {
                     pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
                     scope.launch(Dispatchers.Default) {
                         service.markChatSessionBroken(chatId)
-                        pushConversationError(chatId, message)
                         pushStatus(chatId, "error")
-                        recoverRuntimeAfterFailure(message)
                     }
                     return@addHandler JBCefJSQuery.Response("ok")
                 }
 
                 scope.launch(Dispatchers.Default) {
                     try {
-                        val promptJob = promptJobs[chatId]
+                        val cancelledJob = promptJobs[chatId]?.takeIf { it.isActive }
                         withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
                             service.cancel(chatId)
-                            promptJob?.cancelAndJoin()
                         }
                         pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
                         appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
-                        flushLivePromptCapture(chatId)?.let {
-                            pushPromptDoneChunk(chatId, it, outcome = "cancelled")
-                        }
-                        pushStatus(chatId, "ready")
                         pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
+                        completeCancelledPromptWhenAgentSettles(chatId, cancelledJob)
                     } catch (e: Exception) {
                         val message = "Cancel request failed. ${formatAcpError(e)}"
                         service.markChatSessionBroken(chatId)
-                        pushConversationError(chatId, message)
                         pushStatus(chatId, "error")
-                        recoverRuntimeAfterFailure(message)
                         pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
                     }
                 }

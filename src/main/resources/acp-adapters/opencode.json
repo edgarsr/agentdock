@@ -32,6 +32,8 @@
   },
   "disabledModels": [
     "gpt-5.1",
-    "gpt-5.2"
+    "gpt-5.2",
+    "gpt-5.3",
+    "gemini-2.5"
   ]
 }

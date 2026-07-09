@@ -187,6 +187,69 @@ class AcpRuntimeMetadataTest {
     }
 
     @Test
+    fun `runtime metadata does not invent reasoning effort when config option is absent`() {
+        val response = Json.parseToJsonElement(
+            """
+            {
+              "sessionId": "session-1",
+              "configOptions": [
+                {
+                  "id": "model",
+                  "category": "model",
+                  "type": "select",
+                  "currentValue": "opencode/deepseek-v4-flash-free",
+                  "options": [
+                    { "value": "opencode/deepseek-v4-flash-free", "name": "OpenCode/DeepSeek V4 Flash Free" }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+        ).jsonObject
+
+        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo())
+
+        assertEquals(null, metadata.reasoningEffortConfigId)
+        assertEquals(emptyList(), metadata.availableReasoningEfforts)
+    }
+
+    @Test
+    fun `runtime metadata uses config option reasoning effort`() {
+        val response = Json.parseToJsonElement(
+            """
+            {
+              "sessionId": "session-1",
+              "configOptions": [
+                {
+                  "id": "model",
+                  "category": "model",
+                  "type": "select",
+                  "currentValue": "openai/gpt-5.4",
+                  "options": [
+                    { "value": "openai/gpt-5.4", "name": "OpenAI/GPT-5.4" }
+                  ]
+                },
+                {
+                  "id": "reasoning_effort",
+                  "category": "thought_level",
+                  "type": "select",
+                  "currentValue": "medium",
+                  "options": [
+                    { "value": "medium", "name": "Medium" }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+        ).jsonObject
+
+        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo())
+
+        assertEquals("medium", metadata.currentReasoningEffortId)
+        assertEquals(listOf("medium"), metadata.availableReasoningEfforts.map { it.id })
+    }
+
+    @Test
     fun `config option update extractor returns session id and config options`() {
         val params = Json.parseToJsonElement(
             """

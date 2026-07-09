@@ -20,6 +20,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -40,11 +41,6 @@ import agentdock.history.AgentDockHistoryService
 // A freshly updated adapter can need materially longer than 60s
 // on the first cold initialization after install/update.
 private const val ADAPTER_INITIALIZATION_TIMEOUT_MS = 300_000L
-
-internal data class AdapterRuntimeMetadataFetchResult(
-    val metadata: AcpClientService.AdapterRuntimeMetadata,
-    val sessionId: String
-)
 
 internal fun AcpClientService.initializeDownloadedAdaptersInBackground() {
     if (!startupInitializationStarted.compareAndSet(false, true)) return
@@ -378,9 +374,9 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
             )
             val protocol = sharedProc.protocol
                 ?: throw IllegalStateException("ACP protocol was not initialized for adapter '${adapterInfo.id}'")
-            val metadataResult = fetchAdapterRuntimeMetadata(protocol, adapterInfo)
-            adapterRuntimeMetadataMap[requestedAdapterName] = metadataResult.metadata
-            AgentDockHistoryService.registerEphemeralSession(project.basePath, requestedAdapterName, metadataResult.sessionId)
+            val client = sharedProc.client
+                ?: throw IllegalStateException("ACP client was not initialized for adapter '${adapterInfo.id}'")
+            adapterRuntimeMetadataMap[requestedAdapterName] = fetchAdapterRuntimeMetadata(protocol, client, adapterInfo)
         } catch (_: kotlinx.serialization.SerializationException) {
             // Protocol version mismatch between adapter binary and ACP SDK -
             // models/modes will fall back to config defaults in pushAdapters.
@@ -409,31 +405,57 @@ private fun normalizeAdapterStartupException(error: Exception, startupOutput: Li
 @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     protocol: Protocol,
+    client: Client,
     adapterInfo: AcpAdapterConfig.AdapterInfo
-): AdapterRuntimeMetadataFetchResult {
-    val cwd = resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
+): AcpClientService.AdapterRuntimeMetadata {
+    val probeDir = AcpAdapterPaths.getProbeSessionDir()
+    val cwd = resolveSessionCwd(probeDir.absolutePath)
     val result = protocol.newSessionRaw(cwd)
     val sessionId = result["sessionId"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     if (sessionId.isEmpty()) {
         throw IllegalStateException("ACP session/new response did not include sessionId")
     }
-    val configMetadata = runtimeMetadataFromSessionResponseJson(result, adapterInfo)
-
-    return AdapterRuntimeMetadataFetchResult(
-        metadata = applyAdapterRuntimePreferences(
+    try {
+        val configMetadata = runtimeMetadataFromSessionResponseJson(result, adapterInfo)
+        val adapterVersion = AcpConfigOptionsCache.adapterVersion(adapterInfo)
+        val existingCache = AcpConfigOptionsCache.readValid(adapterInfo)
+        val cached = protocol.collectConfigOptionsCatalog(
+            sessionId = sessionId,
             adapterInfo = adapterInfo,
-            currentModelId = configMetadata.currentModelId,
-            availableModels = configMetadata.availableModels,
-            modelConfigId = configMetadata.modelConfigId,
-            currentModeId = configMetadata.currentModeId,
-            availableModes = configMetadata.availableModes,
-            modeConfigId = configMetadata.modeConfigId,
-            currentReasoningEffortId = configMetadata.currentReasoningEffortId,
-            availableReasoningEfforts = configMetadata.availableReasoningEfforts,
-            reasoningEffortConfigId = configMetadata.reasoningEffortConfigId
-        ),
-        sessionId = sessionId
-    )
+            adapterVersion = adapterVersion,
+            initialMetadata = configMetadata,
+            existingCache = existingCache
+        )
+        AcpConfigOptionsCache.write(cached)
+        return cached.toRuntimeMetadata(adapterInfo)
+    } finally {
+        cleanupProbeSessions(client, adapterInfo)
+    }
+}
+
+@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+private suspend fun AcpClientService.cleanupProbeSessions(
+    client: Client,
+    adapterInfo: AcpAdapterConfig.AdapterInfo
+): Unit {
+    val cwd = resolveSessionCwd(AcpAdapterPaths.getProbeSessionDir().absolutePath)
+    val sessions = runCatching {
+        client.listSessions(cwd = cwd).toList()
+    }.getOrDefault(emptyList())
+
+    sessions.forEach { session ->
+        val sessionId = session.sessionId.value.trim()
+        if (sessionId.isBlank()) return@forEach
+        runCatching {
+            AgentDockHistoryService.deleteSessionImmediately(
+                projectPath = cwd,
+                sessionId = sessionId,
+                adapterName = adapterInfo.id,
+                waitTimeoutMillis = 1_000L,
+                pollIntervalMillis = 100L
+            )
+        }
+    }
 }
 
 internal fun AcpClientService.applyAdapterRuntimePreferences(
@@ -448,7 +470,9 @@ internal fun AcpClientService.applyAdapterRuntimePreferences(
     availableReasoningEfforts: List<AcpAdapterConfig.ModeInfo> = emptyList(),
     reasoningEffortConfigId: String? = null
 ): AcpClientService.AdapterRuntimeMetadata {
-    val filteredModels = availableModels.filterNot { model ->
+    val cached = AcpConfigOptionsCache.readValid(adapterInfo)
+    val sourceModels = availableModels.ifEmpty { cached?.models.orEmpty().map { it.toModelInfo() } }
+    val filteredModels = sourceModels.filterNot { model ->
         adapterInfo.disabledModels.any { disabled -> disabled.isNotBlank() && model.modelId.contains(disabled) }
     }
     val filteredModes = availableModes.filterNot { mode ->
@@ -461,25 +485,42 @@ internal fun AcpClientService.applyAdapterRuntimePreferences(
         ?: currentModelId?.takeIf { current -> filteredModels.any { it.modelId == current } }
         ?: filteredModels.firstOrNull()?.modelId
 
+    val cachedModel = preferredModelId?.let { modelId ->
+        cached?.models?.firstOrNull { it.modelId == modelId }
+    }
+    val cachedModes = cachedModel?.modes
+        ?.filterNot { mode -> adapterInfo.disabledModes.any { disabled -> disabled == mode.id } }
+    val effectiveAvailableModes = cachedModes ?: filteredModes
+    val cachedReasoningEfforts = cachedModel?.efforts
     val preferredModeId = savedPreference?.modeId
-        ?.takeIf { preferred -> filteredModes.any { it.id == preferred } }
-        ?: currentModeId?.takeIf { current -> filteredModes.any { it.id == current } }
-        ?: filteredModes.firstOrNull()?.id
+        ?.takeIf { preferred -> effectiveAvailableModes.any { it.id == preferred } }
+        ?: currentModeId?.takeIf { current -> effectiveAvailableModes.any { it.id == current } }
+        ?: effectiveAvailableModes.firstOrNull()?.id
+    val effectiveAvailableReasoningEfforts = cachedReasoningEfforts ?: availableReasoningEfforts
+    val effectiveReasoningEffortConfigId = reasoningEffortConfigId ?: cached?.reasoningEffortConfigId
     val preferredReasoningEffortId = savedPreference?.reasoningEffortId
-        ?.takeIf { preferred -> availableReasoningEfforts.any { it.id == preferred } }
-        ?: currentReasoningEffortId?.takeIf { current -> availableReasoningEfforts.any { it.id == current } }
-        ?: availableReasoningEfforts.firstOrNull()?.id
+        ?.takeIf { preferred -> effectiveAvailableReasoningEfforts.any { it.id == preferred } }
+        ?: currentReasoningEffortId?.takeIf { current -> effectiveAvailableReasoningEfforts.any { it.id == current } }
+        ?: effectiveAvailableReasoningEfforts.firstOrNull()?.id
 
     return AcpClientService.AdapterRuntimeMetadata(
         currentModelId = preferredModelId,
         availableModels = filteredModels,
         modelConfigId = modelConfigId,
         currentModeId = preferredModeId,
-        availableModes = filteredModes,
-        modeConfigId = modeConfigId,
+        availableModes = effectiveAvailableModes,
+        modeConfigId = modeConfigId ?: cached?.modeConfigId,
         currentReasoningEffortId = preferredReasoningEffortId,
-        availableReasoningEfforts = availableReasoningEfforts,
-        reasoningEffortConfigId = reasoningEffortConfigId
+        availableReasoningEfforts = effectiveAvailableReasoningEfforts,
+        reasoningEffortConfigId = effectiveReasoningEffortConfigId?.takeIf { effectiveAvailableReasoningEfforts.isNotEmpty() },
+        availableModesByModel = cached?.models.orEmpty().associate { model ->
+            model.modelId to model.modes.filterNot { mode ->
+                adapterInfo.disabledModes.any { disabled -> disabled == mode.id }
+            }
+        },
+        availableReasoningEffortsByModel = cached?.models.orEmpty().associate { model ->
+            model.modelId to model.efforts
+        }
     )
 }
 

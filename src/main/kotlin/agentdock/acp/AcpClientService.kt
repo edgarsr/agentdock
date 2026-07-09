@@ -27,6 +27,7 @@ import kotlinx.serialization.json.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 data class PermissionRequest(
@@ -46,8 +47,26 @@ class AcpClientService private constructor(val project: Project) {
         val modeConfigId: String? = null,
         val currentReasoningEffortId: String? = null,
         val availableReasoningEfforts: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-        val reasoningEffortConfigId: String? = null
-    )
+        val reasoningEffortConfigId: String? = null,
+        val availableModesByModel: Map<String, List<AcpAdapterConfig.ModeInfo>> = emptyMap(),
+        val availableReasoningEffortsByModel: Map<String, List<AcpAdapterConfig.ModeInfo>> = emptyMap()
+    ) {
+        fun modesForModel(modelId: String?): List<AcpAdapterConfig.ModeInfo> {
+            return if (availableModesByModel.isEmpty()) {
+                availableModes
+            } else {
+                modelId?.let { availableModesByModel[it] }.orEmpty()
+            }
+        }
+
+        fun reasoningEffortsForModel(modelId: String?): List<AcpAdapterConfig.ModeInfo> {
+            return if (availableReasoningEffortsByModel.isEmpty()) {
+                availableReasoningEfforts
+            } else {
+                modelId?.let { availableReasoningEffortsByModel[it] }.orEmpty()
+            }
+        }
+    }
 
     companion object {
         private val instances = ConcurrentHashMap<Project, AcpClientService>()
@@ -292,6 +311,7 @@ class AcpClientService private constructor(val project: Project) {
         val activeModelIdRef = AtomicReference<String?>(null)
         val activeModeIdRef = AtomicReference<String?>(null)
         val activeReasoningEffortIdRef = AtomicReference<String?>(null)
+        val promptGeneration = AtomicLong(0)
         @Volatile var lastHistoryLoadTime: Long = System.currentTimeMillis()
         @Volatile var allowReplayDelivery: Boolean = true
         @Volatile var ignoreUpdatesUntilPrompt: Boolean = false
@@ -312,6 +332,7 @@ class AcpClientService private constructor(val project: Project) {
             activeModelIdRef.set(null)
             activeModeIdRef.set(null)
             activeReasoningEffortIdRef.set(null)
+            promptGeneration.incrementAndGet()
             lastHistoryLoadTime = 0
             allowReplayDelivery = true
             ignoreUpdatesUntilPrompt = false
@@ -325,6 +346,7 @@ class AcpClientService private constructor(val project: Project) {
         fun markBroken() {
             session = null
             sharedProcess = null
+            promptGeneration.incrementAndGet()
             ignoreUpdatesUntilPrompt = false
             allowReplayDelivery = true
             pendingRequests.values.forEach {

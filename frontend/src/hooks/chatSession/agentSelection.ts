@@ -8,8 +8,10 @@ export type PinnedAgentSnapshot = {
   availableModels?: AgentOption['availableModels'];
   currentModeId?: string;
   availableModes?: AgentOption['availableModes'];
+  availableModesByModel?: AgentOption['availableModesByModel'];
   currentReasoningEffortId?: string;
   availableReasoningEfforts?: AgentOption['availableReasoningEfforts'];
+  reasoningEffortsByModel?: AgentOption['reasoningEffortsByModel'];
 };
 
 export function toPinnedAgentSnapshot(agent: AgentOption): PinnedAgentSnapshot {
@@ -21,8 +23,10 @@ export function toPinnedAgentSnapshot(agent: AgentOption): PinnedAgentSnapshot {
     availableModels: agent.availableModels,
     currentModeId: agent.currentModeId,
     availableModes: agent.availableModes,
+    availableModesByModel: agent.availableModesByModel,
     currentReasoningEffortId: agent.currentReasoningEffortId,
     availableReasoningEfforts: agent.availableReasoningEfforts,
+    reasoningEffortsByModel: agent.reasoningEffortsByModel,
   };
 }
 
@@ -41,8 +45,10 @@ export function resolveSelectedAgent(
     availableModels: pinnedSnapshot.availableModels,
     currentModeId: pinnedSnapshot.currentModeId,
     availableModes: pinnedSnapshot.availableModes,
+    availableModesByModel: pinnedSnapshot.availableModesByModel,
     currentReasoningEffortId: pinnedSnapshot.currentReasoningEffortId,
     availableReasoningEfforts: pinnedSnapshot.availableReasoningEfforts,
+    reasoningEffortsByModel: pinnedSnapshot.reasoningEffortsByModel,
   } as AgentOption;
 }
 
@@ -105,19 +111,11 @@ export function buildModeOptions(availableModes: ModeOption[], selectedModeId: s
 
 export function buildReasoningEffortOptions(
   availableReasoningEfforts: AgentOption['availableReasoningEfforts'] = [],
-  selectedReasoningEffortId: string
+  _selectedReasoningEffortId: string
 ): DropdownOption[] {
-  const options = availableReasoningEfforts.map((effort) => ({
+  return availableReasoningEfforts.map((effort) => ({
     id: effort.id,
     label: effort.name,
     description: effort.description,
   }));
-
-  if (options.length > 0) return options;
-  if (!selectedReasoningEffortId) return [];
-  return [{
-    id: selectedReasoningEffortId,
-    label: selectedReasoningEffortId,
-    description: undefined,
-  }];
 }

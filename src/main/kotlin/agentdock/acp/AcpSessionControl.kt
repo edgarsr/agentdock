@@ -44,6 +44,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     }
 
     context.statusRef.set(AcpClientService.Status.Prompting)
+    val promptGeneration = context.promptGeneration.incrementAndGet()
     context.ignoreUpdatesUntilPrompt = false
     var stopReason: String? = null
     val activeAdapterName = context.activeAdapterNameRef.get()
@@ -68,19 +69,28 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     try {
         session.prompt(promptBlocks).collect { event ->
             when (event) {
-                is Event.SessionUpdateEvent -> sessionUpdateHandler?.invoke(chatId, event.update, false, null)
+                is Event.SessionUpdateEvent -> {
+                    if (context.promptGeneration.get() == promptGeneration && !context.ignoreUpdatesUntilPrompt) {
+                        sessionUpdateHandler?.invoke(chatId, event.update, false, null)
+                    }
+                }
                 is Event.PromptResponseEvent -> stopReason = event.response.stopReason.toString()
             }
         }
-        if (!activeAdapterName.isNullOrBlank()) {
+        val isCurrentPrompt = context.promptGeneration.get() == promptGeneration && !context.ignoreUpdatesUntilPrompt
+        if (isCurrentPrompt && !activeAdapterName.isNullOrBlank()) {
             awaitPendingSessionUpdates(activeAdapterName)
         }
-        stopReason?.let { emit(AcpEvent.PromptDone(it)) }
+        if (isCurrentPrompt) {
+            stopReason?.let { emit(AcpEvent.PromptDone(it)) }
+        }
     } catch (e: Exception) {
         if (e is kotlinx.coroutines.CancellationException) throw e
-        emit(AcpEvent.Error(formatAcpError(e)))
+        if (context.promptGeneration.get() == promptGeneration && !context.ignoreUpdatesUntilPrompt) {
+            emit(AcpEvent.Error(formatAcpError(e)))
+        }
     } finally {
-        if (context.statusRef.get() == AcpClientService.Status.Prompting) {
+        if (context.promptGeneration.get() == promptGeneration && context.statusRef.get() == AcpClientService.Status.Prompting) {
             context.statusRef.set(AcpClientService.Status.Ready)
         }
     }
@@ -97,13 +107,8 @@ internal suspend fun AcpClientService.cancel(chatId: String) {
 
 internal suspend fun AcpClientService.cancelWithContext(context: AcpClientService.AgentContext) {
     val session = context.lifecycleMutex.withLock { context.session } ?: return
-    try {
-        session.cancel()
-    } finally {
-        if (context.statusRef.get() == AcpClientService.Status.Prompting) {
-            context.statusRef.set(AcpClientService.Status.Ready)
-        }
-    }
+    context.ignoreUpdatesUntilPrompt = true
+    session.cancel()
 }
 
 internal suspend fun AcpClientService.stopAgent(chatId: String) {

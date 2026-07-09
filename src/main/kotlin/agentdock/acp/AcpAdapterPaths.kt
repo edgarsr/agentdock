@@ -34,6 +34,12 @@ object AcpAdapterPaths {
         return dir
     }
 
+    fun getProbeSessionDir(): File {
+        val dir = File(getBaseRuntimeDir(), "probe-sessions")
+        dir.mkdirs()
+        return dir
+    }
+
     internal fun getExecutionTarget(): AcpExecutionTarget = currentTarget()
 
     internal fun getTargetDependenciesPath(

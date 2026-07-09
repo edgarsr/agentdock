@@ -11,12 +11,9 @@ import agentdock.utils.escapeForJsString
  * (injectReadySignal runs first on page load and only sets no-op stubs for __on* and __downloadAgent etc.)
  */
 internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
-    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || '') })") ?: ""
-    val setModelInject = setModelQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), modelId: modelId })") ?: ""
-    val setModeInject = setModeQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), modeId: modeId })") ?: ""
-    val setReasoningEffortInject = setReasoningEffortQuery?.inject("JSON.stringify({ chatId: chatId, adapterId: (adapterId || ''), reasoningEffortId: reasoningEffortId })") ?: ""
+    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
     val listAdaptersInject = listAdaptersQuery?.inject("") ?: ""
-    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null })") ?: ""
+    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
     val cancelPromptInject = cancelPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId })") ?: ""
     val stopAgentInject = stopAgentQuery?.inject("chatId") ?: ""
     val respondPermissionInject = respondPermissionQuery?.inject("JSON.stringify({ requestId: requestId, decision: decision })") ?: ""
@@ -53,21 +50,12 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__requestAdapters = function() {
                 try { $listAdaptersInject } catch (e) { }
             };
-            window.__startAgent = function(chatId, adapterId, modelId, requestId) {
+            window.__startAgent = function(chatId, adapterId, modelId, modeId, requestId, reasoningEffortId) {
                 try {
                     $startAgentInject
                 } catch (e) { }
             };
-            window.__setModel = function(chatId, adapterId, modelId) {
-                try { $setModelInject } catch (e) { }
-            };
-            window.__setMode = function(chatId, adapterId, modeId) {
-                try { $setModeInject } catch (e) { }
-            };
-            window.__setReasoningEffort = function(chatId, adapterId, reasoningEffortId) {
-                try { $setReasoningEffortInject } catch (e) { }
-            };
-            window.__sendPrompt = function(chatId, message, requestId, forkBase) {
+            window.__sendPrompt = function(chatId, message, requestId, forkBase, adapterId, modelId, modeId, reasoningEffortId) {
                 try {
                     $sendPromptInject
                 } catch (e) { }

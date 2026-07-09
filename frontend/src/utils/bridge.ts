@@ -343,21 +343,29 @@ export const ACPBridge = {
     window.__requestAdapters?.();
   },
 
-  startAgent: (conversationId: string, adapterId?: string, modelId?: string) => {
+  startAgent: (conversationId: string, adapterId?: string, modelId?: string, modeId?: string, reasoningEffortId?: string) => {
     if (typeof window.__startAgent !== 'function') {
       return Promise.reject(new Error('Start agent bridge is not available.'));
     }
     return awaitBridgeOperation('start_agent', (requestId) => {
-      window.__startAgent?.(conversationId, adapterId, modelId, requestId);
+      window.__startAgent?.(conversationId, adapterId, modelId, modeId, requestId, reasoningEffortId);
     });
   },
 
-  sendPrompt: (conversationId: string, message: string, forkBase?: ForkConversationBase) => {
+  sendPrompt: (
+    conversationId: string,
+    message: string,
+    forkBase?: ForkConversationBase,
+    adapterId?: string,
+    modelId?: string,
+    modeId?: string,
+    reasoningEffortId?: string
+  ) => {
     if (typeof window.__sendPrompt !== 'function') {
       return Promise.reject(new Error('Send prompt bridge is not available.'));
     }
     return awaitBridgeOperation('send_prompt', (requestId) => {
-      window.__sendPrompt?.(conversationId, message, requestId, forkBase);
+      window.__sendPrompt?.(conversationId, message, requestId, forkBase, adapterId, modelId, modeId, reasoningEffortId);
     });
   },
 

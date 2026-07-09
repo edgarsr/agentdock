@@ -207,13 +207,7 @@ export function useChatSession(
     availableAgents,
     effectiveSelectedAgent,
     selectedAgentId,
-    conversationId,
-    status,
     historySession,
-    startedAgentIdRef,
-    startedModelIdRef,
-    startedModeIdRef,
-    startedReasoningEffortIdRef,
   });
 
   const adapterDisplayName = resolvedSelectedAgent?.name || '';
@@ -346,16 +340,19 @@ export function useChatSession(
     try {
       startedAgentIdRef.current = selectedAgentId;
       startedModelIdRef.current = modelId || '';
-      // startAgent() already applies the adapter's current startup mode on the backend.
-      // Keep that as the baseline so we only call __setMode() when the user
-      // selected a different mode than the startup-selected mode.
-      startedModeIdRef.current = selectedAgent?.currentModeId || '';
-      startedReasoningEffortIdRef.current = selectedAgent?.currentReasoningEffortId || '';
+      startedModeIdRef.current = selectedModeId || '';
+      startedReasoningEffortIdRef.current = selectedReasoningEffortId || '';
 
       clearBufferedChunks();
       statusRef.current = 'initializing';
       setStatus('initializing');
-      ACPBridge.startAgent(conversationId, selectedAgentId, modelId || undefined).catch((error) => {
+      ACPBridge.startAgent(
+        conversationId,
+        selectedAgentId,
+        modelId || undefined,
+        selectedModeId || undefined,
+        selectedReasoningEffortId || undefined
+      ).catch((error) => {
         console.warn('[useChatSession] Failed to start agent:', error);
         const message = error instanceof Error ? error.message : String(error);
         failActivePromptLocally(`Prompt was not sent because the agent start request failed. ${message}`);
@@ -366,7 +363,7 @@ export function useChatSession(
       console.warn('[useChatSession] Failed to auto-start agent:', e);
       return false;
     }
-  }, [clearBufferedChunks, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId]);
+  }, [clearBufferedChunks, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
 
   useEffect(() => {
     if (!pendingHandoff) return;
@@ -443,7 +440,15 @@ export function useChatSession(
         
         // Assistant message is already added in handleSend, we just need to trigger the actual send
         const forkBaseToPersist = forkBaseRef.current;
-        ACPBridge.sendPrompt(conversationId, JSON.stringify(blocksToSend), forkBaseToPersist).then(() => {
+        ACPBridge.sendPrompt(
+          conversationId,
+          JSON.stringify(blocksToSend),
+          forkBaseToPersist,
+          selectedAgentId,
+          selectedModelId || undefined,
+          selectedModeId || undefined,
+          selectedReasoningEffortId || undefined
+        ).then(() => {
           forkBaseRef.current = undefined;
           consumeHandoff();
         }).catch((err) => {
@@ -488,7 +493,22 @@ export function useChatSession(
       unsubMode();
       unsubPermission();
     };
-  }, [conversationId, approvalMode, enqueueChunk, applyBufferedChunks, clearBufferedChunks, markFlushUnscheduled, consumeHandoff, failActivePromptLocally, finishActivePromptAfterError, requestRuntimeRecovery]);
+  }, [
+    conversationId,
+    approvalMode,
+    enqueueChunk,
+    applyBufferedChunks,
+    clearBufferedChunks,
+    markFlushUnscheduled,
+    consumeHandoff,
+    failActivePromptLocally,
+    finishActivePromptAfterError,
+    requestRuntimeRecovery,
+    selectedAgentId,
+    selectedModelId,
+    selectedModeId,
+    selectedReasoningEffortId,
+  ]);
 
   useEffect(() => {
     if (!isSending || isHistoryReplaying) return;
@@ -624,7 +644,15 @@ export function useChatSession(
     }
 
     const forkBaseToPersist = forkBaseRef.current;
-    ACPBridge.sendPrompt(conversationId, JSON.stringify(outgoingBlocks), forkBaseToPersist).then(() => {
+    ACPBridge.sendPrompt(
+      conversationId,
+      JSON.stringify(outgoingBlocks),
+      forkBaseToPersist,
+      selectedAgentId,
+      selectedModelId || undefined,
+      selectedModeId || undefined,
+      selectedReasoningEffortId || undefined
+    ).then(() => {
       forkBaseRef.current = undefined;
       consumeHandoff();
       setPermissionQueue([]);
@@ -637,7 +665,7 @@ export function useChatSession(
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
   }, [status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
   const rebuildQueuedPromptBlocks = useCallback((text: string, queuedAttachments: ChatAttachment[]) => {
     return normalizeOutgoingBlocks(buildPromptBlocks(text, queuedAttachments));
