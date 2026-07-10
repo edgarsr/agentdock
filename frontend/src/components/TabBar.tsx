@@ -6,6 +6,12 @@ import { TabItem } from './tabbar/TabItem';
 import { TabOverflowMenu } from './tabbar/TabOverflowMenu';
 import { focusMenuItem } from './tabbar/menuFocus';
 
+function readIslandsTheme(): boolean {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue('--ide-theme-is-islands')
+    .trim() === '1';
+}
+
 interface TabBarProps {
   tabs: ChatTab[];
   activeTabId: string;
@@ -49,6 +55,7 @@ export default function TabBar({
   const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
   const [tabFocusedControl, setTabFocusedControl] = useState<'new' | 'menu' | 'hamburger' | null>(null);
   const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
+  const [isIslandsTheme, setIsIslandsTheme] = useState(readIslandsTheme);
   const [tabsViewportWidth, setTabsViewportWidth] = useState(0);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
@@ -63,6 +70,25 @@ export default function TabBar({
   const focusFirstHamburgerItemOnOpenRef = useRef(false);
   const suppressClickTabIdRef = useRef<string | null>(null);
   const runnableAgents = agents.filter(isAgentRunnable);
+
+  useEffect(() => {
+    const updateThemeClass = () => {
+      const nextIsIslands = readIslandsTheme();
+      document.documentElement.classList.toggle('ide-theme-islands', nextIsIslands);
+      setIsIslandsTheme(nextIsIslands);
+    };
+
+    updateThemeClass();
+    const themeStyle = document.getElementById('ide-theme-style');
+    if (!themeStyle) {
+      return;
+    }
+    const observer = new MutationObserver(updateThemeClass);
+    observer.observe(themeStyle, { childList: true, characterData: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -212,7 +238,7 @@ export default function TabBar({
       border-[var(--ide-Borders-ContrastBorderColor)] select-none shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
       {/* Tabs List */}
       <div ref={tabsListRef} role="tablist"
-        className="flex min-w-0 flex-1 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:h-1.5"
+        className={`flex min-w-0 flex-1 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:h-1.5 ${isIslandsTheme ? 'pl-1' : ''}`}
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -230,6 +256,7 @@ export default function TabBar({
               hasWarning={hasWarning}
               hasUnread={hasUnread}
               hasProcessing={hasProcessing}
+              isIslandsTheme={isIslandsTheme}
               titleClassName={titleClassName}
               onSelectTab={onSelectTab}
               onPointerDown={handleTabPointerDown}

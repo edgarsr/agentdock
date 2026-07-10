@@ -20,6 +20,15 @@ object IdeTheme {
 
     fun isDarkTheme(): Boolean = !JBColor.isBright()
 
+    fun isIslandsTheme(): Boolean {
+        return when (val value = UIManager.get("Islands")) {
+            is Number -> value.toInt() == 1
+            is Boolean -> value
+            is String -> value == "1" || value.equals("true", ignoreCase = true)
+            else -> false
+        }
+    }
+
     private val uiComponents = linkedMapOf(
         "Panel" to UiComponentDef(listOf("background", "foreground")),
         "Label" to UiComponentDef(listOf("background", "foreground", "disabledForeground", "infoForeground", "errorForeground", "warningForeground")),
@@ -112,7 +121,9 @@ object IdeTheme {
 
         // 6. Dynamic background variations
         val isDark = isDarkTheme()
+        val isIslands = isIslandsTheme()
         sb.append("  --ide-theme-is-dark: ${if (isDark) "1" else "0"};\n")
+        sb.append("  --ide-theme-is-islands: ${if (isIslands) "1" else "0"};\n")
         val shimmerHighlightColor = if (isDark) Color(255, 255, 255) else Color(0, 0, 0)
         sb.append("  --ide-shimmer-highlight-color: ${toCssColor(shimmerHighlightColor)};\n")
         val blueUserMessageBackground = if (isDark) Color(0x25, 0x32, 0x4d) else Color(225, 235, 253, 220)
@@ -130,7 +141,7 @@ object IdeTheme {
         sb.append("  --ide-user-message-default-bg: ${toCssColor(defaultUserMessageBackground)};\n")
         sb.append("  --ide-user-message-blue-bg: ${toCssColor(blueUserMessageBackground)};\n")
         sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.2)" else "brightness(0.96)"};\n")
-        sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.2)" else "brightness(0.96)"};\n")
+        sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.32)" else "brightness(0.96)"};\n")
 
         // 7. Dynamic border color (must be different from both backgrounds)
         val originalBorder = uiColor(

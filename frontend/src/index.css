@@ -139,6 +139,17 @@
   *::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  html.ide-theme-islands *::-webkit-scrollbar {
+    width: 8px;
+    height: 6px;
+  }
+
+  html.ide-theme-islands *::-webkit-scrollbar-thumb {
+    background-clip: content-box;
+    border: 1px solid transparent;
+    border-radius: 999px;
+  }
   
   .user-message-bubble .code-refrence-chip {
     margin: 1px;
