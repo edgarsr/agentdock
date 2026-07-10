@@ -152,9 +152,14 @@ private data class PatchDiff(val path: String, val oldText: String?, val newText
 private fun AcpBridge.convertBrokenOtherPatchToolCallJson(rawJson: String): String {
     val parsed = try { Json.parseToJsonElement(rawJson).jsonObject } catch (_: Exception) { return rawJson }
     val kind = parsed["kind"]?.jsonPrimitive?.contentOrNull
+    val rawInput = parsed["rawInput"]
     val patchText = when (kind) {
-        "other" -> (parsed["rawInput"] as? JsonObject)?.get("patchText")?.jsonPrimitive?.contentOrNull
-        "edit" -> (parsed["rawInput"] as? JsonPrimitive)?.contentOrNull
+        "other" -> (rawInput as? JsonObject)?.get("patchText")?.jsonPrimitive?.contentOrNull
+        "edit" -> when (rawInput) {
+            is JsonPrimitive -> rawInput.contentOrNull
+            is JsonObject -> rawInput["patchText"]?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
         else -> null
     } ?: return rawJson
     if (!patchText.contains("*** Begin Patch")) return rawJson
