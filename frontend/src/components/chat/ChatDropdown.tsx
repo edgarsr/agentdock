@@ -2,6 +2,13 @@ import { KeyboardEvent, useState, useRef, useEffect } from 'react';
 import { DropdownOption } from '../../types/chat';
 import { Tooltip } from './shared/Tooltip';
 
+function compactModelName(label: string) {
+  if (label.length <= 16) return label;
+  const slashIndex = label.indexOf('/');
+  if (slashIndex < 0) return label;
+  return label.slice(slashIndex + 1);
+}
+
 export default function ChatDropdown({
   value,
   subValue,
@@ -108,7 +115,8 @@ export default function ChatDropdown({
     return <span className="flex-1 truncate">{option.label}</span>;
   };
   
-  const selectedText = (showSubValueInTrigger ? (selectedSub?.label || selectedSubValue) : undefined) || selectedOption?.label || placeholder;
+  const rawSelectedText = (showSubValueInTrigger ? (selectedSub?.label || selectedSubValue) : undefined) || selectedOption?.label || placeholder;
+  const selectedText = showSubValueInTrigger ? compactModelName(rawSelectedText) : rawSelectedText;
 
   useEffect(() => {
     const updateSize = () => {
