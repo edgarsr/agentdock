@@ -1,7 +1,7 @@
 import { LucideIcon } from 'lucide-react';
 import { ReactNode } from 'react';
 import { SettingsCardShell } from './SettingsCardShell';
-import { Checkbox } from '../ui/Checkbox';
+import { Switch } from '../ui/Switch';
 
 interface SettingsToggleCardProps {
   icon?: LucideIcon;
@@ -24,22 +24,22 @@ export function SettingsToggleCard({
   ariaLabel,
   disabled = false,
   children,
-  className = '',
+  className = ''
 }: SettingsToggleCardProps) {
   return (
     <SettingsCardShell
       title={title}
       description={description}
       className={className}
-      leading={(
-        <Checkbox
+      control={
+        <Switch
           checked={enabled}
           onCheckedChange={onToggle}
           aria-label={ariaLabel}
           disabled={disabled}
           className={disabled ? 'opacity-50' : ''}
         />
-      )}
+      }
     >
       {children}
     </SettingsCardShell>
