@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -241,7 +242,7 @@ internal fun AcpBridge.installMiscQueries() {
 
                     results.add(
                         RankedFileSearchItem(
-                            item = FileSearchItem(relPath, name),
+                            item = FileSearchItem(relPath, name, fileIconProvider?.iconForVirtualFile(virtualFile) ?: ""),
                             matchingDegree = matchingDegree,
                             isSourceContent = fileIndex.isInSourceContent(virtualFile),
                             isBinary = virtualFile.fileType.isBinary
@@ -385,6 +386,46 @@ internal fun AcpBridge.installMiscQueries() {
         }
     }
 
+}
+
+internal fun AcpBridge.installFileIconProvider() {
+    val provider = FileIconProvider(service.project)
+    fileIconProvider = provider
+
+    iconFileQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+        addHandler { payload ->
+            val path = runCatching {
+                Json.parseToJsonElement(payload ?: "{}").jsonObject["path"]?.jsonPrimitive?.content ?: ""
+            }.getOrDefault("")
+            scope.launch(Dispatchers.IO) {
+                val iconDataUri = readAction { provider.iconForPath(path) }
+                runOnEdt {
+                    val responseJson = """{"path":${escapeJsonString(path)},"icon":${escapeJsonString(iconDataUri ?: "")}}"""
+                    browser.cefBrowser.executeJavaScript(
+                        "if(window.__onFileIconResult) window.__onFileIconResult(" + responseJson + ");",
+                        browser.cefBrowser.url, 0
+                    )
+                }
+            }
+            JBCefJSQuery.Response("ok")
+        }
+    }
+
+    val busConnection = ApplicationManager.getApplication().messageBus.connect(browser)
+    busConnection.subscribe(
+        com.intellij.ide.ui.LafManagerListener.TOPIC,
+        com.intellij.ide.ui.LafManagerListener { _ ->
+            scope.launch(Dispatchers.IO) {
+                provider.invalidate()
+                runOnEdt {
+                    browser.cefBrowser.executeJavaScript(
+                        "if(window.__onThemeChanged) window.__onThemeChanged();",
+                        browser.cefBrowser.url, 0
+                    )
+                }
+            }
+        }
+    )
 }
 
 private data class UndoSingleFileRequest(

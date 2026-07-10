@@ -6,6 +6,7 @@ import { ACPBridge } from '../utils/bridge';
 export interface FileMentionItem {
   path: string;
   name: string;
+  icon?: string;
 }
 
 interface UseFileMentionsOptions {

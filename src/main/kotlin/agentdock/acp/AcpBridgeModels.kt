@@ -172,4 +172,4 @@ internal data class HistoryReplayCapture(
 )
 
 @Serializable
-internal data class FileSearchItem(val path: String, val name: String)
+internal data class FileSearchItem(val path: String, val name: String, val icon: String = "")

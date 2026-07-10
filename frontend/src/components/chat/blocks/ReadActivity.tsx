@@ -3,18 +3,13 @@ import { ToolCallEntry } from '../../../types/chat';
 import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
 import { chatFocusClassName } from '../shared/focusStyles';
+import { FileIcon } from '../shared/FileIcon';
 
 interface Props {
   entry: ToolCallEntry;
   onOpenFile: (path: string, line?: number) => void;
 }
 
-const FileIcon = ({ size = 13 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-    <polyline points="13 2 13 9 20 9"></polyline>
-  </svg>
-);
 
 function getFileName(path: string): string {
   if (!path) return '';
@@ -35,12 +30,12 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
   const cleanTitle = entry.title?.replace(/^"(.*)"$/, '$1') || entry.title;
   if (!filePath || !fileName) {
     return (
-      <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
-        <span className=" flex-shrink-0"><FileIcon size={13} /></span>
-        <span className="text-foreground truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
-        {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
-        )}
+      <div className='flex items-center gap-1.5 py-0.5 min-w-0 w-full'>
+        <span className=' flex-shrink-0'>
+          <FileIcon fileName={fileName} filePath={filePath} className='h-3.5 w-3.5 flex-shrink-0' />
+        </span>
+        <span className='text-foreground truncate min-w-0 flex-1 block'>{cleanTitle || entry.kind}</span>
+        {hasError && <div className='w-1.5 h-1.5 rounded-full bg-error flex-shrink-0' />}
       </div>
     );
   }
@@ -71,10 +66,10 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
     : null;
 
   return (
-    <Tooltip variant="minimal" content={`Read ${filePath}${lineRange}`}>
-      <div className="flex items-center gap-1.5 min-w-0 group/activity cursor-help pr-2">
-        <div className="flex-shrink-0 transition-opacity">
-          <FileIcon size={13} />
+    <Tooltip variant='minimal' content={`Read ${filePath}${lineRange}`}>
+      <div className='flex items-center gap-1.5 min-w-0 group/activity cursor-help pr-2'>
+        <div className='flex-shrink-0 transition-opacity'>
+          <FileIcon fileName={fileName} filePath={filePath} className='h-3.5 w-3.5 flex-shrink-0' />
         </div>
         <button
           onClick={() => onOpenFile(filePath, startLine || undefined)}

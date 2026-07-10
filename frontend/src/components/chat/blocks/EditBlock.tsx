@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ToolCallBlock } from '../../../types/chat';
-import { FileCode, ChevronRight, FileDiff } from 'lucide-react';
+import { ChevronRight, FileDiff } from 'lucide-react';
+import { FileIcon } from '../shared/FileIcon';
 import { diff_match_patch } from 'diff-match-patch';
 import hljs, { getLanguageFromPath } from '../../../utils/highlight';
 import { sanitizeCodeHtml } from '../../../utils/sanitizeHtml';
@@ -156,8 +157,12 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         onClick={toggle}
         className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
       >
-        <div className="flex-shrink-0 text-foreground-secondary">
-          <FileCode className="text-foreground" size={14} />
+        <div className='flex-shrink-0 text-foreground-secondary'>
+          <FileIcon
+            fileName={fileName}
+            filePath={diffData?.filePath}
+            className='h-3.5 w-3.5 text-foreground flex-shrink-0'
+          />
         </div>
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <span
