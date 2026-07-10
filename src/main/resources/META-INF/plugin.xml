@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.3.0</version>
+    <version>1.4.0</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -34,6 +34,7 @@
             <li>AI agents can be switched within the same chat while preserving the session context.</li>
             <li>MCP server configuration for additional agent tools and external resources.</li>
             <li>Reusable prompts can be saved in the prompt library and inserted into chat when needed.</li>
+            <li>Prompts can be queued while an agent is already working.</li>
             <li>System instructions can be managed and applied to agent sessions.</li>
             <li>Git commit messages can be generated from the current changes.</li>
         </ul>
@@ -47,14 +48,12 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Removed Gemini CLI because the project has been discontinued.</li>
-            <li>Fixed OpenCode todo list rendering.</li>
-            <li>Added MCP server status indicators.</li>
-            <li>Updated the Kotlin ACP SDK.</li>
-            <li>Improved commit message generation.</li>
-            <li>Fixed the OpenCode reasoning effort selector.</li>
-            <li>Fixed status bar quota usage display.</li>
-            <li>Fixed cross-IDE ACP process cleanup.</li>
+            <li>Added prompt queue support for adding prompts while an agent is already working.</li>
+            <li>Added Islands theme styling for tabs and scrollbars.</li>
+            <li>Fixed OpenCode edit diffs in the chat stream.</li>
+            <li>Added chat input quota widget support for OpenAI models used through OpenCode.</li>
+            <li>Improved reasoning effort selection stability across agents and model changes.</li>
+            <li>Improved @ file mention search relevance.</li>
         </ul>
     ]]></change-notes>
 
