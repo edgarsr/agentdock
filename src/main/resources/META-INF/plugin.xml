@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -48,12 +48,7 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added prompt queue support for adding prompts while an agent is already working.</li>
-            <li>Added Islands theme styling for tabs and scrollbars.</li>
-            <li>Fixed OpenCode edit diffs in the chat stream.</li>
-            <li>Added chat input quota widget support for OpenAI models used through OpenCode.</li>
-            <li>Improved reasoning effort selection stability across agents and model changes.</li>
-            <li>Improved @ file mention search relevance.</li>
+            <li>Switched Codex to the npm ACP adapter, adding GPT-5.6 support.</li>
         </ul>
     ]]></change-notes>
 
