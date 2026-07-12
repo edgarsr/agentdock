@@ -35,8 +35,8 @@ object McpConfigStore {
             id = "jetbrains-ide",
             name = "Jetbrains IDE",
             enabled = false,
-            transport = "sse",
-            url = "http://localhost:64342/sse",
+            transport = "http",
+            url = "http://localhost:64342/stream",
             headers = emptyList()
         )
     )

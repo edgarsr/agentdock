@@ -5,19 +5,13 @@
   "iconPathLight": "/icons/codex-light.svg",
   "iconPathDark": "/icons/codex-dark.svg",
   "distribution": {
-    "type": "archive",
+    "type": "npm",
     "version": "latest",
-    "downloadUrl": "https://github.com/zed-industries/codex-acp/releases/download/v{version}/codex-acp-{version}-{target}.{ext}",
-    "updateSource": {
-      "type": "github_release",
-      "owner": "zed-industries",
-      "repo": "codex-acp",
-      "tagPrefix": "v"
-    },
-    "binaryName": {
-      "win": "codex-acp.exe",
-      "unix": "codex-acp"
-    }
+    "packageName": "@agentclientprotocol/codex-acp"
+  },
+  "launchBinary": {
+    "win": "node_modules\\.bin\\codex-acp.cmd",
+    "unix": "node_modules/.bin/codex-acp"
   },
   "disabledModels": [
     "-5.3",
