@@ -105,7 +105,7 @@ const userMessageBackgroundOptions: Array<{
   {
     id: 'editor-bg',
     label: 'Editor',
-    background: 'var(--ide-editor-bg)',
+    background: 'var(--ide-editor-xbg)',
     toneClass: 'bg-[var(--ide-editor-bg)]'
   }
 ];
@@ -288,7 +288,7 @@ export function SettingsView() {
             </SettingsSelectCard>
 
             <SettingsCardShell
-              title='Message Background'
+              title='User Message Background'
               description='Choose how your messages appear in chat'
             >
               <div className='grid max-w-[620px] grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2'>
