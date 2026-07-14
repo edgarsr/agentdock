@@ -37,16 +37,16 @@ internal class FileIconProvider(private val project: Project) {
         val cacheKey = "file:${virtualFile.url}"
         cache[cacheKey]?.let { return it }
 
-        val renderEpoch = epoch.get()
-        val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
-        val icon = psiFile?.getIcon(0)
-            ?: IconUtil.getIcon(virtualFile, 0, project)
-            ?: virtualFile.fileType.icon
-            ?: AllIcons.FileTypes.Any_type
-        val dataUri = renderIcon(icon) ?: return null
-        if (epoch.get() != renderEpoch) return iconForVirtualFile(virtualFile)
-
-        return cache.putIfAbsent(cacheKey, dataUri) ?: dataUri
+        while (true) {
+            val renderEpoch = epoch.get()
+            val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
+            val icon = psiFile?.getIcon(0)
+                ?: IconUtil.getIcon(virtualFile, 0, project)
+                ?: virtualFile.fileType.icon
+                ?: AllIcons.FileTypes.Any_type
+            val dataUri = renderIcon(icon) ?: return null
+            if (epoch.get() == renderEpoch) return cache.putIfAbsent(cacheKey, dataUri) ?: dataUri
+        }
     }
 
     fun invalidate() {
@@ -59,15 +59,15 @@ internal class FileIconProvider(private val project: Project) {
         val cacheKey = "fallback:$fileName"
         cache[cacheKey]?.let { return it }
 
-        val renderEpoch = epoch.get()
-        val icon = com.intellij.openapi.fileTypes.FileTypeManager.getInstance()
-            .getFileTypeByFileName(fileName)
-            .icon
-            ?: AllIcons.FileTypes.Any_type
-        val dataUri = renderIcon(icon) ?: return null
-        if (epoch.get() != renderEpoch) return fallbackIcon(path)
-
-        return cache.putIfAbsent(cacheKey, dataUri) ?: dataUri
+        while (true) {
+            val renderEpoch = epoch.get()
+            val icon = com.intellij.openapi.fileTypes.FileTypeManager.getInstance()
+                .getFileTypeByFileName(fileName)
+                .icon
+                ?: AllIcons.FileTypes.Any_type
+            val dataUri = renderIcon(icon) ?: return null
+            if (epoch.get() == renderEpoch) return cache.putIfAbsent(cacheKey, dataUri) ?: dataUri
+        }
     }
 
     private fun findVirtualFile(path: String): VirtualFile? {

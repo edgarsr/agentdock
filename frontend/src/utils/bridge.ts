@@ -634,9 +634,8 @@ export const ACPBridge = {
   },
 
   onThemeChanged: (callback: () => void) => {
-    const fn = () => callback();
-    window.addEventListener('acp-theme-changed', fn);
-    return () => window.removeEventListener('acp-theme-changed', fn);
+    window.addEventListener('acp-theme-changed', callback);
+    return () => window.removeEventListener('acp-theme-changed', callback);
   },
 
   loadMcpServers: () => {

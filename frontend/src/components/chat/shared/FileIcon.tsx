@@ -28,15 +28,15 @@ export function FileIcon({
     };
 
     if (icon) setResolvedIcon(icon);
-    else requestIcon();
+    else if (iconPath) requestIcon();
 
-    const unsubscribe = ACPBridge.onThemeChanged(() => {
+    const unsubscribe = iconPath ? ACPBridge.onThemeChanged(() => {
       if (!isMounted) return;
       requestIcon();
-    });
+    }) : undefined;
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [icon, iconPath]);
 
