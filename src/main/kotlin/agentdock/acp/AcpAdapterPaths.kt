@@ -69,7 +69,7 @@ object AcpAdapterPaths {
     ): Boolean {
         val adapterInfo = getAdapterInfo(adapterName)
         val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
-        return runtimeDir.isDirectory &&
+        val installationExists = runtimeDir.isDirectory &&
             when (adapterInfo.distribution.type) {
                 AcpAdapterConfig.DistributionType.ARCHIVE -> resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
                 AcpAdapterConfig.DistributionType.NPM -> {
@@ -77,6 +77,8 @@ object AcpAdapterPaths {
                         resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
                 }
             }
+        return installationExists &&
+            isInstalledVersionSupported(adapterInfo, installedVersionFromRuntimeDir(runtimeDir, adapterInfo))
     }
 
     internal fun deleteAdapter(adapterName: String? = null, target: AcpExecutionTarget = currentTarget()): Boolean {

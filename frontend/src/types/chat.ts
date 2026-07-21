@@ -133,7 +133,7 @@ export interface AgentOption {
   authLoading?: boolean;
   authError?: string;
   authenticating?: boolean;
-  authUiMode?: 'login_logout' | 'manage_terminal';
+  authUiMode?: 'login_logout' | 'login_only' | 'manage_terminal';
   initializing?: boolean;
   initializationDetail?: string;
   initializationError?: string;

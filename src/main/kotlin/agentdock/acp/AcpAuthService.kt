@@ -340,6 +340,7 @@ object AcpAuthService {
         
         if (parsedJson != null) {
             val loggedIn = parsedJson["loggedIn"]?.jsonPrimitive?.booleanOrNull
+                ?: parsedJson["logged_in"]?.jsonPrimitive?.booleanOrNull
             if (loggedIn != null) return loggedIn
             val authenticated = parsedJson["authenticated"]?.jsonPrimitive?.booleanOrNull
             if (authenticated != null) return authenticated
@@ -355,4 +356,3 @@ object AcpAuthService {
         return null
     }
 }
-

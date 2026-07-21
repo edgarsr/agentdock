@@ -1,5 +1,6 @@
 package agentdock.acp
 
+import com.intellij.util.text.VersionComparatorUtil
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
@@ -191,6 +192,15 @@ internal fun installedVersionFromRuntimeDir(
         }
         AcpAdapterConfig.DistributionType.ARCHIVE -> readInstallMetadata(runtimeDir)
     }
+}
+
+internal fun isInstalledVersionSupported(
+    adapterInfo: AcpAdapterConfig.AdapterInfo,
+    installedVersion: String?
+): Boolean {
+    val minimumVersion = adapterInfo.distribution.minimumVersion?.trim().orEmpty()
+    return minimumVersion.isEmpty() ||
+        (!installedVersion.isNullOrBlank() && VersionComparatorUtil.compare(installedVersion, minimumVersion) >= 0)
 }
 
 internal fun writeInstallMetadata(runtimeDir: File, version: String) {

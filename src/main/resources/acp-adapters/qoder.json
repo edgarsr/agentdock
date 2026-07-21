@@ -4,15 +4,16 @@
   "iconPath": "/icons/qoder.svg",
   "iconPathLight": "/icons/qoder-light.svg",
   "iconPathDark": "/icons/qoder-dark.svg",
-  "supportsSessionList": false,
+  "supportsSessionList": true,
   "distribution": {
     "type": "npm",
-    "version": "0.1.43",
+    "version": "latest",
+    "minimumVersion": "1.0.0",
     "packageName": "@qoder-ai/qodercli"
   },
   "launchBinary": {
     "win": "node_modules/.bin/qodercli.cmd",
-    "unix": "node_modules/@qoder-ai/qodercli/bin/qodercli"
+    "unix": "node_modules/.bin/qodercli"
   },
   "args": [
     "--acp"
@@ -28,7 +29,15 @@
     ]
   },
   "authConfig": {
-    "uiMode": "manage_terminal",
-    "loginMode": "manage_terminal"
+    "uiMode": "login_only",
+    "loginMode": "background",
+    "statusArgs": [
+      "status",
+      "-o",
+      "json"
+    ],
+    "loginArgs": [
+      "login"
+    ]
   }
 }

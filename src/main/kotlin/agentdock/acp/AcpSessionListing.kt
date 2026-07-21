@@ -1,7 +1,10 @@
 package agentdock.acp
 
 import com.agentclientprotocol.annotations.UnstableApi
+import com.agentclientprotocol.rpc.MethodName
 import kotlinx.coroutines.flow.toList
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import agentdock.history.SessionMeta
 import agentdock.history.fallbackHistoryTitle
 import agentdock.history.historyComparablePath
@@ -37,4 +40,17 @@ internal suspend fun AcpClientService.listHistorySessions(
             updatedAt = updatedAt
         )
     }
+}
+
+@OptIn(UnstableApi::class)
+internal suspend fun AcpClientService.deleteHistorySession(adapterName: String, sessionId: String): Boolean {
+    val sharedProc = activeProcesses[processKey(adapterName)]?.takeIf { it.isHealthy() } ?: return false
+    val protocol = sharedProc.protocol ?: return false
+    return runCatching {
+        protocol.sendRequestRaw(
+            MethodName("session/delete"),
+            buildJsonObject { put("sessionId", sessionId) }
+        )
+        true
+    }.getOrDefault(false)
 }

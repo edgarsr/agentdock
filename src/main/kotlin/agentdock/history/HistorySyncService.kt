@@ -199,19 +199,6 @@ internal object HistorySyncService {
         result.addAll(acpSessions.sessions)
         scannedAdapters.addAll(acpSessions.scannedAdapters)
 
-        AdapterHistoryRegistry.all().forEach { history ->
-            if (runCatching { AcpAdapterConfig.getAdapterInfo(history.adapterId).supportsSessionList }.getOrDefault(true)) {
-                return@forEach
-            }
-            if (!AcpAdapterPaths.isDownloaded(history.adapterId)) return@forEach
-            runCatching {
-                history.collectSessions(projectPath)
-            }.onSuccess { sessions ->
-                result.addAll(sessions)
-                scannedAdapters.add(history.adapterId)
-            }
-        }
-
         triggerEphemeralSessionDeletion(projectPath, ephemeralEntries, result)
 
         val visibleSessions = result

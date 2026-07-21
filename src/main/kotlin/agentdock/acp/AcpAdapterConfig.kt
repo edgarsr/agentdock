@@ -81,6 +81,7 @@ object AcpAdapterConfig {
     data class Distribution(
         val type: DistributionType,
         val version: String,
+        val minimumVersion: String? = null,
         val packageName: String? = null,
         val downloadUrl: String? = null,
         val binaryName: PlatformBinary? = null,

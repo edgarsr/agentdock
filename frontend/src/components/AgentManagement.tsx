@@ -376,7 +376,8 @@ export function AgentManagementView({
 
                       {!isInstalling && isDownloaded && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                          {agent.hasAuthentication && !isManageAuth && agent.authKnown === true && (
+                          {agent.hasAuthentication && !isManageAuth && agent.authKnown === true &&
+                            (authUiMode !== 'login_only' || agent.authAuthenticated !== true) && (
                             <button
                               type="button"
                               onClick={() => handleAuth(agent)}
@@ -386,7 +387,7 @@ export function AgentManagementView({
                               {isAuthenticating && (
                                 <LoadingSpinner className="w-3 h-3" />
                               )}
-                              {agent.authAuthenticated === true ? 'Log out' : 'Log in'}
+                              {authUiMode === 'login_only' ? 'Log in' : agent.authAuthenticated === true ? 'Log out' : 'Log in'}
                             </button>
                           )}
                           {!agent.cliAvailable && (

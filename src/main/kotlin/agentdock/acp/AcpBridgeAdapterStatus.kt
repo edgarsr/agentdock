@@ -112,6 +112,7 @@ private fun AcpBridge.buildAdapterPayload(
     val updateKnown = updateSupported && !latestVersion.isNullOrBlank() && !installedVersion.isNullOrBlank()
     val updateAvailable = updateKnown && latestVersion != installedVersion
     val authUiMode = info.authConfig?.uiMode ?: "login_logout"
+    val hasDirectAuth = authUiMode != "manage_terminal"
     val isAuthenticating = AcpAuthService.isAuthenticating(info.id)
     val cliAvailable = downloaded == true && info.cli != null && cli.isIdeTerminalAvailable()
     val rawInitError = service.adapterInitializationError(info.id) ?: ""
@@ -120,7 +121,7 @@ private fun AcpBridge.buildAdapterPayload(
     val initError = if (authRequiredByInit) "" else rawInitError
 
     val shouldFetchAuth = downloadedKnown &&
-        downloaded == true && hasAuthentication && authUiMode == "login_logout" &&
+        downloaded == true && hasAuthentication && hasDirectAuth &&
         !isDownloading && !isAuthenticating
 
     val needsAuthFetch = shouldFetchAuth && !authStates.containsKey(info.id)
@@ -132,7 +133,7 @@ private fun AcpBridge.buildAdapterPayload(
         !downloadedKnown -> null
         !hasAuthentication -> null
         authRequiredByInit -> false
-        authUiMode != "login_logout" -> null
+        !hasDirectAuth -> null
         !shouldFetchAuth || needsAuthFetch -> null
         else -> authStates[info.id] == true
     }
@@ -140,7 +141,7 @@ private fun AcpBridge.buildAdapterPayload(
         !downloadedKnown -> false
         !hasAuthentication -> true
         authRequiredByInit -> true
-        authUiMode != "login_logout" -> true
+        !hasDirectAuth -> true
         else -> authAuthenticated != null
     }
     val authLoading = needsAuthFetch || authFetchJobs[info.id]?.isActive == true
@@ -153,7 +154,7 @@ private fun AcpBridge.buildAdapterPayload(
         initStatus != AcpClientService.AdapterInitializationStatus.Ready -> null
         !service.isAdapterReady(info.id) -> false
         !hasAuthentication -> true
-        authUiMode != "login_logout" -> true
+        !hasDirectAuth -> true
         authAuthenticated == null -> null
         else -> authAuthenticated
     }
