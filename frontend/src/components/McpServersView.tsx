@@ -3,7 +3,7 @@ import { Network, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { McpServerConfig, McpStatus, McpStatusUpdate, McpTransport } from '../types/mcp';
 import { ACPBridge } from '../utils/bridge';
 import { Button } from './ui/Button';
-import { Switch } from './ui/Switch';
+import { Checkbox } from './ui/Checkbox';
 import { Tooltip } from './chat/shared/Tooltip';
 import ConfirmationModal from './ConfirmationModal';
 import { DropdownSelect } from './ui/DropdownSelect';
@@ -218,8 +218,14 @@ export function McpServersView() {
             return (
             <div
               key={s.id}
-              className="flex items-center gap-3 px-4 py-2.5 border-b border-border"
+              className="flex items-start gap-3 px-4 py-2.5 border-b border-border"
             >
+              <Checkbox
+                checked={s.enabled}
+                onCheckedChange={() => toggle(s.id)}
+                aria-label={`${s.enabled ? 'Disable' : 'Enable'} ${s.name}`}
+                className='mt-[3px]'
+              />
               <McpStatusDot status={displayStatus} message={displayStatusMessage} />
 
               <div className="flex-1 min-w-0">
@@ -232,13 +238,6 @@ export function McpServersView() {
               </div>
 
               <div className='flex flex-shrink-0 items-center gap-2'>
-                <span className='text-xs text-foreground-secondary'>{s.enabled ? 'Enabled' : 'Disabled'}</span>
-                <Switch
-                  checked={s.enabled}
-                  onCheckedChange={() => toggle(s.id)}
-                  onClick={e => { e.stopPropagation(); }}
-                  aria-label={`${s.enabled ? 'Disable' : 'Enable'} ${s.name}`}
-                />
                 <Tooltip variant="minimal" content="Edit">
                   <button
                     type="button"
