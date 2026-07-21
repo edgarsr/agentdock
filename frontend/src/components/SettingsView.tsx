@@ -76,35 +76,30 @@ function readIdeFontSizePx(): number {
 
 const userMessageBackgroundOptions: Array<{
   id: GlobalSettingsPayload['settings']['userMessageBackgroundStyle'];
-  label: string;
   background: string;
   toneClass: string;
 }> = [
   {
     id: 'default',
-    label: 'Default',
     background: 'var(--ide-user-message-default-bg)',
     toneClass: 'bg-[var(--ide-user-message-default-bg)]'
   },
   {
     id: 'blue',
-    label: 'Blue',
     background: 'var(--ide-user-message-blue-bg)',
     toneClass: 'bg-[var(--ide-user-message-blue-bg)]'
   },
   {
     id: 'background-secondary',
-    label: 'Secondary',
     background: 'var(--ide-background-secondary)',
     toneClass: 'bg-background-secondary'
   },
-  { id: 'primary', label: 'Primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
-  { id: 'secondary', label: 'Button', background: 'var(--ide-Button-startBackground)', toneClass: 'bg-secondary' },
-  { id: 'accent', label: 'Selection', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
-  { id: 'input', label: 'Input', background: 'var(--ide-TextField-background)', toneClass: 'bg-input' },
+  { id: 'primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
+  { id: 'secondary', background: 'var(--ide-Button-startBackground)', toneClass: 'bg-secondary' },
+  { id: 'accent', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
+  { id: 'input', background: 'var(--ide-TextField-background)', toneClass: 'bg-input' },
   {
     id: 'editor-bg',
-    label: 'Editor',
     background: 'var(--ide-editor-xbg)',
     toneClass: 'bg-[var(--ide-editor-bg)]'
   }
@@ -300,7 +295,7 @@ export function SettingsView() {
                       type='button'
                       onClick={() => handleUserMessageBackgroundStyleChange(option.id)}
                       aria-pressed={selected}
-                      aria-label={`${option.label} message background`}
+                      aria-label={`${option.id} message background`}
                       className={`relative min-w-0 rounded-[4px] border p-1.5 text-left focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${
                         selected
                           ? 'border-[var(--ide-Button-focusedBorderColor)] shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]'
@@ -310,7 +305,6 @@ export function SettingsView() {
                       <span className='block rounded-[3px] bg-background-secondary p-1.5'>
                         <span className={`ml-auto block h-5 w-4/5 rounded-[3px] border border-border ${option.toneClass}`} />
                       </span>
-                      <span className='mt-1.5 block truncate pr-4 text-xs text-foreground'>{option.label}</span>
                       {selected ? (
                         <span className='absolute right-2 bottom-1.5 text-[var(--ide-Hyperlink-linkColor)]'>
                           <Check size={12} strokeWidth={2.5} />
