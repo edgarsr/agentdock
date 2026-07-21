@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.4.1</version>
+    <version>1.4.2</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -48,11 +48,13 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Switched Codex to the npm ACP adapter, adding GPT-5.6 support.</li>
+            <li>Fixed plugin startup in JetBrains IDEs 2026.2.</li>
+            <li>Removed custom scroll acceleration to use native JCEF scrolling.</li>
         </ul>
     ]]></change-notes>
 
      <depends>com.intellij.modules.platform</depends>
+     <depends optional="true" config-file="agentdock-withJcef.xml">com.intellij.modules.jcef</depends>
      <depends optional="true" config-file="agentdock-withTerminal.xml">org.jetbrains.plugins.terminal</depends>
      <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="agentdock.acp.AcpQuotaService"/>

@@ -52,6 +52,7 @@ intellijPlatform {
         ides {
             create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.1")
             create(IntelliJPlatformType.PhpStorm, "2026.1")
+            create(IntelliJPlatformType.PhpStorm, "2026.2")
             create(IntelliJPlatformType.IntellijIdea, "261.24374.34")
         }
     }
