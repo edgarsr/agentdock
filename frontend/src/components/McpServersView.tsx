@@ -93,10 +93,10 @@ interface StatusVisual {
 // Lookup keyed by the McpStatus type: adding a status forces a new entry (exhaustive),
 // so the indicator can never silently fall through to a default.
 const STATUS_VISUALS: Record<McpStatus, StatusVisual> = {
-  connected: { dotClass: 'bg-success', pulse: false, defaultLabel: 'Running' },
+  connected: { dotClass: 'bg-success', pulse: false, defaultLabel: 'Connected' },
   loading: { dotClass: 'bg-warning', pulse: true, defaultLabel: 'Checking…' },
   error: { dotClass: 'bg-error', pulse: false, defaultLabel: 'Error' },
-  disabled: { dotClass: 'bg-foreground-secondary', pulse: false, defaultLabel: 'Disabled' },
+  disabled: { dotClass: 'bg-foreground-secondary', pulse: false, defaultLabel: 'Not running' },
   unknown: { dotClass: 'bg-foreground-secondary', pulse: false, defaultLabel: 'Unknown' },
 };
 
@@ -208,62 +208,58 @@ export function McpServersView() {
           </div>
         )}
 
-        {servers.map(s => {
-          const statusUpdate = statusMap[s.id];
-          const status: McpStatus = statusUpdate?.status ?? 'unknown';
-          const statusMessage = statusUpdate?.message;
-          return (
-          <div
-            key={s.id}
-            className="flex items-center gap-3 px-4 py-2.5 border-b border-border"
-          >
-            <Tooltip variant="minimal" content={s.enabled ? 'Enabled' : 'Disabled'}>
+          {servers.map(s => {
+            const statusUpdate = statusMap[s.id];
+            const status: McpStatus = statusUpdate?.status ?? 'unknown';
+            const statusMessage = statusUpdate?.message;
+            const displayStatus: McpStatus = s.enabled ? status : 'disabled';
+            const displayStatusMessage = s.enabled ? statusMessage : undefined;
+            const statusLabel = STATUS_VISUALS[displayStatus].defaultLabel;
+            return (
+            <div
+              key={s.id}
+              className="flex items-start gap-3 px-4 py-2.5 border-b border-border"
+            >
               <Checkbox
                 checked={s.enabled}
                 onCheckedChange={() => toggle(s.id)}
-                onClick={e => { e.stopPropagation(); }}
+                aria-label={`${s.enabled ? 'Disable' : 'Enable'} ${s.name}`}
+                className='mt-[3px]'
               />
-            </Tooltip>
+              <McpStatusDot status={displayStatus} message={displayStatusMessage} />
 
-            <McpStatusDot status={status} message={statusMessage} />
-
-            <div className="flex-1 min-w-0">
-              <div className="truncate">
-                {s.name}
-              </div>
-              <div className="mt-1 text-xs text-foreground-secondary truncate">
-                {s.transport}
-              </div>
-              {status === 'error' && statusMessage && (
-                <div className="mt-1 text-xs text-error truncate" title={statusMessage}>
-                  {statusMessage}
+              <div className="flex-1 min-w-0">
+                <div className="truncate">
+                  {s.name}
                 </div>
-              )}
-            </div>
+                <div className='mt-1 truncate text-xs text-foreground-secondary' title={statusLabel}>
+                  {s.transport.toUpperCase()} · {statusLabel}
+                </div>
+              </div>
 
-            <div className="flex items-center gap-1">
-              <Tooltip variant="minimal" content="Edit">
-                <button
-                  type="button"
-                  onClick={() => openEdit(s)}
-                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-foreground focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-                  aria-label={`Edit ${s.name}`}
-                >
-                  <Pencil size={13} />
-                </button>
-              </Tooltip>
-              <Tooltip variant="minimal" content="Delete">
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(s)}
-                  className="rounded p-1 text-foreground-secondary transition-colors hover:text-error focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-                  aria-label={`Delete ${s.name}`}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </Tooltip>
+              <div className='flex flex-shrink-0 items-center gap-2'>
+                <Tooltip variant="minimal" content="Edit">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(s)}
+                    className="rounded p-1 text-foreground-secondary transition-colors hover:text-foreground focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                    aria-label={`Edit ${s.name}`}
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </Tooltip>
+                <Tooltip variant="minimal" content="Delete">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(s)}
+                    className="rounded p-1 text-foreground-secondary transition-colors hover:text-error focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                    aria-label={`Delete ${s.name}`}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </Tooltip>
+              </div>
             </div>
-          </div>
           );
         })}
 
