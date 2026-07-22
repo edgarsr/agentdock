@@ -34,6 +34,19 @@ internal fun parseIdOnlyPayload(payload: String?): String? {
     return payload?.trim()?.takeIf { it.isNotEmpty() }
 }
 
+internal fun parseAdapterAuthMethodPayload(payload: String?): Pair<String?, String?> {
+    val raw = payload?.trim().orEmpty()
+    if (raw.isEmpty()) return null to null
+    return try {
+        val obj = Json.parseToJsonElement(raw).jsonObject
+        val adapterId = obj["adapterId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val methodId = obj["methodId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        adapterId to methodId
+    } catch (_: Exception) {
+        null to null
+    }
+}
+
 internal fun parseStartPayload(payload: String?): Triple<String?, String?, String?> {
     val parsed = parseStartRequestPayload(payload)
     return Triple(parsed.chatId, parsed.adapterId, parsed.modelId)

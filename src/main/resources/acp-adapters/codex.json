@@ -14,30 +14,16 @@
     "unix": "node_modules/.bin/codex-acp"
   },
   "disabledModels": [
-    "-5.3",
-    "-5.1",
-    "-5.2"
+    "-5.3"
   ],
   "disabledModes": [],
+  "loginMethod": "acp",
+  "logoutMethod": "acp",
+  "loginStatusMethod": "codexCliLoginStatus",
   "agentVersionConfig": {
     "args": ["--version"],
-    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
-  },
-  "authConfig": {
-    "statusMethod": "cliAuthStatus",
-    "loginMethod": "cliLogin",
-    "logoutMethod": "cliLogout",
-    "authNpmPackage": "@openai/codex",
-    "statusArgs": [
-      "login",
-      "status"
-    ],
-    "loginArgs": [
-      "login"
-    ],
-    "logoutArgs": [
-      "logout"
-    ]
+    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)",
+    "command": "cli"
   },
   "cli": {
     "executable": {

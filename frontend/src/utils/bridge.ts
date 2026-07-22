@@ -19,6 +19,7 @@ import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
 import {
   AdapterDeletedEvent,
+  AdapterRefreshStateEvent,
   AdaptersEvent,
   AudioRecordingStateEvent,
   AudioTranscriptionFeatureEvent,
@@ -183,6 +184,10 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.ADAPTERS, { detail: { adapters } }));
     };
 
+    window.__onAdapterRefreshState = (refreshing) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.ADAPTER_REFRESH_STATE, { detail: { refreshing } }));
+    };
+
     window.__onAvailableCommands = (adapterId, commands) => {
       availableCommandsByAdapter.set(adapterId, commands);
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.AVAILABLE_COMMANDS, { detail: { adapterId, commands } }));
@@ -331,6 +336,9 @@ export const ACPBridge = {
 
   onAdapters: (callback: (e: CustomEvent<AdaptersEvent>) => void) => onBridgeEvent(EVENT_NAMES.ADAPTERS, callback),
 
+  onAdapterRefreshState: (callback: (e: CustomEvent<AdapterRefreshStateEvent>) => void) =>
+    onBridgeEvent(EVENT_NAMES.ADAPTER_REFRESH_STATE, callback),
+
   onAvailableCommands: (callback: (e: CustomEvent<AvailableCommandsEvent>) => void) => onBridgeEvent(EVENT_NAMES.AVAILABLE_COMMANDS, callback),
 
   getAvailableCommands: (adapterId: string) => {
@@ -339,8 +347,8 @@ export const ACPBridge = {
 
   onPermissionRequest: (callback: (e: CustomEvent<PermissionRequestEvent>) => void) => onBridgeEvent(EVENT_NAMES.PERMISSION, callback),
 
-  requestAdapters: () => {
-    window.__requestAdapters?.();
+  requestAdapters: (forceRefresh = false) => {
+    window.__requestAdapters?.(forceRefresh);
   },
 
   startAgent: (conversationId: string, adapterId?: string, modelId?: string, modeId?: string, reasoningEffortId?: string) => {

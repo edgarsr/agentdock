@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import agentdock.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 /**
@@ -35,6 +36,7 @@ class AcpBridge(
     internal var toggleAgentEnabledQuery: JBCefJSQuery? = null
     internal var loginAgentQuery: JBCefJSQuery? = null
     internal var logoutAgentQuery: JBCefJSQuery? = null
+    internal var cancelAgentAuthQuery: JBCefJSQuery? = null
     internal var fetchUsageQuery: JBCefJSQuery? = null
     internal var undoFileQuery: JBCefJSQuery? = null
     internal var undoAllFilesQuery: JBCefJSQuery? = null
@@ -62,12 +64,19 @@ class AcpBridge(
     internal val downloadProbeJobs = ConcurrentHashMap<String, Job>()
     internal val downloadProbeStates = ConcurrentHashMap<String, AdapterDownloadProbeState>()
     internal val authActionJobs = ConcurrentHashMap<String, Job>()
-    internal val authFetchJobs = ConcurrentHashMap<String, Job>()
-    internal val authStates = ConcurrentHashMap<String, Boolean>()
+    internal val authActionMethodIds = ConcurrentHashMap<String, String>()
+    internal val authErrors = ConcurrentHashMap<String, String>()
+    internal val loginStatusJobs = ConcurrentHashMap<String, Job>()
+    internal val loginStatusStates = ConcurrentHashMap<String, Boolean>()
+    internal val pendingLoginStatusStates = ConcurrentHashMap<String, Boolean>()
+    internal val completedLoginStatusRefreshes = ConcurrentHashMap.newKeySet<String>()
     internal val updateCheckJobs = ConcurrentHashMap<String, Job>()
     internal val latestVersionStates = ConcurrentHashMap<String, String>()
     internal val agentVersionJobs = ConcurrentHashMap<String, Job>()
     internal val agentVersionStates = ConcurrentHashMap<String, String>()
+    internal val initialAdapterRefreshStarted = AtomicBoolean(false)
+    internal val fullAdapterRefreshInProgress = AtomicBoolean(false)
+    internal val fullAdapterRefreshDispatching = AtomicBoolean(false)
     internal val replaySeqByChatId = ConcurrentHashMap<String, Int>()
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
@@ -79,8 +88,9 @@ class AcpBridge(
     internal val audio = AcpAudioPlayer(scope)
 
     companion object {
-        // Keep this aligned with the service startup budget. Cold agent starts can exceed 45s.
-        const val START_AGENT_TIMEOUT_MS = 300_000L
+        // The service owns the 300s adapter-initialization budget. Leave time
+        // for session creation and preference application after it completes.
+        const val START_AGENT_TIMEOUT_MS = 360_000L
     }
 
     fun install() {

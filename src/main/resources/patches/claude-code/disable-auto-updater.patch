@@ -1,0 +1,6 @@
+{
+  "path": "dist/index.js",
+  "find": "#!/usr/bin/env node\n",
+  "replace": "#!/usr/bin/env node\nprocess.env.DISABLE_AUTOUPDATER = \"1\";\n",
+  "alreadyApplied": "process.env.DISABLE_AUTOUPDATER = \"1\";"
+}

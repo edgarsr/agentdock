@@ -26,6 +26,7 @@ export interface StatusEvent { chatId: string; status: string; }
 export interface SessionIdEvent { chatId: string; sessionId: string; }
 export interface ModeEvent { chatId: string; modeId: string; }
 export interface AdaptersEvent { adapters: AgentOption[]; }
+export interface AdapterRefreshStateEvent { refreshing: boolean; }
 export interface PermissionRequestEvent { request: PermissionRequest; }
 export interface AvailableCommandsEvent { adapterId: string; commands: AvailableCommand[]; }
 export interface HistoryListEvent { list: HistorySessionMeta[]; }
@@ -59,6 +60,7 @@ export const EVENT_NAMES = {
   SESSION_ID: 'acp-session-id',
   MODE: 'acp-mode',
   ADAPTERS: 'acp-adapters',
+  ADAPTER_REFRESH_STATE: 'acp-adapter-refresh-state',
   AVAILABLE_COMMANDS: 'acp-available-commands',
   USAGE_DATA: 'acp-usage-data',
   PERMISSION: 'acp-permission',

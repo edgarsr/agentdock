@@ -6,7 +6,6 @@ import com.agentclientprotocol.model.PermissionOptionId
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.withLock
@@ -121,11 +120,9 @@ internal suspend fun AcpClientService.stopAgent(chatId: String) {
 internal fun AcpClientService.stopSharedProcess(adapterName: String) {
     ensureExecutionTargetCurrent()
     adapterInitializationJobs.remove(adapterName)?.cancel()
-    adapterInitializationScopes.remove(adapterName)?.coroutineContext?.cancel()
     val shared = activeProcesses.remove(processKey(adapterName))
     teardownAdapterProcess(shared)
     updateAdapterInitializationState(adapterName, AcpClientService.AdapterInitializationStatus.NotStarted)
-    adapterInitialization.remove(adapterName)
     adapterRuntimeMetadataMap.remove(adapterName)
     availableCommandsByAdapter.remove(adapterName)
     sessions.values.filter { it.sharedProcess == shared }.forEach { it.stop() }
@@ -150,9 +147,6 @@ internal fun AcpClientService.resetExecutionEnvironment(
 ) {
     adapterInitializationJobs.values.forEach { it.cancel() }
     adapterInitializationJobs.clear()
-    adapterInitializationScopes.values.forEach { it.coroutineContext.cancel() }
-    adapterInitializationScopes.clear()
-    adapterInitialization.clear()
     adapterInitializationState.clear()
     adapterInitializationErrors.clear()
     adapterInitializationDetails.clear()
@@ -160,6 +154,7 @@ internal fun AcpClientService.resetExecutionEnvironment(
     availableCommandsByAdapter.clear()
     systemInstructionsInjectedSessionIds.clear()
     replayOwnerBySessionId.clear()
+    configProbeSessionKeys.clear()
 
     sessions.values.forEach { it.stop() }
     if (clearSessions) {

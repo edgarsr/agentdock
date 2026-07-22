@@ -56,13 +56,35 @@ private fun parsePermissionDecisionPayload(payload: String?): PermissionDecision
     }.getOrNull()
 }
 
-private fun AcpBridge.refreshDownloadedAdapterInitialization() {
-    val target = AcpAdapterPaths.getExecutionTarget()
-    AcpAdapterConfig.getAllAdapters().values.forEach { info ->
-        if (!AcpAdapterPaths.isDownloaded(info.id, target)) return@forEach
-        if (service.isAdapterReady(info.id)) return@forEach
-        if (service.adapterInitializationStatus(info.id) == AcpClientService.AdapterInitializationStatus.Initializing) return@forEach
-        service.initializeAdapterInBackground(info.id)
+internal fun AcpBridge.startInitialAdapterRefresh() {
+    if (!initialAdapterRefreshStarted.compareAndSet(false, true)) {
+        pushAdapterRefreshState(fullAdapterRefreshInProgress.get())
+        scope.launch(Dispatchers.IO) { pushAdapters(includeRuntimeChecks = false) }
+        return
+    }
+    startFullAdapterRefresh()
+}
+
+private fun AcpBridge.startFullAdapterRefresh() {
+    if (!fullAdapterRefreshInProgress.compareAndSet(false, true)) {
+        pushAdapterRefreshState(true)
+        scope.launch(Dispatchers.IO) {
+            pushAdapters(includeRuntimeChecks = false)
+        }
+        return
+    }
+
+    pushAdapterRefreshState(true)
+    fullAdapterRefreshDispatching.set(true)
+    scope.launch(Dispatchers.IO) {
+        try {
+            resetAdapterRefreshState()
+            pushAdapters(includeRuntimeChecks = false)
+            pushAdapters(includeRuntimeChecks = true)
+        } finally {
+            fullAdapterRefreshDispatching.set(false)
+            finishFullAdapterRefreshIfIdle()
+        }
     }
 }
 
@@ -135,14 +157,12 @@ internal fun AcpBridge.installConversationQueries() {
     }
 
     listAdaptersQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler {
-            scope.launch(Dispatchers.IO) {
-                resetAuthStatusRefreshState()
-                pushAdapters(includeRuntimeChecks = false)
-                refreshDownloadedAdapterInitialization()
-                scope.launch(Dispatchers.IO) {
-                    pushAdapters(includeRuntimeChecks = true)
-                }
+        addHandler { payload ->
+            if (payload == "refresh") {
+                initialAdapterRefreshStarted.set(true)
+                startFullAdapterRefresh()
+            } else {
+                startInitialAdapterRefresh()
             }
             JBCefJSQuery.Response("ok")
         }

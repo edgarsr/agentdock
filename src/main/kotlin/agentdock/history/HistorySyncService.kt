@@ -1,32 +1,49 @@
 package agentdock.history
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.diagnostic.Logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpAdapterPaths
 import agentdock.acp.AcpClientService
 import agentdock.acp.listHistorySessions
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+
+private const val SESSION_LIST_TIMEOUT_MS = 30_000L
 
 internal object HistorySyncService {
     private val log = Logger.getInstance(HistorySyncService::class.java)
-    private val backgroundScope = CoroutineScope(Dispatchers.IO)
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val ephemeralDeletionJobs = ConcurrentHashMap<String, Boolean>()
+    private val projectSyncMutexes = ConcurrentHashMap<String, Mutex>()
 
     fun startBackgroundHistorySync(projectPath: String?) {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return
         backgroundScope.launch {
-            syncProjectIndex(cleanProjectPath)
+            try {
+                syncProjectIndex(cleanProjectPath)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                log.warn("Background history sync failed for '$cleanProjectPath'", error)
+            }
         }
     }
 
-    fun syncHistoryIndex(projectPath: String?): Boolean {
+    suspend fun syncHistoryIndex(projectPath: String?): Boolean {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return false
         syncProjectIndex(cleanProjectPath)
@@ -38,7 +55,7 @@ internal object HistorySyncService {
         return buildHistoryList(cleanProjectPath, HistoryStorage.readExistingProjectIndex(cleanProjectPath))
     }
 
-    fun syncAndGetHistoryList(projectPath: String?): List<SessionMeta> {
+    suspend fun syncAndGetHistoryList(projectPath: String?): List<SessionMeta> {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         return buildHistoryList(cleanProjectPath, syncProjectIndex(cleanProjectPath))
     }
@@ -73,9 +90,15 @@ internal object HistorySyncService {
         }
     }
 
-    private fun syncProjectIndex(projectPath: String): List<HistoryConversationIndexEntry> {
+    private suspend fun syncProjectIndex(projectPath: String): List<HistoryConversationIndexEntry> {
         if (projectPath.isBlank()) return emptyList()
+        val mutex = projectSyncMutexes.computeIfAbsent(projectPath) { Mutex() }
+        return mutex.withLock {
+            syncProjectIndexLocked(projectPath)
+        }
+    }
 
+    private suspend fun syncProjectIndexLocked(projectPath: String): List<HistoryConversationIndexEntry> {
         val indexFile = HistoryStorage.ensureProjectIndexFile(projectPath)
         val rawExisting = HistoryStorage.readProjectIndex(indexFile)
         val existing = rawExisting.filter { conversation ->
@@ -100,7 +123,7 @@ internal object HistorySyncService {
                 }
                 if (!keptKeys.add(key)) return@mapNotNull null
                 val syncedSession = session.copy(
-                    createdAt = if (session.createdAt > 0) minOf(session.createdAt, meta.createdAt) else meta.createdAt,
+                    createdAt = resolveSyncedCreatedAt(session.createdAt, meta.createdAt),
                     updatedAt = resolveSyncedUpdatedAt(session.updatedAt, meta.updatedAt),
                     sourceFilePath = meta.filePath.takeIf { it.isNotBlank() } ?: session.sourceFilePath
                 )
@@ -189,7 +212,7 @@ internal object HistorySyncService {
         return combinedConversations
     }
 
-    private fun collectSyncedAvailableSessionMeta(projectPath: String): AvailableSessionMetaResult {
+    private suspend fun collectSyncedAvailableSessionMeta(projectPath: String): AvailableSessionMetaResult {
         val result = mutableListOf<SessionMeta>()
         val scannedAdapters = linkedSetOf<String>()
         val ephemeralEntries = HistoryStorage.readEphemeralSessions(projectPath)
@@ -213,27 +236,48 @@ internal object HistorySyncService {
         return AvailableSessionMetaResult(visibleSessions, scannedAdapters)
     }
 
-    private fun collectSessionListMeta(projectPath: String): AvailableSessionMetaResult {
-        val project = findOpenProject(projectPath) ?: return AvailableSessionMetaResult(emptyList(), emptySet())
+    private suspend fun collectSessionListMeta(projectPath: String): AvailableSessionMetaResult = coroutineScope {
+        val project = findOpenProject(projectPath)
+            ?: return@coroutineScope AvailableSessionMetaResult(emptyList(), emptySet())
         val service = AcpClientService.getInstance(project)
         val adapters = AcpAdapterConfig.getAllAdapters().values
             .filter { it.supportsSessionList }
-            .filter { AcpAdapterPaths.isDownloaded(it.id) }
-
-        return runBlocking {
-            val sessions = mutableListOf<SessionMeta>()
-            val scannedAdapters = linkedSetOf<String>()
-            adapters.forEach { adapterInfo ->
-                if (!service.isAdapterReady(adapterInfo.id)) return@forEach
-                runCatching {
-                    service.listHistorySessions(adapterInfo, projectPath)
-                }.onSuccess { adapterSessions ->
-                    sessions.addAll(adapterSessions)
-                    scannedAdapters.add(adapterInfo.id)
+            .filter { adapterInfo ->
+                try {
+                    AcpAdapterPaths.isDownloaded(adapterInfo.id)
+                } catch (error: Exception) {
+                    log.warn("Unable to inspect installation state for adapter '${adapterInfo.id}'", error)
+                    false
                 }
             }
-            AvailableSessionMetaResult(sessions, scannedAdapters)
-        }
+            .filter { service.isAdapterReady(it.id) }
+
+        val scans = adapters.map { adapterInfo ->
+            async(Dispatchers.IO) {
+                try {
+                    val sessions = withTimeout(SESSION_LIST_TIMEOUT_MS) {
+                        service.listHistorySessions(adapterInfo, projectPath)
+                    }
+                    AdapterSessionScan(adapterInfo.id, sessions)
+                } catch (error: TimeoutCancellationException) {
+                    log.warn(
+                        "Session list timed out for adapter '${adapterInfo.id}' after ${SESSION_LIST_TIMEOUT_MS}ms",
+                        error
+                    )
+                    null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    log.warn("Session list failed for adapter '${adapterInfo.id}'", error)
+                    null
+                }
+            }
+        }.awaitAll().filterNotNull()
+
+        AvailableSessionMetaResult(
+            sessions = scans.flatMap { it.sessions },
+            scannedAdapters = scans.mapTo(linkedSetOf()) { it.adapterId }
+        )
     }
 
     private fun findOpenProject(projectPath: String): Project? {
@@ -289,14 +333,6 @@ internal object HistorySyncService {
         }
     }
 
-    private fun resolveSyncedUpdatedAt(currentUpdatedAt: Long, discoveredUpdatedAt: Long): Long {
-        return when {
-            currentUpdatedAt > 0L && discoveredUpdatedAt > 0L -> maxOf(currentUpdatedAt, discoveredUpdatedAt)
-            currentUpdatedAt > 0L -> currentUpdatedAt
-            else -> discoveredUpdatedAt
-        }
-    }
-
     private fun deleteOrphanedConversationFiles(
         projectPath: String,
         conversations: List<HistoryConversationIndexEntry>
@@ -349,5 +385,26 @@ internal object HistorySyncService {
                     }
                 )
             }.sortedByDescending { it.updatedAt }
+    }
+
+    private data class AdapterSessionScan(
+        val adapterId: String,
+        val sessions: List<SessionMeta>
+    )
+}
+
+internal fun resolveSyncedCreatedAt(currentCreatedAt: Long, discoveredCreatedAt: Long): Long {
+    return when {
+        currentCreatedAt > 0L && discoveredCreatedAt > 0L -> minOf(currentCreatedAt, discoveredCreatedAt)
+        currentCreatedAt > 0L -> currentCreatedAt
+        else -> discoveredCreatedAt
+    }
+}
+
+internal fun resolveSyncedUpdatedAt(currentUpdatedAt: Long, discoveredUpdatedAt: Long): Long {
+    return when {
+        currentUpdatedAt > 0L && discoveredUpdatedAt > 0L -> maxOf(currentUpdatedAt, discoveredUpdatedAt)
+        currentUpdatedAt > 0L -> currentUpdatedAt
+        else -> discoveredUpdatedAt
     }
 }

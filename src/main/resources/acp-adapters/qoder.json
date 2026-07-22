@@ -5,6 +5,8 @@
   "iconPathLight": "/icons/qoder-light.svg",
   "iconPathDark": "/icons/qoder-dark.svg",
   "supportsSessionList": true,
+  "loginMethod": "cli",
+  "loginStatusMethod": "qoderCliStatus",
   "distribution": {
     "type": "npm",
     "version": "latest",
@@ -26,18 +28,6 @@
     "resumeArgs": [
       "-r",
       "{sessionId}"
-    ]
-  },
-  "authConfig": {
-    "statusMethod": "cliAuthStatus",
-    "loginMethod": "cliLogin",
-    "statusArgs": [
-      "status",
-      "-o",
-      "json"
-    ],
-    "loginArgs": [
-      "login"
     ]
   }
 }

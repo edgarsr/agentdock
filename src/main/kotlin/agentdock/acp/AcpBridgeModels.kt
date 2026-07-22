@@ -28,6 +28,13 @@ internal data class AdapterReasoningEffortPayload(
 )
 
 @Serializable
+internal data class AdapterAuthMethodPayload(
+    val id: String,
+    val name: String,
+    val description: String
+)
+
+@Serializable
 internal data class AdapterPayload(
     val id: String,
     val name: String,
@@ -44,13 +51,13 @@ internal data class AdapterPayload(
     val downloaded: Boolean? = null,
     val downloadedKnown: Boolean = false,
     val downloadPath: String = "",
-    val hasAuthentication: Boolean,
-    val authAuthenticated: Boolean? = null,
-    val authKnown: Boolean = false,
-    val authLoading: Boolean,
-    val authError: String,
+    val loginMethod: String?,
+    val authMethods: List<AdapterAuthMethodPayload>,
     val authenticating: Boolean,
-    val loginAvailable: Boolean,
+    val authenticatingMethodId: String,
+    val authError: String,
+    val loginStatusSupported: Boolean = false,
+    val loggedIn: Boolean? = null,
     val logoutAvailable: Boolean,
     val initializing: Boolean,
     val initializationDetail: String,

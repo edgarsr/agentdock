@@ -276,7 +276,7 @@ internal fun AcpBridge.installAdapterQueries() {
                 injectDebugApi(browser.cefBrowser)
             }
             scope.launch(Dispatchers.IO) {
-                pushAdapters()
+                startInitialAdapterRefresh()
                 pushAllAvailableCommands()
             }
             JBCefJSQuery.Response("ok")
@@ -298,11 +298,11 @@ internal fun AcpBridge.installAdapterQueries() {
                     try {
                         downloadStatuses[adapterId] = "Starting download..."
                         resetDownloadProbeState(adapterId)
-                        pushAdapters()
+                        pushAdapters(includeRuntimeChecks = true, adapterIdToRefresh = adapterId)
 
                         service.stopSharedProcess(adapterId)
                         AcpConfigOptionsCache.remove(adapterId)
-                        latestVersionStates.remove(adapterId)
+                        resetUpdateCheckState(adapterId, target)
                         val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterId)
                         val targetDir = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id)
 
@@ -325,7 +325,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             val installedVersion = AcpAdapterPaths.installedVersion(adapterId, target)
                             setDownloadProbeState(adapterId, target, downloaded = true, installedVersion = installedVersion)
                             service.initializeAdapterInBackground(adapterId)
-                            pushAdapters()
+                            refreshAdapterLoginStatus(adapterId)
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
                                 previous?.takeIf { it.startsWith("Error:") }
@@ -370,14 +370,15 @@ internal fun AcpBridge.installAdapterQueries() {
             val adapterId = parseIdOnlyPayload(payload)
             if (adapterId != null) {
                 scope.launch(Dispatchers.IO) {
+                    val target = AcpAdapterPaths.getExecutionTarget()
                     service.stopSharedProcess(adapterId)
                     AcpConfigOptionsCache.remove(adapterId)
-                    latestVersionStates.remove(adapterId)
+                    resetUpdateCheckState(adapterId, target)
                     resetDownloadProbeState(adapterId)
-                    val deleted = AcpAdapterPaths.deleteAdapter(adapterId, AcpAdapterPaths.getExecutionTarget())
+                    val deleted = AcpAdapterPaths.deleteAdapter(adapterId, target)
                     if (deleted) {
                         downloadStatuses.remove(adapterId)
-                        setDownloadProbeState(adapterId, AcpAdapterPaths.getExecutionTarget(), downloaded = false)
+                        setDownloadProbeState(adapterId, target, downloaded = false)
                         runOnEdt {
                             browser.cefBrowser.executeJavaScript(
                                 "if(window.__onAdapterDeleted) window.__onAdapterDeleted(${jsStringLiteral(adapterId)});",
@@ -387,7 +388,7 @@ internal fun AcpBridge.installAdapterQueries() {
                     } else {
                         downloadStatuses[adapterId] = "Error: Unable to remove adapter files"
                     }
-                    pushAdapters()
+                    pushAdapters(includeRuntimeChecks = true, adapterIdToRefresh = adapterId)
                 }
             }
             JBCefJSQuery.Response("ok")
@@ -427,7 +428,7 @@ internal fun AcpBridge.installAdapterQueries() {
 
                         downloadStatuses[adapterId] = "Updating to $latestVersion..."
                         resetDownloadProbeState(adapterId)
-                        pushAdapters()
+                        pushAdapters(includeRuntimeChecks = true, adapterIdToRefresh = adapterId)
 
                         service.stopSharedProcess(adapterId)
                         AcpConfigOptionsCache.remove(adapterId)
@@ -457,6 +458,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             downloadStatuses.remove(adapterId)
                             setDownloadProbeState(adapterId, target, downloaded = true, installedVersion = latestVersion)
                             service.initializeAdapterInBackground(adapterId)
+                            refreshAdapterLoginStatus(adapterId)
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
                                 previous?.takeIf { it.startsWith("Error:") }
@@ -484,38 +486,19 @@ internal fun AcpBridge.installAdapterQueries() {
 
     loginAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { payload ->
-            val adapterId = parseIdOnlyPayload(payload)
-            if (adapterId != null) {
-                val existingJob = authActionJobs.remove(adapterId)
-                existingJob?.cancel()
-                val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
-                    try {
-                        downloadStatuses.remove(adapterId)
-                        pushAdapters()
-                        val authenticated = AcpLoginService.login(
-                            adapterName = adapterId,
-                            service = service,
-                            projectPath = service.project.basePath,
-                            onProgress = { pushAdapters() }
-                        )
-                        if (authenticated) {
-                            service.stopSharedProcess(adapterId)
-                            authStates.remove(adapterId)
-                            service.initializeAdapterInBackground(adapterId)
-                        }
-                    } catch (_: CancellationException) {
-                        downloadStatuses.remove(adapterId)
-                    } catch (e: Exception) {
-                        val message = e.message?.takeIf { it.isNotBlank() } ?: "Login failed"
-                        downloadStatuses[adapterId] = "Error: $message"
-                    } finally {
-                        authActionJobs.remove(adapterId)
-                        authStates.remove(adapterId)
-                        pushAdapters()
+            val (adapterId, methodId) = parseAdapterAuthMethodPayload(payload)
+            if (adapterId != null && methodId != null) {
+                launchAuthAction(adapterId, methodId, "Login failed") {
+                    val restartRequired = AcpAuthenticationService.login(
+                        adapterId = adapterId,
+                        methodId = methodId,
+                        service = service
+                    )
+                    if (restartRequired) {
+                        service.stopSharedProcess(adapterId)
+                        service.initializeAdapterInBackground(adapterId)
                     }
                 }
-                authActionJobs[adapterId] = job
-                job.start()
             }
             JBCefJSQuery.Response("ok")
         }
@@ -525,30 +508,22 @@ internal fun AcpBridge.installAdapterQueries() {
         addHandler { payload ->
             val adapterId = parseIdOnlyPayload(payload)
             if (adapterId != null) {
-                val existingJob = authActionJobs.remove(adapterId)
-                existingJob?.cancel()
-                val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
-                    try {
-                        downloadStatuses.remove(adapterId)
-                        pushAdapters()
-                        if (AcpLogoutService.logout(adapterId)) {
-                            service.stopSharedProcess(adapterId)
-                            authStates.remove(adapterId)
-                            service.initializeAdapterInBackground(adapterId)
-                        }
-                    } catch (_: CancellationException) {
-                        downloadStatuses.remove(adapterId)
-                    } catch (e: Exception) {
-                        val message = e.message?.takeIf { it.isNotBlank() } ?: "Logout failed"
-                        downloadStatuses[adapterId] = "Error: $message"
-                    } finally {
-                        authActionJobs.remove(adapterId)
-                        authStates.remove(adapterId)
-                        pushAdapters()
+                launchAuthAction(adapterId, null, "Logout failed") {
+                    val restartRequired = AcpAuthenticationService.logout(adapterId, service)
+                    if (restartRequired) {
+                        service.stopSharedProcess(adapterId)
+                        service.initializeAdapterInBackground(adapterId)
                     }
                 }
-                authActionJobs[adapterId] = job
-                job.start()
+            }
+            JBCefJSQuery.Response("ok")
+        }
+    }
+
+    cancelAgentAuthQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+        addHandler { payload ->
+            parseIdOnlyPayload(payload)?.let { adapterId ->
+                authActionJobs[adapterId]?.cancel()
             }
             JBCefJSQuery.Response("ok")
         }
@@ -604,4 +579,39 @@ internal fun AcpBridge.installAdapterQueries() {
         }
     }
 
+}
+
+private fun AcpBridge.launchAuthAction(
+    adapterId: String,
+    methodId: String?,
+    fallbackError: String,
+    action: suspend () -> Unit
+) {
+    val previousJob = authActionJobs[adapterId]
+    if (methodId == null) {
+        authActionMethodIds.remove(adapterId)
+    } else {
+        authActionMethodIds[adapterId] = methodId
+    }
+    lateinit var job: kotlinx.coroutines.Job
+    job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+        try {
+            previousJob?.join()
+            authErrors.remove(adapterId)
+            pushAdapters()
+            action()
+        } catch (_: CancellationException) {
+            authErrors.remove(adapterId)
+        } catch (error: Exception) {
+            val message = error.message?.takeIf { it.isNotBlank() } ?: fallbackError
+            authErrors[adapterId] = message
+        } finally {
+            authActionJobs.remove(adapterId, job)
+            methodId?.let { authActionMethodIds.remove(adapterId, it) }
+            refreshAdapterLoginStatus(adapterId)
+        }
+    }
+    authActionJobs[adapterId] = job
+    previousJob?.cancel()
+    job.start()
 }

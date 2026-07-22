@@ -148,7 +148,8 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var process: Process? = null
         @Volatile var client: Client? = null
         @Volatile var protocol: Protocol? = null
-        @Volatile var authMethodIds: Set<String> = emptySet()
+        @Volatile var authMethods: List<AuthMethod> = emptyList()
+        @Volatile var logoutAvailable: Boolean = false
         @Volatile var protocolScope: CoroutineScope? = null
         @Volatile var isInitialized: Boolean = false
         @Volatile var sessionUpdateWrapped: Boolean = false
@@ -176,7 +177,8 @@ class AcpClientService private constructor(val project: Project) {
             process = null
             client = null
             protocol = null
-            authMethodIds = emptySet()
+            authMethods = emptyList()
+            logoutAvailable = false
             protocolScope?.coroutineContext?.cancel()
             protocolScope = null
             isInitialized = false
@@ -195,10 +197,9 @@ class AcpClientService private constructor(val project: Project) {
     internal val activeProcesses = ConcurrentHashMap<String, SharedProcess>()
     internal val liveOwnerBySessionId = ConcurrentHashMap<String, String>()
     internal val replayOwnerBySessionId = ConcurrentHashMap<String, String>()
+    internal val configProbeSessionKeys: MutableSet<String> = ConcurrentHashMap.newKeySet()
     internal val startupInitializationStarted = AtomicBoolean(false)
-    internal val adapterInitialization = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     internal val adapterInitializationJobs = ConcurrentHashMap<String, Job>()
-    internal val adapterInitializationScopes = ConcurrentHashMap<String, CoroutineScope>()
     internal val adapterInitializationState = ConcurrentHashMap<String, AdapterInitializationStatus>()
     internal val adapterInitializationErrors = ConcurrentHashMap<String, String>()
     internal val adapterInitializationDetails = ConcurrentHashMap<String, String>()
@@ -224,6 +225,12 @@ class AcpClientService private constructor(val project: Project) {
         val sharedProc = activeProcesses[processKey(adapterName)] ?: return false
         return sharedProc.isHealthy()
     }
+
+    fun adapterAuthMethods(adapterName: String): List<AuthMethod> =
+        activeProcesses[processKey(adapterName)]?.authMethods.orEmpty()
+
+    fun isAdapterLogoutAvailable(adapterName: String): Boolean =
+        activeProcesses[processKey(adapterName)]?.logoutAvailable == true
 
     internal fun updateAvailableCommands(adapterName: String, commands: List<AvailableCommandPayload>) {
         availableCommandsByAdapter[adapterName] = commands

@@ -7,6 +7,9 @@
   "supportsSessionList": true,
   "sessionListMethod": "grokCliSessions",
   "sessionDeleteMethod": "grokCliSessionDelete",
+  "loginMethod": "acp",
+  "logoutMethod": "cli",
+  "loginStatusMethod": "grokBuildAuthFile",
   "distribution": {
     "type": "npm",
     "version": "latest",
@@ -26,15 +29,6 @@
       "version"
     ],
     "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
-  },
-  "authConfig": {
-    "statusMethod": "grokAuthStatus",
-    "loginMethod": "acpAuthenticateLogin",
-    "logoutMethod": "cliLogout",
-    "authMethodId": "grok.com",
-    "logoutArgs": [
-      "logout"
-    ]
   },
   "cli": {
     "executable": {

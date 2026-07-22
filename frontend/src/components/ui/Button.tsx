@@ -1,6 +1,6 @@
 import { ButtonHTMLAttributes, forwardRef, ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'install' | 'accentOutline' | 'danger';
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'install' | 'accentOutline' | 'danger';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -26,6 +26,7 @@ const baseClassName = [
 const variantClassNames: Record<ButtonVariant, string> = {
   primary: 'bg-primary text-[var(--ide-Button-default-foreground)]',
   secondary: 'bg-secondary text-[var(--ide-Button-foreground)]',
+  outline: 'bg-transparent text-foreground',
   install: 'text-success border-[#57965c]',
   accentOutline: 'bg-input text-[var(--ide-Hyperlink-linkColor)]',
   danger: [
@@ -58,7 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     >
       {leftIcon ? <span className="flex h-[1em] w-[1em] items-center justify-center">{leftIcon}</span> : null}
       {children ? <span>{children}</span> : null}
-      {rightIcon ? <span className="flex h-[1em] w-[1em] items-center justify-center">{rightIcon}</span> : null}
+      {rightIcon ? <span className="flex h-[1em] w-[1em] items-center justify-center relative left-[4px]">{rightIcon}</span> : null}
     </button>
   );
 });

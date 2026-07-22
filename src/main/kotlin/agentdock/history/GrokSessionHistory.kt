@@ -19,18 +19,20 @@ internal object GrokSessionHistory {
             adapterId = adapterId,
             projectPath = projectPath,
             args = listOf("--no-auto-update", "sessions", "list", "--limit", ALL_SESSIONS_LIMIT.toString())
-        ) ?: throw IllegalStateException("Grok session list command failed")
+        )
 
         return parseSessionList(output, adapterId, projectPath)
     }
 
     fun grokCliSessionDelete(adapterId: String, projectPath: String, sessionId: String): Boolean {
         if (!sessionIdPattern.matches(sessionId)) return false
-        return runAgentHistoryCliCommand(
-            adapterId = adapterId,
-            projectPath = projectPath,
-            args = listOf("--no-auto-update", "sessions", "delete", sessionId)
-        ) != null
+        return runCatching {
+            runAgentHistoryCliCommand(
+                adapterId = adapterId,
+                projectPath = projectPath,
+                args = listOf("--no-auto-update", "sessions", "delete", sessionId)
+            )
+        }.isSuccess
     }
 
     internal fun parseSessionList(output: String, adapterId: String, projectPath: String): List<SessionMeta> {

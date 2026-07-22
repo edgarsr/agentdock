@@ -180,7 +180,7 @@ export function ChatInputControls({
 
         {showAuxIndicators && selectedAgentId && (
           <AdapterUsageLifecycleProvider
-            value={{enabled: true, isSending, sessionKey: status === 'ready' ? usageSessionKey : undefined,}}
+            value={{ mode: 'chat', enabled: true, isSending, sessionKey: status === 'ready' ? usageSessionKey : undefined }}
           >
             <ChatUsageIndicator agentId={selectedAgentId} modelId={selectedModelId} />
           </AdapterUsageLifecycleProvider>

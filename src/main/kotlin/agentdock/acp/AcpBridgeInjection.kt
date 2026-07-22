@@ -12,7 +12,7 @@ import agentdock.utils.escapeForJsString
  */
 internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
-    val listAdaptersInject = listAdaptersQuery?.inject("") ?: ""
+    val listAdaptersInject = listAdaptersQuery?.inject("(forceRefresh === true ? 'refresh' : '')") ?: ""
     val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
     val cancelPromptInject = cancelPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId })") ?: ""
     val stopAgentInject = stopAgentQuery?.inject("chatId") ?: ""
@@ -23,8 +23,11 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val cancelAgentInstallInject = cancelAgentInstallQuery?.inject("adapterId") ?: ""
     val deleteAgentInject = deleteAgentQuery?.inject("adapterId") ?: ""
     val updateAgentInject = updateAgentQuery?.inject("adapterId") ?: ""
-    val loginAgentInject = loginAgentQuery?.inject("adapterId") ?: ""
+    val loginAgentInject = loginAgentQuery?.inject(
+        "JSON.stringify({ adapterId: adapterId, methodId: methodId })"
+    ) ?: ""
     val logoutAgentInject = logoutAgentQuery?.inject("adapterId") ?: ""
+    val cancelAgentAuthInject = cancelAgentAuthQuery?.inject("adapterId") ?: ""
     val fetchUsageInject = fetchUsageQuery?.inject("adapterId") ?: ""
     val openAgentCliInject = openAgentCliQuery?.inject("adapterId") ?: ""
     val openHistoryConversationCliInject = openHistoryConversationCliQuery?.inject("JSON.stringify(payload)") ?: ""
@@ -47,7 +50,7 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val script = """
         (function() {
             window.__IS_DEV = ${BuildConfig.IS_DEV};
-            window.__requestAdapters = function() {
+            window.__requestAdapters = function(forceRefresh) {
                 try { $listAdaptersInject } catch (e) { }
             };
             window.__startAgent = function(chatId, adapterId, modelId, modeId, requestId, reasoningEffortId) {
@@ -87,11 +90,14 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__updateAgent = function(adapterId) {
                 try { $updateAgentInject } catch (e) { }
             };
-            window.__loginAgent = function(adapterId) {
+            window.__loginAgent = function(adapterId, methodId) {
                 try { $loginAgentInject } catch (e) { }
             };
             window.__logoutAgent = function(adapterId) {
                 try { $logoutAgentInject } catch (e) { }
+            };
+            window.__cancelAgentAuth = function(adapterId) {
+                try { $cancelAgentAuthInject } catch (e) { }
             };
             window.__fetchAdapterUsage = function(adapterId) {
                 try { $fetchUsageInject } catch (e) { }
@@ -148,8 +154,9 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
                 try { $saveConversationTranscriptInject } catch (e) { }
             };
 
-            // Try prime
-            try { window.__requestAdapters(); } catch (e) {}
+            var pendingAdapterRefresh = window.__pendingAdapterRefresh === true;
+            window.__pendingAdapterRefresh = false;
+            try { window.__requestAdapters(pendingAdapterRefresh); } catch (e) {}
         })();
     """.trimIndent()
     cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
@@ -170,6 +177,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__onBridgeOperationResult = window.__onBridgeOperationResult || function(payload) {};
         window.__onSessionId = window.__onSessionId || function(chatId, id) {};
         window.__onAdapters = window.__onAdapters || function(adapters) {};
+        window.__onAdapterRefreshState = window.__onAdapterRefreshState || function(refreshing) {};
         window.__onAvailableCommands = window.__onAvailableCommands || function(adapterId, commands) {};
         window.__onMode = window.__onMode || function(chatId, modeId) {};
         window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
@@ -187,13 +195,18 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__notifyReady = function() {
             try { $readyInject } catch (e) { }
         };
+        window.__requestAdapters = window.__requestAdapters || function(forceRefresh) {
+            window.__pendingAdapterRefresh =
+                window.__pendingAdapterRefresh === true || forceRefresh === true;
+        };
         window.__downloadAgent = window.__downloadAgent || function(id) {};
         window.__cancelAgentInstall = window.__cancelAgentInstall || function(id) {};
         window.__deleteAgent = window.__deleteAgent || function(id) {};
         window.__onAdapterDeleted = window.__onAdapterDeleted || function(id) {};
         window.__updateAgent = window.__updateAgent || function(id) {};
-        window.__loginAgent = window.__loginAgent || function(id) {};
+        window.__loginAgent = window.__loginAgent || function(id, methodId) {};
         window.__logoutAgent = window.__logoutAgent || function(id) {};
+        window.__cancelAgentAuth = window.__cancelAgentAuth || function(id) {};
         window.__fetchAdapterUsage = window.__fetchAdapterUsage || function(id) {};
         window.__openAgentCli = window.__openAgentCli || function(id) {};
         window.__openHistoryConversationCli = window.__openHistoryConversationCli || function(payload) {};

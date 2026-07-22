@@ -5,6 +5,9 @@
   "iconPathLight": "/icons/cursor-light.svg",
   "iconPathDark": "/icons/cursor-dark.svg",
   "supportsSessionList": true,
+  "loginMethod": "acp",
+  "logoutMethod": "cli",
+  "loginStatusMethod": "cursorCliStatus",
   "distribution": {
     "type": "archive",
     "version": "latest",
@@ -26,20 +29,6 @@
     "resumeArgs": [
       "--resume",
       "{sessionId}"
-    ]
-  },
-  "authConfig": {
-    "statusMethod": "cliAuthStatus",
-    "loginMethod": "cliLogin",
-    "logoutMethod": "cliLogout",
-    "statusArgs": [
-      "about"
-    ],
-    "loginArgs": [
-      "login"
-    ],
-    "logoutArgs": [
-      "logout"
     ]
   },
   "disabledModels": [

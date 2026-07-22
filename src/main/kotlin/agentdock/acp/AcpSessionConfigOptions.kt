@@ -25,6 +25,10 @@ private data class ConfigSelectOption(
     val description: String?
 )
 
+internal fun configProbeSessionKey(adapterName: String, sessionId: String): String {
+    return "$adapterName\u0000$sessionId"
+}
+
 internal fun runtimeMetadataFromConfigOptionsJson(
     configOptions: JsonElement?,
     adapterInfo: AcpAdapterConfig.AdapterInfo
@@ -72,17 +76,17 @@ internal fun runtimeMetadataFromConfigOptionsJson(
 
     return AcpClientService.AdapterRuntimeMetadata(
         currentModelId = configCurrentModelId?.takeIf { current ->
-            filteredModels.isEmpty() || filteredModels.any { it.modelId == current }
+            filteredModels.any { it.modelId == current }
         },
         availableModels = filteredModels,
         modelConfigId = modelConfig?.configId,
         currentModeId = modeConfig?.currentValue?.takeIf { current ->
-            filteredModes.isEmpty() || filteredModes.any { it.id == current }
+            filteredModes.any { it.id == current }
         },
         availableModes = filteredModes,
         modeConfigId = modeConfig?.configId,
         currentReasoningEffortId = reasoningConfig?.currentValue?.takeIf { current ->
-            configReasoningEfforts.isEmpty() || configReasoningEfforts.any { it.id == current }
+            configReasoningEfforts.any { it.id == current }
         },
         availableReasoningEfforts = configReasoningEfforts,
         reasoningEffortConfigId = reasoningEffortConfigId
@@ -93,65 +97,16 @@ internal fun runtimeMetadataFromSessionResponseJson(
     response: JsonObject,
     adapterInfo: AcpAdapterConfig.AdapterInfo
 ): AcpClientService.AdapterRuntimeMetadata {
-    val configMetadata = runtimeMetadataFromConfigOptionsJson(response["configOptions"], adapterInfo)
-    if (
-        configMetadata.availableModels.isNotEmpty() ||
-        configMetadata.availableModes.isNotEmpty() ||
-        configMetadata.availableReasoningEfforts.isNotEmpty() ||
-        configMetadata.modelConfigId != null ||
-        configMetadata.modeConfigId != null ||
-        configMetadata.reasoningEffortConfigId != null
-    ) {
-        return configMetadata
-    }
+    return runtimeMetadataFromConfigOptionsJson(response["configOptions"], adapterInfo)
+}
 
-    val modelState = response["models"] as? JsonObject
-    val modeState = response["modes"] as? JsonObject
-    val models = ((modelState?.get("availableModels") as? JsonArray) ?: JsonArray(emptyList()))
-        .mapNotNull { modelElement ->
-            val model = modelElement as? JsonObject ?: return@mapNotNull null
-            val modelId = model["modelId"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-            if (modelId.isEmpty()) return@mapNotNull null
-            AcpAdapterConfig.ModelInfo(
-                modelId = modelId,
-                name = model["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: modelId,
-                description = model["description"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
-            )
-        }
-        .filterNot { model ->
-            adapterInfo.disabledModels.any { disabled -> disabled.isNotBlank() && model.modelId.contains(disabled) }
-        }
-    val modes = ((modeState?.get("availableModes") as? JsonArray) ?: JsonArray(emptyList()))
-        .mapNotNull { modeElement ->
-            val mode = modeElement as? JsonObject ?: return@mapNotNull null
-            val modeId = mode["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-            if (modeId.isEmpty()) return@mapNotNull null
-            AcpAdapterConfig.ModeInfo(
-                id = modeId,
-                name = mode["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: modeId,
-                description = mode["description"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
-            )
-        }
-        .filterNot { mode ->
-            adapterInfo.disabledModes.any { disabled -> disabled == mode.id }
-        }
-
-    val currentModelId = modelState?.get("currentModelId")?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { current ->
-        current.isNotEmpty() && (models.isEmpty() || models.any { it.modelId == current })
-    }
-    return AcpClientService.AdapterRuntimeMetadata(
-        currentModelId = currentModelId,
-        availableModels = models,
-        modelConfigId = null,
-        currentModeId = modeState?.get("currentModeId")?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { current ->
-            current.isNotEmpty() && (modes.isEmpty() || modes.any { it.id == current })
-        },
-        availableModes = modes,
-        modeConfigId = null,
-        currentReasoningEffortId = null,
-        availableReasoningEfforts = emptyList(),
-        reasoningEffortConfigId = null
-    )
+internal fun runtimeMetadataFromSetConfigOptionResponseJson(
+    response: JsonObject,
+    adapterInfo: AcpAdapterConfig.AdapterInfo
+): AcpClientService.AdapterRuntimeMetadata {
+    val configOptions = response["configOptions"] as? JsonArray
+        ?: throw IllegalStateException("ACP session/set_config_option response did not include configOptions")
+    return runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
 }
 
 internal suspend fun Protocol.newSessionRaw(cwd: String): JsonObject {
@@ -190,38 +145,26 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
     val collectedModels = mutableListOf<CachedModelConfigOptions>()
     var modeConfigId = initialMetadata.modeConfigId ?: existingCache?.modeConfigId
     var reasoningEffortConfigId = initialMetadata.reasoningEffortConfigId ?: existingCache?.reasoningEffortConfigId
-    var currentModelId = initialMetadata.currentModelId
-    var currentModeId = initialMetadata.currentModeId ?: existingCache?.currentModeId
-    var currentReasoningEffortId = initialMetadata.currentReasoningEffortId ?: existingCache?.currentReasoningEffortId
+    val currentModelId = initialMetadata.currentModelId
+    val currentModeId = initialMetadata.currentModeId
+    val currentReasoningEffortId = initialMetadata.currentReasoningEffortId
 
     val models = initialMetadata.availableModels
     val modelConfigId = initialMetadata.modelConfigId ?: existingCache?.modelConfigId
-    if (models.isEmpty()) {
-        currentModelId.orEmpty().takeIf { it.isNotBlank() }?.let { modelId ->
-            val cachedModel = cachedModels[modelId]
-            collectedModels += CachedModelConfigOptions(
-                modelId = modelId,
-                name = cachedModel?.name ?: modelId,
-                description = cachedModel?.description,
-                modes = cachedModel?.modes ?: initialMetadata.availableModes,
-                efforts = cachedModel?.efforts ?: initialMetadata.availableReasoningEfforts
-            )
-        }
-    } else {
+    if (models.isNotEmpty()) {
         models.forEach { model ->
             val cachedModel = cachedModels[model.modelId]
+            val isCurrentModel = model.modelId == initialMetadata.currentModelId
+            var loadedFreshMetadata = false
 
-            val metadata = if (cachedModel != null) {
+            val metadata = if (isCurrentModel) {
+                initialMetadata
+            } else if (cachedModel?.configOptionsLoaded == true) {
                 emptyRuntimeMetadata()
             } else if (!modelConfigId.isNullOrBlank()) {
-                runCatching {
-                    val response = setSessionConfigOptionRaw(sessionId, modelConfigId, model.modelId)
-                    runtimeMetadataFromConfigOptionsJson(response["configOptions"], adapterInfo)
-                }.getOrElse {
-                    if (model.modelId == initialMetadata.currentModelId) initialMetadata else emptyRuntimeMetadata()
-                }
-            } else if (model.modelId == initialMetadata.currentModelId) {
-                initialMetadata
+                loadedFreshMetadata = true
+                val response = setSessionConfigOptionRaw(sessionId, modelConfigId, model.modelId)
+                runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
             } else {
                 emptyRuntimeMetadata()
             }
@@ -230,16 +173,16 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
                 modelId = model.modelId,
                 name = model.name,
                 description = model.description,
-                modes = cachedModel?.modes ?: metadata.availableModes,
-                efforts = cachedModel?.efforts ?: metadata.availableReasoningEfforts
+                modes = if (isCurrentModel || loadedFreshMetadata) metadata.availableModes else cachedModel?.modes.orEmpty(),
+                efforts = if (isCurrentModel || loadedFreshMetadata) {
+                    metadata.availableReasoningEfforts
+                } else {
+                    cachedModel?.efforts.orEmpty()
+                },
+                configOptionsLoaded = isCurrentModel || loadedFreshMetadata || cachedModel?.configOptionsLoaded == true
             )
             modeConfigId = modeConfigId ?: metadata.modeConfigId
             reasoningEffortConfigId = reasoningEffortConfigId ?: metadata.reasoningEffortConfigId
-            if (model.modelId == initialMetadata.currentModelId) {
-                currentModelId = metadata.currentModelId ?: currentModelId
-                currentModeId = metadata.currentModeId ?: currentModeId
-                currentReasoningEffortId = metadata.currentReasoningEffortId ?: currentReasoningEffortId
-            }
         }
     }
 
@@ -253,6 +196,8 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
         modelConfigId = modelConfigId,
         modeConfigId = modeConfigId,
         reasoningEffortConfigId = reasoningEffortConfigId,
+        modes = initialMetadata.availableModes,
+        efforts = initialMetadata.availableReasoningEfforts,
         models = collectedModels
     )
 }
@@ -264,7 +209,7 @@ internal fun extractConfigOptionsUpdate(params: JsonElement?): Pair<String, Json
     val updateObject = paramsObject["update"] as? JsonObject ?: return null
     val updateType = updateObject["sessionUpdate"]?.jsonPrimitive?.contentOrNull ?: return null
     if (updateType != "config_option_update") return null
-    val configOptions = updateObject["configOptions"] ?: return null
+    val configOptions = updateObject["configOptions"] as? JsonArray ?: return null
     return sessionId to configOptions
 }
 
@@ -279,13 +224,14 @@ private fun selectConfigOption(options: JsonArray, category: String): ConfigSele
         .firstNotNullOfOrNull { option ->
             val id = option["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
             val optionCategory = option["category"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            if (id.isEmpty()) return@firstNotNullOfOrNull null
             if (id != category && optionCategory != category) return@firstNotNullOfOrNull null
             val type = option["type"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-            if (type.isNotEmpty() && type != "select") return@firstNotNullOfOrNull null
+            if (type != "select") return@firstNotNullOfOrNull null
             val choices = flattenSelectOptions(option["options"])
             if (choices.isEmpty()) return@firstNotNullOfOrNull null
             ConfigSelection(
-                configId = id.ifEmpty { category },
+                configId = id,
                 currentValue = option["currentValue"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() },
                 options = choices
             )

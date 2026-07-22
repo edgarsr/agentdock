@@ -6,7 +6,6 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.PermissionOption
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
@@ -31,7 +30,10 @@ import agentdock.acp.ensureSharedProcessStarted
 import agentdock.acp.processKey
 import agentdock.acp.resolveModelToApply
 import agentdock.acp.resolveSessionCwd
+import agentdock.acp.runtimeMetadataFromSetConfigOptionResponseJson
 import agentdock.acp.serializeContentBlock
+import agentdock.acp.setSessionConfigOptionRaw
+import agentdock.acp.storeFreshAdapterRuntimeMetadata
 import agentdock.history.AgentDockHistoryService
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
@@ -105,7 +107,20 @@ internal class GitCommitAcpExecutor(
             AgentDockHistoryService.registerEphemeralSession(project.basePath, adapterInfo.id, ephemeralSessionId)
 
             if (!selectedModelId.isNullOrBlank()) {
-                runCatching { session.setModel(ModelId(selectedModelId)) }
+                val configId = runtimeMetadata?.modelConfigId
+                if (configId == null) {
+                    if (selectedModelId != runtimeMetadata?.currentModelId) {
+                        error("ACP adapter '${adapterInfo.id}' does not provide a model config option")
+                    }
+                } else {
+                    val protocol = sharedProcess.protocol
+                        ?: error("ACP protocol is not initialized for ${adapterInfo.id}")
+                    val response = protocol.setSessionConfigOptionRaw(session.sessionId.value, configId, selectedModelId)
+                    acpService.storeFreshAdapterRuntimeMetadata(
+                        adapterInfo,
+                        runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
+                    )
+                }
             }
 
             val responseText = StringBuilder()

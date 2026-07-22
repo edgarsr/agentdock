@@ -129,28 +129,6 @@ internal fun downloadArchiveDistributionLocal(
             ensureExtractedFilesExecutable(targetDir)
         }
         tempFile.delete()
-        val authNpmPackage = adapterInfo.authConfig?.authNpmPackage
-        if (!authNpmPackage.isNullOrBlank()) {
-            cancellation?.throwIfCancelled()
-            statusCallback?.invoke("Installing auth tools...")
-            val nodeRuntime = AcpNodeRuntimeResolver.resolveOrInstall(statusCallback, cancellation)
-            if (nodeRuntime == null) {
-                statusCallback?.invoke("Error: Node.js is required")
-                return false
-            }
-            val builder = ProcessBuilder(nodeRuntime.npm, "install", "--prefix", targetDir.absolutePath, "$authNpmPackage@latest")
-                .directory(targetDir)
-            AcpNodeRuntimeResolver.applyTo(builder, nodeRuntime)
-            val authInstallExitCode = runArchiveCommand(
-                builder,
-                statusCallback,
-                cancellation
-            )
-            if (authInstallExitCode != 0) {
-                statusCallback?.invoke("Error: Auth tools installation failed")
-                return false
-            }
-        }
         statusCallback?.invoke("${adapterInfo.name} installed successfully.")
         true
     } catch (e: CancellationException) {

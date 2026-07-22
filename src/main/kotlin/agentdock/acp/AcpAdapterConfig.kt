@@ -29,21 +29,8 @@ object AcpAdapterConfig {
     @Serializable
     data class AgentVersionConfig(
         val args: List<String>,
-        val pattern: String? = null
-    )
-
-    @Serializable
-    data class AuthConfig(
-        val authScript: String? = null,
-        val statusMethod: String? = null,
-        val loginMethod: String? = null,
-        val logoutMethod: String? = null,
-        val authMethodId: String? = null,
-        val command: List<String> = emptyList(),
-        val authNpmPackage: String? = null,
-        val statusArgs: List<String> = emptyList(),
-        val loginArgs: List<String> = emptyList(),
-        val logoutArgs: List<String> = emptyList()
+        val pattern: String? = null,
+        val command: String = "adapter"
     )
 
     @Serializable
@@ -108,7 +95,11 @@ object AcpAdapterConfig {
         val disabledModes: List<String> = emptyList(),
         val args: List<String> = emptyList(),
         val patches: List<String> = emptyList(),
-        val authConfig: AuthConfig? = null,
+        val loginMethod: String? = null,
+        val logoutMethod: String? = null,
+        val loginStatusMethod: String? = null,
+        val loginArgs: List<String> = listOf("login"),
+        val logoutArgs: List<String> = listOf("logout"),
         val agentVersionConfig: AgentVersionConfig? = null,
         val cli: CliConfig? = null,
         /**

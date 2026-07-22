@@ -108,6 +108,12 @@ export interface AvailableCommand {
   inputHint?: string | null;
 }
 
+export interface AgentAuthMethod {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface AgentOption {
   id: string;
   name: string;
@@ -127,13 +133,13 @@ export interface AgentOption {
   downloading?: boolean;
   downloadStatus?: string;
   disabledModels?: string[];
-  hasAuthentication?: boolean;
-  authAuthenticated?: boolean;
-  authKnown?: boolean;
-  authLoading?: boolean;
+  loginMethod?: string | null;
+  authMethods?: AgentAuthMethod[];
   authError?: string;
   authenticating?: boolean;
-  loginAvailable?: boolean;
+  authenticatingMethodId?: string;
+  loginStatusSupported?: boolean;
+  loggedIn?: boolean | null;
   logoutAvailable?: boolean;
   initializing?: boolean;
   initializationDetail?: string;
@@ -490,7 +496,7 @@ declare global {
       modeId?: string,
       reasoningEffortId?: string
     ) => void;
-    __requestAdapters?: () => void;
+    __requestAdapters?: (forceRefresh?: boolean) => void;
     __notifyReady?: () => void;
     __respondPermission?: (requestId: string, decision: string) => void;
     __cancelPrompt?: (conversationId: string, requestId?: string) => void;
@@ -505,8 +511,9 @@ declare global {
     __renameHistoryConversation?: (payload: { projectPath: string; conversationId: string; newTitle: string }) => void;
     __loadHistoryConversation?: (conversationId: string, projectPath: string, historyConversationId: string) => void;
     __recoverRuntime?: (reason?: string, requestId?: string) => void;
-    __loginAgent?: (adapterId: string) => void;
+    __loginAgent?: (adapterId: string, methodId: string) => void;
     __logoutAgent?: (adapterId: string) => void;
+    __cancelAgentAuth?: (adapterId: string) => void;
     __fetchAdapterUsage?: (adapterId: string) => void;
     __openAgentCli?: (adapterId: string) => void;
     __openHistoryConversationCli?: (payload: { projectPath: string; conversationId: string }) => void;
@@ -532,6 +539,7 @@ declare global {
     __onStatus?: (chatId: string, status: string) => void;
     __onSessionId?: (chatId: string, id: string) => void;
     __onAdapters?: (adapters: AgentOption[]) => void;
+    __onAdapterRefreshState?: (refreshing: boolean) => void;
     __onAvailableCommands?: (adapterId: string, commands: AvailableCommand[]) => void;
     __onMode?: (chatId: string, modeId: string) => void;
     __onPermissionRequest?: (request: PermissionRequest) => void;

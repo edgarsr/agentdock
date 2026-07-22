@@ -4,18 +4,11 @@ import com.agentclientprotocol.client.ClientOperationsFactory
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
-import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.SessionId
-import com.agentclientprotocol.model.SessionModeId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import agentdock.history.SessionMeta
-
-// Max time to wait for the agent process to start and respond to ACP initialize.
-// The retry loop in initializeSharedProcessAtStartup can take up to this long for slow agents.
-private const val PROCESS_STARTUP_TIMEOUT_MS = 300_000L
 
 internal fun AcpClientService.processKey(adapterName: String): String {
     return adapterName
@@ -97,9 +90,7 @@ internal suspend fun AcpClientService.startAgent(
                 }
                 context.sharedProcess = sharedProc
 
-                withTimeout(PROCESS_STARTUP_TIMEOUT_MS) {
-                    ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
-                }
+                ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
                 ensureAsyncSessionUpdates(sharedProc)
 
                 val runtimeMetadata = adapterRuntimeMetadataMap[requestedAdapterName]
@@ -130,11 +121,10 @@ internal suspend fun AcpClientService.startAgent(
                 }
 
                 applyRequestedSessionPreferences(
-                    session = session,
                     adapterName = requestedAdapterName,
                     preferredModelId = preferredModelId ?: savedPreference?.modelId,
                     preferredModeId = preferredModeId ?: savedPreference?.modeId,
-                    preferredReasoningEffortId = preferredReasoningEffortId,
+                    preferredReasoningEffortId = preferredReasoningEffortId ?: savedPreference?.reasoningEffortId,
                     runtimeMetadata = runtimeMetadata,
                     context = context
                 )
@@ -162,34 +152,16 @@ private suspend fun AcpClientService.applyReadySessionModelPreference(
         return true
     }
 
-    val session = context.session ?: return false
-    val applied = runCatching {
-        val configId = adapterRuntimeMetadataMap[adapterName]?.modelConfigId
-        val protocol = context.sharedProcess?.protocol
-        val sessionId = context.sessionIdRef.get()
-        if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-            val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
-            updateMetadataFromConfigOptionResponse(adapterName, response, context)
-        } else {
-            session.setModel(ModelId(selectedModelId))
-            context.activeModelIdRef.set(selectedModelId)
-            adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-                adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = selectedModelId)
-            }
-        }
-        AcpAgentPreferencesStore.rememberModel(adapterName, selectedModelId)
-        true
-    }.getOrDefault(false)
-    if (applied) return true
-
-    if (!session.modelsSupported) return false
+    if (context.session == null) return false
+    val metadata = adapterRuntimeMetadataMap[adapterName] ?: return false
+    if (metadata.availableModels.none { it.modelId == selectedModelId }) return false
+    val configId = metadata.modelConfigId?.takeIf { it.isNotBlank() } ?: return false
+    val protocol = context.sharedProcess?.protocol ?: return false
+    val sessionId = context.sessionIdRef.get()?.takeIf { it.isNotBlank() } ?: return false
     return runCatching {
-        session.setModel(ModelId(selectedModelId))
-        context.activeModelIdRef.set(selectedModelId)
-        AcpAgentPreferencesStore.rememberModel(adapterName, selectedModelId)
-        adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-            adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModelId = selectedModelId)
-        }
+        val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
+        updateMetadataFromConfigOptionResponse(adapterName, response, context)
+        context.activeModelIdRef.get()?.let { AcpAgentPreferencesStore.rememberModel(adapterName, it) }
         true
     }.getOrDefault(false)
 }
@@ -206,34 +178,17 @@ private suspend fun AcpClientService.applyReadySessionModePreference(
         return true
     }
 
-    val session = context.session ?: return false
-    val applied = runCatching {
-        val configId = adapterRuntimeMetadataMap[adapterName]?.modeConfigId
-        val protocol = context.sharedProcess?.protocol
-        val sessionId = context.sessionIdRef.get()
-        if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-            val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModeId)
-            updateMetadataFromConfigOptionResponse(adapterName, response, context)
-        } else {
-            session.setMode(SessionModeId(selectedModeId))
-            context.activeModeIdRef.set(selectedModeId)
-            adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-                adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = selectedModeId)
-            }
-        }
-        AcpAgentPreferencesStore.rememberMode(adapterName, selectedModeId)
-        true
-    }.getOrDefault(false)
-    if (applied) return true
-
-    if (!session.modesSupported) return false
+    if (context.session == null) return false
+    val metadata = adapterRuntimeMetadataMap[adapterName] ?: return false
+    val activeModelId = context.activeModelIdRef.get() ?: metadata.currentModelId
+    if (metadata.modesForModel(activeModelId).none { it.id == selectedModeId }) return false
+    val configId = metadata.modeConfigId?.takeIf { it.isNotBlank() } ?: return false
+    val protocol = context.sharedProcess?.protocol ?: return false
+    val sessionId = context.sessionIdRef.get()?.takeIf { it.isNotBlank() } ?: return false
     return runCatching {
-        session.setMode(SessionModeId(selectedModeId))
-        context.activeModeIdRef.set(selectedModeId)
-        AcpAgentPreferencesStore.rememberMode(adapterName, selectedModeId)
-        adapterRuntimeMetadataMap[adapterName]?.let { metadata ->
-            adapterRuntimeMetadataMap[adapterName] = metadata.copy(currentModeId = selectedModeId)
-        }
+        val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModeId)
+        updateMetadataFromConfigOptionResponse(adapterName, response, context)
+        context.activeModeIdRef.get()?.let { AcpAgentPreferencesStore.rememberMode(adapterName, it) }
         true
     }.getOrDefault(false)
 }
@@ -252,16 +207,17 @@ private suspend fun AcpClientService.applyReadySessionReasoningEffortPreference(
     val metadata = adapterRuntimeMetadataMap[adapterName] ?: return false
     val activeModelId = context.activeModelIdRef.get() ?: metadata.currentModelId
     val availableReasoningEfforts = metadata.reasoningEffortsForModel(activeModelId)
-    val configId = metadata.reasoningEffortConfigId ?: return false
+    val configId = metadata.reasoningEffortConfigId?.takeIf { it.isNotBlank() } ?: return false
     if (availableReasoningEfforts.none { it.id == selectedReasoningEffortId }) return false
     val protocol = context.sharedProcess?.protocol ?: return false
     val sessionId = context.sessionIdRef.get()?.takeIf { it.isNotBlank() } ?: return false
 
     return runCatching {
         val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedReasoningEffortId)
-        AcpAgentPreferencesStore.rememberReasoningEffort(adapterName, selectedReasoningEffortId)
         updateMetadataFromConfigOptionResponse(adapterName, response, context)
-        context.activeReasoningEffortIdRef.set(selectedReasoningEffortId)
+        context.activeReasoningEffortIdRef.get()?.let {
+            AcpAgentPreferencesStore.rememberReasoningEffort(adapterName, it)
+        }
         true
     }.getOrDefault(false)
 }
@@ -380,9 +336,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
     }
     context.sharedProcess = sharedProc
 
-    withTimeout(PROCESS_STARTUP_TIMEOUT_MS) {
-        ensureSharedProcessStarted(sharedProc, adapterInfo)
-    }
+    ensureSharedProcessStarted(sharedProc, adapterInfo)
     ensureAsyncSessionUpdates(sharedProc)
     context.sessionIdRef.set(sessionId)
 
@@ -423,28 +377,13 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
         context.activeAdapterNameRef.set(requestedAdapterName)
 
         val runtimeMetadata = adapterRuntimeMetadataMap[requestedAdapterName]
-        if (
-            runtimeMetadata?.modelConfigId != null ||
-            runtimeMetadata?.modeConfigId != null ||
-            runtimeMetadata?.reasoningEffortConfigId != null
-        ) {
-            context.activeModelIdRef.set(preferredModelId?.trim()?.takeIf { it.isNotEmpty() } ?: runtimeMetadata.currentModelId)
-            context.activeModeIdRef.set(preferredModeId?.trim()?.takeIf { it.isNotEmpty() } ?: runtimeMetadata.currentModeId)
-            context.activeReasoningEffortIdRef.set(runtimeMetadata.currentReasoningEffortId)
-        } else {
-            @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
-            if (session.modesSupported) {
-                context.activeModeIdRef.set(session.currentMode.value.value)
-            } else if (!preferredModeId.isNullOrBlank()) {
-                context.activeModeIdRef.set(preferredModeId.trim())
-            }
-            @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
-            if (session.modelsSupported) {
-                context.activeModelIdRef.set(session.currentModel.value.value)
-            } else if (!preferredModelId.isNullOrBlank()) {
-                context.activeModelIdRef.set(preferredModelId.trim())
-            }
-        }
+        context.activeModelIdRef.set(
+            preferredModelId?.trim()?.takeIf { it.isNotEmpty() } ?: runtimeMetadata?.currentModelId
+        )
+        context.activeModeIdRef.set(
+            preferredModeId?.trim()?.takeIf { it.isNotEmpty() } ?: runtimeMetadata?.currentModeId
+        )
+        context.activeReasoningEffortIdRef.set(runtimeMetadata?.currentReasoningEffortId)
     } else {
         context.session = null
     }
@@ -474,7 +413,6 @@ private suspend fun AcpClientService.createOrResumeSession(
 
 @Suppress("OPT_IN_USAGE")
 private suspend fun AcpClientService.applyRequestedSessionPreferences(
-    session: com.agentclientprotocol.client.ClientSession,
     adapterName: String,
     preferredModelId: String?,
     preferredModeId: String?,
@@ -492,25 +430,13 @@ private suspend fun AcpClientService.applyRequestedSessionPreferences(
             val configId = runtimeMetadata?.modelConfigId
             val protocol = context.sharedProcess?.protocol
             val sessionId = context.sessionIdRef.get()
-            if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-                val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
-                updateMetadataFromConfigOptionResponse(adapterName, response, context)
-            } else {
-                session.setModel(ModelId(selectedModelId))
-            }
-            context.activeModelIdRef.set(selectedModelId)
-            AcpAgentPreferencesStore.rememberModel(adapterName, selectedModelId)
+            if (configId.isNullOrBlank() || protocol == null || sessionId.isNullOrBlank()) return@runCatching false
+            val response = protocol.setSessionConfigOptionRaw(sessionId, configId, selectedModelId)
+            updateMetadataFromConfigOptionResponse(adapterName, response, context)
+            context.activeModelIdRef.get()?.let { AcpAgentPreferencesStore.rememberModel(adapterName, it) }
             true
         }.getOrElse { false }
-        if (!applied && session.modelsSupported) {
-            runCatching {
-                session.setModel(ModelId(selectedModelId))
-                context.activeModelIdRef.set(selectedModelId)
-                AcpAgentPreferencesStore.rememberModel(adapterName, selectedModelId)
-            }.onFailure {
-                context.activeModelIdRef.set(runtimeMetadata?.currentModelId)
-            }
-        } else if (!applied) {
+        if (!applied) {
             context.activeModelIdRef.set(runtimeMetadata?.currentModelId)
         }
     }
@@ -524,25 +450,13 @@ private suspend fun AcpClientService.applyRequestedSessionPreferences(
             val configId = modeRuntimeMetadata?.modeConfigId
             val protocol = context.sharedProcess?.protocol
             val sessionId = context.sessionIdRef.get()
-            if (!configId.isNullOrBlank() && protocol != null && !sessionId.isNullOrBlank()) {
-                val response = protocol.setSessionConfigOptionRaw(sessionId, configId, currentModeId)
-                updateMetadataFromConfigOptionResponse(adapterName, response, context)
-            } else {
-                session.setMode(SessionModeId(currentModeId))
-            }
-            context.activeModeIdRef.set(currentModeId)
-            AcpAgentPreferencesStore.rememberMode(adapterName, currentModeId)
+            if (configId.isNullOrBlank() || protocol == null || sessionId.isNullOrBlank()) return@runCatching false
+            val response = protocol.setSessionConfigOptionRaw(sessionId, configId, currentModeId)
+            updateMetadataFromConfigOptionResponse(adapterName, response, context)
+            context.activeModeIdRef.get()?.let { AcpAgentPreferencesStore.rememberMode(adapterName, it) }
             true
         }.getOrElse { false }
-        if (!applied && session.modesSupported) {
-            runCatching {
-                session.setMode(SessionModeId(currentModeId))
-                context.activeModeIdRef.set(currentModeId)
-                AcpAgentPreferencesStore.rememberMode(adapterName, currentModeId)
-            }.onFailure {
-                context.activeModeIdRef.set(modeRuntimeMetadata?.currentModeId)
-            }
-        } else if (!applied) {
+        if (!applied) {
             context.activeModeIdRef.set(modeRuntimeMetadata?.currentModeId)
         }
     }
@@ -559,9 +473,10 @@ private suspend fun AcpClientService.applyRequestedSessionPreferences(
             val sessionId = context.sessionIdRef.get()
             if (configId.isNullOrBlank() || protocol == null || sessionId.isNullOrBlank()) return@runCatching false
             val response = protocol.setSessionConfigOptionRaw(sessionId, configId, requestedReasoningEffortId)
-            AcpAgentPreferencesStore.rememberReasoningEffort(adapterName, requestedReasoningEffortId)
             updateMetadataFromConfigOptionResponse(adapterName, response, context)
-            context.activeReasoningEffortIdRef.set(requestedReasoningEffortId)
+            context.activeReasoningEffortIdRef.get()?.let {
+                AcpAgentPreferencesStore.rememberReasoningEffort(adapterName, it)
+            }
             true
         }.getOrElse { false }
         if (!applied) {

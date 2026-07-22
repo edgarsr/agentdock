@@ -9,6 +9,45 @@ import kotlin.test.assertTrue
 
 class AcpPlatformCompatibilityTest {
     @Test
+    fun `Claude Code uses its CLI login status method`() {
+        val adapter = AcpAdapterConfig.getAdapterInfo("claude-code")
+
+        assertEquals("claudeCodeCliAuthStatus", adapter.loginStatusMethod)
+    }
+
+    @Test
+    fun `Claude Code login status parser reads logged in state`() {
+        assertEquals(false, parseClaudeCodeLoginStatus("""{"loggedIn":false,"authMethod":"none"}"""))
+        assertEquals(true, parseClaudeCodeLoginStatus("""{"loggedIn":true,"authMethod":"claude.ai"}"""))
+        assertEquals(null, parseClaudeCodeLoginStatus("""{"authMethod":"none"}"""))
+    }
+
+    @Test
+    fun `Codex uses its CLI login status method`() {
+        val adapter = AcpAdapterConfig.getAdapterInfo("codex")
+
+        assertEquals("codexCliLoginStatus", adapter.loginStatusMethod)
+        assertEquals("cli", adapter.agentVersionConfig?.command)
+    }
+
+    @Test
+    fun `Codex login status parser reads CLI output`() {
+        assertEquals(false, parseCodexLoginStatus("Not logged in"))
+        assertEquals(true, parseCodexLoginStatus("Logged in using ChatGPT"))
+        assertEquals(null, parseCodexLoginStatus("Unable to read login status"))
+    }
+
+    @Test
+    fun `Cursor uses ACP login and CLI logout`() {
+        val adapter = AcpAdapterConfig.getAdapterInfo("cursor-cli")
+
+        assertEquals("acp", adapter.loginMethod)
+        assertEquals("cli", adapter.logoutMethod)
+        assertEquals(listOf("logout"), adapter.logoutArgs)
+        assertEquals("cursorCliStatus", adapter.loginStatusMethod)
+    }
+
+    @Test
     fun `Kimi Code adapter uses the npm ACP command`() = withOsName("Windows 11") {
         val adapter = AcpAdapterConfig.getAdapterInfo("kimi-code")
 
@@ -32,15 +71,28 @@ class AcpPlatformCompatibilityTest {
         assertEquals(listOf("--no-auto-update", "agent", "stdio"), adapter.args)
         assertEquals("grokCliSessions", adapter.sessionListMethod)
         assertEquals("grokCliSessionDelete", adapter.sessionDeleteMethod)
-        assertEquals("grokAuthStatus", adapter.authConfig?.statusMethod)
-        assertEquals("acpAuthenticateLogin", adapter.authConfig?.loginMethod)
-        assertEquals("cliLogout", adapter.authConfig?.logoutMethod)
-        assertEquals("grok.com", adapter.authConfig?.authMethodId)
-        assertEquals(listOf("logout"), adapter.authConfig?.logoutArgs)
+        assertEquals("acp", adapter.loginMethod)
+        assertEquals("cli", adapter.logoutMethod)
+        assertEquals(listOf("logout"), adapter.logoutArgs)
+        assertEquals("grokBuildAuthFile", adapter.loginStatusMethod)
         assertEquals(
             listOf("cmd.exe", "/c", File("C:/agent/node_modules/.bin/grok.cmd").absolutePath) + adapter.args,
             buildAdapterLaunchCommand("C:/agent", adapter, "C:/project", AcpExecutionTarget.LOCAL)
         )
+    }
+
+    @Test
+    fun `Grok Build login status parser checks for an auth key`() {
+        assertEquals(
+            true,
+            parseGrokBuildLoginStatus("""{"https://auth.x.ai:account":{"key":"token","auth_mode":"oidc"}}""")
+        )
+        assertEquals(
+            false,
+            parseGrokBuildLoginStatus("""{"https://auth.x.ai:account":{"auth_mode":"oidc"}}""")
+        )
+        assertEquals(false, parseGrokBuildLoginStatus("{}"))
+        assertEquals(null, parseGrokBuildLoginStatus("not json"))
     }
 
     @Test

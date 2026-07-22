@@ -20,32 +20,29 @@ data class AcpAgentPreferencesState(
 )
 
 object AcpAgentPreferencesStore {
+    private data class StoredState(
+        val state: AcpAgentPreferencesState,
+        val valid: Boolean
+    )
+
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
         encodeDefaults = true
     }
     private val lock = Any()
+    private var cachedState: StoredState? = null
 
     private fun stateFile(): File = File(AcpAdapterPaths.getBaseRuntimeDir(), "acp-agent-preferences.json")
 
     fun load(): AcpAgentPreferencesState = synchronized(lock) {
-        val file = stateFile()
-        if (!file.isFile) {
-            return@synchronized save(AcpAgentPreferencesState())
-        }
-        val loaded = runCatching {
-            json.decodeFromString<AcpAgentPreferencesState>(file.readText())
-        }.getOrDefault(AcpAgentPreferencesState())
-        save(loaded)
+        readStoredState().state
     }
 
     fun save(state: AcpAgentPreferencesState): AcpAgentPreferencesState = synchronized(lock) {
         val normalized = normalize(state)
-        val file = stateFile()
-        file.parentFile?.mkdirs()
-        file.atomicWriteText(json.encodeToString(normalized))
-        normalized
+        val stored = readStoredState()
+        if (stored.valid && stored.state == normalized) stored.state else writeState(normalized)
     }
 
     fun lastAgentId(): String? = load().lastAgentId.takeIf { it.isNotBlank() }
@@ -104,16 +101,33 @@ object AcpAgentPreferencesStore {
 
     private fun updateState(transform: (AcpAgentPreferencesState) -> AcpAgentPreferencesState): AcpAgentPreferencesState =
         synchronized(lock) {
-            val file = stateFile()
-            val current = if (file.isFile) {
-                runCatching {
-                    json.decodeFromString<AcpAgentPreferencesState>(file.readText())
-                }.getOrDefault(AcpAgentPreferencesState())
-            } else {
-                AcpAgentPreferencesState()
-            }
-            save(transform(current))
+            val stored = readStoredState()
+            val updated = normalize(transform(stored.state))
+            if (stored.valid && stored.state == updated) stored.state else writeState(updated)
         }
+
+    private fun readStoredState(): StoredState {
+        cachedState?.let { return it }
+        val file = stateFile()
+        if (!file.isFile) {
+            return StoredState(AcpAgentPreferencesState(), valid = false).also { cachedState = it }
+        }
+        return runCatching {
+            StoredState(
+                state = normalize(json.decodeFromString<AcpAgentPreferencesState>(file.readText())),
+                valid = true
+            )
+        }.getOrDefault(StoredState(AcpAgentPreferencesState(), valid = false))
+            .also { cachedState = it }
+    }
+
+    private fun writeState(state: AcpAgentPreferencesState): AcpAgentPreferencesState {
+        val file = stateFile()
+        file.parentFile?.mkdirs()
+        file.atomicWriteText(json.encodeToString(state))
+        cachedState = StoredState(state, valid = true)
+        return state
+    }
 
     private fun normalize(state: AcpAgentPreferencesState): AcpAgentPreferencesState {
         val normalizedAgents = state.agents.entries.mapNotNull { (adapterId, pref) ->

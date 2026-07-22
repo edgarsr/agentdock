@@ -10,18 +10,15 @@ import { CursorUsage } from './usage/CursorUsage';
 import { QoderUsage } from './usage/QoderUsage';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import { MenuButton } from './ui/MenuButton';
 import { SplitButton } from './ui/SplitButton';
-import { resetAdapterUsageCaches, useAdapterUsage } from '../hooks/useAdapterUsage';
+import { AdapterUsageLifecycleProvider } from '../hooks/useAdapterUsage';
 
 function mergeAgentSnapshot(previous: AgentOption | undefined, next: AgentOption): AgentOption {
   if (!previous) return next;
 
   const keepDownloadSnapshot = next.downloadedKnown !== true && previous.downloadedKnown === true;
   const keepReadySnapshot = next.readyKnown !== true && previous.readyKnown === true;
-  const keepAuthSnapshot =
-    next.hasAuthentication === true &&
-    next.authKnown !== true &&
-    previous.authKnown === true;
   const keepUpdateSnapshot =
     (keepDownloadSnapshot || next.updateSupported === true || previous.updateSupported === true) &&
     next.updateKnown !== true &&
@@ -50,8 +47,6 @@ function mergeAgentSnapshot(previous: AgentOption | undefined, next: AgentOption
     agentVersion: keepAgentVersion ? previous.agentVersion : next.agentVersion,
     readyKnown: keepReadySnapshot ? previous.readyKnown : next.readyKnown,
     ready: keepReadySnapshot ? previous.ready : next.ready,
-    authKnown: keepAuthSnapshot ? previous.authKnown : next.authKnown,
-    authAuthenticated: keepAuthSnapshot ? previous.authAuthenticated : next.authAuthenticated,
     updateSupported: keepUpdateSupport ? previous.updateSupported : next.updateSupported,
     latestVersion: keepLatestVersion ? previous.latestVersion : next.latestVersion,
     updateKnown: keepUpdateSnapshot ? previous.updateKnown : next.updateKnown,
@@ -76,10 +71,6 @@ function mergeAgentSnapshots(
 
 let serviceProviderAgentSnapshots: Record<string, AgentOption> = {};
 
-function resetServiceProviderAgentSnapshots() {
-  serviceProviderAgentSnapshots = {};
-}
-
 const linkButtonFocusClassName = [
   'focus:outline-none',
   'focus-visible:rounded-[3px]',
@@ -92,21 +83,10 @@ function UsageSection({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CopilotUsageSection({ refreshKey }: { refreshKey: number }) {
-  const data = useAdapterUsage('github-copilot-cli');
-
-  if (data) {
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed?.quota_snapshots?.premium_interactions?.unlimited === true) return null;
-    } catch {
-      // Let CopilotUsage handle malformed data fallback.
-    }
-  }
-
+function CopilotUsageSection() {
   return (
     <UsageSection>
-      <CopilotUsage key={refreshKey} />
+      <CopilotUsage />
     </UsageSection>
   );
 }
@@ -128,8 +108,8 @@ export function AgentManagementView({
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmUpdateId, setConfirmUpdateId] = useState<string | null>(null);
-  const [authIds, setAuthIds] = useState<Set<string>>(new Set());
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [authActions, setAuthActions] = useState<Map<string, string>>(new Map());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const prevIsActiveRef = useRef(isActive);
   const hasActivatedRef = useRef(false);
 
@@ -139,7 +119,11 @@ export function AgentManagementView({
       const { mergedAgents, nextSnapshots } = mergeAgentSnapshots(serviceProviderAgentSnapshots, safeAdapters);
       serviceProviderAgentSnapshots = nextSnapshots;
       setAgents(mergedAgents);
-      setAuthIds(new Set(mergedAgents.filter(a => a.authenticating).map(a => a.id)));
+      setAuthActions(new Map(
+        mergedAgents
+          .filter(a => a.authenticating)
+          .map(a => [a.id, a.authenticatingMethodId || ''] as const)
+      ));
       setDeletingIds(prev => {
         const next = new Set<string>();
         prev.forEach(id => {
@@ -155,10 +139,16 @@ export function AgentManagementView({
         return next;
       });
     });
+    const disposeRefreshState = ACPBridge.onAdapterRefreshState((e) => {
+      setIsRefreshing(e.detail.refreshing);
+    });
 
     ACPBridge.requestAdapters();
 
-    return dispose;
+    return () => {
+      disposeRefreshState();
+      dispose();
+    };
   }, []);
 
   useEffect(() => {
@@ -169,7 +159,6 @@ export function AgentManagementView({
 
     hasActivatedRef.current = true;
     ACPBridge.requestAdapters();
-    setRefreshKey((k) => k + 1);
   }, [isActive]);
 
   const handleDownload = (id: string) => {
@@ -216,34 +205,44 @@ export function AgentManagementView({
     )));
   };
 
-  const handleAuth = (agent: AgentOption) => {
-    if (authIds.has(agent.id) || agent.authenticating || agent.authLoading) return;
-    setAuthIds(prev => new Set(prev).add(agent.id));
+  const handleLogin = (agent: AgentOption, methodId: string) => {
+    setAuthActions(prev => new Map(prev).set(agent.id, methodId));
+    window.__loginAgent?.(agent.id, methodId);
+  };
 
-    if (agent.authAuthenticated) {
-      window.__logoutAgent?.(agent.id);
-    } else {
-      window.__loginAgent?.(agent.id);
+  const handleLogout = (agent: AgentOption) => {
+    setAuthActions(prev => new Map(prev).set(agent.id, ''));
+    window.__logoutAgent?.(agent.id);
+  };
+
+  const handleCancelAuth = (agent: AgentOption) => {
+    window.__cancelAgentAuth?.(agent.id);
+  };
+
+  const handleCliAuth = (agent: AgentOption) => {
+    if (authActions.has(agent.id) || agent.authenticating) {
+      window.__cancelAgentAuth?.(agent.id);
     }
+    window.__openAgentCli?.(agent.id);
   };
 
   const handleRefresh = () => {
-    resetServiceProviderAgentSnapshots();
-    resetAdapterUsageCaches();
-    setAgents([]);
-    ACPBridge.requestAdapters();
-    setRefreshKey(k => k + 1);
+    setIsRefreshing(true);
+    ACPBridge.requestAdapters(true);
   };
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
+    <AdapterUsageLifecycleProvider value={{ mode: 'provider', enabled: isActive }}>
+      <div className="flex flex-col h-full bg-background text-foreground overflow-hidden">
       <div className="flex items-center justify-end px-3 border-b border-border shrink-0 min-h-12">
         <button
           onClick={handleRefresh}
-          className={`p-1 text-foreground-secondary hover:text-foreground transition-colors ${linkButtonFocusClassName}`}
+          disabled={isRefreshing}
+          className={`p-1 text-foreground-secondary hover:text-foreground disabled:opacity-70 transition-colors ${linkButtonFocusClassName}`}
           title="Refresh"
+          aria-label="Refresh service providers"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto w-full px-2 pb-16">
@@ -254,12 +253,23 @@ export function AgentManagementView({
             const isInstalling = installingIds.has(agent.id) || agent.downloading;
             const isDeleting = deletingIds.has(agent.id);
             const isProcessing = isInstalling || isDeleting;
-            const isAuthenticating = authIds.has(agent.id) || !!agent.authenticating;
+            const hasLocalAuthAction = authActions.has(agent.id);
+            const isAuthenticating = hasLocalAuthAction || !!agent.authenticating;
+            const authenticatingMethodId = hasLocalAuthAction
+              ? authActions.get(agent.id) || ''
+              : agent.authenticatingMethodId || '';
+            const isLoggingOut = isAuthenticating && !authenticatingMethodId;
+            const usesAcpLogin = agent.loginMethod === 'acp';
+            const usesCliLogin = agent.loginMethod === 'cli';
+            const hasLoginMenu = usesAcpLogin || usesCliLogin;
+            const showLogin = agent.loggedIn !== true;
+            const showLogout = agent.logoutAvailable === true && agent.loggedIn === true;
+            const showCliAuthFallback = agent.loggedIn === true && agent.logoutAvailable !== true;
+            const showUsage = agent.loginStatusSupported !== true || agent.loggedIn === true;
             const isLast = index === agents.length - 1;
             const isStarting = !!agent.initializing;
             const initializationDetail = agent.initializationDetail?.trim();
-            const isAuthKnown = agent.hasAuthentication !== true || agent.authKnown === true;
-            const canResolveStatus = isDownloaded && agent.readyKnown === true && isAuthKnown;
+            const canResolveStatus = isDownloaded && agent.readyKnown === true;
             const isStatusUnknown = isDownloaded && !isStarting && !canResolveStatus;
             const canUpdate = isDownloaded && agent.updateAvailable === true && !isInstalling;
             const agentVersionSuffix = agent.agentVersion ? ` (v${agent.agentVersion})` : '';
@@ -270,10 +280,10 @@ export function AgentManagementView({
               : null;
             const statusLabel = isStarting
               ? 'Starting'
-              : (agent.hasAuthentication === true && agent.authKnown === true && agent.authAuthenticated === false)
-                ? 'Not logged in'
               : (agent.initializationError || agent.downloadStatus?.startsWith('Error'))
                 ? 'Not ready'
+              : agent.ready === true && agent.loginStatusSupported === true && agent.loggedIn === false
+                ? 'Not logged in'
               : agent.ready === true
                 ? 'Ready'
                 : 'Not ready';
@@ -281,6 +291,8 @@ export function AgentManagementView({
               ? 'text-foreground-secondary'
               : statusLabel === 'Ready'
                 ? 'text-success'
+              : statusLabel === 'Not logged in'
+                ? 'text-warning'
                 : 'text-error';
 
             return (
@@ -290,7 +302,7 @@ export function AgentManagementView({
                     <img src={agent.iconPath} className="h-8 w-8 object-contain opacity-75" />
                   </div>
 
-                  <div className="min-w-0 flex-1 self-center py-2 text-ide-small text-foreground-secondary">
+                  <div className="min-w-0 flex-1 py-4 text-ide-small text-foreground-secondary">
                     <div className="flex items-baseline gap-1.5 mb-1">
                       <div className="font-semibold text-ide-regular text-foreground">{agent.name}</div>
                       {versionLabel && (<span className="text-foreground-secondary">{versionLabel}</span>)}
@@ -335,53 +347,26 @@ export function AgentManagementView({
                         </div>
                       )}
 
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'claude-code' && (
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'claude-code' && (
                         <UsageSection>
-                          <ClaudeUsage key={refreshKey} />
+                          <ClaudeUsage />
                         </UsageSection>
                       )}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (
                         <UsageSection>
-                          <CodexUsage key={refreshKey} />
+                          <CodexUsage />
                         </UsageSection>
                       )}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection refreshKey={refreshKey} />}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && <CursorUsage />}
-                      {!isInstalling && isDownloaded && agent.ready === true && agent.id === 'qoder' && (
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection />}
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && <CursorUsage />}
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'qoder' && (
                         <UsageSection>
                           <QoderUsage />
                         </UsageSection>
                       )}
 
-                      {!isInstalling && isDownloaded && (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                          {agent.hasAuthentication && agent.authKnown === true &&
-                            ((agent.authAuthenticated === true && agent.logoutAvailable === true) ||
-                              (agent.authAuthenticated !== true && agent.loginAvailable === true)) && (
-                            <button
-                              type="button"
-                              onClick={() => handleAuth(agent)}
-                              disabled={isProcessing || isAuthenticating}
-                              className={`text-link hover:underline disabled:opacity-50 transition-colors flex items-center gap-1 select-none whitespace-nowrap ${linkButtonFocusClassName}`}
-                            >
-                              {isAuthenticating && (
-                                <LoadingSpinner className="w-3 h-3" />
-                              )}
-                              {agent.authAuthenticated === true ? 'Log out' : 'Log in'}
-                            </button>
-                          )}
-                          {!agent.cliAvailable && (
-                            <span className="basis-full text-error">IDE terminal is required</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => window.__openAgentCli?.(agent.id)}
-                            disabled={!agent.cliAvailable}
-                            className={`text-link hover:underline disabled:opacity-50 transition-colors select-none whitespace-nowrap ${linkButtonFocusClassName}`}
-                          >
-                            CLI auth
-                          </button>
-                        </div>
+                      {!isInstalling && isDownloaded && agent.authError && (
+                        <div className="text-error">{agent.authError}</div>
                       )}
 
                       {!isInstalling && agent.initializationError && (
@@ -391,7 +376,7 @@ export function AgentManagementView({
                     </div>
                   </div>
 
-                  <div className="flex items-center py-4 whitespace-nowrap">
+                  <div className="flex shrink-0 flex-col items-end gap-2 py-4 whitespace-nowrap">
                     {isInstalling ? (
                       <Button
                         onClick={() => handleCancelInstall(agent.id)}
@@ -439,6 +424,66 @@ export function AgentManagementView({
                             {isDeleting ? 'Uninstalling' : 'Uninstall'}
                           </Button>
                         )}
+                        {showLogin && hasLoginMenu && (
+                          isAuthenticating && !isLoggingOut ? (
+                            <Button
+                              onClick={() => handleCancelAuth(agent)}
+                              disabled={isProcessing}
+                              variant="outline"
+                              leftIcon={<LoadingSpinner className="w-4 h-4" />}
+                            >
+                              Cancel
+                            </Button>
+                          ) : (
+                            <MenuButton
+                              label="Log in"
+                              variant="primary"
+                              disabled={isProcessing || isLoggingOut}
+                              items={[
+                                ...(usesAcpLogin
+                                  ? (agent.authMethods || []).map(method => ({
+                                      label: method.name,
+                                      title: method.description || undefined,
+                                      onClick: () => handleLogin(agent, method.id),
+                                    }))
+                                  : [{
+                                      label: `${agent.name} login`,
+                                      onClick: () => handleLogin(agent, 'cli'),
+                                    }]),
+                                {
+                                  label: 'CLI',
+                                  title: agent.cliAvailable ? undefined : 'IDE terminal is required',
+                                  disabled: !agent.cliAvailable,
+                                  onClick: () => handleCliAuth(agent),
+                                },
+                              ]}
+                            />
+                          )
+                        )}
+                        {((showLogin && !hasLoginMenu) || showCliAuthFallback) && (
+                          <Button
+                            onClick={() => handleCliAuth(agent)}
+                            disabled={!agent.cliAvailable || isProcessing}
+                            title={!agent.cliAvailable ? 'IDE terminal is required' : undefined}
+                            variant="outline"
+                          >
+                            CLI auth
+                          </Button>
+                        )}
+                        {showLogout && (
+                          <Button
+                            onClick={() => (
+                              isLoggingOut
+                                ? handleCancelAuth(agent)
+                                : handleLogout(agent)
+                            )}
+                            disabled={isProcessing}
+                            variant="outline"
+                            leftIcon={isLoggingOut ? <LoadingSpinner className="w-4 h-4" /> : undefined}
+                          >
+                            {isLoggingOut ? 'Cancel' : 'Log out'}
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>
@@ -463,6 +508,7 @@ export function AgentManagementView({
         onConfirm={performUpdate}
         onCancel={() => setConfirmUpdateId(null)}
       />
-    </div>
+      </div>
+    </AdapterUsageLifecycleProvider>
   );
 }

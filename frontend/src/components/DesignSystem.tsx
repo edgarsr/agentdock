@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from './ui/Button';
 import { Checkbox } from './ui/Checkbox';
 import { DropdownSelect } from './ui/DropdownSelect';
+import { MenuButton } from './ui/MenuButton';
 import { SplitButton } from './ui/SplitButton';
 
 export function DesignSystemView() {
@@ -111,12 +112,21 @@ export function DesignSystemView() {
                     <div className="flex flex-wrap items-center gap-4">
                         <Button variant="primary">OK</Button>
                         <Button variant="secondary">Cancel</Button>
+                        <Button variant="outline">Log out</Button>
                         <Button variant="secondary" disabled>Apply</Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         <Button variant="install">Install</Button>
                         <Button variant="accentOutline">Uninstall</Button>
                         <SplitButton label="Update" menuItems={[{ label: 'Uninstall' }]} />
+                        <MenuButton
+                            label="Log in"
+                            items={[
+                                { label: 'Claude Subscription' },
+                                { label: 'Anthropic Console' },
+                                { label: 'CLI' },
+                            ]}
+                        />
                     </div>
                 </div>
             </section>
