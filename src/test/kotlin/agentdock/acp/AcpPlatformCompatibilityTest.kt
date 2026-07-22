@@ -9,6 +9,49 @@ import kotlin.test.assertTrue
 
 class AcpPlatformCompatibilityTest {
     @Test
+    fun `Grok Build adapter uses the npm ACP stdio command`() = withOsName("Windows 11") {
+        val adapter = AcpAdapterConfig.getAdapterInfo("grok-build")
+
+        assertEquals("@xai-official/grok", adapter.distribution.packageName)
+        assertEquals(null, adapter.distribution.minimumVersion)
+        assertEquals(listOf("--no-auto-update", "agent", "stdio"), adapter.args)
+        assertEquals("grokCliSessions", adapter.sessionListMethod)
+        assertEquals("grokCliSessionDelete", adapter.sessionDeleteMethod)
+        assertEquals("grokAuthStatus", adapter.authConfig?.statusMethod)
+        assertEquals("acpAuthenticateLogin", adapter.authConfig?.loginMethod)
+        assertEquals("cliLogout", adapter.authConfig?.logoutMethod)
+        assertEquals("grok.com", adapter.authConfig?.authMethodId)
+        assertEquals(listOf("logout"), adapter.authConfig?.logoutArgs)
+        assertEquals(
+            listOf("cmd.exe", "/c", File("C:/agent/node_modules/.bin/grok.cmd").absolutePath) + adapter.args,
+            buildAdapterLaunchCommand("C:/agent", adapter, "C:/project", AcpExecutionTarget.LOCAL)
+        )
+    }
+
+    @Test
+    fun `launch detection is independent from minimum version support`() = withOsName("Windows 11") {
+        val runtimeDir = createTempDirectory("agentdock-old-adapter").toFile()
+        val adapter = npmAdapter().copy(
+            distribution = npmAdapter().distribution.copy(minimumVersion = "2.0.0")
+        )
+        File(runtimeDir, "node_modules/.bin/tool.cmd").apply {
+            parentFile.mkdirs()
+            writeText("@echo off")
+        }
+        File(runtimeDir, "node_modules/tool/package.json").apply {
+            parentFile.mkdirs()
+            writeText("""{"version":"1.5.0"}""")
+        }
+
+        assertTrue(AcpAdapterPaths.hasInstalledAdapterLaunch(
+            runtimeDir,
+            adapter,
+            AcpExecutionTarget.LOCAL
+        ))
+        assertFalse(isInstalledVersionSupported(adapter, installedVersionFromRuntimeDir(runtimeDir, adapter)))
+    }
+
+    @Test
     fun `local Linux and macOS use unix npm launch binaries`() = withOsName("Linux") {
         val adapter = npmAdapter()
 

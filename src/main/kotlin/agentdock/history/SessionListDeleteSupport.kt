@@ -7,6 +7,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import agentdock.utils.atomicWriteText
+import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpClientService
 import agentdock.acp.deleteHistorySession
 import com.intellij.openapi.project.ProjectManager
@@ -25,6 +26,12 @@ internal object SessionListDeleteSupport {
     }
 
     fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
+        when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
+            "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
+            null -> Unit
+            else -> return false
+        }
+
         return when (adapterName) {
             "claude-code" -> deleteClaudeSession(projectPath, sessionId, sourceFilePath)
             "codex" -> deleteCodexSession(sourceFilePath)

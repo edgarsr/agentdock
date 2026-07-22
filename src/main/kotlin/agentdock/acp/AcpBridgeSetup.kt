@@ -3,6 +3,7 @@ package agentdock.acp
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -327,7 +328,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             pushAdapters()
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
-                                previous?.takeIf { it.startsWith("Error:") } ?: "Error: Download failed"
+                                previous?.takeIf { it.startsWith("Error:") }
                             }
                             pushAdapters()
                         }
@@ -458,7 +459,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             service.initializeAdapterInBackground(adapterId)
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
-                                previous?.takeIf { it.startsWith("Error:") } ?: "Error: Update failed"
+                                previous?.takeIf { it.startsWith("Error:") }
                             }
                         }
                     } catch (_: CancellationException) {
@@ -487,43 +488,20 @@ internal fun AcpBridge.installAdapterQueries() {
             if (adapterId != null) {
                 val existingJob = authActionJobs.remove(adapterId)
                 existingJob?.cancel()
-                val job = scope.launch(Dispatchers.Default) {
+                val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
                     try {
                         downloadStatuses.remove(adapterId)
-                        AcpAuthService.incrementActive(adapterId)
                         pushAdapters()
-                        when {
-                            AcpAuthService.getLoginMode(adapterId) == "manage_terminal" -> {
-                                if (!cli.isIdeTerminalAvailable()) {
-                                    throw Exception("IDE terminal is required for auth management")
-                                }
-                                cli.openAgentCliInTerminal(adapterId)
-                            }
-                            AcpAuthService.getLoginMode(adapterId) == "ide_terminal" -> {
-                                if (!cli.isIdeTerminalAvailable()) {
-                                    throw Exception("IDE terminal is required for login")
-                                }
-                                if (!cli.openLoginInTerminal(adapterId)) {
-                                    throw Exception("Unable to open IDE terminal for login")
-                                }
-                            }
-                            else -> {
-                                val projectPath = service.project.basePath
-                                val authenticated = AcpAuthService.login(
-                                    adapterName = adapterId,
-                                    projectPath = projectPath,
-                                    onProgress = {
-                                        pushAdapters()
-                                    }
-                                )
-                                if (authenticated) {
-                                    service.stopSharedProcess(adapterId)
-                                    resetDownloadProbeState(adapterId)
-                                    authStates.remove(adapterId)
-                                    service.initializeAdapterInBackground(adapterId)
-                                    pushAdapters()
-                                }
-                            }
+                        val authenticated = AcpLoginService.login(
+                            adapterName = adapterId,
+                            service = service,
+                            projectPath = service.project.basePath,
+                            onProgress = { pushAdapters() }
+                        )
+                        if (authenticated) {
+                            service.stopSharedProcess(adapterId)
+                            authStates.remove(adapterId)
+                            service.initializeAdapterInBackground(adapterId)
                         }
                     } catch (_: CancellationException) {
                         downloadStatuses.remove(adapterId)
@@ -531,13 +509,13 @@ internal fun AcpBridge.installAdapterQueries() {
                         val message = e.message?.takeIf { it.isNotBlank() } ?: "Login failed"
                         downloadStatuses[adapterId] = "Error: $message"
                     } finally {
-                        AcpAuthService.decrementActive(adapterId)
                         authActionJobs.remove(adapterId)
                         authStates.remove(adapterId)
                         pushAdapters()
                     }
                 }
                 authActionJobs[adapterId] = job
+                job.start()
             }
             JBCefJSQuery.Response("ok")
         }
@@ -549,19 +527,28 @@ internal fun AcpBridge.installAdapterQueries() {
             if (adapterId != null) {
                 val existingJob = authActionJobs.remove(adapterId)
                 existingJob?.cancel()
-                val job = scope.launch(Dispatchers.Default) {
+                val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
                     try {
-                        AcpAuthService.incrementActive(adapterId)
+                        downloadStatuses.remove(adapterId)
                         pushAdapters()
-                        AcpAuthService.logout(adapterId)
+                        if (AcpLogoutService.logout(adapterId)) {
+                            service.stopSharedProcess(adapterId)
+                            authStates.remove(adapterId)
+                            service.initializeAdapterInBackground(adapterId)
+                        }
+                    } catch (_: CancellationException) {
+                        downloadStatuses.remove(adapterId)
+                    } catch (e: Exception) {
+                        val message = e.message?.takeIf { it.isNotBlank() } ?: "Logout failed"
+                        downloadStatuses[adapterId] = "Error: $message"
                     } finally {
-                        AcpAuthService.decrementActive(adapterId)
                         authActionJobs.remove(adapterId)
                         authStates.remove(adapterId)
                         pushAdapters()
                     }
                 }
                 authActionJobs[adapterId] = job
+                job.start()
             }
             JBCefJSQuery.Response("ok")
         }

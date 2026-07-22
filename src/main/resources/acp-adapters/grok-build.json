@@ -1,0 +1,49 @@
+{
+  "id": "grok-build",
+  "name": "Grok Build",
+  "iconPath": "/icons/grok-build.svg",
+  "iconPathLight": "/icons/grok-build-light.svg",
+  "iconPathDark": "/icons/grok-build-dark.svg",
+  "supportsSessionList": true,
+  "sessionListMethod": "grokCliSessions",
+  "sessionDeleteMethod": "grokCliSessionDelete",
+  "distribution": {
+    "type": "npm",
+    "version": "latest",
+    "packageName": "@xai-official/grok"
+  },
+  "launchBinary": {
+    "win": "node_modules/.bin/grok.cmd",
+    "unix": "node_modules/.bin/grok"
+  },
+  "args": [
+    "--no-auto-update",
+    "agent",
+    "stdio"
+  ],
+  "agentVersionConfig": {
+    "args": [
+      "version"
+    ],
+    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
+  },
+  "authConfig": {
+    "statusMethod": "grokAuthStatus",
+    "loginMethod": "acpAuthenticateLogin",
+    "logoutMethod": "cliLogout",
+    "authMethodId": "grok.com",
+    "logoutArgs": [
+      "logout"
+    ]
+  },
+  "cli": {
+    "executable": {
+      "win": "node_modules/.bin/grok.cmd",
+      "unix": "node_modules/.bin/grok"
+    },
+    "resumeArgs": [
+      "--resume",
+      "{sessionId}"
+    ]
+  }
+}

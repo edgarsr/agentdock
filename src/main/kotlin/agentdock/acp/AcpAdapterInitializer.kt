@@ -36,6 +36,7 @@ import java.io.File
 import java.util.Collections
 import agentdock.BuildConfig
 import agentdock.history.AgentDockHistoryService
+import agentdock.history.GrokSessionHistory
 
 // Keep this aligned with the broader ACP startup budget.
 // A freshly updated adapter can need materially longer than 60s
@@ -348,6 +349,7 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
                 if (initResult == null) {
                     throw java.util.concurrent.TimeoutException("Timed out waiting for 10000 ms")
                 }
+                sharedProc.authMethodIds = initResult.authMethods.map { it.id.value }.toSet()
                 initialized = true
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -381,7 +383,13 @@ internal suspend fun AcpClientService.initializeSharedProcessAtStartup(
             // Protocol version mismatch between adapter binary and ACP SDK -
             // models/modes will fall back to config defaults in pushAdapters.
         } catch (e: Exception) {
-            throw normalizeAdapterStartupException(e, startupOutput)
+            val normalized = normalizeAdapterStartupException(e, startupOutput)
+            val authenticationRequired = normalized.message?.startsWith("[AUTH_REQUIRED]") == true
+            if (authenticationRequired && !adapterInfo.authConfig?.statusMethod.isNullOrBlank()) {
+                adapterRuntimeMetadataMap.remove(requestedAdapterName)
+            } else {
+                throw normalized
+            }
         }
         sharedProc.isInitialized = true
     }
@@ -429,16 +437,33 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
         AcpConfigOptionsCache.write(cached)
         return cached.toRuntimeMetadata(adapterInfo)
     } finally {
-        cleanupProbeSessions(client, adapterInfo)
+        cleanupProbeSessions(client, adapterInfo, sessionId)
     }
 }
 
 @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 private suspend fun AcpClientService.cleanupProbeSessions(
     client: Client,
-    adapterInfo: AcpAdapterConfig.AdapterInfo
+    adapterInfo: AcpAdapterConfig.AdapterInfo,
+    currentSessionId: String
 ): Unit {
-    val cwd = resolveSessionCwd(AcpAdapterPaths.getProbeSessionDir().absolutePath)
+    val probeProjectPath = AcpAdapterPaths.getProbeSessionDir().absolutePath
+    if (adapterInfo.sessionDeleteMethod == "grokCliSessionDelete") {
+        val sessionIds = linkedSetOf(currentSessionId)
+        runCatching {
+            GrokSessionHistory.grokCliSessions(adapterInfo.id, probeProjectPath)
+        }.getOrDefault(emptyList()).forEach { session ->
+            sessionIds.add(session.sessionId)
+        }
+        sessionIds.forEach { sessionId ->
+            runCatching {
+                GrokSessionHistory.grokCliSessionDelete(adapterInfo.id, probeProjectPath, sessionId)
+            }
+        }
+        return
+    }
+
+    val cwd = resolveSessionCwd(probeProjectPath)
     val sessions = runCatching {
         client.listSessions(cwd = cwd).toList()
     }.getOrDefault(emptyList())

@@ -1,7 +1,6 @@
 package agentdock.acp
 
 import com.intellij.openapi.project.Project
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import agentdock.history.AgentDockHistoryService
 import java.io.File
@@ -19,24 +18,6 @@ internal class AcpBridgeCli(
         if (command.isBlank()) return
         val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, AcpAdapterPaths.getExecutionTarget())
         openInIdeTerminal(resolveTerminalWorkingDir(adapterRoot), "${adapterInfo.name} CLI", command)
-    }
-
-    fun openLoginInTerminal(adapterId: String): Boolean {
-        val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull() ?: return false
-        val commandParts = AcpAuthService.buildLoginCommand(adapterId) ?: return false
-        val shellFlavor = detectIdeTerminalShellFlavor()
-        val command = toShellCommand(commandParts.map { normalizeInteractiveShellPart(it, shellFlavor) }, shellFlavor)
-        if (command.isBlank()) return false
-        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, AcpAdapterPaths.getExecutionTarget())
-        return openInIdeTerminal(resolveTerminalWorkingDir(adapterRoot), "${adapterInfo.name} Login", command)
-    }
-
-    suspend fun awaitInteractiveLoginCompletion(adapterId: String) {
-        val timeoutAt = System.currentTimeMillis() + AcpAuthService.INTERACTIVE_LOGIN_TIMEOUT_MS
-        while (System.currentTimeMillis() < timeoutAt) {
-            if (!AcpAuthService.isAuthenticating(adapterId)) return
-            delay(500L)
-        }
     }
 
     fun openHistoryConversationCliInTerminal(projectPath: String, conversationId: String) {

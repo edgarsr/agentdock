@@ -69,15 +69,7 @@ object AcpAdapterPaths {
     ): Boolean {
         val adapterInfo = getAdapterInfo(adapterName)
         val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
-        val installationExists = runtimeDir.isDirectory &&
-            when (adapterInfo.distribution.type) {
-                AcpAdapterConfig.DistributionType.ARCHIVE -> resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
-                AcpAdapterConfig.DistributionType.NPM -> {
-                    File(runtimeDir, "node_modules").isDirectory &&
-                        resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
-                }
-            }
-        return installationExists &&
+        return hasInstalledAdapterLaunch(runtimeDir, adapterInfo, target) &&
             isInstalledVersionSupported(adapterInfo, installedVersionFromRuntimeDir(runtimeDir, adapterInfo))
     }
 
@@ -137,10 +129,16 @@ object AcpAdapterPaths {
         if (!success) return false
         applyPatches(targetDir, resolvedAdapterInfo, statusCallback)
         cancellation?.throwIfCancelled()
-        val downloaded = isDownloaded(resolvedAdapterInfo.id, target)
-        if (!downloaded) {
+        val installedVersionOverride = resolvedAdapterInfo.distribution.version
+            .takeIf { resolvedAdapterInfo.distribution.type == AcpAdapterConfig.DistributionType.ARCHIVE }
+        val hasLaunchExecutable = hasInstalledAdapterLaunch(targetDir, resolvedAdapterInfo, target)
+        if (!hasLaunchExecutable) {
             statusCallback?.invoke(missingLaunchTargetError(targetDir.absolutePath, resolvedAdapterInfo, target))
         }
+        val installedVersion = installedVersionOverride
+            ?: installedVersionFromRuntimeDir(targetDir, resolvedAdapterInfo)
+        val downloaded = hasLaunchExecutable &&
+            isInstalledVersionSupported(resolvedAdapterInfo, installedVersion)
         if (downloaded) writeInstallMetadata(targetDir, resolvedAdapterInfo.distribution.version)
         return downloaded
     }
@@ -180,6 +178,17 @@ object AcpAdapterPaths {
         projectPath: String? = null,
         target: AcpExecutionTarget = currentTarget()
     ): List<String> = buildAdapterLaunchCommand(adapterRootPath, adapterInfo, projectPath, target)
+
+    internal fun hasInstalledAdapterLaunch(
+        runtimeDir: File,
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        target: AcpExecutionTarget
+    ): Boolean {
+        return runtimeDir.isDirectory &&
+            (adapterInfo.distribution.type != AcpAdapterConfig.DistributionType.NPM ||
+                File(runtimeDir, "node_modules").isDirectory) &&
+            resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
+    }
 
     private fun missingLaunchTargetError(
         runtimeDir: String,

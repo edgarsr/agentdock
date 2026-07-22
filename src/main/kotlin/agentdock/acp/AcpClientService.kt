@@ -148,6 +148,7 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var process: Process? = null
         @Volatile var client: Client? = null
         @Volatile var protocol: Protocol? = null
+        @Volatile var authMethodIds: Set<String> = emptySet()
         @Volatile var protocolScope: CoroutineScope? = null
         @Volatile var isInitialized: Boolean = false
         @Volatile var sessionUpdateWrapped: Boolean = false
@@ -175,6 +176,7 @@ class AcpClientService private constructor(val project: Project) {
             process = null
             client = null
             protocol = null
+            authMethodIds = emptySet()
             protocolScope?.coroutineContext?.cancel()
             protocolScope = null
             isInitialized = false

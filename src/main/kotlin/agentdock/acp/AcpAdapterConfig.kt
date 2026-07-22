@@ -35,8 +35,10 @@ object AcpAdapterConfig {
     @Serializable
     data class AuthConfig(
         val authScript: String? = null,
-        val uiMode: String = "login_logout",
-        val loginMode: String = "background",
+        val statusMethod: String? = null,
+        val loginMethod: String? = null,
+        val logoutMethod: String? = null,
+        val authMethodId: String? = null,
         val command: List<String> = emptyList(),
         val authNpmPackage: String? = null,
         val statusArgs: List<String> = emptyList(),
@@ -97,6 +99,8 @@ object AcpAdapterConfig {
         val iconPathLight: String? = null,
         val iconPathDark: String? = null,
         val supportsSessionList: Boolean = true,
+        val sessionListMethod: String = "acpSessionList",
+        val sessionDeleteMethod: String? = null,
         val distribution: Distribution,
         val launchPath: String = "",
         val launchBinary: PlatformBinary? = null,

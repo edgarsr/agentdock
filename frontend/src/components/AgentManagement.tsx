@@ -20,7 +20,6 @@ function mergeAgentSnapshot(previous: AgentOption | undefined, next: AgentOption
   const keepReadySnapshot = next.readyKnown !== true && previous.readyKnown === true;
   const keepAuthSnapshot =
     next.hasAuthentication === true &&
-    next.authUiMode !== 'manage_terminal' &&
     next.authKnown !== true &&
     previous.authKnown === true;
   const keepUpdateSnapshot =
@@ -221,24 +220,6 @@ export function AgentManagementView({
     if (authIds.has(agent.id) || agent.authenticating || agent.authLoading) return;
     setAuthIds(prev => new Set(prev).add(agent.id));
 
-    if ((agent.authUiMode ?? 'login_logout') === 'manage_terminal') {
-      if (!agent.cliAvailable) {
-        setAuthIds(prev => {
-          const next = new Set(prev);
-          next.delete(agent.id);
-          return next;
-        });
-        return;
-      }
-      window.__openAgentCli?.(agent.id);
-      setAuthIds(prev => {
-        const next = new Set(prev);
-        next.delete(agent.id);
-        return next;
-      });
-      return;
-    }
-
     if (agent.authAuthenticated) {
       window.__logoutAgent?.(agent.id);
     } else {
@@ -274,12 +255,10 @@ export function AgentManagementView({
             const isDeleting = deletingIds.has(agent.id);
             const isProcessing = isInstalling || isDeleting;
             const isAuthenticating = authIds.has(agent.id) || !!agent.authenticating;
-            const authUiMode = agent.authUiMode ?? 'login_logout';
-            const isManageAuth = authUiMode === 'manage_terminal';
             const isLast = index === agents.length - 1;
             const isStarting = !!agent.initializing;
             const initializationDetail = agent.initializationDetail?.trim();
-            const isAuthKnown = isManageAuth || agent.hasAuthentication !== true || agent.authKnown === true;
+            const isAuthKnown = agent.hasAuthentication !== true || agent.authKnown === true;
             const canResolveStatus = isDownloaded && agent.readyKnown === true && isAuthKnown;
             const isStatusUnknown = isDownloaded && !isStarting && !canResolveStatus;
             const canUpdate = isDownloaded && agent.updateAvailable === true && !isInstalling;
@@ -376,8 +355,9 @@ export function AgentManagementView({
 
                       {!isInstalling && isDownloaded && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                          {agent.hasAuthentication && !isManageAuth && agent.authKnown === true &&
-                            (authUiMode !== 'login_only' || agent.authAuthenticated !== true) && (
+                          {agent.hasAuthentication && agent.authKnown === true &&
+                            ((agent.authAuthenticated === true && agent.logoutAvailable === true) ||
+                              (agent.authAuthenticated !== true && agent.loginAvailable === true)) && (
                             <button
                               type="button"
                               onClick={() => handleAuth(agent)}
@@ -387,7 +367,7 @@ export function AgentManagementView({
                               {isAuthenticating && (
                                 <LoadingSpinner className="w-3 h-3" />
                               )}
-                              {authUiMode === 'login_only' ? 'Log in' : agent.authAuthenticated === true ? 'Log out' : 'Log in'}
+                              {agent.authAuthenticated === true ? 'Log out' : 'Log in'}
                             </button>
                           )}
                           {!agent.cliAvailable && (

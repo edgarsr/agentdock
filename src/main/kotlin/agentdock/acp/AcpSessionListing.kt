@@ -5,6 +5,7 @@ import com.agentclientprotocol.rpc.MethodName
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import agentdock.history.GrokSessionHistory
 import agentdock.history.SessionMeta
 import agentdock.history.fallbackHistoryTitle
 import agentdock.history.historyComparablePath
@@ -18,6 +19,20 @@ internal suspend fun AcpClientService.listHistorySessions(
     ensureExecutionTargetCurrent()
     if (!AcpAdapterPaths.isDownloaded(adapterInfo.id)) return emptyList()
 
+    return when (adapterInfo.sessionListMethod) {
+        "acpSessionList" -> acpSessionList(adapterInfo, projectPath)
+        "grokCliSessions" -> GrokSessionHistory.grokCliSessions(adapterInfo.id, projectPath)
+        else -> throw IllegalStateException(
+            "Unknown session list method '${adapterInfo.sessionListMethod}' for adapter '${adapterInfo.id}'"
+        )
+    }
+}
+
+@OptIn(UnstableApi::class)
+private suspend fun AcpClientService.acpSessionList(
+    adapterInfo: AcpAdapterConfig.AdapterInfo,
+    projectPath: String
+): List<SessionMeta> {
     val sharedProc = activeProcesses[processKey(adapterInfo.id)]?.takeIf { it.isHealthy() } ?: return emptyList()
     val client = sharedProc.client ?: return emptyList()
     val expectedProjectPath = historyComparablePath(projectPath)

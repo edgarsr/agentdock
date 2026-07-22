@@ -91,7 +91,9 @@ private fun AcpBridge.buildAdapterPayload(
 
     val dlStatus = downloadStatuses[info.id] ?: ""
     val isDownloading = dlStatus.isNotEmpty() && !dlStatus.startsWith("Error")
-    val hasAuthentication = info.authConfig != null
+    val hasAuthentication = !info.authConfig?.statusMethod.isNullOrBlank()
+    val loginAvailable = !info.authConfig?.loginMethod.isNullOrBlank()
+    val logoutAvailable = !info.authConfig?.logoutMethod.isNullOrBlank()
     val installedVersion = probeState?.installedVersion
     val rawAgentVersion = agentVersionStates[info.id]
     val agentVersion = rawAgentVersion?.takeIf { it != installedVersion }
@@ -111,17 +113,14 @@ private fun AcpBridge.buildAdapterPayload(
     }
     val updateKnown = updateSupported && !latestVersion.isNullOrBlank() && !installedVersion.isNullOrBlank()
     val updateAvailable = updateKnown && latestVersion != installedVersion
-    val authUiMode = info.authConfig?.uiMode ?: "login_logout"
-    val hasDirectAuth = authUiMode != "manage_terminal"
-    val isAuthenticating = AcpAuthService.isAuthenticating(info.id)
+    val isAuthenticating = authActionJobs[info.id]?.isActive == true
     val cliAvailable = downloaded == true && info.cli != null && cli.isIdeTerminalAvailable()
     val rawInitError = service.adapterInitializationError(info.id) ?: ""
     val initializationDetail = if (isInitializing) service.adapterInitializationDetail(info.id).orEmpty() else ""
-    val authRequiredByInit = rawInitError.startsWith("[AUTH_REQUIRED]")
-    val initError = if (authRequiredByInit) "" else rawInitError
+    val initError = rawInitError
 
     val shouldFetchAuth = downloadedKnown &&
-        downloaded == true && hasAuthentication && hasDirectAuth &&
+        downloaded == true && hasAuthentication &&
         !isDownloading && !isAuthenticating
 
     val needsAuthFetch = shouldFetchAuth && !authStates.containsKey(info.id)
@@ -132,29 +131,23 @@ private fun AcpBridge.buildAdapterPayload(
     val authAuthenticated = when {
         !downloadedKnown -> null
         !hasAuthentication -> null
-        authRequiredByInit -> false
-        !hasDirectAuth -> null
         !shouldFetchAuth || needsAuthFetch -> null
         else -> authStates[info.id] == true
     }
     val authKnown = when {
         !downloadedKnown -> false
         !hasAuthentication -> true
-        authRequiredByInit -> true
-        !hasDirectAuth -> true
         else -> authAuthenticated != null
     }
     val authLoading = needsAuthFetch || authFetchJobs[info.id]?.isActive == true
 
     val isReady = when {
         !downloadedKnown -> null
-        authRequiredByInit -> false
         initStatus == AcpClientService.AdapterInitializationStatus.NotStarted -> false
         initStatus == AcpClientService.AdapterInitializationStatus.Failed -> false
         initStatus != AcpClientService.AdapterInitializationStatus.Ready -> null
         !service.isAdapterReady(info.id) -> false
         !hasAuthentication -> true
-        !hasDirectAuth -> true
         authAuthenticated == null -> null
         else -> authAuthenticated
     }
@@ -229,7 +222,8 @@ private fun AcpBridge.buildAdapterPayload(
         authLoading = authLoading,
         authError = "",
         authenticating = isAuthenticating,
-        authUiMode = authUiMode,
+        loginAvailable = loginAvailable,
+        logoutAvailable = logoutAvailable,
         initializing = isInitializing,
         initializationDetail = initializationDetail,
         initializationError = initError,
@@ -316,7 +310,7 @@ internal fun AcpBridge.pushAdapters(includeRuntimeChecks: Boolean = true) {
         for (id in idsToFetch) {
             if (authFetchJobs[id]?.isActive == true) continue
             authFetchJobs[id] = scope.launch(Dispatchers.IO) {
-                val authenticated = try { AcpAuthService.getAuthStatus(id).authenticated } catch (_: Exception) { true }
+                val authenticated = try { AcpAuthStatusService.getStatus(id).authenticated } catch (_: Exception) { true }
                 authStates[id] = authenticated
                 authFetchJobs.remove(id)
                 pushAdapters()
@@ -353,7 +347,7 @@ internal fun AcpBridge.pushAdapters(includeRuntimeChecks: Boolean = true) {
             if (!agentVersionStates[info.id].isNullOrBlank()) return@forEach
             agentVersionJobs[info.id] = scope.launch(Dispatchers.IO) {
                 try {
-                    val cmd = AcpAuthService.buildAgentVersionCommand(info)
+                    val cmd = AcpAuthCommand.buildAgentVersionCommand(info)
                     if (!cmd.isNullOrEmpty()) {
                         val downloadPath = AcpAdapterPaths.getDownloadPath(info.id, target)
                         val workDir = if (downloadPath.isNotBlank()) File(downloadPath) else null
@@ -401,7 +395,6 @@ internal fun AcpBridge.resetAuthStatusRefreshState() {
     adapterInstallJobs.values.forEach { it.cancel() }
     adapterInstallJobs.clear()
     downloadStatuses.clear()
-    AcpAuthService.resetTransientState()
 }
 
 internal fun AcpBridge.resetDownloadProbeState(adapterId: String? = null) {

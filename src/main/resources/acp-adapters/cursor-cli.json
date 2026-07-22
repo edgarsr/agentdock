@@ -29,8 +29,9 @@
     ]
   },
   "authConfig": {
-    "uiMode": "login_logout",
-    "loginMode": "background",
+    "statusMethod": "cliAuthStatus",
+    "loginMethod": "cliLogin",
+    "logoutMethod": "cliLogout",
     "statusArgs": [
       "about"
     ],
