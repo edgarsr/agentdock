@@ -1,0 +1,38 @@
+{
+  "id": "kimi-code",
+  "name": "Kimi Code",
+  "iconPath": "/icons/kimi-code.svg",
+  "iconPathLight": "/icons/kimi-code-light.svg",
+  "iconPathDark": "/icons/kimi-code-dark.svg",
+  "distribution": {
+    "type": "npm",
+    "version": "latest",
+    "packageName": "@moonshot-ai/kimi-code"
+  },
+  "launchBinary": {
+    "win": "node_modules/.bin/kimi.cmd",
+    "unix": "node_modules/.bin/kimi"
+  },
+  "args": [
+    "acp"
+  ],
+  "sessionDeleteMethod": "kimiCodeSessionDelete",
+  "disabledModels": [],
+  "disabledModes": [],
+  "agentVersionConfig": {
+    "args": [
+      "--version"
+    ],
+    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
+  },
+  "cli": {
+    "executable": {
+      "win": "node_modules/.bin/kimi.cmd",
+      "unix": "node_modules/.bin/kimi"
+    },
+    "resumeArgs": [
+      "--session",
+      "{sessionId}"
+    ]
+  }
+}

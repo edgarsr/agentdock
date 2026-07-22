@@ -5,6 +5,7 @@
     "acp-adapters/codex.json",
     "acp-adapters/grok-build.json",
     "acp-adapters/github-copilot-cli.json",
+    "acp-adapters/kimi-code.json",
     "acp-adapters/kilo.json",
     "acp-adapters/qoder.json",
     "acp-adapters/opencode.json"

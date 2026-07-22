@@ -9,6 +9,21 @@ import kotlin.test.assertTrue
 
 class AcpPlatformCompatibilityTest {
     @Test
+    fun `Kimi Code adapter uses the npm ACP command`() = withOsName("Windows 11") {
+        val adapter = AcpAdapterConfig.getAdapterInfo("kimi-code")
+
+        assertEquals("@moonshot-ai/kimi-code", adapter.distribution.packageName)
+        assertEquals(listOf("acp"), adapter.args)
+        assertEquals("acpSessionList", adapter.sessionListMethod)
+        assertEquals("kimiCodeSessionDelete", adapter.sessionDeleteMethod)
+        assertEquals(
+            listOf("cmd.exe", "/c", File("C:/agent/node_modules/.bin/kimi.cmd").absolutePath, "acp"),
+            buildAdapterLaunchCommand("C:/agent", adapter, "C:/project", AcpExecutionTarget.LOCAL)
+        )
+        assertEquals(listOf("--session", "{sessionId}"), adapter.cli?.resumeArgs)
+    }
+
+    @Test
     fun `Grok Build adapter uses the npm ACP stdio command`() = withOsName("Windows 11") {
         val adapter = AcpAdapterConfig.getAdapterInfo("grok-build")
 

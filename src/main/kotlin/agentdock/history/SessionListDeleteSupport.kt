@@ -28,6 +28,7 @@ internal object SessionListDeleteSupport {
     fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
         when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
             "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
+            "kimiCodeSessionDelete" -> return KimiSessionHistory.kimiCodeSessionDelete(projectPath, sessionId)
             null -> Unit
             else -> return false
         }
