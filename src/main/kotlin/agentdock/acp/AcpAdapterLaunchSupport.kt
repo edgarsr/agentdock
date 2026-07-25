@@ -84,6 +84,9 @@ internal fun buildAdapterLaunchCommand(
 }
 
 internal fun resolvePatchRoot(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo): File {
+    if (adapterInfo.patchRoot == AcpAdapterConfig.PatchRoot.RUNTIME) {
+        return adapterRoot
+    }
     return when (adapterInfo.distribution.type) {
         AcpAdapterConfig.DistributionType.ARCHIVE -> adapterRoot
         AcpAdapterConfig.DistributionType.NPM -> resolveNpmPackageRoot(adapterRoot, adapterInfo)

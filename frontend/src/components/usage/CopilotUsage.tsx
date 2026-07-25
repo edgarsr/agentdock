@@ -5,27 +5,46 @@ import { formatResetAt, hasDisplayableQuotaReset } from './shared/formatResetAt'
 
 const usageLinkClassName = 'text-link hover:underline focus:outline-none focus-visible:rounded-[3px] focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]';
 
-interface CopilotQuotaWindow {
-  entitlement?: number;
-  remaining?: number;
-  percent_remaining?: number;
-  unlimited?: boolean;
+interface CopilotQuota {
+  entitlementRequests?: number;
+  usedRequests?: number;
+  remainingPercentage?: number;
+  resetDate?: string;
+  isUnlimitedEntitlement?: boolean;
 }
 
-interface CopilotUsageData {
-  quota_reset_date?: string;
-  quota_reset_date_utc?: string;
-  quota_snapshots?: {
-    premium_interactions?: CopilotQuotaWindow;
-  };
+export interface CopilotUsageData {
+  quota?: CopilotQuota;
 }
 
 const AGENT_ID = 'github-copilot-cli';
-const BILLING_URL = 'https://github.com/settings/billing/premium_requests_usage';
+const BILLING_URL = 'https://github.com/settings/billing/ai_usage';
+
+export function parseCopilotUsage(data: string | null): CopilotUsageData | null {
+  if (!data) return null;
+  try {
+    const parsed = JSON.parse(data);
+    return parsed && typeof parsed === 'object' ? parsed as CopilotUsageData : null;
+  } catch {
+    return null;
+  }
+}
+
+export function copilotPercentUsed(usage: CopilotUsageData | null): number | null {
+  const remaining = usage?.quota?.remainingPercentage;
+  return typeof remaining === 'number' ? clampPercent(100 - remaining) : null;
+}
+
+function formatQuotaAmount(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value);
+}
 
 export function CopilotUsage() {
   const data = useAdapterUsage(AGENT_ID);
-  if (!data) {
+  const usage = parseCopilotUsage(data);
+  if (!usage) return null;
+  const quota = usage?.quota;
+  if (!quota) {
     return (
       <div className="text-foreground-secondary">
         Usage quotas: <button type="button" onClick={() => window.__openUrl?.(BILLING_URL)} className={usageLinkClassName}>{BILLING_URL}</button>
@@ -33,58 +52,24 @@ export function CopilotUsage() {
     );
   }
 
-  let usage: CopilotUsageData | null = null;
-  try {
-    usage = JSON.parse(data);
-  } catch {
-    return (
-      <div className="text-foreground-secondary">
-        Usage quotas: <button type="button" onClick={() => window.__openUrl?.(BILLING_URL)} className={usageLinkClassName}>{BILLING_URL}</button>
-      </div>
-    );
-  }
-
-  const premium = usage?.quota_snapshots?.premium_interactions;
-  if (!premium) {
-    return (
-      <div className="text-foreground-secondary">
-        Usage quotas: <button type="button" onClick={() => window.__openUrl?.(BILLING_URL)} className={usageLinkClassName}>{BILLING_URL}</button>
-      </div>
-    );
-  }
-
-  if (premium.unlimited === true) {
-    return null;
-  }
-
-  const resetAt = usage?.quota_reset_date_utc ?? usage?.quota_reset_date;
-  if (!hasDisplayableQuotaReset(resetAt)) {
-    return (
-      <div className="text-foreground-secondary">
-        Usage quotas: <button type="button" onClick={() => window.__openUrl?.(BILLING_URL)} className={usageLinkClassName}>{BILLING_URL}</button>
-      </div>
-    );
-  }
-
-  const entitlement = typeof premium.entitlement === 'number' ? premium.entitlement : null;
-  const remaining = typeof premium.remaining === 'number' ? premium.remaining : null;
-  const used = entitlement !== null && remaining !== null ? Math.max(0, entitlement - remaining) : null;
-  const percentRemaining = typeof premium.percent_remaining === 'number' ? premium.percent_remaining : null;
-  const percentUsed = percentRemaining !== null ? clampPercent(100 - percentRemaining) : null;
-  const resetLabel = formatResetAt(resetAt);
-  const metaParts = [
-    remaining !== null ? `${remaining} left` : null,
-    resetLabel ? `Resets: ${resetLabel}` : null,
-  ].filter(Boolean);
+  const entitlement = typeof quota.entitlementRequests === 'number' ? quota.entitlementRequests : null;
+  const used = typeof quota.usedRequests === 'number' ? quota.usedRequests : null;
+  const percentUsed = copilotPercentUsed(usage);
+  const resetLabel = hasDisplayableQuotaReset(quota.resetDate) ? formatResetAt(quota.resetDate) : null;
+  const valueLabel = quota.isUnlimitedEntitlement
+    ? 'No limit'
+    : used !== null && entitlement !== null
+      ? `${formatQuotaAmount(used)} / ${formatQuotaAmount(entitlement)} AIC`
+      : 'N/A';
 
   return (
     <div className="flex flex-col gap-y-2">
       <span className="whitespace-nowrap text-foreground-secondary">Usage quotas</span>
       <UsageMetricRow
-        label="Premium requests"
+        label="Plan"
         percent={percentUsed}
-        valueLabel={used !== null && entitlement !== null ? `${used} / ${entitlement} used` : 'N/A'}
-        meta={metaParts.length > 0 ? metaParts.join(' · ') : undefined}
+        valueLabel={valueLabel}
+        meta={resetLabel ? `Resets: ${resetLabel}` : undefined}
       />
     </div>
   );

@@ -115,7 +115,9 @@ export default function ChatDropdown({
     return <span className="flex-1 truncate">{option.label}</span>;
   };
   
-  const rawSelectedText = (showSubValueInTrigger ? (selectedSub?.label || selectedSubValue) : undefined) || selectedOption?.label || placeholder;
+  const rawSelectedText = showSubValueInTrigger
+    ? (selectedSub?.label || selectedSubValue || '')
+    : (selectedOption?.label || placeholder);
   const selectedText = showSubValueInTrigger ? compactModelName(rawSelectedText) : rawSelectedText;
 
   useEffect(() => {

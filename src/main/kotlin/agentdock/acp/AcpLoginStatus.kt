@@ -13,6 +13,7 @@ internal object AcpLoginStatus {
     private const val CLAUDE_CODE_METHOD = "claudeCodeCliAuthStatus"
     private const val CODEX_METHOD = "codexCliLoginStatus"
     private const val CURSOR_METHOD = "cursorCliStatus"
+    private const val COPILOT_RPC_METHOD = "copilotRpcAuthStatus"
     private const val GROK_BUILD_METHOD = "grokBuildAuthFile"
     private const val QODER_METHOD = "qoderCliStatus"
     private const val STATUS_TIMEOUT_SECONDS = 10L
@@ -24,6 +25,7 @@ internal object AcpLoginStatus {
         CLAUDE_CODE_METHOD -> resolveClaudeCode(adapterInfo, target)
         CODEX_METHOD -> resolveCodex(adapterInfo)
         CURSOR_METHOD -> resolveCursor(adapterInfo)
+        COPILOT_RPC_METHOD -> AcpCopilotAuthenticationRpc.fetchLoginStatus(adapterInfo.id)
         GROK_BUILD_METHOD -> resolveGrokBuild()
         QODER_METHOD -> resolveQoder(adapterInfo)
         else -> null

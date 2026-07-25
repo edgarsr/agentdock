@@ -6,28 +6,23 @@
   "iconPathDark": "/icons/copilot-dark.svg",
   "distribution": {
     "type": "npm",
-    "version": "1.0.36",
+    "version": "1.0.75",
+    "minimumVersion": "1.0.75",
     "packageName": "@github/copilot"
   },
-  "launchPath": "index.js",
+  "launchPath": "npm-loader.js",
   "args": [
     "--acp",
     "--stdio"
   ],
+  "patchRoot": "runtime",
   "patches": [
-    "@patches/github-copilot-cli/usage-json-loader.patch",
-    "@patches/github-copilot-cli/usage-json.patch",
-    "@patches/github-copilot-cli/usage-json-run.patch",
     "@patches/github-copilot-cli/acp-load-session-reuse.patch"
   ],
   "disabledModes": [],
-  "disabledModels": [
-    "gpt-5.1",
-    "gpt-5.2",
-    "mini",
-    "opus-4.5",
-    "sonnet-4.5"
-  ],
+  "disabledModels": [],
+  "logoutMethod": "copilotRpc",
+  "loginStatusMethod": "copilotRpcAuthStatus",
   "cli": {
     "executable": {
       "win": "node_modules/.bin/copilot.cmd",

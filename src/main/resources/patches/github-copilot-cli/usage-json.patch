@@ -1,6 +1,0 @@
-{
-  "path": "app.js",
-  "findRegex": "(return\\{getToken:[A-Za-z0-9_$]+,getAnyToken:[A-Za-z0-9_$]+,removeToken:[A-Za-z0-9_$]+,storeToken:[A-Za-z0-9_$]+,storeCurrentTokenInConfig:[A-Za-z0-9_$]+\\}\\},([A-Za-z0-9_$]+)=[A-Za-z0-9_$]+\\(\\)\\}\\);)(?:async function __agentDockCopilotUsageJson\\(\\)\\{.*?process\\.exit\\(0\\)\\})?",
-  "replace": "$1async function __agentDockCopilotUsageJson(){let t=process.argv.indexOf(\"--config-dir\"),e=t!==-1&&process.argv[t+1]?{configDir:process.argv[t+1]}:void 0,n={},r=typeof rr<\"u\"&&rr&&typeof rr.load==\"function\"?rr:void 0;r&&(n=await r.load(e)||{});let o=n.last_logged_in_user,s=o?.host??\"https://github.com\",a=o?await $2.getToken(o.host,o.login,e):await $2.getAnyToken(e);if(!a)a=await $2.getAnyToken(e);if(!a){process.exit(0);return}try{let h=new URL(s);h.hostname.startsWith(\"api.\")||(h.hostname=\"api.\"+h.hostname);let resp=await fetch(new URL(\"/copilot_internal/user\",h.origin).href,{headers:{Authorization:\"Bearer \"+a,Accept:\"application/json\"}});if(resp.ok)process.stdout.write(JSON.stringify(await resp.json()));}catch(err){}process.exit(0)}",
-  "alreadyApplied": "new URL(\"/copilot_internal/user\",h.origin)"
-}

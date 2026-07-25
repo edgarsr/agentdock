@@ -102,8 +102,9 @@ internal fun AcpClientService.resolveModelToApply(
     available: List<AcpAdapterConfig.ModelInfo>,
     default: String?
 ): String? {
+    if (available.isEmpty()) return null
     val preference = pref?.trim().takeUnless { it.isNullOrEmpty() }
-    return if (preference != null && (available.isEmpty() || available.any { it.modelId == preference })) {
+    return if (preference != null && available.any { it.modelId == preference }) {
         preference
     } else {
         default

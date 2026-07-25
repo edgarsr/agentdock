@@ -57,16 +57,19 @@ export function buildAgentOptions(
   pinnedSnapshot: PinnedAgentSnapshot | null,
   pinnedAgentId: string
 ): DropdownOption[] {
-  const options = availableAgents.map((agent) => ({
-    id: agent.id,
-    label: agent.name,
-    iconPath: agent.iconPath,
-    subOptions: agent.availableModels?.map(m => ({
+  const options = availableAgents.map((agent) => {
+    const subOptions = agent.availableModels?.map(m => ({
       id: m.modelId,
       label: m.name,
       description: m.description,
-    }))
-  }));
+    }));
+    return {
+      id: agent.id,
+      label: agent.name,
+      iconPath: agent.iconPath,
+      subOptions: subOptions?.length ? subOptions : undefined,
+    };
+  });
 
   if (
     pinnedSnapshot &&
@@ -74,19 +77,16 @@ export function buildAgentOptions(
     pinnedSnapshot.id === pinnedAgentId &&
     !options.some((option) => option.id === pinnedAgentId)
   ) {
+    const subOptions = pinnedSnapshot.availableModels?.map((model) => ({
+      id: model.modelId,
+      label: model.name,
+      description: model.description,
+    }));
     options.unshift({
       id: pinnedSnapshot.id,
       label: pinnedSnapshot.name || pinnedSnapshot.id,
       iconPath: pinnedSnapshot.iconPath,
-      subOptions: pinnedSnapshot.availableModels?.map((model) => ({
-        id: model.modelId,
-        label: model.name,
-        description: model.description,
-      })) || (pinnedSnapshot.currentModelId ? [{
-        id: pinnedSnapshot.currentModelId,
-        label: pinnedSnapshot.currentModelId,
-        description: undefined,
-      }] : []),
+      subOptions: subOptions?.length ? subOptions : undefined,
     });
   }
 

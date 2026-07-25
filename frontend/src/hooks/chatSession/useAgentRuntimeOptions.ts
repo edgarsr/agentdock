@@ -20,7 +20,13 @@ export function useAgentRuntimeOptions({
   const availableModels = effectiveSelectedAgent?.availableModels ?? [];
 
   const selectedModelId = effectiveSelectedAgent
-    ? (selectedModelByAgent[effectiveSelectedAgent.id] || effectiveSelectedAgent.currentModelId || availableModels[0]?.modelId || '')
+    ? (
+        [
+          selectedModelByAgent[effectiveSelectedAgent.id],
+          effectiveSelectedAgent.currentModelId,
+          availableModels[0]?.modelId,
+        ].find((modelId) => modelId && availableModels.some((model) => model.modelId === modelId)) || ''
+      )
     : '';
 
   const hasModesByModel = !!effectiveSelectedAgent?.availableModesByModel &&
@@ -93,9 +99,19 @@ export function useAgentRuntimeOptions({
     setSelectedModelByAgent((prev) => {
       const next: Record<string, string> = { ...prev };
       availableAgents.forEach((agent) => {
-        if (next[agent.id]) return;
-        const currentModel = agent.currentModelId || agent.availableModels?.[0]?.modelId || '';
-        if (currentModel) next[agent.id] = currentModel;
+        const models = agent.availableModels ?? [];
+        const currentSelection = next[agent.id];
+        if (currentSelection && models.some((model) => model.modelId === currentSelection)) return;
+
+        const currentModel = agent.currentModelId &&
+          models.some((model) => model.modelId === agent.currentModelId)
+            ? agent.currentModelId
+            : models[0]?.modelId;
+        if (currentModel) {
+          next[agent.id] = currentModel;
+        } else {
+          delete next[agent.id];
+        }
       });
       return next;
     });

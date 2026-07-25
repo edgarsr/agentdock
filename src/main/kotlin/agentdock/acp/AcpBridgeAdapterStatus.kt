@@ -138,6 +138,7 @@ private fun AcpBridge.buildAdapterPayload(
     val logoutAvailable = when (info.logoutMethod) {
         "acp" -> service.isAdapterLogoutAvailable(info.id)
         "cli" -> info.logoutArgs.isNotEmpty()
+        "copilotRpc" -> true
         else -> false
     }
     val installedVersion = probeState?.installedVersion
@@ -187,9 +188,10 @@ private fun AcpBridge.buildAdapterPayload(
         )
     val resolvedCurrentModelId = savedPreference?.modelId
         ?.takeIf { preferred ->
-            rawRuntimeMetadata.availableModels.isEmpty() || rawRuntimeMetadata.availableModels.any { it.modelId == preferred }
+            rawRuntimeMetadata.availableModels.any { it.modelId == preferred }
         }
         ?: rawRuntimeMetadata.currentModelId
+            ?.takeIf { current -> rawRuntimeMetadata.availableModels.any { it.modelId == current } }
     val resolvedAvailableModes = rawRuntimeMetadata.modesForModel(resolvedCurrentModelId)
     val resolvedCurrentModeId = savedPreference?.modeId
         ?.takeIf { preferred -> resolvedAvailableModes.any { it.id == preferred } }

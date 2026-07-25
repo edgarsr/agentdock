@@ -199,6 +199,24 @@ class AcpQuotaService : Disposable {
                         else -> secondaryPct ?: 0
                     }
                 }
+                "github-copilot-cli" -> {
+                    val quota = root["quota"] as? JsonObject
+                    val resetAt = (quota?.get("resetDate") as? JsonPrimitive)?.contentOrNull
+                    val unlimited = (quota?.get("isUnlimitedEntitlement") as? JsonPrimitive)?.booleanOrNull == true
+                    val remaining = (quota?.get("remainingPercentage") as? JsonPrimitive)?.doubleOrNull
+                    val usedPct = if (resetAt.isNullOrBlank() || hasDisplayableQuotaReset(resetAt)) {
+                        roundPercent(remaining?.let { 100.0 - it })
+                    } else null
+
+                    if (unlimited) {
+                        details.add("Plan: No limit")
+                    } else {
+                        usedPct?.let {
+                            details.add("Plan: $it%")
+                            mainPercent = it
+                        }
+                    }
+                }
             }
             if (details.isEmpty()) null
             else QuotaDetail(adapter.id, adapter.name, mainPercent, details)

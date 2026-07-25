@@ -1,5 +1,5 @@
 {
-  "path": "app.js",
+  "pathGlob": "node_modules/@github/copilot-*/app.js",
   "findRegex": "(async\\s+loadSession\\s*\\(\\s*([A-Za-z0-9_$]+)\\s*\\)\\s*\\{\\s*)if\\s*\\(\\s*this\\.sessions\\.has\\s*\\(\\s*\\2\\.sessionId\\s*\\)\\s*\\)\\s*throw\\s+new\\s+([A-Za-z0-9_$]+)\\s*\\(\\s*-32602\\s*,\\s*`Session \\$\\{\\2\\.sessionId\\} is already loaded`\\s*\\)\\s*;\\s*let\\s+([A-Za-z0-9_$]+)\\s*=\\s*await\\s+this\\.authManager\\.getCurrentAuthInfo\\s*\\(\\s*\\)\\s*;\\s*if\\s*\\(\\s*!\\4\\s*\\)\\s*throw\\s+\\3\\.authRequired\\s*\\(\\s*\\)\\s*;\\s*",
   "replace": "$1let $4=await this.authManager.getCurrentAuthInfo();if(!$4)throw $3.authRequired();let __agentDockExistingSession=this.sessions.get($2.sessionId);if(__agentDockExistingSession)return await this.replaySessionHistory($2.sessionId,__agentDockExistingSession.session),await this.buildSessionStateResponse($2.sessionId,__agentDockExistingSession,$4);",
   "alreadyApplied": "__agentDockExistingSession=this.sessions.get"

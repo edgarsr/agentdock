@@ -90,6 +90,10 @@ internal object AcpAuthenticationService {
                 cliLogout(adapterInfo)
                 true
             }
+            "copilotRpc" -> {
+                AcpCopilotAuthenticationRpc.logout(adapterId)
+                true
+            }
             null -> throw IllegalStateException("Logout is not configured for '$adapterId'")
             else -> throw IllegalStateException(
                 "Unsupported logout method '${adapterInfo.logoutMethod}' for '$adapterId'"
