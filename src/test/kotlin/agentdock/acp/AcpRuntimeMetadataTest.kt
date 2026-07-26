@@ -48,6 +48,22 @@ class AcpRuntimeMetadataTest {
                     { "value": "medium", "name": "Medium", "description": "Balanced" },
                     { "value": "high", "name": "High", "description": "Deeper reasoning" }
                   ]
+                },
+                {
+                  "id": "verbosity",
+                  "name": "Verbosity",
+                  "type": "select",
+                  "currentValue": "brief",
+                  "options": [
+                    { "value": "brief", "name": "Brief" },
+                    { "value": "detailed", "name": "Detailed" }
+                  ]
+                },
+                {
+                  "id": "use_tools",
+                  "name": "Use tools",
+                  "type": "boolean",
+                  "currentValue": true
                 }
               ]
             }
@@ -65,6 +81,8 @@ class AcpRuntimeMetadataTest {
         assertEquals("reasoning_effort", metadata.reasoningEffortConfigId)
         assertEquals("medium", metadata.currentReasoningEffortId)
         assertEquals(listOf("low", "medium", "high"), metadata.availableReasoningEfforts.map { it.id })
+        assertEquals("brief", metadata.configOptions.first { it.id == "verbosity" }.currentValue)
+        assertEquals("true", metadata.configOptions.first { it.id == "use_tools" }.currentValue)
     }
 
     @Test
@@ -314,56 +332,45 @@ class AcpRuntimeMetadataTest {
     }
 
     @Test
-    fun `fresh snapshot replaces current model options and preserves untouched model catalog`() {
+    fun `fresh snapshot replaces adapter options and preserves untouched model effort catalog`() {
         val existing = CachedAdapterConfigOptions(
             adapterId = "codex",
             adapterVersion = "1.0.0",
             refreshedAtMillis = 100L,
-            currentModelId = "model-a",
-            currentModeId = "old-mode",
-            currentReasoningEffortId = "high",
-            modelConfigId = "model",
-            modeConfigId = "mode",
-            reasoningEffortConfigId = "reasoning_effort",
-            models = listOf(
-                CachedModelConfigOptions(
-                    modelId = "model-a",
-                    name = "Model A",
-                    modes = listOf(AcpAdapterConfig.ModeInfo("old-mode", "Old mode")),
-                    efforts = listOf(AcpAdapterConfig.ModeInfo("high", "High")),
-                    configOptionsLoaded = true
-                ),
-                CachedModelConfigOptions(
-                    modelId = "model-b",
-                    name = "Model B",
-                    modes = listOf(AcpAdapterConfig.ModeInfo("plan", "Plan")),
-                    efforts = listOf(AcpAdapterConfig.ModeInfo("low", "Low")),
-                    configOptionsLoaded = true
+            configOptions = listOf(
+                AcpConfigOption(
+                    "reasoning_effort", "Reasoning", category = "thought_level", type = "select",
+                    currentValue = "high",
+                    options = listOf(AcpConfigOptionValue("high", "High"))
                 )
+            ),
+            reasoningEffortsByModel = mapOf(
+                "model-a" to listOf(AcpConfigOptionValue("high", "High", null)),
+                "model-b" to listOf(AcpConfigOptionValue("low", "Low", null))
             )
         )
         val fresh = AcpClientService.AdapterRuntimeMetadata(
-            currentModelId = "model-a",
-            availableModels = listOf(
-                AcpAdapterConfig.ModelInfo("model-a", "Model A"),
-                AcpAdapterConfig.ModelInfo("model-b", "Model B")
-            ),
-            modelConfigId = "model",
-            currentModeId = "new-mode",
-            availableModes = listOf(AcpAdapterConfig.ModeInfo("new-mode", "New mode")),
-            modeConfigId = "mode",
-            currentReasoningEffortId = null,
-            availableReasoningEfforts = emptyList(),
-            reasoningEffortConfigId = null
+            configOptions = listOf(
+                AcpConfigOption(
+                    "model", "Model", category = "model", type = "select", currentValue = "model-a",
+                    options = listOf(
+                        AcpConfigOptionValue("model-a", "Model A", null),
+                        AcpConfigOptionValue("model-b", "Model B", null)
+                    )
+                ),
+                AcpConfigOption(
+                    "mode", "Mode", category = "mode", type = "select", currentValue = "new-mode",
+                    options = listOf(AcpConfigOptionValue("new-mode", "New mode", null))
+                )
+            )
         )
 
         val updated = existing.updatedWithSnapshot(adapterInfo(), "1.0.0", fresh)
 
         assertEquals(100L, updated.refreshedAtMillis)
-        assertEquals(listOf("new-mode"), updated.models[0].modes.map { it.id })
-        assertEquals(emptyList(), updated.models[0].efforts)
-        assertEquals(listOf("plan"), updated.models[1].modes.map { it.id })
-        assertEquals(listOf("low"), updated.models[1].efforts.map { it.id })
+        assertEquals(emptyList(), updated.reasoningEffortsByModel["model-a"])
+        assertEquals(listOf("low"), updated.reasoningEffortsByModel["model-b"]?.map { it.value })
+        assertEquals("reasoning_effort", updated.configOptions.first { it.isReasoning() }.id)
         val runtime = updated.toRuntimeMetadata(adapterInfo())
         assertEquals("new-mode", runtime.currentModeId)
         assertEquals(null, runtime.currentReasoningEffortId)
@@ -372,15 +379,21 @@ class AcpRuntimeMetadataTest {
     @Test
     fun `cache preserves mode and effort options when adapter has no model selector`() {
         val metadata = AcpClientService.AdapterRuntimeMetadata(
-            currentModelId = null,
-            availableModels = emptyList(),
-            modelConfigId = null,
-            currentModeId = "build",
-            availableModes = listOf(AcpAdapterConfig.ModeInfo("build", "Build")),
-            modeConfigId = "mode",
-            currentReasoningEffortId = "medium",
-            availableReasoningEfforts = listOf(AcpAdapterConfig.ModeInfo("medium", "Medium")),
-            reasoningEffortConfigId = "reasoning_effort"
+            configOptions = listOf(
+                AcpConfigOption(
+                    "mode", "Mode", category = "mode", type = "select", currentValue = "build",
+                    options = listOf(AcpConfigOptionValue("build", "Build", null))
+                ),
+                AcpConfigOption(
+                    "reasoning_effort", "Reasoning", category = "thought_level", type = "select",
+                    currentValue = "medium",
+                    options = listOf(AcpConfigOptionValue("medium", "Medium", null))
+                ),
+                AcpConfigOption(
+                    "verbosity", "Verbosity", type = "select", currentValue = "brief",
+                    options = listOf(AcpConfigOptionValue("brief", "Brief", null))
+                )
+            )
         )
 
         val existing: CachedAdapterConfigOptions? = null
@@ -391,6 +404,7 @@ class AcpRuntimeMetadataTest {
         assertEquals(listOf("build"), restored.availableModes.map { it.id })
         assertEquals("medium", restored.currentReasoningEffortId)
         assertEquals(listOf("medium"), restored.availableReasoningEfforts.map { it.id })
+        assertEquals("brief", restored.configOptions.first { it.id == "verbosity" }.currentValue)
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
 import kotlinx.serialization.json.*
 import agentdock.history.ConversationAssistantMetadata
+import agentdock.history.ConversationConfigOptionMetadata
 import agentdock.history.HistoryDiffCompactor
 
 private val replayIgnoredUserCommandTags = listOf(
@@ -49,9 +50,7 @@ internal fun AcpBridge.recordStoredEvent(
         val role = event["role"]?.jsonPrimitive?.contentOrNull
         if (role == "assistant" && prompt.assistantMeta == null) {
             prompt.assistantMeta = buildAssistantMetadata(
-                adapterName = adapterName,
-                modelId = capture.currentModelId,
-                modeId = capture.currentModeId
+                adapterName = adapterName
             )
         }
         upsertStoredToolEvent(prompt.events, event)
@@ -255,8 +254,7 @@ internal fun AcpBridge.buildStoredContentChunk(
 
 internal fun AcpBridge.buildAssistantMetadata(
     adapterName: String,
-    modelId: String? = null,
-    modeId: String? = null,
+    configValues: Map<String, String> = emptyMap(),
     promptStartedAtMillis: Long? = null,
     durationSeconds: Double? = null,
     contextTokensUsed: Long? = null,
@@ -267,24 +265,24 @@ internal fun AcpBridge.buildAssistantMetadata(
 
     val adapterInfo = runCatching { AcpAdapterPaths.getAdapterInfo(cleanAdapterName) }.getOrNull()
     val runtimeMetadata = service.adapterRuntimeMetadata(cleanAdapterName)
-    val cleanModelId = modelId?.trim()?.takeIf { it.isNotBlank() }
-    val cleanModeId = modeId?.trim()?.takeIf { it.isNotBlank() }
+    val optionsById = runtimeMetadata?.configOptions.orEmpty().associateBy { it.id }
 
     return ConversationAssistantMetadata(
         agentId = cleanAdapterName,
         agentName = adapterInfo?.name ?: cleanAdapterName,
-        modelId = cleanModelId,
-        modelName = cleanModelId?.let { model ->
-            runtimeMetadata?.availableModels?.firstOrNull { it.modelId == model }?.name ?: model
-        },
-        modeId = cleanModeId,
-        modeName = cleanModeId?.let { mode ->
-            runtimeMetadata?.availableModes?.firstOrNull { it.id == mode }?.name ?: mode
-        },
         promptStartedAtMillis = promptStartedAtMillis,
         durationSeconds = durationSeconds,
         contextTokensUsed = contextTokensUsed,
-        contextWindowSize = contextWindowSize
+        contextWindowSize = contextWindowSize,
+        configOptions = configValues.map { (id, value) ->
+            val option = optionsById[id]
+            ConversationConfigOptionMetadata(
+                id = id,
+                name = option?.name ?: id,
+                value = value,
+                displayValue = option?.options?.firstOrNull { it.value == value }?.name ?: value
+            )
+        }
     )
 }
 

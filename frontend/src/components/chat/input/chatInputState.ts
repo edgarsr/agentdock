@@ -3,6 +3,7 @@ import {
   AudioTranscriptionFeatureState,
   AvailableCommand,
   ChatAttachment,
+  ConfigOption,
   DropdownOption,
 } from '../../../types/chat';
 
@@ -30,6 +31,8 @@ export interface ChatInputProps {
   reasoningEffortOptions: DropdownOption[];
   selectedReasoningEffortId: string;
   onReasoningEffortChange: (id: string) => void;
+  additionalConfigOptions: ConfigOption[];
+  onConfigOptionChange: (configId: string, value: string) => void;
   approvalMode: ApprovalMode;
   onApprovalModeChange: (mode: ApprovalMode) => void;
   hasSelectedAgent: boolean;

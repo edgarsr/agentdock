@@ -28,6 +28,13 @@ internal data class AdapterReasoningEffortPayload(
 )
 
 @Serializable
+internal data class SessionConfigOptionsPayload(
+    val chatId: String,
+    val configOptions: List<AcpConfigOption>,
+    val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>>
+)
+
+@Serializable
 internal data class AdapterAuthMethodPayload(
     val id: String,
     val name: String,
@@ -44,10 +51,10 @@ internal data class AdapterPayload(
     val availableModels: List<AdapterModelPayload>,
     val currentModeId: String,
     val availableModes: List<AdapterModePayload>,
-    val availableModesByModel: Map<String, List<AdapterModePayload>> = emptyMap(),
     val currentReasoningEffortId: String,
     val availableReasoningEfforts: List<AdapterReasoningEffortPayload>,
-    val reasoningEffortsByModel: Map<String, List<AdapterReasoningEffortPayload>> = emptyMap(),
+    val configOptions: List<AcpConfigOption>,
+    val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>> = emptyMap(),
     val downloaded: Boolean? = null,
     val downloadedKnown: Boolean = false,
     val downloadPath: String = "",
@@ -174,8 +181,6 @@ internal data class HistoryReplayCapture(
     val conversationId: String,
     var currentSessionId: String? = null,
     var currentAdapterName: String? = null,
-    var currentModelId: String? = null,
-    var currentModeId: String? = null,
     val sessions: MutableList<ReplaySessionCapture> = mutableListOf()
 )
 

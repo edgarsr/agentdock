@@ -123,8 +123,10 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
     promptTime ? { label: 'Prompt time', value: promptTime } : null,
     duration ? { label: 'Duration', value: duration } : null,
     message.agentName ? { label: 'Agent', value: message.agentName } : null,
-    message.modelName ? { label: 'Model', value: message.modelName } : null,
-    message.modeName ? { label: 'Mode', value: message.modeName } : null,
+    ...(message.configOptions ?? []).map((option) => ({
+      label: option.name,
+      value: option.displayValue || option.value,
+    })),
     contextUsage ? { label: 'Context', value: contextUsage } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
   const hasMetaTooltip = tooltipRows.length > 0;

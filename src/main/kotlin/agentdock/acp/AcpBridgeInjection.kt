@@ -11,9 +11,9 @@ import agentdock.utils.escapeForJsString
  * (injectReadySignal runs first on page load and only sets no-op stubs for __on* and __downloadAgent etc.)
  */
 internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
-    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
+    val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), configValues: (configValues || {}) })") ?: ""
     val listAdaptersInject = listAdaptersQuery?.inject("(forceRefresh === true ? 'refresh' : '')") ?: ""
-    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null, adapterId: (adapterId || ''), modelId: (modelId || ''), modeId: (modeId || ''), reasoningEffortId: (reasoningEffortId || '') })") ?: ""
+    val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null, adapterId: (adapterId || ''), configValues: (configValues || {}) })") ?: ""
     val cancelPromptInject = cancelPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId })") ?: ""
     val stopAgentInject = stopAgentQuery?.inject("chatId") ?: ""
     val respondPermissionInject = respondPermissionQuery?.inject("JSON.stringify({ requestId: requestId, decision: decision })") ?: ""
@@ -53,12 +53,12 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__requestAdapters = function(forceRefresh) {
                 try { $listAdaptersInject } catch (e) { }
             };
-            window.__startAgent = function(chatId, adapterId, modelId, modeId, requestId, reasoningEffortId) {
+            window.__startAgent = function(chatId, adapterId, configValues, requestId) {
                 try {
                     $startAgentInject
                 } catch (e) { }
             };
-            window.__sendPrompt = function(chatId, message, requestId, forkBase, adapterId, modelId, modeId, reasoningEffortId) {
+            window.__sendPrompt = function(chatId, message, requestId, forkBase, adapterId, configValues) {
                 try {
                     $sendPromptInject
                 } catch (e) { }
@@ -180,6 +180,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__onAdapterRefreshState = window.__onAdapterRefreshState || function(refreshing) {};
         window.__onAvailableCommands = window.__onAvailableCommands || function(adapterId, commands) {};
         window.__onMode = window.__onMode || function(chatId, modeId) {};
+        window.__onSessionConfigOptions = window.__onSessionConfigOptions || function(payload) {};
         window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
         window.__respondPermission = window.__respondPermission || function(requestId, decision) {};
         window.__stopAgent = window.__stopAgent || function(chatId) {};

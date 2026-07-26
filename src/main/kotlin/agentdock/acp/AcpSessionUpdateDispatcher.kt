@@ -100,17 +100,15 @@ private fun AcpClientService.updateRuntimeMetadataFromConfigOptionsNotification(
     val (sessionId, configOptions) = extractConfigOptionsUpdate(params) ?: return
     if (configProbeSessionKeys.contains(configProbeSessionKey(adapterName, sessionId))) return
     val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
-    val metadata = storeFreshAdapterRuntimeMetadata(
-        adapterInfo,
-        runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
-    )
-
     val targetContext = synchronized(liveOwnerBySessionId) {
         liveOwnerBySessionId[sessionId]?.let { ownerChatId -> sessions[ownerChatId] }
     }
-    targetContext?.activeModelIdRef?.set(metadata.currentModelId)
-    targetContext?.activeModeIdRef?.set(metadata.currentModeId)
-    targetContext?.activeReasoningEffortIdRef?.set(metadata.currentReasoningEffortId)
+    val metadata = runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
+    if (targetContext != null) {
+        updateSessionRuntimeMetadata(adapterInfo, metadata, targetContext)
+    } else {
+        AcpConfigOptionsCache.updateFromSnapshot(adapterInfo, metadata)
+    }
 }
 
 internal fun AcpClientService.extractAvailableCommands(

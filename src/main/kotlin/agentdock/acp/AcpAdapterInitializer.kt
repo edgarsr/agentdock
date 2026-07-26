@@ -21,6 +21,13 @@ internal fun AcpClientService.initializeAdapterInBackground(adapterName: String)
     val downloaded = runCatching { AcpAdapterPaths.isDownloaded(adapterId) }.getOrDefault(false)
     if (!downloaded) return
 
+    val cachedMetadata = AcpConfigOptionsCache.readValid(adapterInfo)?.toRuntimeMetadata(adapterInfo)
+    if (cachedMetadata != null) {
+        adapterRuntimeMetadataMap[adapterId] = cachedMetadata
+    } else {
+        adapterRuntimeMetadataMap.remove(adapterId)
+    }
+
     updateAdapterInitializationState(
         adapterId,
         AcpClientService.AdapterInitializationStatus.Initializing,

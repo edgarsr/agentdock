@@ -13,6 +13,7 @@ data class SessionMeta(
     val promptCount: Int? = null,
     val modelId: String? = null,
     val modeId: String? = null,
+    val configOptions: Map<String, String> = emptyMap(),
     val projectPath: String,
     val title: String,
     val filePath: String,
@@ -34,17 +35,22 @@ data class ProcessedFileState(
 )
 
 @Serializable
+data class ConversationConfigOptionMetadata(
+    val id: String,
+    val name: String,
+    val value: String,
+    val displayValue: String = ""
+)
+
+@Serializable
 data class ConversationAssistantMetadata(
     val agentId: String? = null,
     val agentName: String? = null,
-    val modelId: String? = null,
-    val modelName: String? = null,
-    val modeId: String? = null,
-    val modeName: String? = null,
     val promptStartedAtMillis: Long? = null,
     val durationSeconds: Double? = null,
     val contextTokensUsed: Long? = null,
-    val contextWindowSize: Long? = null
+    val contextWindowSize: Long? = null,
+    val configOptions: List<ConversationConfigOptionMetadata> = emptyList()
 )
 
 @Serializable
@@ -94,6 +100,7 @@ internal data class HistorySessionChangesEntry(
 internal data class HistorySessionIndexEntry(
     val sessionId: String,
     val adapterName: String,
+    val configOptions: Map<String, String> = emptyMap(),
     val createdAt: Long,
     val updatedAt: Long,
     val sourceFilePath: String? = null,

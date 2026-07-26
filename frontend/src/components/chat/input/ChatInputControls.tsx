@@ -1,13 +1,18 @@
 import { RefObject } from 'react';
 import {
+  CornerDownLeft,
+  Keyboard as KeyboardIcon,
   ListPlus,
   LoaderCircle,
   Mic,
   Plus,
   SendHorizontal,
+  ShieldCheck,
+  ShieldQuestion,
+  SlidersHorizontal,
   Square,
 } from 'lucide-react';
-import { ApprovalMode, DropdownOption } from '../../../types/chat';
+import { ApprovalMode, ConfigOption, DropdownOption } from '../../../types/chat';
 import { SlashCommandItem } from './slashCommands';
 import ChatDropdown from '../ChatDropdown';
 import { ChatUsageIndicator } from '../../usage/chat/ChatUsageIndicator';
@@ -28,6 +33,7 @@ interface ChatInputControlsProps {
   modeOptions: DropdownOption[];
   selectedReasoningEffortId: string;
   reasoningEffortOptions: DropdownOption[];
+  additionalConfigOptions: ConfigOption[];
   approvalMode: ApprovalMode;
   isSending: boolean;
   hasSelectedAgent: boolean;
@@ -49,6 +55,7 @@ interface ChatInputControlsProps {
   onModelChange: (id: string, targetAgentId?: string) => void;
   onModeChange: (id: string) => void;
   onReasoningEffortChange: (id: string) => void;
+  onConfigOptionChange: (configId: string, value: string) => void;
   onApprovalModeChange: (mode: ApprovalMode) => void;
   onSend: () => void;
   onQueueDraft?: () => void;
@@ -69,6 +76,7 @@ export function ChatInputControls({
   modeOptions,
   selectedReasoningEffortId,
   reasoningEffortOptions,
+  additionalConfigOptions,
   approvalMode,
   isSending,
   hasSelectedAgent,
@@ -90,6 +98,7 @@ export function ChatInputControls({
   onModelChange,
   onModeChange,
   onReasoningEffortChange,
+  onConfigOptionChange,
   onApprovalModeChange,
   onSend,
   onQueueDraft,
@@ -102,9 +111,7 @@ export function ChatInputControls({
     <div ref={controlsRowRef} className="flex flex-wrap items-stretch gap-y-1 px-1 py-1 text-foreground">
       <div className="flex min-w-0 flex-1 items-stretch">
         <ChatDropdown
-          value="send-mode"
-          subValue={sendMode}
-          subValues={{ 'send-mode': sendMode, approvals: approvalMode }}
+          value=""
           options={plusMenuOptions}
           placeholder=""
           disabled={false}
@@ -121,17 +128,6 @@ export function ChatInputControls({
             }
           }}
           onSubChange={(parentId, subId) => {
-            if (parentId === 'send-mode') {
-              setSendMode(subId as 'enter' | 'ctrl-enter');
-              localStorage.setItem('chat-send-mode', subId);
-              return;
-            }
-
-            if (parentId === 'approvals') {
-              onApprovalModeChange(subId as ApprovalMode);
-              return;
-            }
-
             if (parentId === 'commands') {
               handleInsertSlashItem(subId, agentSlashItems);
               return;
@@ -146,9 +142,9 @@ export function ChatInputControls({
         <ChatDropdown
           value={selectedAgentId}
           subValue={selectedModelId}
-          options={agentOptions}
+          options={isSending ? agentOptions.filter((option) => option.id === selectedAgentId) : agentOptions}
           placeholder="Select Agent"
-          disabled={isSending}
+          disabled={false}
           collapsed={collapsedAgentDropdown}
           showSubValueInTrigger={true}
           onChange={onAgentChange}
@@ -161,7 +157,7 @@ export function ChatInputControls({
             value={selectedModeId}
             options={modeOptions}
             placeholder="Mode"
-            disabled={isSending || !hasSelectedAgent}
+            disabled={!hasSelectedAgent}
             onChange={onModeChange}
             className="ml-0.5"
           />
@@ -172,11 +168,89 @@ export function ChatInputControls({
             value={selectedReasoningEffortId}
             options={reasoningEffortOptions}
             placeholder="Reasoning"
-            disabled={isSending || !hasSelectedAgent}
+            disabled={!hasSelectedAgent}
             onChange={onReasoningEffortChange}
             className="ml-0.5"
           />
         )}
+
+        <ChatDropdown
+          value=""
+          subValues={{
+            'send-mode': sendMode,
+            approvals: approvalMode,
+            ...Object.fromEntries(additionalConfigOptions.map((option) => [option.id, option.currentValue])),
+          }}
+          options={[
+            {
+              id: 'send-mode',
+              label: 'Send mode',
+              subOptions: [
+                { id: 'enter', label: 'Enter', icon: <CornerDownLeft className="w-4 h-4" /> },
+                { id: 'ctrl-enter', label: 'Ctrl+Enter', icon: <KeyboardIcon className="w-4 h-4" /> },
+              ],
+            },
+            {
+              id: 'approvals',
+              label: 'Approvals',
+              subOptions: [
+                {
+                  id: 'ask',
+                  label: 'Ask approvals',
+                  description: 'Show agent approval prompts',
+                  icon: <ShieldQuestion className="w-4 h-4" />,
+                },
+                {
+                  id: 'auto',
+                  label: 'Auto approve',
+                  description: 'Automatically approve tool requests when a normal approve option is available',
+                  icon: <ShieldCheck className="w-4 h-4" />,
+                },
+              ],
+            },
+            ...additionalConfigOptions.map((option) => {
+              const values = option.type === 'boolean'
+                ? [
+                    { id: 'true', label: 'Enabled' },
+                    { id: 'false', label: 'Disabled' },
+                  ]
+                : option.options.map((value) => ({
+                    id: value.value,
+                    label: value.name,
+                    description: value.description,
+                  }));
+
+              return {
+                id: option.id,
+                label: option.name,
+                description: option.description,
+                subOptions: values,
+              };
+            }),
+          ]}
+          placeholder="Options"
+          disabled={false}
+          customTrigger={
+            <Tooltip variant="minimal" content="Options">
+              <div className="flex items-center">
+                <SlidersHorizontal size={16} aria-hidden="true" />
+                <span className="sr-only">Options</span>
+              </div>
+            </Tooltip>
+          }
+          onChange={() => {}}
+          onSubChange={(parentId, subId) => {
+            if (parentId === 'send-mode') {
+              setSendMode(subId as 'enter' | 'ctrl-enter');
+              localStorage.setItem('chat-send-mode', subId);
+            } else if (parentId === 'approvals') {
+              onApprovalModeChange(subId as ApprovalMode);
+            } else {
+              onConfigOptionChange(parentId, subId);
+            }
+          }}
+          className="ml-0.5 mr-1"
+        />
 
         {showAuxIndicators && selectedAgentId && (
           <AdapterUsageLifecycleProvider

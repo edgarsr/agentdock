@@ -38,33 +38,36 @@ data class PermissionRequest(
 )
 
 class AcpClientService private constructor(val project: Project) {
-    data class AdapterRuntimeMetadata(
-        val currentModelId: String?,
-        val availableModels: List<AcpAdapterConfig.ModelInfo>,
-        val modelConfigId: String? = null,
-        val currentModeId: String?,
-        val availableModes: List<AcpAdapterConfig.ModeInfo>,
-        val modeConfigId: String? = null,
-        val currentReasoningEffortId: String? = null,
-        val availableReasoningEfforts: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-        val reasoningEffortConfigId: String? = null,
-        val availableModesByModel: Map<String, List<AcpAdapterConfig.ModeInfo>> = emptyMap(),
-        val availableReasoningEffortsByModel: Map<String, List<AcpAdapterConfig.ModeInfo>> = emptyMap()
+    internal data class AdapterRuntimeMetadata(
+        val configOptions: List<AcpConfigOption>,
+        val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>> = emptyMap()
     ) {
-        fun modesForModel(modelId: String?): List<AcpAdapterConfig.ModeInfo> {
-            return if (availableModesByModel.isEmpty()) {
-                availableModes
-            } else {
-                modelId?.let { availableModesByModel[it] }.orEmpty()
-            }
+        private fun option(vararg categories: String): AcpConfigOption? =
+            configOptions.firstOrNull { option -> categories.any(option::matchesCategory) }
+
+        private val modelOption get() = option("model")
+        private val modeOption get() = option("mode")
+        private val reasoningOption get() = option("thought_level", "reasoning_effort")
+
+        val currentModelId get() = modelOption?.currentValue?.takeIf(String::isNotEmpty)
+        val availableModels get() = modelOption?.options.orEmpty().map {
+            AcpAdapterConfig.ModelInfo(it.value, it.name, it.description)
         }
+        val modelConfigId get() = modelOption?.id
+        val currentModeId get() = modeOption?.currentValue?.takeIf(String::isNotEmpty)
+        val availableModes get() = modeOption?.options.orEmpty().map {
+            AcpAdapterConfig.ModeInfo(it.value, it.name, it.description)
+        }
+        val modeConfigId get() = modeOption?.id
+        val currentReasoningEffortId get() = reasoningOption?.currentValue?.takeIf(String::isNotEmpty)
+        val availableReasoningEfforts get() = reasoningOption?.options.orEmpty().map {
+            AcpAdapterConfig.ModeInfo(it.value, it.name, it.description)
+        }
+        val reasoningEffortConfigId get() = reasoningOption?.id
 
         fun reasoningEffortsForModel(modelId: String?): List<AcpAdapterConfig.ModeInfo> {
-            return if (availableReasoningEffortsByModel.isEmpty()) {
-                availableReasoningEfforts
-            } else {
-                modelId?.let { availableReasoningEffortsByModel[it] }.orEmpty()
-            }
+            val values = modelId?.let { reasoningEffortsByModel[it] } ?: reasoningOption?.options.orEmpty()
+            return values.map { AcpAdapterConfig.ModeInfo(it.value, it.name, it.description) }
         }
     }
 
@@ -126,6 +129,13 @@ class AcpClientService private constructor(val project: Project) {
 
     fun setOnAdapterInitializationStateChanged(handler: (String, AdapterInitializationStatus, String?) -> Unit) {
         adapterInitializationStateHandler = handler
+    }
+
+    @Volatile
+    internal var sessionConfigOptionsHandler: ((String, AdapterRuntimeMetadata) -> Unit)? = null
+
+    internal fun setOnSessionConfigOptionsChanged(handler: (String, AdapterRuntimeMetadata) -> Unit) {
+        sessionConfigOptionsHandler = handler
     }
 
     internal fun bindLiveSessionOwner(chatId: String, sessionId: String?) {
@@ -218,7 +228,7 @@ class AcpClientService private constructor(val project: Project) {
     }
     fun adapterInitializationError(adapterName: String): String? = adapterInitializationErrors[adapterName]
     fun adapterInitializationDetail(adapterName: String): String? = adapterInitializationDetails[adapterName]
-    fun adapterRuntimeMetadata(adapterName: String): AdapterRuntimeMetadata? = adapterRuntimeMetadataMap[adapterName]
+    internal fun adapterRuntimeMetadata(adapterName: String): AdapterRuntimeMetadata? = adapterRuntimeMetadataMap[adapterName]
     internal fun availableCommands(adapterName: String): List<AvailableCommandPayload> = availableCommandsByAdapter[adapterName] ?: emptyList()
     internal fun allAvailableCommands(): Map<String, List<AvailableCommandPayload>> = availableCommandsByAdapter.toMap()
     fun isAdapterReady(adapterName: String): Boolean {
@@ -320,6 +330,8 @@ class AcpClientService private constructor(val project: Project) {
         val activeModelIdRef = AtomicReference<String?>(null)
         val activeModeIdRef = AtomicReference<String?>(null)
         val activeReasoningEffortIdRef = AtomicReference<String?>(null)
+        val activeConfigValues = ConcurrentHashMap<String, String>()
+        val runtimeMetadataRef = AtomicReference<AdapterRuntimeMetadata?>(null)
         val promptGeneration = AtomicLong(0)
         @Volatile var lastHistoryLoadTime: Long = System.currentTimeMillis()
         @Volatile var allowReplayDelivery: Boolean = true
@@ -341,6 +353,8 @@ class AcpClientService private constructor(val project: Project) {
             activeModelIdRef.set(null)
             activeModeIdRef.set(null)
             activeReasoningEffortIdRef.set(null)
+            activeConfigValues.clear()
+            runtimeMetadataRef.set(null)
             promptGeneration.incrementAndGet()
             lastHistoryLoadTime = 0
             allowReplayDelivery = true

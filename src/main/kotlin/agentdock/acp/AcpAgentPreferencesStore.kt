@@ -8,9 +8,7 @@ import java.io.File
 
 @Serializable
 data class AcpAgentPreference(
-    val modelId: String = "",
-    val modeId: String = "",
-    val reasoningEffortId: String = ""
+    val configOptions: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -49,9 +47,7 @@ object AcpAgentPreferencesStore {
 
     fun preferenceFor(adapterId: String): AcpAgentPreference? {
         if (adapterId.isBlank()) return null
-        return load().agents[adapterId]?.takeIf {
-            it.modelId.isNotBlank() || it.modeId.isNotBlank() || it.reasoningEffortId.isNotBlank()
-        }
+        return load().agents[adapterId]?.takeIf { it.configOptions.isNotEmpty() }
     }
 
     fun rememberAgent(adapterId: String) {
@@ -60,41 +56,18 @@ object AcpAgentPreferencesStore {
         updateState { current -> current.copy(lastAgentId = trimmedAdapterId) }
     }
 
-    fun rememberModel(adapterId: String, modelId: String) {
+    fun rememberConfigOptions(adapterId: String, values: Map<String, String>) {
         val trimmedAdapterId = adapterId.trim()
-        val trimmedModelId = modelId.trim()
-        if (trimmedAdapterId.isEmpty() || trimmedModelId.isEmpty()) return
+        val normalizedValues = values.mapNotNull { (id, value) ->
+            val normalizedId = id.trim()
+            val normalizedValue = value.trim()
+            if (normalizedId.isEmpty() || normalizedValue.isEmpty()) null else normalizedId to normalizedValue
+        }.toMap()
+        if (trimmedAdapterId.isEmpty() || normalizedValues.isEmpty()) return
         updateState { current ->
-            val existing = current.agents[trimmedAdapterId] ?: AcpAgentPreference()
             current.copy(
                 lastAgentId = current.lastAgentId,
-                agents = current.agents + (trimmedAdapterId to existing.copy(modelId = trimmedModelId))
-            )
-        }
-    }
-
-    fun rememberMode(adapterId: String, modeId: String) {
-        val trimmedAdapterId = adapterId.trim()
-        val trimmedModeId = modeId.trim()
-        if (trimmedAdapterId.isEmpty() || trimmedModeId.isEmpty()) return
-        updateState { current ->
-            val existing = current.agents[trimmedAdapterId] ?: AcpAgentPreference()
-            current.copy(
-                lastAgentId = current.lastAgentId,
-                agents = current.agents + (trimmedAdapterId to existing.copy(modeId = trimmedModeId))
-            )
-        }
-    }
-
-    fun rememberReasoningEffort(adapterId: String, reasoningEffortId: String) {
-        val trimmedAdapterId = adapterId.trim()
-        val trimmedReasoningEffortId = reasoningEffortId.trim()
-        if (trimmedAdapterId.isEmpty() || trimmedReasoningEffortId.isEmpty()) return
-        updateState { current ->
-            val existing = current.agents[trimmedAdapterId] ?: AcpAgentPreference()
-            current.copy(
-                lastAgentId = current.lastAgentId,
-                agents = current.agents + (trimmedAdapterId to existing.copy(reasoningEffortId = trimmedReasoningEffortId))
+                agents = current.agents + (trimmedAdapterId to AcpAgentPreference(normalizedValues))
             )
         }
     }
@@ -135,16 +108,13 @@ object AcpAgentPreferencesStore {
             if (trimmedAdapterId.isEmpty()) {
                 null
             } else {
-                val normalizedPref = AcpAgentPreference(
-                    modelId = pref.modelId.trim(),
-                    modeId = pref.modeId.trim(),
-                    reasoningEffortId = pref.reasoningEffortId.trim()
-                )
-                if (
-                    normalizedPref.modelId.isEmpty() &&
-                    normalizedPref.modeId.isEmpty() &&
-                    normalizedPref.reasoningEffortId.isEmpty()
-                ) {
+                val normalizedPref = AcpAgentPreference(pref.configOptions.mapNotNull { (id, value) ->
+                    val normalizedId = id.trim()
+                    val normalizedValue = value.trim()
+                    if (normalizedId.isEmpty() || normalizedValue.isEmpty()) null
+                    else normalizedId to normalizedValue
+                }.toMap())
+                if (normalizedPref.configOptions.isEmpty()) {
                     null
                 } else {
                     trimmedAdapterId to normalizedPref

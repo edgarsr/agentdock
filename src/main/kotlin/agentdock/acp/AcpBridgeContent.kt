@@ -180,9 +180,7 @@ internal fun AcpBridge.recordUsageUpdate(
         val session = getOrCreateReplaySession(capture, sessionId, adapterName)
         val prompt = getOrCreateReplayPrompt(session, startNewIfNeeded = false)
         val current = prompt.assistantMeta ?: buildAssistantMetadata(
-            adapterName = adapterName,
-            modelId = capture.currentModelId,
-            modeId = capture.currentModeId
+            adapterName = adapterName
         )
         prompt.assistantMeta = current?.copy(
             contextTokensUsed = used ?: current.contextTokensUsed,
@@ -301,6 +299,25 @@ internal fun AcpBridge.pushMode(chatId: String, modeId: String?) {
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
             "if(window.__onMode) window.__onMode($escapedChatId, $escapedModeId);",
+            browser.cefBrowser.url, 0
+        )
+    }
+}
+
+internal fun AcpBridge.pushSessionConfigOptions(
+    chatId: String,
+    metadata: AcpClientService.AdapterRuntimeMetadata
+) {
+    val payload = Json.encodeToString(
+        SessionConfigOptionsPayload(
+            chatId = chatId,
+            configOptions = metadata.configOptions,
+            reasoningEffortsByModel = metadata.reasoningEffortsByModel
+        )
+    ).escapeForJsString()
+    runOnEdt {
+        browser.cefBrowser.executeJavaScript(
+            "if(window.__onSessionConfigOptions) window.__onSessionConfigOptions(JSON.parse('$payload'));",
             browser.cefBrowser.url, 0
         )
     }
@@ -456,14 +473,11 @@ internal fun AcpBridge.pushPromptDoneChunk(
         put("promptOutcome", outcome)
         metadata.agentId?.let { put("agentId", it) }
         metadata.agentName?.let { put("agentName", it) }
-        metadata.modelId?.let { put("modelId", it) }
-        metadata.modelName?.let { put("modelName", it) }
-        metadata.modeId?.let { put("modeId", it) }
-        metadata.modeName?.let { put("modeName", it) }
         metadata.promptStartedAtMillis?.let { put("promptStartedAtMillis", it) }
         metadata.durationSeconds?.let { put("durationSeconds", it) }
         metadata.contextTokensUsed?.let { put("contextTokensUsed", it) }
         metadata.contextWindowSize?.let { put("contextWindowSize", it) }
+        put("configOptions", Json.encodeToJsonElement(metadata.configOptions))
         if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)

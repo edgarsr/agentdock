@@ -123,7 +123,7 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                             pushStatus(chatId, "initializing")
                             startHistoryReplayCapture(chatId, projectPath, conversationId)
                             val lastSession = sessionsChain.last()
-                            beginImportedReplaySession(chatId, lastSession.sessionId, lastSession.adapterName, lastSession.modelId, lastSession.modeId)
+                            beginImportedReplaySession(chatId, lastSession.sessionId, lastSession.adapterName)
                             withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
                                 service.loadSession(
                                     chatId,

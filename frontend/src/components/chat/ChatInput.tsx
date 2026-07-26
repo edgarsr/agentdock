@@ -31,6 +31,8 @@ export default function ChatInput(props: ChatInputProps) {
     reasoningEffortOptions,
     selectedReasoningEffortId,
     onReasoningEffortChange,
+    additionalConfigOptions,
+    onConfigOptionChange,
     approvalMode,
     onApprovalModeChange,
     hasSelectedAgent,
@@ -130,6 +132,7 @@ export default function ChatInput(props: ChatInputProps) {
             modeOptions={modeOptions}
             selectedReasoningEffortId={selectedReasoningEffortId}
             reasoningEffortOptions={reasoningEffortOptions}
+            additionalConfigOptions={additionalConfigOptions}
             approvalMode={approvalMode}
             isSending={isSending}
             hasSelectedAgent={hasSelectedAgent}
@@ -151,6 +154,7 @@ export default function ChatInput(props: ChatInputProps) {
             onModelChange={onModelChange}
             onModeChange={onModeChange}
             onReasoningEffortChange={onReasoningEffortChange}
+            onConfigOptionChange={onConfigOptionChange}
             onApprovalModeChange={onApprovalModeChange}
             onSend={onSend}
             onQueueDraft={onQueueDraft}

@@ -1,233 +1,187 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AgentOption, HistorySessionMeta } from '../../types/chat';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AgentOption,
+  ConfigOption,
+  HistorySessionMeta,
+  SessionConfigOptionsPayload,
+} from '../../types/chat';
 
 type UseAgentRuntimeOptionsArgs = {
   availableAgents: AgentOption[];
   effectiveSelectedAgent: AgentOption | undefined;
   selectedAgentId: string;
   historySession?: HistorySessionMeta;
+  sessionConfigOptions?: SessionConfigOptionsPayload;
 };
+
+const matches = (option: ConfigOption, category: string) =>
+  option.id === category || option.category === category;
+
+const isReasoning = (option: ConfigOption) =>
+  matches(option, 'thought_level') || matches(option, 'reasoning_effort');
+
+const accepts = (option: ConfigOption, value?: string) =>
+  !!value && (option.type === 'boolean'
+    ? value === 'true' || value === 'false'
+    : option.options.some((item) => item.value === value));
+
+const EMPTY_SELECTION: Record<string, string> = {};
 
 export function useAgentRuntimeOptions({
   availableAgents,
   effectiveSelectedAgent,
   selectedAgentId,
   historySession,
+  sessionConfigOptions,
 }: UseAgentRuntimeOptionsArgs) {
-  const [selectedModelByAgent, setSelectedModelByAgent] = useState<Record<string, string>>({});
-  const [selectedModeByAgent, setSelectedModeByAgent] = useState<Record<string, string>>({});
-  const [selectedReasoningEffortByAgent, setSelectedReasoningEffortByAgent] = useState<Record<string, string>>({});
-  const availableModels = effectiveSelectedAgent?.availableModels ?? [];
-
-  const selectedModelId = effectiveSelectedAgent
-    ? (
-        [
-          selectedModelByAgent[effectiveSelectedAgent.id],
-          effectiveSelectedAgent.currentModelId,
-          availableModels[0]?.modelId,
-        ].find((modelId) => modelId && availableModels.some((model) => model.modelId === modelId)) || ''
-      )
+  const [selectedByAgent, setSelectedByAgent] = useState<Record<string, Record<string, string>>>({});
+  const dirtyConfigIdsByAgent = useRef<Record<string, Set<string>>>({});
+  const sessionAgentId = effectiveSelectedAgent?.id;
+  const options = sessionConfigOptions?.configOptions ?? effectiveSelectedAgent?.configOptions ?? [];
+  const selected = effectiveSelectedAgent
+    ? selectedByAgent[effectiveSelectedAgent.id] ?? EMPTY_SELECTION
+    : EMPTY_SELECTION;
+  const modelOption = options.find((option) => matches(option, 'model'));
+  const modelValue = selected[modelOption?.id ?? ''];
+  const selectedModelId = modelOption
+    ? (accepts(modelOption, modelValue) ? modelValue! : modelOption.currentValue || modelOption.options[0]?.value || '')
     : '';
 
-  const hasModesByModel = !!effectiveSelectedAgent?.availableModesByModel &&
-    Object.keys(effectiveSelectedAgent.availableModesByModel).length > 0;
-  const availableModes = hasModesByModel
-    ? (selectedModelId ? effectiveSelectedAgent?.availableModesByModel?.[selectedModelId] ?? [] : [])
-    : effectiveSelectedAgent?.availableModes ?? [];
-  const availableModeIds = useMemo(() => new Set(availableModes.map((mode) => mode.id)), [availableModes]);
-
-  const hasReasoningEffortsByModel = !!effectiveSelectedAgent?.reasoningEffortsByModel &&
-    Object.keys(effectiveSelectedAgent.reasoningEffortsByModel).length > 0;
-  const availableReasoningEfforts = hasReasoningEffortsByModel
-    ? (selectedModelId ? effectiveSelectedAgent?.reasoningEffortsByModel?.[selectedModelId] ?? [] : [])
-    : effectiveSelectedAgent?.availableReasoningEfforts ?? [];
-  const availableReasoningEffortIds = useMemo(
-    () => new Set(availableReasoningEfforts.map((effort) => effort.id)),
-    [availableReasoningEfforts]
-  );
-
-  const selectedModeId = effectiveSelectedAgent
-    ? (
-        selectedModeByAgent[effectiveSelectedAgent.id] &&
-        availableModeIds.has(selectedModeByAgent[effectiveSelectedAgent.id])
-          ? selectedModeByAgent[effectiveSelectedAgent.id]
-          : (
-              effectiveSelectedAgent.currentModeId &&
-              availableModeIds.has(effectiveSelectedAgent.currentModeId)
-                ? effectiveSelectedAgent.currentModeId
-                : availableModes[0]?.id || ''
-            )
-      )
-    : '';
-
-  const selectedReasoningEffortId = effectiveSelectedAgent
-    ? (
-        selectedReasoningEffortByAgent[effectiveSelectedAgent.id] &&
-        availableReasoningEffortIds.has(selectedReasoningEffortByAgent[effectiveSelectedAgent.id])
-          ? selectedReasoningEffortByAgent[effectiveSelectedAgent.id]
-          : (
-              effectiveSelectedAgent.currentReasoningEffortId &&
-              availableReasoningEffortIds.has(effectiveSelectedAgent.currentReasoningEffortId)
-                ? effectiveSelectedAgent.currentReasoningEffortId
-                : availableReasoningEfforts[0]?.id || ''
-            )
-      )
-    : '';
-
-  const modelIdForStart = selectedAgentId
-    ? selectedModelId
-    : '';
-
-  const resolveReasoningEffortsForModel = (agent: AgentOption | undefined, modelId: string) => {
-    if (!agent || !modelId) return [];
-    if (agent.reasoningEffortsByModel && Object.keys(agent.reasoningEffortsByModel).length > 0) {
-      return agent.reasoningEffortsByModel?.[modelId] ?? [];
-    }
-    return agent.availableReasoningEfforts ?? [];
-  };
-
-  const resolveModesForModel = (agent: AgentOption | undefined, modelId: string) => {
-    if (!agent || !modelId) return [];
-    if (agent.availableModesByModel && Object.keys(agent.availableModesByModel).length > 0) {
-      return agent.availableModesByModel?.[modelId] ?? [];
-    }
-    return agent.availableModes ?? [];
-  };
-
-  useEffect(() => {
-    if (availableAgents.length === 0) return;
-    setSelectedModelByAgent((prev) => {
-      const next: Record<string, string> = { ...prev };
-      availableAgents.forEach((agent) => {
-        const models = agent.availableModels ?? [];
-        const currentSelection = next[agent.id];
-        if (currentSelection && models.some((model) => model.modelId === currentSelection)) return;
-
-        const currentModel = agent.currentModelId &&
-          models.some((model) => model.modelId === agent.currentModelId)
-            ? agent.currentModelId
-            : models[0]?.modelId;
-        if (currentModel) {
-          next[agent.id] = currentModel;
-        } else {
-          delete next[agent.id];
+  const effectiveOptions = useMemo(() => options.map((option) => (
+    isReasoning(option) && selectedModelId
+      ? {
+          ...option,
+          options: sessionConfigOptions?.reasoningEffortsByModel[selectedModelId]
+            ?? effectiveSelectedAgent?.reasoningEffortsByModel?.[selectedModelId]
+            ?? option.options,
         }
-      });
-      return next;
-    });
-
-  }, [availableAgents]);
-
-  useEffect(() => {
-    if (!historySession) return;
-    if (historySession.modelId) {
-      setSelectedModelByAgent((prev) => ({
-        ...prev,
-        [historySession.adapterName]: historySession.modelId as string
-      }));
-    }
-    if (historySession.modeId) {
-      setSelectedModeByAgent((prev) => ({
-        ...prev,
-        [historySession.adapterName]: historySession.modeId as string
-      }));
-    }
-  }, [historySession]);
-
-  useEffect(() => {
-    if (!selectedAgentId) return;
-    setSelectedModeByAgent((prev) => {
-      const current = prev[selectedAgentId];
-      if (current && availableModeIds.has(current)) return prev;
-      if (availableModes.length === 0) {
-        if (!current) return prev;
-        const next = { ...prev };
-        delete next[selectedAgentId];
-        return next;
-      }
-      return { ...prev, [selectedAgentId]: selectedModeId || availableModes[0].id };
-    });
-  }, [availableModeIds, availableModes, selectedAgentId, selectedModeId]);
-
-  useEffect(() => {
-    if (!selectedAgentId) return;
-    setSelectedReasoningEffortByAgent((prev) => {
-      const current = prev[selectedAgentId];
-      if (current && availableReasoningEffortIds.has(current)) return prev;
-      if (availableReasoningEfforts.length === 0) {
-        if (!current) return prev;
-        const next = { ...prev };
-        delete next[selectedAgentId];
-        return next;
-      }
-      return { ...prev, [selectedAgentId]: selectedReasoningEffortId || availableReasoningEfforts[0].id };
-    });
-  }, [
-    availableReasoningEffortIds,
-    availableReasoningEfforts,
-    selectedAgentId,
-    selectedReasoningEffortId,
+      : option
+  )), [
+    effectiveSelectedAgent?.reasoningEffortsByModel,
+    options,
+    selectedModelId,
+    sessionConfigOptions?.reasoningEffortsByModel,
   ]);
+  const configValues = useMemo(() => Object.fromEntries(effectiveOptions.map((option) => {
+      const selectedValue = selected[option.id];
+      const value = accepts(option, selectedValue)
+        ? selectedValue!
+        : accepts(option, option.currentValue)
+          ? option.currentValue
+          : option.options[0]?.value ?? option.currentValue;
+      return [option.id, value];
+    }).filter(([, value]) => value !== '')),
+    [effectiveOptions, selected]
+  );
+  const selectedConfigOptions = effectiveOptions
+    .filter((option) => configValues[option.id] !== undefined)
+    .map((option) => {
+      const value = configValues[option.id];
+      return {
+        id: option.id,
+        name: option.name,
+        value,
+        displayValue: option.options.find((candidate) => candidate.value === value)?.name ?? value,
+      };
+    });
+
+  const modeOption = effectiveOptions.find((option) => matches(option, 'mode'));
+  const reasoningOption = effectiveOptions.find(isReasoning);
+  const selectedModeId = modeOption ? configValues[modeOption.id] ?? '' : '';
+  const selectedReasoningEffortId = reasoningOption ? configValues[reasoningOption.id] ?? '' : '';
+  const availableModes = modeOption?.options.map((option) => ({
+    id: option.value,
+    name: option.name,
+    description: option.description,
+  })) ?? [];
+  const availableReasoningEfforts = reasoningOption?.options.map((option) => ({
+    id: option.value,
+    name: option.name,
+    description: option.description,
+  })) ?? [];
+  const additionalConfigOptions = effectiveOptions
+    .filter((option) => !matches(option, 'model') && !matches(option, 'mode') && !isReasoning(option))
+    .map((option) => ({ ...option, currentValue: configValues[option.id] ?? option.currentValue }));
+
+  useEffect(() => {
+    if (!sessionConfigOptions || !sessionAgentId) return;
+    const reported = Object.fromEntries(
+      sessionConfigOptions.configOptions
+        .filter((option) => option.currentValue !== '')
+        .map((option) => [option.id, option.currentValue])
+    );
+    const dirtyIds = dirtyConfigIdsByAgent.current[sessionAgentId];
+    setSelectedByAgent((current) => ({
+      ...current,
+      [sessionAgentId]: {
+        ...reported,
+        ...Object.fromEntries(
+          Object.entries(current[sessionAgentId] ?? {}).filter(([id]) => dirtyIds?.has(id))
+        ),
+      },
+    }));
+  }, [sessionAgentId, sessionConfigOptions]);
+
+  useEffect(() => {
+    if (!historySession || !sessionAgentId) return;
+    const historyValues = historySession.configOptions ?? {};
+    if (Object.keys(historyValues).length === 0) return;
+    dirtyConfigIdsByAgent.current[sessionAgentId] = new Set(Object.keys(historyValues));
+    setSelectedByAgent((current) => ({
+      ...current,
+      [sessionAgentId]: {
+        ...current[sessionAgentId],
+        ...historyValues,
+      },
+    }));
+  }, [historySession, sessionAgentId]);
+
+  const selectConfigValue = (configId: string, value: string, targetAgentId = selectedAgentId) => {
+    if (!targetAgentId) return;
+    (dirtyConfigIdsByAgent.current[targetAgentId] ??= new Set()).add(configId);
+    setSelectedByAgent((current) => ({
+      ...current,
+      [targetAgentId]: {
+        ...current[targetAgentId],
+        [configId]: value,
+      },
+    }));
+  };
+
+  const markConfigValuesSubmitted = useCallback((targetAgentId = selectedAgentId) => {
+    if (targetAgentId) dirtyConfigIdsByAgent.current[targetAgentId] = new Set();
+  }, [selectedAgentId]);
 
   const handleModelChange = (modelId: string, targetAgentId?: string) => {
     const agentId = targetAgentId || selectedAgentId;
-    setSelectedModelByAgent((prev) => (
-      agentId ? { ...prev, [agentId]: modelId } : prev
-    ));
-    if (!agentId) return;
-
     const agent = availableAgents.find((item) => item.id === agentId)
-      || (effectiveSelectedAgent?.id === agentId ? effectiveSelectedAgent : undefined);
-    const modes = resolveModesForModel(agent, modelId);
-    const efforts = resolveReasoningEffortsForModel(agent, modelId);
-    setSelectedModeByAgent((prev) => {
-      if (modes.length === 0) {
-        if (!prev[agentId]) return prev;
-        const next = { ...prev };
-        delete next[agentId];
-        return next;
-      }
-
-      const current = prev[agentId];
-      if (current && modes.some((mode) => mode.id === current)) return prev;
-      return { ...prev, [agentId]: modes[0].id };
-    });
-    setSelectedReasoningEffortByAgent((prev) => {
-      if (efforts.length === 0) {
-        if (!prev[agentId]) return prev;
-        const next = { ...prev };
-        delete next[agentId];
-        return next;
-      }
-
-      const current = prev[agentId];
-      if (current && efforts.some((effort) => effort.id === current)) return prev;
-      return { ...prev, [agentId]: efforts[0].id };
-    });
-  };
-
-  const handleModeChange = (modeId: string) => {
-    setSelectedModeByAgent((prev) => (
-      selectedAgentId ? { ...prev, [selectedAgentId]: modeId } : prev
-    ));
-  };
-
-  const handleReasoningEffortChange = (reasoningEffortId: string) => {
-    setSelectedReasoningEffortByAgent((prev) => (
-      selectedAgentId ? { ...prev, [selectedAgentId]: reasoningEffortId } : prev
-    ));
+      ?? (effectiveSelectedAgent?.id === agentId ? effectiveSelectedAgent : undefined);
+    const option = agentId === sessionAgentId
+      ? modelOption
+      : agent?.configOptions?.find((item) => matches(item, 'model'));
+    if (option) selectConfigValue(option.id, modelId, agentId);
   };
 
   return {
-    availableModels,
+    availableModels: modelOption?.options.map((option) => ({
+      modelId: option.value,
+      name: option.name,
+      description: option.description,
+    })) ?? [],
     availableModes,
     availableReasoningEfforts,
+    additionalConfigOptions,
+    configValues,
+    selectedConfigOptions,
     selectedModelId,
     selectedModeId,
     selectedReasoningEffortId,
-    modelIdForStart,
+    modelIdForStart: selectedAgentId ? selectedModelId : '',
+    markConfigValuesSubmitted,
     handleModelChange,
-    handleModeChange,
-    handleReasoningEffortChange,
+    handleModeChange: (value: string) => modeOption && selectConfigValue(modeOption.id, value),
+    handleReasoningEffortChange: (value: string) =>
+      reasoningOption && selectConfigValue(reasoningOption.id, value),
+    handleConfigOptionChange: selectConfigValue,
   };
 }

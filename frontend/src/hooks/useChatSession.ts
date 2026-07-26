@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  ApprovalMode,
-  Message,
   AgentOption,
-  PermissionRequest,
-  HistorySessionMeta,
+  ApprovalMode,
   ChatAttachment,
-  PendingHandoffContext,
   ForkConversationBase,
-  RichContentBlock
+  HistorySessionMeta,
+  Message,
+  PendingHandoffContext,
+  PermissionRequest,
+  RichContentBlock,
+  SessionConfigOptionsPayload
 } from '../types/chat';
-import { ACPBridge } from '../utils/bridge';
-import { buildReplayMessages } from '../utils/replay';
-import { lastAssistantMessageHasMeta } from './chatSession/messageProcessing';
+import {ACPBridge} from '../utils/bridge';
+import {buildReplayMessages} from '../utils/replay';
+import {lastAssistantMessageHasMeta} from './chatSession/messageProcessing';
 import {
   nextMessageId,
   normalizeOutgoingBlocks,
@@ -20,20 +21,20 @@ import {
   prependHandoffContext,
   titleFromFirstPrompt,
 } from './chatSession/messageBasics';
-import { buildPromptBlocks } from './chatSession/promptBlocks';
+import {buildPromptBlocks} from './chatSession/promptBlocks';
 import {
-  PinnedAgentSnapshot,
   buildAgentOptions,
   buildModeOptions,
   buildReasoningEffortOptions,
+  PinnedAgentSnapshot,
   resolveSelectedAgent,
   toPinnedAgentSnapshot,
 } from './chatSession/agentSelection';
-import { useAgentRuntimeOptions } from './chatSession/useAgentRuntimeOptions';
-import { useAvailableCommands } from './chatSession/useAvailableCommands';
-import { useBufferedMessageChunks } from './chatSession/useBufferedMessageChunks';
-import { usePromptQueue } from './chatSession/usePromptQueue';
-import { QueuedPrompt } from './chatSession/promptQueueTypes';
+import {useAgentRuntimeOptions} from './chatSession/useAgentRuntimeOptions';
+import {useAvailableCommands} from './chatSession/useAvailableCommands';
+import {useBufferedMessageChunks} from './chatSession/useBufferedMessageChunks';
+import {usePromptQueue} from './chatSession/usePromptQueue';
+import {QueuedPrompt} from './chatSession/promptQueueTypes';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
 const APPROVAL_MODE_STORAGE_KEY = 'chat-approval-mode';
@@ -112,6 +113,7 @@ export function useChatSession(
   const permissionRequest = permissionQueue[0] ?? null;
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
+  const [sessionConfigOptions, setSessionConfigOptions] = useState<SessionConfigOptionsPayload>();
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
 
@@ -193,27 +195,54 @@ export function useChatSession(
   const resolvedSelectedAgent = resolveSelectedAgent(selectedAgent, pinnedAgentSnapshotRef.current, pinnedAgentId);
   const availableCommands = useAvailableCommands(availableAgents, selectedAgentId);
   const effectiveSelectedAgent = resolvedSelectedAgent;
+
+  useEffect(() => ACPBridge.onSessionConfigOptions((event) => {
+    if (event.detail.payload.chatId === conversationId) {
+      setSessionConfigOptions(event.detail.payload);
+    }
+  }), [conversationId]);
+
+  useEffect(() => setSessionConfigOptions(undefined), [selectedAgentId]);
+
   const {
+    availableModels,
     availableModes,
     availableReasoningEfforts,
     selectedModelId,
     selectedModeId,
     selectedReasoningEffortId,
+    additionalConfigOptions,
+    configValues,
+    selectedConfigOptions,
     modelIdForStart,
+    markConfigValuesSubmitted,
     handleModelChange,
     handleModeChange,
     handleReasoningEffortChange,
+    handleConfigOptionChange,
   } = useAgentRuntimeOptions({
     availableAgents,
     effectiveSelectedAgent,
     selectedAgentId,
     historySession,
+    sessionConfigOptions,
   });
 
   const adapterDisplayName = resolvedSelectedAgent?.name || '';
   const agentOptions = useMemo(
-    () => buildAgentOptions(availableAgents, pinnedAgentSnapshotRef.current, pinnedAgentId),
-    [availableAgents, pinnedAgentId]
+    () => buildAgentOptions(availableAgents, pinnedAgentSnapshotRef.current, pinnedAgentId).map((option) => (
+      option.id === selectedAgentId
+        ? {
+            ...option,
+            subOptions: availableModels.map((model) => ({
+              id: model.modelId,
+              label: model.name,
+              description: model.description,
+            })),
+          }
+        : option
+    )),
+    [availableAgents, availableModels, pinnedAgentId, selectedAgentId]
   );
   const modeOptions = useMemo(
     () => buildModeOptions(availableModes, selectedModeId),
@@ -273,8 +302,7 @@ export function useChatSession(
           timestamp: Date.now(),
           agentId: selectedAgentId,
           agentName: adapterDisplayName,
-          modelName: selectedModelId,
-          modeName: selectedModeId,
+          configOptions: selectedConfigOptions,
           promptStartedAtMillis: startedAt,
           duration,
           metaComplete: true,
@@ -287,8 +315,7 @@ export function useChatSession(
     applyBufferedChunks,
     markFlushUnscheduled,
     selectedAgentId,
-    selectedModelId,
-    selectedModeId,
+    selectedConfigOptions,
   ]);
 
   const requestRuntimeRecovery = useCallback((reason: string) => {
@@ -335,23 +362,20 @@ export function useChatSession(
       return false;
     }
 
-    const modelId = modelIdForStart;
-
     try {
       startedAgentIdRef.current = selectedAgentId;
-      startedModelIdRef.current = modelId || '';
+      startedModelIdRef.current = modelIdForStart || '';
       startedModeIdRef.current = selectedModeId || '';
       startedReasoningEffortIdRef.current = selectedReasoningEffortId || '';
 
       clearBufferedChunks();
       statusRef.current = 'initializing';
       setStatus('initializing');
+      markConfigValuesSubmitted();
       ACPBridge.startAgent(
         conversationId,
         selectedAgentId,
-        modelId || undefined,
-        selectedModeId || undefined,
-        selectedReasoningEffortId || undefined
+        configValues
       ).catch((error) => {
         console.warn('[useChatSession] Failed to start agent:', error);
         const message = error instanceof Error ? error.message : String(error);
@@ -363,7 +387,7 @@ export function useChatSession(
       console.warn('[useChatSession] Failed to auto-start agent:', e);
       return false;
     }
-  }, [clearBufferedChunks, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
+  }, [clearBufferedChunks, configValues, conversationId, failActivePromptLocally, historySession, markConfigValuesSubmitted, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
 
   useEffect(() => {
     if (!pendingHandoff) return;
@@ -440,14 +464,13 @@ export function useChatSession(
         
         // Assistant message is already added in handleSend, we just need to trigger the actual send
         const forkBaseToPersist = forkBaseRef.current;
+        markConfigValuesSubmitted();
         ACPBridge.sendPrompt(
           conversationId,
           JSON.stringify(blocksToSend),
           forkBaseToPersist,
           selectedAgentId,
-          selectedModelId || undefined,
-          selectedModeId || undefined,
-          selectedReasoningEffortId || undefined
+          configValues
         ).then(() => {
           forkBaseRef.current = undefined;
           consumeHandoff();
@@ -504,6 +527,8 @@ export function useChatSession(
     failActivePromptLocally,
     finishActivePromptAfterError,
     requestRuntimeRecovery,
+    markConfigValuesSubmitted,
+    configValues,
     selectedAgentId,
     selectedModelId,
     selectedModeId,
@@ -627,8 +652,7 @@ export function useChatSession(
       timestamp: Date.now(),
       agentId: selectedAgentId,
       agentName: adapterDisplayName,
-      modelName: selectedModelId,
-      modeName: selectedModeId,
+      configOptions: selectedConfigOptions,
       promptStartedAtMillis: promptStartedAt,
       metaComplete: false,
     };
@@ -644,14 +668,13 @@ export function useChatSession(
     }
 
     const forkBaseToPersist = forkBaseRef.current;
+    markConfigValuesSubmitted();
     ACPBridge.sendPrompt(
       conversationId,
       JSON.stringify(outgoingBlocks),
       forkBaseToPersist,
       selectedAgentId,
-      selectedModelId || undefined,
-      selectedModeId || undefined,
-      selectedReasoningEffortId || undefined
+      configValues
     ).then(() => {
       forkBaseRef.current = undefined;
       consumeHandoff();
@@ -665,7 +688,7 @@ export function useChatSession(
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
   }, [status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, markConfigValuesSubmitted, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
   const rebuildQueuedPromptBlocks = useCallback((text: string, queuedAttachments: ChatAttachment[]) => {
     return normalizeOutgoingBlocks(buildPromptBlocks(text, queuedAttachments));
@@ -825,6 +848,9 @@ export function useChatSession(
     selectedReasoningEffortId,
     reasoningEffortOptions,
     handleReasoningEffortChange,
+    additionalConfigOptions,
+    configValues,
+    handleConfigOptionChange,
     approvalMode,
     setApprovalMode,
     permissionRequest,

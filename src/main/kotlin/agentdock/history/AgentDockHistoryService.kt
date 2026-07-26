@@ -40,6 +40,7 @@ object AgentDockHistoryService {
         conversationId: String,
         sessionId: String,
         adapterName: String,
+        configOptions: Map<String, String> = emptyMap(),
         promptCount: Int,
         titleCandidate: String?,
         inheritedAdapterNames: List<String> = emptyList(),
@@ -51,6 +52,7 @@ object AgentDockHistoryService {
             conversationId,
             sessionId,
             adapterName,
+            configOptions,
             promptCount,
             titleCandidate,
             inheritedAdapterNames,
@@ -167,6 +169,7 @@ object AgentDockHistoryService {
             conversationId = cleanConversationId,
             sessionId = cleanSessionId,
             adapterName = cleanAdapterName,
+            configOptions = assistantMeta?.configOptions.orEmpty().associate { it.id to it.value },
             promptCount = HistoryReplayStore.replayPromptCount(updatedData),
             titleCandidate = HistoryReplayStore.titleCandidateFromReplayData(updatedData),
             touchUpdatedAt = true

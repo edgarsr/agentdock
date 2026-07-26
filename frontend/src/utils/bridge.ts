@@ -42,6 +42,7 @@ import {
   PermissionRequestEvent,
   PromptLibraryEvent,
   SessionIdEvent,
+  SessionConfigOptionsEvent,
   StatusEvent,
   SystemInstructionsEvent,
   ToolCallBridgeEvent,
@@ -178,6 +179,10 @@ export const ACPBridge = {
 
     window.__onMode = (chatId, modeId) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.MODE, { detail: { chatId, modeId } }));
+    };
+
+    window.__onSessionConfigOptions = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.SESSION_CONFIG_OPTIONS, { detail: { payload } }));
     };
 
     window.__onAdapters = (adapters) => {
@@ -333,6 +338,8 @@ export const ACPBridge = {
   onSessionId: (callback: (e: CustomEvent<SessionIdEvent>) => void) => onBridgeEvent(EVENT_NAMES.SESSION_ID, callback),
 
   onMode: (callback: (e: CustomEvent<ModeEvent>) => void) => onBridgeEvent(EVENT_NAMES.MODE, callback),
+  onSessionConfigOptions: (callback: (e: CustomEvent<SessionConfigOptionsEvent>) => void) =>
+    onBridgeEvent(EVENT_NAMES.SESSION_CONFIG_OPTIONS, callback),
 
   onAdapters: (callback: (e: CustomEvent<AdaptersEvent>) => void) => onBridgeEvent(EVENT_NAMES.ADAPTERS, callback),
 
@@ -351,12 +358,12 @@ export const ACPBridge = {
     window.__requestAdapters?.(forceRefresh);
   },
 
-  startAgent: (conversationId: string, adapterId?: string, modelId?: string, modeId?: string, reasoningEffortId?: string) => {
+  startAgent: (conversationId: string, adapterId?: string, configValues?: Record<string, string>) => {
     if (typeof window.__startAgent !== 'function') {
       return Promise.reject(new Error('Start agent bridge is not available.'));
     }
     return awaitBridgeOperation('start_agent', (requestId) => {
-      window.__startAgent?.(conversationId, adapterId, modelId, modeId, requestId, reasoningEffortId);
+      window.__startAgent?.(conversationId, adapterId, configValues, requestId);
     });
   },
 
@@ -365,15 +372,13 @@ export const ACPBridge = {
     message: string,
     forkBase?: ForkConversationBase,
     adapterId?: string,
-    modelId?: string,
-    modeId?: string,
-    reasoningEffortId?: string
+    configValues?: Record<string, string>
   ) => {
     if (typeof window.__sendPrompt !== 'function') {
       return Promise.reject(new Error('Send prompt bridge is not available.'));
     }
     return awaitBridgeOperation('send_prompt', (requestId) => {
-      window.__sendPrompt?.(conversationId, message, requestId, forkBase, adapterId, modelId, modeId, reasoningEffortId);
+      window.__sendPrompt?.(conversationId, message, requestId, forkBase, adapterId, configValues);
     });
   },
 

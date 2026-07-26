@@ -77,6 +77,7 @@ internal object HistorySyncService {
             SessionMeta(
                 sessionId = session.sessionId,
                 adapterName = session.adapterName,
+                configOptions = session.configOptions,
                 conversationId = conversation.id,
                 sessionCount = conversation.sessions.size,
                 promptCount = conversation.promptCount,
@@ -190,6 +191,7 @@ internal object HistorySyncService {
                         HistorySessionIndexEntry(
                             sessionId = meta.sessionId,
                             adapterName = meta.adapterName,
+                            configOptions = meta.configOptions,
                             createdAt = meta.createdAt,
                             updatedAt = meta.updatedAt,
                             sourceFilePath = meta.filePath.takeIf { it.isNotBlank() },
@@ -372,6 +374,7 @@ internal object HistorySyncService {
                 SessionMeta(
                     sessionId = latestSession.sessionId,
                     adapterName = latestSession.adapterName,
+                    configOptions = latestSession.configOptions,
                     conversationId = conversation.id,
                     sessionCount = visibleSessions.size,
                     promptCount = conversation.promptCount,

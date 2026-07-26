@@ -15,6 +15,7 @@ internal object HistoryConversationIndexService {
         conversationId: String,
         sessionId: String,
         adapterName: String,
+        configOptions: Map<String, String> = emptyMap(),
         promptCount: Int,
         titleCandidate: String?,
         inheritedAdapterNames: List<String> = emptyList(),
@@ -66,6 +67,7 @@ internal object HistoryConversationIndexService {
                         return@map session
                     }
                     session.copy(
+                        configOptions = configOptions.ifEmpty { session.configOptions },
                         updatedAt = if (touchUpdatedAt) now else session.updatedAt,
                         createdAt = if (session.createdAt > 0) session.createdAt else now,
                         sourceFilePath = sourceFilePath ?: session.sourceFilePath
@@ -75,6 +77,7 @@ internal object HistoryConversationIndexService {
             touchUpdatedAt -> (mergedConversation?.sessions ?: emptyList()) + HistorySessionIndexEntry(
                 sessionId = cleanSessionId,
                 adapterName = cleanAdapterName,
+                configOptions = configOptions,
                 createdAt = now,
                 updatedAt = now,
                 sourceFilePath = sourceFilePath,
@@ -214,6 +217,7 @@ internal object HistoryConversationIndexService {
         val newSession = extractedSession ?: HistorySessionIndexEntry(
             sessionId = cleanSessionId,
             adapterName = cleanAdapterName,
+            configOptions = sourceMeta?.configOptions.orEmpty(),
             createdAt = sourceMeta?.createdAt ?: now,
             updatedAt = sourceMeta?.updatedAt ?: now,
             changes = null

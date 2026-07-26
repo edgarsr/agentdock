@@ -23,15 +23,11 @@ internal fun AcpBridge.startHistoryReplayCapture(
 internal fun AcpBridge.beginImportedReplaySession(
     chatId: String,
     sessionId: String,
-    adapterName: String,
-    modelId: String?,
-    modeId: String?
+    adapterName: String
 ) {
     val capture = historyReplayCaptures[chatId] ?: return
     capture.currentSessionId = sessionId.takeIf { it.isNotBlank() }
     capture.currentAdapterName = adapterName.takeIf { it.isNotBlank() }
-    capture.currentModelId = modelId?.takeIf { it.isNotBlank() }
-    capture.currentModeId = modeId?.takeIf { it.isNotBlank() }
 }
 
 internal fun AcpBridge.discardHistoryReplayCapture(chatId: String) {

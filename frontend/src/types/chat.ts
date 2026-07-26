@@ -63,7 +63,12 @@ export interface PlanBlock { type: 'plan'; entries: PlanEntry[]; isReplay?: bool
 
 export type RichContentBlock = TextBlock | ImageBlock | AudioBlock | VideoBlock | FileBlock | CodeReferenceBlock | ExploringBlock | ToolCallBlock | PlanBlock;
 
-
+export interface MessageConfigOption {
+  id: string;
+  name: string;
+  value: string;
+  displayValue?: string;
+}
 
 export interface Message {
   id: string;
@@ -75,8 +80,7 @@ export interface Message {
   // Meta-information
   agentId?: string;
   agentName?: string;
-  modelName?: string;
-  modeName?: string;
+  configOptions?: MessageConfigOption[];
   promptStartedAtMillis?: number;
   duration?: number;
   contextTokensUsed?: number;
@@ -102,6 +106,28 @@ export interface ReasoningEffortOption {
   description?: string;
 }
 
+export interface ConfigOptionValue {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface ConfigOption {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  type: 'select' | 'boolean';
+  currentValue: string;
+  options: ConfigOptionValue[];
+}
+
+export interface SessionConfigOptionsPayload {
+  chatId: string;
+  configOptions: ConfigOption[];
+  reasoningEffortsByModel: Record<string, ConfigOptionValue[]>;
+}
+
 export interface AvailableCommand {
   name: string;
   description: string;
@@ -123,10 +149,10 @@ export interface AgentOption {
   availableModels?: ModelOption[];
   currentModeId?: string;
   availableModes?: ModeOption[];
-  availableModesByModel?: Record<string, ModeOption[]>;
   currentReasoningEffortId?: string;
   availableReasoningEfforts?: ReasoningEffortOption[];
-  reasoningEffortsByModel?: Record<string, ReasoningEffortOption[]>;
+  configOptions?: ConfigOption[];
+  reasoningEffortsByModel?: Record<string, ConfigOptionValue[]>;
   downloaded?: boolean;
   downloadedKnown?: boolean;
   downloadPath?: string;
@@ -221,6 +247,7 @@ export interface HistorySessionMeta {
   allAdapterNames?: string[];
   modelId?: string;
   modeId?: string;
+  configOptions?: Record<string, string>;
   projectPath: string;
   title: string;
   filePath: string;
@@ -248,10 +275,7 @@ export interface ContentChunk {
   planEntries?: PlanEntry[];
   agentId?: string;
   agentName?: string;
-  modelId?: string;
-  modelName?: string;
-  modeId?: string;
-  modeName?: string;
+  configOptions?: MessageConfigOption[];
   promptStartedAtMillis?: number;
   durationSeconds?: number;
   contextTokensUsed?: number;
@@ -280,10 +304,7 @@ export interface ReplayContentBlock {
 export interface ConversationAssistantMetadata {
   agentId?: string;
   agentName?: string;
-  modelId?: string;
-  modelName?: string;
-  modeId?: string;
-  modeName?: string;
+  configOptions?: MessageConfigOption[];
   promptStartedAtMillis?: number;
   durationSeconds?: number;
   contextTokensUsed?: number;
@@ -481,10 +502,8 @@ declare global {
     __startAgent?: (
       conversationId: string,
       adapterId?: string,
-      modelId?: string,
-      modeId?: string,
-      requestId?: string,
-      reasoningEffortId?: string
+      configValues?: Record<string, string>,
+      requestId?: string
     ) => void;
     __sendPrompt?: (
       conversationId: string,
@@ -492,9 +511,7 @@ declare global {
       requestId?: string,
       forkBase?: ForkConversationBase,
       adapterId?: string,
-      modelId?: string,
-      modeId?: string,
-      reasoningEffortId?: string
+      configValues?: Record<string, string>
     ) => void;
     __requestAdapters?: (forceRefresh?: boolean) => void;
     __notifyReady?: () => void;
@@ -542,6 +559,7 @@ declare global {
     __onAdapterRefreshState?: (refreshing: boolean) => void;
     __onAvailableCommands?: (adapterId: string, commands: AvailableCommand[]) => void;
     __onMode?: (chatId: string, modeId: string) => void;
+    __onSessionConfigOptions?: (payload: SessionConfigOptionsPayload) => void;
     __onPermissionRequest?: (request: PermissionRequest) => void;
     __onHistoryList?: (list: HistorySessionMeta[]) => void;
     __onHistoryDeleteResult?: (result: HistoryDeleteResultPayload) => void;

@@ -123,9 +123,6 @@ internal fun AcpBridge.installConversationQueries() {
             val parsed = parseStartRequestPayload(payload)
             val chatId = parsed.chatId
             val adapterName = parsed.adapterId
-            val modelId = parsed.modelId
-            val modeId = parsed.modeId
-            val reasoningEffortId = parsed.reasoningEffortId
             if (chatId != null) {
                 pushBridgeOperationResult(parsed.requestId, chatId, "start_agent", ok = true)
                 scope.launch(Dispatchers.Default) {
@@ -135,9 +132,7 @@ internal fun AcpBridge.installConversationQueries() {
                             service.startAgent(
                                 chatId,
                                 adapterName,
-                                modelId,
-                                preferredModeId = modeId,
-                                preferredReasoningEffortId = reasoningEffortId
+                                parsed.configValues
                             )
                         }
                         pushAdapters()
@@ -187,7 +182,12 @@ internal fun AcpBridge.installConversationQueries() {
                 }
 
                 pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
-                val captureId = beginLivePromptCapture(chatId, parsed.rawBlocks, parsed.forkBase)
+                val captureId = beginLivePromptCapture(
+                    chatId,
+                    parsed.rawBlocks,
+                    parsed.forkBase,
+                    parsed.configValues
+                )
                 val previousPromptJob = promptJobs[chatId]?.takeIf { it.isActive }
                 lateinit var job: Job
                 job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
@@ -208,10 +208,9 @@ internal fun AcpBridge.installConversationQueries() {
                         service.startAgent(
                             chatId = chatId,
                             adapterName = parsed.adapterId,
-                            preferredModelId = parsed.modelId,
-                            preferredModeId = parsed.modeId,
-                            preferredReasoningEffortId = parsed.reasoningEffortId
+                            preferredConfigValues = parsed.configValues
                         )
+                        pushAdapters(includeRuntimeChecks = false)
                         pushStatus(chatId, "prompting")
                         service.prompt(chatId, blocks).collect { event ->
                             when (event) {

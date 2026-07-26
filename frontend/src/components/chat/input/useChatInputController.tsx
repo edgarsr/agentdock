@@ -1,38 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  LexicalEditor,
-} from 'lexical';
-import {
-  Bookmark,
-  CornerDownLeft,
-  Keyboard as KeyboardIcon,
-  Paperclip,
-  ShieldCheck,
-  ShieldQuestion,
-  SquareTerminal,
-} from 'lucide-react';
+import type {KeyboardEvent} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {$getRoot, $getSelection, $isRangeSelection, LexicalEditor,} from 'lexical';
+import {Bookmark, Paperclip, SquareTerminal,} from 'lucide-react';
 
-import {
-  AudioRecordingStatePayload,
-  DropdownOption,
-} from '../../../types/chat';
-import { PromptLibraryItem } from '../../../types/promptLibrary';
-import { ACPBridge } from '../../../utils/bridge';
-import { openFile } from '../../../utils/openFile';
-import { useSlashCommands } from '../../../hooks/useSlashCommands';
-import {
-  applySlashCommandToEditor,
-  buildAgentSlashItems,
-  buildPromptLibrarySlashItems,
-} from './slashCommands';
-import { useFileMentions } from '../../../hooks/useFileMentions';
-import { ImageNode, $createImageNode } from './ImageNode';
-import { CodeReferenceNode } from './CodeReferenceNode';
-import { ChatInputProps, emptyTranscriptionFeature } from './chatInputState';
+import {AudioRecordingStatePayload, DropdownOption,} from '../../../types/chat';
+import {PromptLibraryItem} from '../../../types/promptLibrary';
+import {ACPBridge} from '../../../utils/bridge';
+import {openFile} from '../../../utils/openFile';
+import {useSlashCommands} from '../../../hooks/useSlashCommands';
+import {applySlashCommandToEditor, buildAgentSlashItems, buildPromptLibrarySlashItems,} from './slashCommands';
+import {useFileMentions} from '../../../hooks/useFileMentions';
+import {$createImageNode, ImageNode} from './ImageNode';
+import {CodeReferenceNode} from './CodeReferenceNode';
+import {ChatInputProps, emptyTranscriptionFeature} from './chatInputState';
 
 export function useChatInputController({
   conversationId,
@@ -44,7 +24,6 @@ export function useChatInputController({
   status,
   modeOptions,
   selectedModeId,
-  approvalMode,
   availableCommands,
   attachments,
   onAttachmentsChange,
@@ -95,20 +74,19 @@ export function useChatInputController({
   }, []);
 
   useEffect(() => {
-    const cleanup = ACPBridge.onAudioRecordingState((e) => {
+    return ACPBridge.onAudioRecordingState((e) => {
       const payload: AudioRecordingStatePayload = e.detail.payload;
       setIsRecording(payload.recording);
       if (payload.error) {
         console.error('[ChatInput] Audio recording error:', payload.error);
       }
     });
-    return cleanup;
   }, []);
 
   useEffect(() => {
     const handleDragHighlight = (e: Event) => {
       const active = (e as CustomEvent<{ active: boolean }>).detail?.active;
-      setIsDragOver(!!active);
+      setIsDragOver(active);
     };
     window.addEventListener('drag-highlight', handleDragHighlight as EventListener);
     return () => window.removeEventListener('drag-highlight', handleDragHighlight as EventListener);
@@ -161,18 +139,6 @@ export function useChatInputController({
     ...promptLibrarySlashItems,
   ]), [agentSlashItems, promptLibrarySlashItems]);
 
-  const sendModeIcon = useMemo(() => (
-    sendMode === 'ctrl-enter'
-      ? <KeyboardIcon className="w-4 h-4" />
-      : <CornerDownLeft className="w-4 h-4" />
-  ), [sendMode]);
-
-  const approvalModeIcon = useMemo(() => (
-    approvalMode === 'auto'
-      ? <ShieldCheck className="w-4 h-4" />
-      : <ShieldQuestion className="w-4 h-4" />
-  ), [approvalMode]);
-
   const plusMenuOptions: DropdownOption[] = useMemo(() => {
     const options: DropdownOption[] = [
       { id: 'add-files', label: 'Attach file', icon: <Paperclip className="w-4 h-4" /> },
@@ -204,38 +170,8 @@ export function useChatInputController({
       });
     }
 
-    options.push({
-      id: 'send-mode',
-      label: 'Send mode',
-      icon: sendModeIcon,
-      subOptions: [
-        { id: 'enter', label: 'Enter', icon: <CornerDownLeft className="w-4 h-4" /> },
-        { id: 'ctrl-enter', label: 'Ctrl+Enter', icon: <KeyboardIcon className="w-4 h-4" /> },
-      ]
-    });
-
-    options.push({
-      id: 'approvals',
-      label: 'Approvals',
-      icon: approvalModeIcon,
-      subOptions: [
-        {
-          id: 'ask',
-          label: 'Ask approvals',
-          description: 'Show agent approval prompts',
-          icon: <ShieldQuestion className="w-4 h-4" />,
-        },
-        {
-          id: 'auto',
-          label: 'Auto approve',
-          description: 'Automatically approve tool requests when a normal approve option is available',
-          icon: <ShieldCheck className="w-4 h-4" />,
-        },
-      ]
-    });
-
     return options;
-  }, [agentSlashItems, approvalModeIcon, promptLibrarySlashItems, sendModeIcon]);
+  }, [agentSlashItems, promptLibrarySlashItems]);
 
   const handleImagePaste = useCallback((file: File, editor: LexicalEditor) => {
     const reader = new FileReader();

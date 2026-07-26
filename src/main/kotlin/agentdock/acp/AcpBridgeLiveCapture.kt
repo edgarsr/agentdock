@@ -8,7 +8,8 @@ import agentdock.history.ForkConversationBase
 internal fun AcpBridge.beginLivePromptCapture(
     chatId: String,
     blocks: List<JsonObject>,
-    forkBase: ForkConversationBase?
+    forkBase: ForkConversationBase?,
+    configValues: Map<String, String>
 ): String? {
     val projectPath = service.project.basePath.orEmpty()
     val sessionId = service.sessionId(chatId).orEmpty()
@@ -27,8 +28,7 @@ internal fun AcpBridge.beginLivePromptCapture(
         startedAtMillis = System.currentTimeMillis(),
         assistantMeta = buildAssistantMetadata(
             adapterName = adapterName,
-            modelId = service.activeModelId(chatId),
-            modeId = service.activeModeId(chatId)
+            configValues = configValues
         )
     )
     livePromptCaptures.put(chatId, capture)?.let { previous ->

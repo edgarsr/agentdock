@@ -69,7 +69,6 @@ private suspend fun AcpClientService.initializeSharedProcessWithinBudget(
     val adapterId = adapterInfo.id
     val target = AcpAdapterPaths.getExecutionTarget()
     val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
-    adapterRuntimeMetadataMap.remove(adapterId)
 
     updateAdapterInitializationState(
         adapterId,

@@ -9,41 +9,16 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.time.Instant
 
-private const val CONFIG_OPTIONS_CACHE_SCHEMA_VERSION = 3
+private const val CONFIG_OPTIONS_CACHE_SCHEMA_VERSION = 5
 private const val CONFIG_OPTIONS_CACHE_MAX_AGE_MILLIS = 7L * 24L * 60L * 60L * 1000L
-
-@Serializable
-internal data class CachedModelConfigOptions(
-    val modelId: String,
-    val name: String,
-    val description: String? = null,
-    val modes: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-    val efforts: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-    val configOptionsLoaded: Boolean = false
-) {
-    fun toModelInfo(): AcpAdapterConfig.ModelInfo {
-        return AcpAdapterConfig.ModelInfo(
-            modelId = modelId,
-            name = name,
-            description = description
-        )
-    }
-}
 
 @Serializable
 internal data class CachedAdapterConfigOptions(
     val adapterId: String,
     val adapterVersion: String,
     val refreshedAtMillis: Long,
-    val currentModelId: String? = null,
-    val currentModeId: String? = null,
-    val currentReasoningEffortId: String? = null,
-    val modelConfigId: String? = null,
-    val modeConfigId: String? = null,
-    val reasoningEffortConfigId: String? = null,
-    val modes: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-    val efforts: List<AcpAdapterConfig.ModeInfo> = emptyList(),
-    val models: List<CachedModelConfigOptions> = emptyList()
+    val configOptions: List<AcpConfigOption> = emptyList(),
+    val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>> = emptyMap()
 )
 
 @Serializable
@@ -157,75 +132,58 @@ internal fun CachedAdapterConfigOptions?.updatedWithSnapshot(
     metadata: AcpClientService.AdapterRuntimeMetadata,
     refreshedAtMillis: Long = this?.refreshedAtMillis ?: Instant.now().toEpochMilli()
 ): CachedAdapterConfigOptions {
-    val cachedModels = this?.models.orEmpty().associateBy { it.modelId }
-    val currentModelId = metadata.currentModelId
-    val models = metadata.availableModels.map { model ->
-        val cached = cachedModels[model.modelId]
-        val isCurrentModel = model.modelId == currentModelId
-        CachedModelConfigOptions(
-            modelId = model.modelId,
-            name = model.name,
-            description = model.description,
-            modes = if (isCurrentModel) metadata.availableModes else cached?.modes.orEmpty(),
-            efforts = if (isCurrentModel) metadata.availableReasoningEfforts else cached?.efforts.orEmpty(),
-            configOptionsLoaded = isCurrentModel || cached?.configOptionsLoaded == true
-        )
+    val effortsByModel = this?.reasoningEffortsByModel.orEmpty().toMutableMap()
+    metadata.currentModelId?.let { modelId ->
+        effortsByModel[modelId] = metadata.configOptions.firstOrNull { it.isReasoning() }
+            ?.options
+            .orEmpty()
+    }
+    val cachedReasoning = this?.configOptions?.firstOrNull { it.isReasoning() }
+    val configOptions = if (
+        cachedReasoning != null && metadata.configOptions.none { it.isReasoning() }
+    ) {
+        metadata.configOptions + cachedReasoning.copy(currentValue = "", options = emptyList())
+    } else {
+        metadata.configOptions
     }
     return CachedAdapterConfigOptions(
         adapterId = adapterInfo.id,
         adapterVersion = adapterVersion,
         refreshedAtMillis = refreshedAtMillis,
-        currentModelId = currentModelId,
-        currentModeId = metadata.currentModeId,
-        currentReasoningEffortId = metadata.currentReasoningEffortId,
-        modelConfigId = metadata.modelConfigId,
-        modeConfigId = metadata.modeConfigId,
-        reasoningEffortConfigId = metadata.reasoningEffortConfigId,
-        modes = metadata.availableModes,
-        efforts = metadata.availableReasoningEfforts,
-        models = models
+        configOptions = configOptions,
+        reasoningEffortsByModel = effortsByModel
     )
 }
 
 internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
     adapterInfo: AcpAdapterConfig.AdapterInfo
 ): AcpClientService.AdapterRuntimeMetadata {
-    val filteredModels = models.filterNot { model ->
-        adapterInfo.disabledModels.any { disabled -> disabled.isNotBlank() && model.modelId.contains(disabled) }
-    }
-    val selectedModelId = currentModelId?.takeIf { current ->
-        filteredModels.any { it.modelId == current }
-    }
-
-    val selectedModel = selectedModelId?.let { id -> filteredModels.firstOrNull { it.modelId == id } }
-    val effectiveModes = (selectedModel?.modes ?: modes)
-        .filterNot { mode -> adapterInfo.disabledModes.any { disabled -> disabled == mode.id } }
-    val selectedModeId = currentModeId?.takeIf { current ->
-        effectiveModes.isEmpty() || effectiveModes.any { it.id == current }
-    }
-
-    val reasoningEfforts = selectedModel?.efforts ?: efforts
-    val selectedReasoningEffortId = currentReasoningEffortId?.takeIf { current ->
-        reasoningEfforts.isEmpty() || reasoningEfforts.any { it.id == current }
-    }
-
-    return AcpClientService.AdapterRuntimeMetadata(
-        currentModelId = selectedModelId,
-        availableModels = filteredModels.map { it.toModelInfo() },
-        modelConfigId = modelConfigId,
-        currentModeId = selectedModeId,
-        availableModes = effectiveModes,
-        modeConfigId = modeConfigId,
-        currentReasoningEffortId = selectedReasoningEffortId,
-        availableReasoningEfforts = reasoningEfforts,
-        reasoningEffortConfigId = reasoningEffortConfigId?.takeIf { reasoningEfforts.isNotEmpty() },
-        availableModesByModel = filteredModels.associate { model ->
-            model.modelId to model.modes.filterNot { mode ->
-                adapterInfo.disabledModes.any { disabled -> disabled == mode.id }
+    val filteredOptions = configOptions.map { option ->
+        val values = when {
+            option.matchesCategory("model") -> option.options.filterNot { model ->
+                adapterInfo.disabledModels.any { disabled ->
+                    disabled.isNotBlank() && model.value.contains(disabled)
+                }
             }
-        },
-        availableReasoningEffortsByModel = filteredModels.associate { model ->
-            model.modelId to model.efforts
+            option.matchesCategory("mode") -> option.options.filterNot { mode ->
+                adapterInfo.disabledModes.any { it == mode.value }
+            }
+            else -> option.options
         }
+        option.copy(
+            currentValue = option.currentValue.takeIf { current ->
+                option.type != "select" || values.any { it.value == current }
+            }.orEmpty(),
+            options = values
+        )
+    }
+    val modelIds = filteredOptions
+        .firstOrNull { it.matchesCategory("model") }
+        ?.options
+        .orEmpty()
+        .mapTo(mutableSetOf()) { it.value }
+    return AcpClientService.AdapterRuntimeMetadata(
+        configOptions = filteredOptions,
+        reasoningEffortsByModel = reasoningEffortsByModel.filterKeys(modelIds::contains)
     )
 }

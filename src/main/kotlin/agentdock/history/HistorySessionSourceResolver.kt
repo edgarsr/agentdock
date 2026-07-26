@@ -8,6 +8,7 @@ internal object HistorySessionSourceResolver {
         return SessionMeta(
             sessionId = sessionId,
             adapterName = adapterName,
+            configOptions = indexedSession.configOptions,
             projectPath = projectPath,
             title = "Untitled Session",
             filePath = sourceFilePath,

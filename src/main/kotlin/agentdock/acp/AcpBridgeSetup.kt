@@ -19,6 +19,9 @@ internal fun AcpBridge.installServiceCallbacks() {
     service.setOnAdapterInitializationStateChanged { _, _, _ ->
         scope.launch(Dispatchers.IO) { pushAdapters() }
     }
+    service.setOnSessionConfigOptionsChanged { chatId, metadata ->
+        pushSessionConfigOptions(chatId, metadata)
+    }
     service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
         if (isReplay && suppressReplayForChatIds.contains(chatId)) {
             return@setOnSessionUpdate

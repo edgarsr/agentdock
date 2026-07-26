@@ -87,10 +87,6 @@ private fun AcpAdapterConfig.ModeInfo.toReasoningEffortPayload(): AdapterReasoni
     return AdapterReasoningEffortPayload(id, name, description.orEmpty())
 }
 
-private fun AcpAdapterConfig.ModeInfo.toModePayload(): AdapterModePayload {
-    return AdapterModePayload(id, name, description.orEmpty())
-}
-
 internal fun AcpBridge.setDownloadProbeState(
     adapterId: String,
     target: AcpExecutionTarget,
@@ -178,40 +174,29 @@ private fun AcpBridge.buildAdapterPayload(
 
     val savedPreference = preferences.agents[info.id]
     val rawRuntimeMetadata = service.adapterRuntimeMetadata(info.id)
-        ?: AcpClientService.AdapterRuntimeMetadata(
-            currentModelId = null,
-            availableModels = emptyList(),
-            currentModeId = null,
-            availableModes = emptyList(),
-            currentReasoningEffortId = null,
-            availableReasoningEfforts = emptyList()
-        )
-    val resolvedCurrentModelId = savedPreference?.modelId
-        ?.takeIf { preferred ->
-            rawRuntimeMetadata.availableModels.any { it.modelId == preferred }
-        }
+        ?: AcpClientService.AdapterRuntimeMetadata(emptyList())
+    val preferredValues = savedPreference?.configOptions.orEmpty()
+    val modelOption = rawRuntimeMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
+    val selectedModelId = modelOption?.id?.let { preferredValues[it] }
+        ?.takeIf { preferred -> modelOption?.accepts(preferred) == true }
         ?: rawRuntimeMetadata.currentModelId
-            ?.takeIf { current -> rawRuntimeMetadata.availableModels.any { it.modelId == current } }
-    val resolvedAvailableModes = rawRuntimeMetadata.modesForModel(resolvedCurrentModelId)
-    val resolvedCurrentModeId = savedPreference?.modeId
-        ?.takeIf { preferred -> resolvedAvailableModes.any { it.id == preferred } }
-        ?: rawRuntimeMetadata.currentModeId
-            ?.takeIf { current -> resolvedAvailableModes.any { it.id == current } }
-        ?: resolvedAvailableModes.firstOrNull()?.id
-    val resolvedAvailableReasoningEfforts = rawRuntimeMetadata.reasoningEffortsForModel(resolvedCurrentModelId)
-    val resolvedCurrentReasoningEffortId = savedPreference?.reasoningEffortId
-        ?.takeIf { preferred -> resolvedAvailableReasoningEfforts.any { it.id == preferred } }
-        ?: rawRuntimeMetadata.currentReasoningEffortId
-            ?.takeIf { current -> resolvedAvailableReasoningEfforts.any { it.id == current } }
-        ?: resolvedAvailableReasoningEfforts.firstOrNull()?.id
-    val resolvedReasoningEffortConfigId = rawRuntimeMetadata.reasoningEffortConfigId
     val runtimeMetadata = rawRuntimeMetadata.copy(
-        currentModelId = resolvedCurrentModelId,
-        currentModeId = resolvedCurrentModeId,
-        availableModes = resolvedAvailableModes,
-        currentReasoningEffortId = resolvedCurrentReasoningEffortId,
-        availableReasoningEfforts = resolvedAvailableReasoningEfforts,
-        reasoningEffortConfigId = resolvedReasoningEffortConfigId
+        configOptions = rawRuntimeMetadata.configOptions.map { option ->
+            val values = if (
+                option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
+            ) {
+                rawRuntimeMetadata.reasoningEffortsByModel[selectedModelId] ?: option.options
+            } else {
+                option.options
+            }
+            val candidate = preferredValues[option.id]
+            val resolved = candidate
+                ?.takeIf { option.copy(options = values).accepts(it) }
+                ?: option.currentValue.takeIf { option.type != "select" || values.any { value -> value.value == it } }
+                ?: values.firstOrNull()?.value
+                ?: option.currentValue
+            option.copy(currentValue = resolved, options = values)
+        }
     )
 
     return AdapterPayload(
@@ -227,16 +212,12 @@ private fun AcpBridge.buildAdapterPayload(
         availableModes = runtimeMetadata.availableModes.map {
             AdapterModePayload(it.id, it.name, it.description.orEmpty())
         },
-        availableModesByModel = runtimeMetadata.availableModesByModel.mapValues { (_, modes) ->
-            modes.map { it.toModePayload() }
-        },
         currentReasoningEffortId = runtimeMetadata.currentReasoningEffortId ?: "",
         availableReasoningEfforts = runtimeMetadata.availableReasoningEfforts.map {
             it.toReasoningEffortPayload()
         },
-        reasoningEffortsByModel = runtimeMetadata.availableReasoningEffortsByModel.mapValues { (_, efforts) ->
-            efforts.map { it.toReasoningEffortPayload() }
-        },
+        configOptions = runtimeMetadata.configOptions,
+        reasoningEffortsByModel = runtimeMetadata.reasoningEffortsByModel,
         downloaded = downloaded,
         downloadedKnown = downloadedKnown,
         downloadPath = if (downloaded == true) AcpAdapterPaths.getDownloadPath(info.id, target) else "",
