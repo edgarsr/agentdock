@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
 import {
   AgentOption,
   AudioTranscriptionFeatureState,
@@ -10,10 +9,7 @@ import {
 import { ACPBridge } from '../utils/bridge';
 import ConfirmationModal from './ConfirmationModal';
 import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSettings';
-import { SettingsCardShell } from './settings/SettingsCardShell';
-import { SettingsSelectCard } from './settings/SettingsSelectCard';
-import { SettingsSection } from './settings/SettingsSection';
-import { SettingsToggleCard } from './settings/SettingsToggleCard';
+import { SettingsCheckbox, SettingsField, SettingsSection } from './settings/SettingsLayout';
 import { Button } from './ui/Button';
 import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
 
@@ -28,10 +24,8 @@ const defaultGlobalSettings: GlobalSettingsPayload = {
   }
 };
 
-function SettingsLoadingSpinner({ className = 'w-3.5 h-3.5' }: { className?: string }) {
-  return (
-    <div className={`${className} shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin`} />
-  );
+function SettingsLoadingSpinner() {
+  return <div className='h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent' />;
 }
 
 function normalizeGitCommitGenerationSettings(
@@ -82,12 +76,12 @@ const userMessageBackgroundOptions: Array<{
   {
     id: 'default',
     background: 'var(--ide-user-message-default-bg)',
-    toneClass: 'bg-[var(--ide-user-message-default-bg)]'
+    toneClass: 'bg-user-message-default'
   },
   {
     id: 'blue',
     background: 'var(--ide-user-message-blue-bg)',
-    toneClass: 'bg-[var(--ide-user-message-blue-bg)]'
+    toneClass: 'bg-user-message-blue'
   },
   {
     id: 'background-secondary',
@@ -100,19 +94,17 @@ const userMessageBackgroundOptions: Array<{
   { id: 'input', background: 'var(--ide-TextField-background)', toneClass: 'bg-input' },
   {
     id: 'editor-bg',
-    background: 'var(--ide-editor-xbg)',
-    toneClass: 'bg-[var(--ide-editor-bg)]'
+    background: 'var(--ide-editor-bg)',
+    toneClass: 'bg-editor-bg'
   }
 ];
 
 const emptyState: AudioTranscriptionFeatureState = {
   id: 'whisper-transcription',
-  title: 'Audio Input',
   installed: false,
   installing: false,
   supported: false,
   status: 'Loading',
-  detail: '',
   installPath: ''
 };
 
@@ -138,18 +130,11 @@ export function SettingsView() {
   const [installedAgents, setInstalledAgents] = useState<AgentOption[]>([]);
   const [pendingAudioInputUninstall, setPendingAudioInputUninstall] = useState(false);
   const [uiFontSizeBasePx, setUiFontSizeBasePx] = useState(() => readIdeFontSizePx());
-  const uiFontSizeOptions = Array.from({ length: 7 }, (_, index) => {
+  const uiFontSizeSelectOptions: DropdownOption[] = Array.from({ length: 7 }, (_, index) => {
     const offset = index - 3;
     const px = uiFontSizeBasePx + offset;
-    return {
-      offset,
-      label: offset === 0 ? `${px}px (default)` : `${px}px`
-    };
+    return { value: String(offset), label: offset === 0 ? `${px}px (default)` : `${px}px` };
   });
-  const uiFontSizeSelectOptions: DropdownOption[] = uiFontSizeOptions.map((option) => ({
-    value: String(option.offset),
-    label: option.label
-  }));
 
   useEffect(() => {
     document.documentElement.style.setProperty(
@@ -231,34 +216,8 @@ export function SettingsView() {
     ACPBridge.saveAudioTranscriptionSettings(next);
   };
 
-  const handleGitCommitGenerationChange = (gitCommitGeneration: GitCommitGenerationSettingsValue) => {
-    const next = { ...globalSettings.settings, gitCommitGeneration };
-    setGlobalSettings((prev) => ({ ...prev, settings: next }));
-    ACPBridge.saveGlobalSettings(next);
-  };
-
-  const handleAudioNotificationsChange = (audioNotificationsEnabled: boolean) => {
-    const next = { ...globalSettings.settings, audioNotificationsEnabled };
-    setGlobalSettings((prev) => ({ ...prev, settings: next }));
-    ACPBridge.saveGlobalSettings(next);
-  };
-
-  const handleQuotaWidgetEnabledChange = (quotaWidgetEnabled: boolean) => {
-    const next = { ...globalSettings.settings, quotaWidgetEnabled };
-    setGlobalSettings((prev) => ({ ...prev, settings: next }));
-    ACPBridge.saveGlobalSettings(next);
-  };
-
-  const handleUiFontSizeChange = (uiFontSizeOffsetPx: number) => {
-    const next = { ...globalSettings.settings, uiFontSizeOffsetPx };
-    setGlobalSettings((prev) => ({ ...prev, settings: next }));
-    ACPBridge.saveGlobalSettings(next);
-  };
-
-  const handleUserMessageBackgroundStyleChange = (
-    userMessageBackgroundStyle: GlobalSettingsPayload['settings']['userMessageBackgroundStyle']
-  ) => {
-    const next = { ...globalSettings.settings, userMessageBackgroundStyle };
+  const updateGlobalSettings = (patch: Partial<GlobalSettingsPayload['settings']>) => {
+    const next = { ...globalSettings.settings, ...patch };
     setGlobalSettings((prev) => ({ ...prev, settings: next }));
     ACPBridge.saveGlobalSettings(next);
   };
@@ -266,120 +225,109 @@ export function SettingsView() {
   return (
     <div className='flex h-full flex-col overflow-hidden'>
       <div className='w-full flex-1 overflow-y-auto'>
-        <div className='flex w-full max-w-[840px] flex-col gap-6 px-4 py-4'>
-          <h1 className='px-2 text-ide-h4 font-medium text-foreground'>Settings</h1>
-
-          <SettingsSection title='APPEARANCE'>
-            <SettingsSelectCard
-              title='Interface Font Size'
-              description='Adjust the size of text and controls in Agent Dock'
-            >
+        <div className='mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-8 pt-6'>
+          <SettingsSection title='Appearance'>
+            <SettingsField label='Base Font Size' colon>
               <DropdownSelect
                 value={String(globalSettings.settings.uiFontSizeOffsetPx)}
-                onChange={(value) => handleUiFontSizeChange(Number(value))}
+                onChange={(value) => updateGlobalSettings({ uiFontSizeOffsetPx: Number(value) })}
                 options={uiFontSizeSelectOptions}
-                className='w-[200px] max-w-[42vw]'
+                className='max-w-full'
               />
-            </SettingsSelectCard>
+            </SettingsField>
 
-            <SettingsCardShell
-              title='User Message Background'
-              description='Choose how your messages appear in chat'
+            <SettingsField
+              label='User Message Background'
+              description='Choose the background color used for your chat messages'
+              stacked
             >
-              <div className='grid max-w-[620px] grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-2'>
-                {userMessageBackgroundOptions.map((option) => {
-                  const selected = globalSettings.settings.userMessageBackgroundStyle === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type='button'
-                      onClick={() => handleUserMessageBackgroundStyleChange(option.id)}
-                      aria-pressed={selected}
-                      aria-label={`${option.id} message background`}
-                      className={`relative min-w-0 rounded-[4px] border p-1.5 text-left focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${
-                        selected
-                          ? 'border-[var(--ide-Button-focusedBorderColor)] shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]'
-                          : 'border-[var(--ide-Button-disabledBorderColor)] hover:bg-hover'
-                      }`}
-                    >
-                      <span className='block rounded-[3px] bg-background-secondary p-1.5'>
-                        <span className={`ml-auto block h-5 w-4/5 rounded-[3px] border border-border ${option.toneClass}`} />
-                      </span>
-                      {selected ? (
-                        <span className='absolute right-2 bottom-1.5 text-[var(--ide-Hyperlink-linkColor)]'>
-                          <Check size={12} strokeWidth={2.5} />
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+              <div className='flex flex-wrap gap-2'>
+                {userMessageBackgroundOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type='button'
+                    onClick={() => updateGlobalSettings({ userMessageBackgroundStyle: option.id })}
+                    aria-pressed={globalSettings.settings.userMessageBackgroundStyle === option.id}
+                    aria-label={`${option.id} message background`}
+                    className={`h-8 w-8 rounded-[4px] border ${option.toneClass} focus:outline-none ${
+                      globalSettings.settings.userMessageBackgroundStyle === option.id
+                        ? 'border-[var(--ide-Button-focusedBorderColor)] shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]'
+                        : 'border-border'
+                    }`}
+                  />
+                ))}
               </div>
-            </SettingsCardShell>
+            </SettingsField>
           </SettingsSection>
 
-          <SettingsSection title='NOTIFICATIONS'>
-            <SettingsToggleCard
+          <SettingsSection title='General'>
+            <SettingsCheckbox
               title='Audio Notifications'
-              description='Play sounds for assistant replies and permission requests'
-              enabled={globalSettings.settings.audioNotificationsEnabled}
-              onToggle={() => handleAudioNotificationsChange(!globalSettings.settings.audioNotificationsEnabled)}
+              description='Play sounds for new assistant messages and permission requests'
+              checked={globalSettings.settings.audioNotificationsEnabled}
+              onToggle={() =>
+                updateGlobalSettings({ audioNotificationsEnabled: !globalSettings.settings.audioNotificationsEnabled })
+              }
               ariaLabel='Enable audio notifications'
             />
-          </SettingsSection>
 
-          <SettingsSection title='IDE INTEGRATION'>
-            <SettingsToggleCard
+            <SettingsCheckbox
               title='Status Bar Quota Widget'
               description='Display real-time agent usage quotas in the IDE status bar'
-              enabled={globalSettings.settings.quotaWidgetEnabled}
-              onToggle={() => handleQuotaWidgetEnabledChange(!globalSettings.settings.quotaWidgetEnabled)}
+              checked={globalSettings.settings.quotaWidgetEnabled}
+              onToggle={() => updateGlobalSettings({ quotaWidgetEnabled: !globalSettings.settings.quotaWidgetEnabled })}
               ariaLabel='Enable status bar quota widget'
             />
 
             <GitCommitGenerationSettings
               settings={globalSettings.settings.gitCommitGeneration}
               installedAgents={installedAgents}
-              onChange={handleGitCommitGenerationChange}
+              onChange={(gitCommitGeneration) => updateGlobalSettings({ gitCommitGeneration })}
             />
           </SettingsSection>
 
           {feature.supported && (
-            <SettingsSection title='VOICE INPUT'>
-              <SettingsCardShell
-                title='Audio Input'
-                description='Transcribe microphone input locally using Whisper'
-                control={
-                  <Button
-                    onClick={handleAudioInputAction}
-                    disabled={feature.installing || (!feature.installed && !feature.supported)}
-                    variant={feature.installed ? 'accentOutline' : 'install'}
-                    className='text-ide-regular'
-                    leftIcon={feature.installing ? <SettingsLoadingSpinner className='w-3 h-3' /> : undefined}
-                  >
-                    {actionLabel}
-                  </Button>
-                }
-              >
-                {showAudioInputDetails && (
-                  <div className='grid max-w-[560px] grid-cols-1 items-center gap-x-3 gap-y-2 min-[420px]:grid-cols-[88px_minmax(0,260px)]'>
-                    <span className='text-foreground-secondary'>Status</span>
-                    <span>{feature.status}</span>
-                    <span className='text-foreground-secondary'>Language</span>
-                    <DropdownSelect
-                      value={settings.language}
-                      onChange={handleLanguageChange}
-                      options={whisperLanguageOptions}
-                      disabled={!feature.installed}
-                      className='w-full'
-                    />
-                    {feature.installed && feature.installPath && (
-                      <div className='mt-1 break-all text-xs text-foreground-secondary min-[420px]:col-span-2'>
-                        Installed at <span className='font-mono'>{feature.installPath}</span>
-                      </div>
-                    )}
+            <SettingsSection title='Audio Input'>
+              <SettingsField label='Transcribe microphone input locally using Whisper' stacked>
+                <div className='flex flex-col gap-2'>
+                  {showAudioInputDetails && (
+                    <>
+                      <SettingsField label='Status'>
+                        <span className='text-foreground-secondary'>{feature.status}</span>
+                      </SettingsField>
+                      <SettingsField
+                        label='Language'
+                        colon
+                        description={
+                          feature.installed && feature.installPath ? (
+                            <span className='break-all'>
+                              Installed at <span className='font-mono'>{feature.installPath}</span>
+                            </span>
+                          ) : undefined
+                        }
+                      >
+                        <DropdownSelect
+                          value={settings.language}
+                          onChange={handleLanguageChange}
+                          options={whisperLanguageOptions}
+                          disabled={!feature.installed}
+                          className='max-w-full'
+                        />
+                      </SettingsField>
+                    </>
+                  )}
+                  <div className='mt-1'>
+                    <Button
+                      onClick={handleAudioInputAction}
+                      disabled={feature.installing}
+                      variant={feature.installed ? 'accentOutline' : 'install'}
+                      leftIcon={feature.installing ? <SettingsLoadingSpinner /> : undefined}
+                    >
+                      {actionLabel}
+                    </Button>
                   </div>
-                )}
-              </SettingsCardShell>
+                </div>
+              </SettingsField>
             </SettingsSection>
           )}
         </div>

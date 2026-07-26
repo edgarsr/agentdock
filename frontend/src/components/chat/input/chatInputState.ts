@@ -48,11 +48,9 @@ export interface ChatInputProps {
 
 export const emptyTranscriptionFeature: AudioTranscriptionFeatureState = {
   id: 'whisper-transcription',
-  title: 'Whisper',
   installed: false,
   installing: false,
   supported: false,
   status: 'Loading',
-  detail: '',
   installPath: '',
 };

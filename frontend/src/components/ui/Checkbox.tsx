@@ -26,7 +26,7 @@ export function Checkbox({
       aria-checked={checked}
       disabled={disabled}
       className={cx(
-        'bg-background inline-flex h-4 w-4 items-center justify-center rounded-[3px] border',
+        'bg-background inline-flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[3px] border',
         checked
           ? 'border-transparent bg-primary text-[var(--ide-Button-default-foreground)]'
           : 'border-[var(--ide-Button-startBorderColor)] text-transparent',
@@ -40,7 +40,7 @@ export function Checkbox({
       }}
       {...props}
     >
-      {checked ? <Check size={13} strokeWidth={3.25} /> : null}
+      {checked ? <Check size={12} strokeWidth={3.25} /> : null}
     </button>
   );
 }

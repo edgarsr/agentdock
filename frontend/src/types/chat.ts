@@ -451,12 +451,10 @@ export interface BridgeOperationResultPayload {
 
 export interface AudioTranscriptionFeatureState {
   id: string;
-  title: string;
   installed: boolean;
   installing: boolean;
   supported: boolean;
   status: string;
-  detail: string;
   installPath: string;
 }
 

@@ -39,6 +39,10 @@ export default {
           bg: 'var(--ide-editor-bg)',
           fg: 'var(--ide-editor-fg)',
         },
+        'user-message': {
+          default: 'var(--ide-user-message-default-bg)',
+          blue: 'var(--ide-user-message-blue-bg)',
+        },
         success: '#57965c',
         error: '#db5c5c',
         warning: '#ba9752',
