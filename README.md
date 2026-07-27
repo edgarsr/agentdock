@@ -10,13 +10,15 @@ Currently supported AI agents:
 - Codex
 - Cursor
 - GitHub Copilot
+- Grok Build
 - Kilo
+- Kimi Code
 - OpenCode
 - Qoder
 
 ## Features
 
-- Installation, update, and uninstall flows for supported AI agents inside the plugin.
+- Installation, update, uninstall, login, and logout flows for supported AI agents inside the plugin.
 - Communication with supported AI agents through ACP (Agent Client Protocol) in a GUI.
 - Structured display of agent output, including tool use, thinking blocks, terminal commands, plans, file edits, and diffs.
 - Review of files changed by an agent, with options to accept selected changes or revert them from the IDE.
@@ -33,6 +35,7 @@ Currently supported AI agents:
 - AI agents can be switched within the same chat while preserving the session context.
 - MCP server configuration for additional agent tools and external resources.
 - Reusable prompts can be saved in the prompt library and inserted into chat when needed.
+- Prompts can be queued while an agent is already working.
 - System instructions can be managed and applied to agent sessions.
 - Git commit messages can be generated from the current changes.
 

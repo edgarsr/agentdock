@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.4.2</version>
+    <version>1.5.0</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -12,13 +12,15 @@
             <li>Codex</li>
             <li>Cursor</li>
             <li>GitHub Copilot</li>
+            <li>Grok Build</li>
             <li>Kilo</li>
+            <li>Kimi Code</li>
             <li>OpenCode</li>
             <li>Qoder</li>
         </ul>
         <h4>Features:</h4>
         <ul>
-            <li>Installation, update, and uninstall flows for supported AI agents inside the plugin.</li>
+            <li>Installation, update, uninstall, login, and logout flows for supported AI agents inside the plugin.</li>
             <li>Communication with supported AI agents through ACP (Agent Client Protocol) in a GUI.</li>
             <li>Structured display of agent output, including tool use, thinking blocks, terminal commands, plans, file edits, and diffs.</li>
             <li>Review of files changed by an agent, with options to accept selected changes or revert them from the IDE.</li>
@@ -48,8 +50,13 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Fixed plugin startup in JetBrains IDEs 2026.2.</li>
-            <li>Removed custom scroll acceleration to use native JCEF scrolling.</li>
+            <li>Added support for Grok Build.</li>
+            <li>Added support for Kimi Code.</li>
+            <li>Updated the Qoder integration.</li>
+            <li>Updated the GitHub Copilot integration and changed its usage data source.</li>
+            <li>Reworked agent management, including login and logout flows and the related UI.</li>
+            <li>Added a menu exposing all agent configuration options.</li>
+            <li>Fixed minor front-end issues.</li>
         </ul>
     ]]></change-notes>
 
