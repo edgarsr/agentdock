@@ -41,17 +41,17 @@ function startLivePromptRepaints() {
   }, LIVE_PROMPT_REPAINT_INTERVAL_MS);
 }
 
-function scheduleClickRepaints() {
+function scheduleInteractionRepaints(source: string) {
   clearScheduledRepaints();
 
   firstRepaintTimer = window.setTimeout(() => {
     firstRepaintTimer = null;
-    triggerRepaint(`click:${FIRST_REPAINT_DELAY_MS}ms`);
+    triggerRepaint(`${source}:${FIRST_REPAINT_DELAY_MS}ms`);
   }, FIRST_REPAINT_DELAY_MS);
 
   secondRepaintTimer = window.setTimeout(() => {
     secondRepaintTimer = null;
-    triggerRepaint(`click:${SECOND_REPAINT_DELAY_MS}ms`);
+    triggerRepaint(`${source}:${SECOND_REPAINT_DELAY_MS}ms`);
   }, SECOND_REPAINT_DELAY_MS);
 }
 
@@ -59,7 +59,9 @@ export function installJcefHostRepaintCoordinator() {
   if (typeof window === "undefined" || coordinatorInstalled) return;
   coordinatorInstalled = true;
 
-  document.addEventListener("click", scheduleClickRepaints, { passive: true, capture: true });
+  const options = { passive: true, capture: true } as const;
+  document.addEventListener("click", () => scheduleInteractionRepaints('click'), options);
+  document.addEventListener("keydown", () => scheduleInteractionRepaints('keydown'), options);
 }
 
 export function acquireJcefLivePromptRepaint() {
