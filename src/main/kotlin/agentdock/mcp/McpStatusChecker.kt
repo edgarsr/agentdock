@@ -323,7 +323,7 @@ object McpStatusChecker {
 
     private fun withDiagnostics(message: String, output: ProcessOutputBuffer): String {
         val diagnostics = output.summary() ?: return message
-        return "$message. Diagnostics: $diagnostics"
+        return "$message\n\nDiagnostics:\n$diagnostics"
     }
 
     private fun withExitCode(process: Process, detail: String): String {
@@ -332,8 +332,8 @@ object McpStatusChecker {
     }
 
     private class ProcessOutputBuffer(
-        private val maxLines: Int = 20,
-        private val maxChars: Int = 500
+        private val maxLines: Int = 40,
+        private val maxLineChars: Int = 500
     ) {
         private val lines = ArrayDeque<String>()
 
@@ -342,7 +342,9 @@ object McpStatusChecker {
             val trimmed = line.trim()
             if (!isUsefulDiagnostic(trimmed)) return
 
-            lines.addLast("$source: $trimmed")
+            // Cap each line on its own so one huge line cannot crowd out the rest,
+            // and keep lines separate so the UI can render them as real lines.
+            lines.addLast("$source: ${trimmed.take(maxLineChars)}")
             while (lines.size > maxLines) {
                 lines.removeFirst()
             }
@@ -350,9 +352,9 @@ object McpStatusChecker {
 
         @Synchronized
         fun summary(): String? {
-            val text = lines.joinToString(" | ")
+            val text = lines.joinToString("\n")
             if (text.isBlank()) return null
-            return text.takeLast(maxChars)
+            return text
         }
 
         private fun isUsefulDiagnostic(line: String): Boolean =

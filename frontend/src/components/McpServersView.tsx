@@ -87,30 +87,33 @@ function retainStatuses(
 interface StatusVisual {
   dotClass: string;
   pulse: boolean;
-  defaultLabel: string;
+  label: string;
 }
 
-// Lookup keyed by the McpStatus type: adding a status forces a new entry (exhaustive),
-// so the indicator can never silently fall through to a default.
-const STATUS_VISUALS: Record<McpStatus, StatusVisual> = {
-  connected: { dotClass: 'bg-success', pulse: false, defaultLabel: 'Connected' },
-  loading: { dotClass: 'bg-warning', pulse: true, defaultLabel: 'Checking…' },
-  error: { dotClass: 'bg-error', pulse: false, defaultLabel: 'Error' },
-  disabled: { dotClass: 'bg-foreground-secondary', pulse: false, defaultLabel: 'Not running' },
-  unknown: { dotClass: 'bg-foreground-secondary', pulse: false, defaultLabel: 'Unknown' },
+// Lookup keyed by the McpStatus type: adding a status forces a new entry (exhaustive)
+const STATUS_VISUALS: Record<McpStatus, StatusVisual | null> = {
+  connected: { dotClass: 'bg-success', pulse: false, label: 'Reachable' },
+  loading: { dotClass: 'bg-warning', pulse: true, label: 'Checking…' },
+  error: { dotClass: 'bg-error', pulse: false, label: 'Error' },
+  disabled: null,
+  unknown: null,
 };
 
-function McpStatusDot({ status, message }: { status: McpStatus; message?: string }) {
+function McpStatusLine({ transport, status }: { transport: McpTransport; status: McpStatus }) {
   const visual = STATUS_VISUALS[status];
-  const label = message || visual.defaultLabel;
   return (
-    <Tooltip variant="minimal" content={label}>
-      <span
-        role="img"
-        aria-label={label}
-        className={`inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ${visual.dotClass}${visual.pulse ? ' animate-pulse' : ''}`}
-      />
-    </Tooltip>
+    <div className='mt-1 flex items-center gap-1.5 text-xs text-foreground-secondary'>
+      {visual && (
+        <span
+          role="img"
+          aria-label={visual.label}
+          className={`inline-block h-2 w-2 mt-[-2px] flex-shrink-0 rounded-full ${visual.dotClass}${visual.pulse ? ' animate-pulse' : ''}`}
+        />
+      )}
+      <span className='truncate'>
+        {transport.toUpperCase()}{visual ? ` · ${visual.label}` : ''}
+      </span>
+    </div>
   );
 }
 
@@ -214,7 +217,6 @@ export function McpServersView() {
             const statusMessage = statusUpdate?.message;
             const displayStatus: McpStatus = s.enabled ? status : 'disabled';
             const displayStatusMessage = s.enabled ? statusMessage : undefined;
-            const statusLabel = STATUS_VISUALS[displayStatus].defaultLabel;
             return (
             <div
               key={s.id}
@@ -224,20 +226,27 @@ export function McpServersView() {
                 checked={s.enabled}
                 onCheckedChange={() => toggle(s.id)}
                 aria-label={`${s.enabled ? 'Disable' : 'Enable'} ${s.name}`}
-                className='mt-[3px]'
+                // Centered against the name + status lines at the default IDE font size.
+                // Kept as a fixed offset so an expanded error block below cannot drag it down.
+                className='mt-[11px]'
               />
-              <McpStatusDot status={displayStatus} message={displayStatusMessage} />
-
               <div className="flex-1 min-w-0">
                 <div className="truncate">
                   {s.name}
                 </div>
-                <div className='mt-1 truncate text-xs text-foreground-secondary' title={statusLabel}>
-                  {s.transport.toUpperCase()} · {statusLabel}
-                </div>
+                <McpStatusLine transport={s.transport} status={displayStatus} />
+                {displayStatus === 'error' && displayStatusMessage && (
+                  // Errors are shown in full: wrapped over as many lines as needed,
+                  // with scrolling only as a guard against unusually long output.
+                  <div className='mt-1 max-h-[160px] overflow-y-auto whitespace-pre-wrap break-words text-xs text-error'>
+                    {displayStatusMessage}
+                  </div>
+                )}
               </div>
 
-              <div className='flex flex-shrink-0 items-center gap-2'>
+              {/* Same fixed offset as the checkbox, so both edges sit on the
+                  centre line of the name + status lines. */}
+              <div className='mt-[8px] flex flex-shrink-0 items-center gap-2'>
                 <Tooltip variant="minimal" content="Edit">
                   <button
                     type="button"
