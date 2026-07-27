@@ -23,7 +23,8 @@ internal data class CachedAdapterConfigOptions(
 
 @Serializable
 private data class ConfigOptionsCacheFile(
-    val schemaVersion: Int = CONFIG_OPTIONS_CACHE_SCHEMA_VERSION,
+    // Defaults to 0 so a file written before versioning (or with the field stripped) fails the schema check.
+    val schemaVersion: Int = 0,
     val adapters: Map<String, CachedAdapterConfigOptions> = emptyMap()
 )
 
@@ -116,8 +117,9 @@ internal object AcpConfigOptionsCache {
             val file = cacheFile()
             val parent = file.parentFile
             if (!parent.exists()) parent.mkdirs()
-            file.atomicWriteText(json.encodeToString(content))
-            memoryCache = content
+            val versioned = content.copy(schemaVersion = CONFIG_OPTIONS_CACHE_SCHEMA_VERSION)
+            file.atomicWriteText(json.encodeToString(versioned))
+            memoryCache = versioned
             true
         } catch (error: Exception) {
             log.warn("Unable to persist ACP config options cache", error)
