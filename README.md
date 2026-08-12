@@ -41,7 +41,7 @@ Currently supported AI agents:
 
 ## Requirements
 
-- JetBrains IDE based on IntelliJ Platform 2025.1 or newer.
+- JetBrains IDE based on IntelliJ Platform 2025.3 or newer.
 - Some agents use JetBrains IDE terminal for authentication.
 - On macOS and Linux, installing some agents requires `curl` and `tar`.
 

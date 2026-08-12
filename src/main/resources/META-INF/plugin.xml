@@ -42,7 +42,7 @@
         </ul>
         <h4>Requirements:</h4>
         <ul>
-            <li>JetBrains IDE based on IntelliJ Platform 2025.1 or newer.</li>
+            <li>JetBrains IDE based on IntelliJ Platform 2025.3 or newer.</li>
             <li>Some agents use JetBrains IDE terminal for authentication.</li>
             <li>On macOS and Linux, installing some agents requires curl and tar.</li>
         </ul>
@@ -50,6 +50,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>Raised the minimum supported IntelliJ Platform version to 2025.3.</li>
             <li>Added support for Grok Build.</li>
             <li>Added support for Kimi Code.</li>
             <li>Updated the Qoder integration.</li>

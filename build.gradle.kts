@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity("2025.1")
+        intellijIdea("2025.3")
         jetbrainsRuntime()
         bundledPlugin("org.jetbrains.plugins.terminal")
     }
@@ -50,7 +50,7 @@ intellijPlatform {
     }
     pluginVerification {
         ides {
-            create(IntelliJPlatformType.IntellijIdeaCommunity, "2025.1")
+            create(IntelliJPlatformType.IntellijIdea, "2025.3")
             create(IntelliJPlatformType.PhpStorm, "2026.1")
             create(IntelliJPlatformType.PhpStorm, "2026.2")
             create(IntelliJPlatformType.IntellijIdea, "261.24374.34")
