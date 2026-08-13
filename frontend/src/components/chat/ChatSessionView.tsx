@@ -133,7 +133,10 @@ export default function ChatSessionView({
   } = useFileChanges(conversationId, acpSessionId, adapterName);
 
   const lastAssistantMsgWithContext = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
+    // Fork messages keep their original context metadata for transcript/history display,
+    // but they belong to the source session and must not represent the new session usage.
+    const currentSessionStartIndex = initialMessages?.length ?? 0;
+    for (let i = messages.length - 1; i >= currentSessionStartIndex; i--) {
       const msg = messages[i];
       if (msg.role === 'assistant' && (msg.contextTokensUsed !== undefined || msg.contextWindowSize !== undefined)) {
         if (!selectedAgentId || msg.agentId === selectedAgentId) {
@@ -143,7 +146,7 @@ export default function ChatSessionView({
       }
     }
     return null;
-  }, [messages, selectedAgentId]);
+  }, [initialMessages?.length, messages, selectedAgentId]);
 
   const handleShowDiff = useCallback((fc: FileChangeSummary) => {
     if (typeof window.__showDiff === 'function') {
