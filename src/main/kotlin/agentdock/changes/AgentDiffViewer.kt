@@ -21,7 +21,12 @@ object AgentDiffViewer {
     fun rebuildBeforeContent(currentContent: String, operations: List<UndoOperation>): String {
         var content = currentContent
         for (op in operations.reversed()) {
-            if (op.newText.isEmpty()) continue
+            if (op.newText.isEmpty()) {
+                // A whole-file deletion leaves no text to search for. Once the current
+                // snapshot is empty, the deleted content is the complete prior snapshot.
+                if (content.isEmpty()) content = op.oldText
+                continue
+            }
             val idx = content.indexOf(op.newText)
             if (idx >= 0) {
                 content = content.substring(0, idx) + op.oldText + content.substring(idx + op.newText.length)

@@ -115,7 +115,7 @@ private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: Json
         ?: mergedRaw["kind"]?.jsonPrimitive?.contentOrNull
         ?: ""
     val mergedRawFinal = if (mergedKind == "edit") {
-        preserveEditDiffContent(existingRaw, incomingRaw, mergedRaw)
+        mergeEditDiffContent(existingRaw, incomingRaw, mergedRaw)
     } else {
         mergedRaw
     }
@@ -146,7 +146,7 @@ private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: Json
     }
 }
 
-private fun preserveEditDiffContent(
+internal fun mergeEditDiffContent(
     existingRaw: JsonObject?,
     incomingRaw: JsonObject,
     mergedRaw: JsonObject
@@ -155,14 +155,62 @@ private fun preserveEditDiffContent(
     if (!existingContent.any(::isDiffLikePayload)) return mergedRaw
 
     val incomingContent = incomingRaw["content"] as? JsonArray ?: return mergedRaw
-    if (incomingContent.any(::isDiffLikePayload)) return mergedRaw
+    val incomingDiffs = incomingContent.filter(::isDiffLikePayload)
+    if (incomingDiffs.isEmpty()) {
+        return buildJsonObject {
+            mergedRaw.forEach { (key, value) ->
+                if (key != "content") put(key, value)
+            }
+            put("content", existingContent)
+        }
+    }
+
+    val incomingDiffsByPath = incomingDiffs
+        .mapNotNull { diff -> diffPath(diff)?.let { path -> path to diff } }
+        .groupBy({ it.first }, { it.second })
+    val emittedPaths = mutableSetOf<String>()
+    val mergedContent = buildJsonArray {
+        existingContent.forEach { item ->
+            val path = diffPath(item)
+            val replacements = path?.let(incomingDiffsByPath::get)
+            if (replacements == null) {
+                add(item)
+            } else if (path != null && emittedPaths.add(path)) {
+                replacements.forEach { replacement -> add(replacement) }
+            }
+        }
+
+        incomingContent.forEach { item ->
+            if (!isDiffLikePayload(item)) {
+                add(item)
+                return@forEach
+            }
+            val path = diffPath(item)
+            if (path == null || emittedPaths.add(path)) {
+                if (path == null) {
+                    add(item)
+                } else {
+                    incomingDiffsByPath[path].orEmpty().forEach { replacement -> add(replacement) }
+                }
+            }
+        }
+    }
 
     return buildJsonObject {
         mergedRaw.forEach { (key, value) ->
             if (key != "content") put(key, value)
         }
-        put("content", existingContent)
+        put("content", mergedContent)
     }
+}
+
+private fun diffPath(element: JsonElement): String? {
+    if (!isDiffLikePayload(element)) return null
+    return (element as? JsonObject)
+        ?.get("path")
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.takeIf { it.isNotBlank() }
 }
 
 private fun parseStoredToolRawJson(rawJson: String): JsonObject? =

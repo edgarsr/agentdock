@@ -151,6 +151,40 @@ class UndoFileHandlerTest {
         assertEquals(1, stats?.deletions)
     }
 
+    @Test
+    fun `file stats include every line of a deleted file`() {
+        val projectDir = Files.createTempDirectory("agent-dock-project-").toFile()
+        val deletedFile = projectDir.resolve("Deleted.kt")
+        val project = projectWithBasePath(projectDir.path)
+
+        val stats = AgentChangeCalculator.computeFileStats(
+            project,
+            deletedFile.path,
+            "M",
+            listOf(UndoOperation("first\nsecond\nthird\n", ""))
+        )
+
+        assertEquals(0, stats?.additions)
+        assertEquals(3, stats?.deletions)
+    }
+
+    @Test
+    fun `undo restores a deleted file`() {
+        val projectDir = Files.createTempDirectory("agent-dock-project-").toFile()
+        val deletedFile = projectDir.resolve("Deleted.kt")
+        val project = projectWithBasePath(projectDir.path)
+
+        val result = UndoFileHandler.undoSingleFile(
+            project,
+            deletedFile.path,
+            "M",
+            listOf(UndoOperation("first\nsecond\n", ""))
+        )
+
+        assertTrue(result.success, result.toString())
+        assertEquals("first\nsecond\n", deletedFile.readText())
+    }
+
     private fun projectWithBasePath(basePath: String): Project {
         return Proxy.newProxyInstance(
             Project::class.java.classLoader,

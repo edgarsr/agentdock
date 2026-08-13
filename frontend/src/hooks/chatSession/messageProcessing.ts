@@ -8,7 +8,15 @@ import {
   ContentChunk,
   ToolCallDiffEntry,
 } from '../../types/chat';
-import { safeParseJson, buildToolCallEntry, extractResultTexts, appendToolOutput, replaceToolOutput, extractToolCallDiffEntries } from '../../utils/toolCallUtils';
+import {
+  safeParseJson,
+  buildToolCallEntry,
+  extractResultTexts,
+  appendToolOutput,
+  replaceToolOutput,
+  extractToolCallDiffEntries,
+  mergeToolCallDiffEntries,
+} from '../../utils/toolCallUtils';
 import { nextMessageId } from './messageBasics';
 import {
   closeStreamingExploring,
@@ -39,40 +47,6 @@ function collectToolCallDiffEntries(blocks: ToolCallBlock[]): ToolCallDiffEntry[
   });
 }
 
-function mergeToolCallDiffEntries(existing: ToolCallDiffEntry[], incoming: ToolCallDiffEntry[]): ToolCallDiffEntry[] {
-  const incomingByPath = new Map<string, ToolCallDiffEntry[]>();
-  const pathlessIncoming: ToolCallDiffEntry[] = [];
-  incoming.forEach((entry) => {
-    if (!entry.path) {
-      pathlessIncoming.push(entry);
-      return;
-    }
-    const entries = incomingByPath.get(entry.path) || [];
-    entries.push(entry);
-    incomingByPath.set(entry.path, entries);
-  });
-
-  const replacedPaths = new Set<string>();
-  const merged: ToolCallDiffEntry[] = [];
-  existing.forEach((entry) => {
-    const incomingForPath = entry.path ? incomingByPath.get(entry.path) : undefined;
-    if (!incomingForPath) {
-      merged.push(entry);
-      return;
-    }
-    if (!replacedPaths.has(entry.path)) {
-      merged.push(...incomingForPath);
-      replacedPaths.add(entry.path);
-    }
-  });
-
-  incomingByPath.forEach((entries, path) => {
-    if (!replacedPaths.has(path)) merged.push(...entries);
-  });
-  merged.push(...pathlessIncoming);
-  return merged;
-}
-
 // Unified chunk processing - one path for both streaming and replay chunks.
 
 function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
@@ -81,7 +55,7 @@ function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
     if (message.role !== 'assistant') continue;
 
     const next = [...messages];
-    const finalizedMessage: Message = {
+    next[i] = {
       ...message,
       agentId: chunk.agentId ?? message.agentId,
       agentName: chunk.agentName ?? message.agentName,
@@ -93,7 +67,6 @@ function applyPromptDone(messages: Message[], chunk: ContentChunk): Message[] {
       contentBlocks: failPendingToolStatuses(message.contentBlocks),
       metaComplete: true,
     };
-    next[i] = finalizedMessage;
     return next;
   }
 
@@ -201,8 +174,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
 
   // Final rebuild
   const txt = blocks.filter((b): b is TextBlock => b.type === 'text').map(b => b.text).join('');
-  const finalMsg = setBlocks({ ...lastMsg, content: txt }, blocks);
-  newMessages[newMessages.length - 1] = finalMsg;
+  newMessages[newMessages.length - 1] = setBlocks({ ...lastMsg, content: txt }, blocks);
   return newMessages;
 }
 

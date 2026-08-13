@@ -1,4 +1,4 @@
-import { ToolCallEntry, ContentChunk, ToolCallDiffEntry } from '../types/chat';
+import { ToolCallEntry, ContentChunk, ToolCallDiffEntry, ToolCallEvent } from '../types/chat';
 
 export type { ToolCallDiffEntry };
 
@@ -78,6 +78,63 @@ export function extractToolCallDiffEntries(
     oldText: null,
     newText: typeof rawInput.file_text === 'string' ? rawInput.file_text : String(rawInput.file_text),
   }];
+}
+
+/**
+ * Merge an incremental edit update without dropping files reported by an earlier
+ * chunk of the same tool call. An incoming path replaces the previous snapshot
+ * for that path; paths absent from the update remain available.
+ */
+export function mergeToolCallDiffEntries<T extends { path: string }>(
+  existing: T[],
+  incoming: T[]
+): T[] {
+  const incomingByPath = new Map<string, T[]>();
+  const pathlessIncoming: T[] = [];
+  incoming.forEach((entry) => {
+    if (!entry.path) {
+      pathlessIncoming.push(entry);
+      return;
+    }
+    const entries = incomingByPath.get(entry.path) || [];
+    entries.push(entry);
+    incomingByPath.set(entry.path, entries);
+  });
+
+  const replacedPaths = new Set<string>();
+  const merged: T[] = [];
+  existing.forEach((entry) => {
+    const incomingForPath = entry.path ? incomingByPath.get(entry.path) : undefined;
+    if (!incomingForPath) {
+      merged.push(entry);
+      return;
+    }
+    if (!replacedPaths.has(entry.path)) {
+      merged.push(...incomingForPath);
+      replacedPaths.add(entry.path);
+    }
+  });
+
+  incomingByPath.forEach((entries, path) => {
+    if (!replacedPaths.has(path)) merged.push(...entries);
+  });
+  merged.push(...pathlessIncoming);
+  return merged;
+}
+
+export function mergeToolCallEvent(existing: ToolCallEvent, incoming: ToolCallEvent): ToolCallEvent {
+  return {
+    ...existing,
+    ...incoming,
+    title: incoming.title || existing.title,
+    kind: incoming.kind || existing.kind,
+    status: incoming.status || existing.status,
+    isReplay: incoming.isReplay ?? existing.isReplay,
+    diffs: incoming.diffs.length > 0
+      ? mergeToolCallDiffEntries(existing.diffs, incoming.diffs)
+      : existing.diffs,
+    locations: incoming.locations || existing.locations,
+  };
 }
 
 function isExecutePermissionPayload(json: Record<string, any>): boolean {

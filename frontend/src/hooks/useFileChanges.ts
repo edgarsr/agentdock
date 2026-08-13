@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ToolCallEvent, FileChangeSummary, ProcessedFileState } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayToolCallEvents } from '../utils/replay';
+import { mergeToolCallEvent } from '../utils/toolCallUtils';
 
 /**
  * Tool call statuses that confirm the operation was successfully applied.
@@ -11,6 +12,15 @@ import { buildReplayToolCallEvents } from '../utils/replay';
  *  - Events that were denied / cancelled / failed are also hidden
  */
 const APPLIED_STATUSES = new Set(['success', 'completed']);
+
+function upsertToolCallEvent(events: ToolCallEvent[], incoming: ToolCallEvent): ToolCallEvent[] {
+  const existingIndex = events.findIndex((event) => event.toolCallId === incoming.toolCallId);
+  if (existingIndex < 0) return [...events, incoming];
+
+  const updated = [...events];
+  updated[existingIndex] = mergeToolCallEvent(updated[existingIndex], incoming);
+  return updated;
+}
 
 /**
  * Check if two file paths refer to the same file.
@@ -47,7 +57,10 @@ export function useFileChanges(
   adapterName: string
 ) {
   const [undoErrorMessage, setUndoErrorMessage] = useState<string | null>(null);
-  const [statsByFilePath, setStatsByFilePath] = useState<Record<string, { additions: number; deletions: number }>>({});
+  const [computedStats, setComputedStats] = useState<{
+    source: FileChangeSummary[];
+    byFilePath: Record<string, { additions: number; deletions: number }>;
+  } | null>(null);
   const [toolCallEvents, setToolCallEvents] = useState<ToolCallEvent[]>([]);
   const [processedFileStates, setProcessedFileStates] = useState<ProcessedFileState[]>([]);
   const [baseToolCallIndex, setBaseToolCallIndex] = useState(0);
@@ -75,7 +88,7 @@ export function useFileChanges(
     setProcessedFileStates([]);
     setBaseToolCallIndex(0);
     setToolCallEvents([]);
-    setStatsByFilePath({});
+    setComputedStats(null);
     setHasPluginEdits(false);
     setPendingUndoFilePaths(null);
     setUndoErrorMessage(null);
@@ -132,7 +145,7 @@ export function useFileChanges(
       const payload = e.detail.payload;
       if (payload.diffs && payload.diffs.length > 0) {
         // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
-        setToolCallEvents((prev) => [...prev, payload]);
+        setToolCallEvents((prev) => upsertToolCallEvent(prev, payload));
       }
     });
 
@@ -143,27 +156,15 @@ export function useFileChanges(
 
       if (hasDiffs) {
         // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
-        setToolCallEvents((prevEvents) => {
-          const existingIdx = prevEvents.findIndex((ev) => ev.toolCallId === payload.toolCallId);
-          if (existingIdx >= 0) {
-            const updated = [...prevEvents];
-            updated[existingIdx] = payload;
-            return updated;
-          }
-          return [...prevEvents, payload];
-        });
+        setToolCallEvents((prevEvents) => upsertToolCallEvent(prevEvents, payload));
       } else if (payload.toolCallId && payload.status) {
         // Status-only update (no diffs) — update existing event's status
         // This handles denied permissions, errors, etc.
-        setToolCallEvents((prevEvents) => {
-          const idx = prevEvents.findIndex((ev) => ev.toolCallId === payload.toolCallId);
-          if (idx >= 0) {
-            const updated = [...prevEvents];
-            updated[idx] = { ...updated[idx], status: payload.status };
-            return updated;
-          }
-          return prevEvents;
-        });
+        setToolCallEvents((prevEvents) => (
+          prevEvents.some((event) => event.toolCallId === payload.toolCallId)
+            ? upsertToolCallEvent(prevEvents, payload)
+            : prevEvents
+        ));
       }
     });
 
@@ -225,7 +226,7 @@ export function useFileChanges(
 
   useEffect(() => {
     if (baseFileChanges.length === 0) {
-      setStatsByFilePath({});
+      setComputedStats(null);
       return;
     }
 
@@ -244,12 +245,12 @@ export function useFileChanges(
             deletions: file.deletions,
           };
         });
-        setStatsByFilePath(nextStats);
+        setComputedStats({ source: baseFileChanges, byFilePath: nextStats });
       })
       .catch((err) => {
         if (!cancelled) {
           console.error('[useFileChanges] Failed to compute file change stats:', err);
-          setStatsByFilePath({});
+          setComputedStats({ source: baseFileChanges, byFilePath: {} });
         }
       });
 
@@ -258,16 +259,22 @@ export function useFileChanges(
     };
   }, [baseFileChanges]);
 
+  const statsPending = baseFileChanges.length > 0 && computedStats?.source !== baseFileChanges;
+  const statsByFilePath = computedStats?.source === baseFileChanges ? computedStats.byFilePath : {};
+
   const fileChanges = useMemo<FileChangeSummary[]>(() => {
-    return baseFileChanges.map((fc) => {
+    if (statsPending) return baseFileChanges;
+
+    return baseFileChanges.flatMap((fc) => {
       const stats = statsByFilePath[fc.filePath];
-        return {
-          ...fc,
-          additions: stats?.additions ?? 0,
-          deletions: stats?.deletions ?? 0,
-        };
+      if (!stats || (stats.additions === 0 && stats.deletions === 0)) return [];
+      return [{
+        ...fc,
+        additions: stats.additions,
+        deletions: stats.deletions,
+      }];
     });
-  }, [baseFileChanges, statsByFilePath]);
+  }, [baseFileChanges, statsByFilePath, statsPending]);
   fileChangesRef.current = fileChanges;
 
   const totalAdditions = useMemo(() => fileChanges.reduce((sum, fc) => sum + fc.additions, 0), [fileChanges]);

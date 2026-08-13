@@ -14,7 +14,15 @@ import {
   ToolCallEntry,
   ToolCallEvent,
 } from '../types/chat';
-import { appendToolOutput, buildToolCallEntry, extractResultTexts, extractToolCallDiffEntries, replaceToolOutput, safeParseJson } from './toolCallUtils';
+import {
+  appendToolOutput,
+  buildToolCallEntry,
+  extractResultTexts,
+  extractToolCallDiffEntries,
+  mergeToolCallEvent,
+  replaceToolOutput,
+  safeParseJson,
+} from './toolCallUtils';
 
 const IMPACTFUL_KEYWORDS = [
   'rm', 'mv', 'cp', 'mkdir', 'touch', 'chmod', 'chown', 'run', 'compile',
@@ -628,14 +636,14 @@ export function buildReplayToolCallEvents(data: ConversationReplayData): ToolCal
         if (hasDiffs) {
           const existingIdx = toolCallEvents.findIndex((item) => item.toolCallId === payload.toolCallId);
           if (existingIdx >= 0) {
-            toolCallEvents[existingIdx] = payload;
+            toolCallEvents[existingIdx] = mergeToolCallEvent(toolCallEvents[existingIdx], payload);
           } else {
             toolCallEvents.push(payload);
           }
         } else if (payload.toolCallId && payload.status) {
           const existingIdx = toolCallEvents.findIndex((item) => item.toolCallId === payload.toolCallId);
           if (existingIdx >= 0) {
-            toolCallEvents[existingIdx] = { ...toolCallEvents[existingIdx], status: payload.status };
+            toolCallEvents[existingIdx] = mergeToolCallEvent(toolCallEvents[existingIdx], payload);
           }
         }
       });
