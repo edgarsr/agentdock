@@ -62,7 +62,9 @@ export function useAgentRuntimeOptions({
     selectedModelId,
     sessionConfigOptions?.reasoningEffortsByModel,
   ]);
-  const configValues = useMemo(() => Object.fromEntries(effectiveOptions.map((option) => {
+  const configValues = useMemo(() => Object.fromEntries(effectiveOptions
+    .filter((option) => option.type !== 'select' || option.options.length > 0)
+    .map((option) => {
       const selectedValue = selected[option.id];
       const value = accepts(option, selectedValue)
         ? selectedValue!
@@ -70,7 +72,8 @@ export function useAgentRuntimeOptions({
           ? option.currentValue
           : option.options[0]?.value ?? option.currentValue;
       return [option.id, value];
-    }).filter(([, value]) => value !== '')),
+    })
+    .filter(([, value]) => value !== '')),
     [effectiveOptions, selected]
   );
   const selectedConfigOptions = effectiveOptions

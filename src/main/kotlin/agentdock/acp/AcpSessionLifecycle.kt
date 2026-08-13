@@ -155,15 +155,16 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     for (configId in optionIds.filter(preferredValues::containsKey)) {
         val requestedValue = preferredValues.getValue(configId).trim()
         val metadata = context.runtimeMetadataRef.get() ?: return false
-        val option = metadata.configOptions.firstOrNull { it.id == configId } ?: return false
-        val effectiveOption = if (
-            option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
-        ) {
+        // Applying one option can narrow the rest: agents drop options that the newly selected model
+        // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
+        val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
+        val effectiveOption = if (option.isReasoning()) {
             val modelId = context.activeModelIdRef.get() ?: metadata.currentModelId
             option.copy(options = metadata.reasoningEffortsByModel[modelId] ?: option.options)
         } else {
             option
         }
+        if (effectiveOption.type == "select" && effectiveOption.options.isEmpty()) continue
         if (!effectiveOption.accepts(requestedValue)) return false
         if (context.activeConfigValues[configId] == requestedValue) continue
         val response = runCatching {
