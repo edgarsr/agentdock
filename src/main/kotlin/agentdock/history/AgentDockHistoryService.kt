@@ -61,16 +61,6 @@ object AgentDockHistoryService {
         )
     }
 
-    fun hasConversationReplay(projectPath: String?, conversationId: String?): Boolean {
-        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
-        val cleanConversationId = runCatching {
-            HistoryStorage.requireSafeConversationId(conversationId.orEmpty())
-        }.getOrElse { return false }
-        if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
-        if (!hasConversationInCurrentEnvironment(cleanProjectPath, cleanConversationId)) return false
-        return HistoryReplayStore.resolveFreshConversationReplayFile(cleanProjectPath, cleanConversationId) != null
-    }
-
     fun loadConversationReplay(projectPath: String?, conversationId: String?): ConversationReplayData? {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         val cleanConversationId = runCatching {
@@ -78,12 +68,10 @@ object AgentDockHistoryService {
         }.getOrElse { return null }
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return null
         if (!hasConversationInCurrentEnvironment(cleanProjectPath, cleanConversationId)) return null
-        val replayFile = HistoryReplayStore.resolveFreshConversationReplayFile(cleanProjectPath, cleanConversationId)
-            ?: return null
-        val data = HistoryReplayStore.readConversationData(replayFile) ?: return null
+        val data = HistoryReplayStore.readFreshConversationData(cleanProjectPath, cleanConversationId) ?: return null
         val lastPrompt = data.sessions.lastOrNull()?.prompts?.lastOrNull()
         if (lastPrompt != null && lastPrompt.assistantMeta == null) {
-            runCatching { replayFile.delete() }
+            runCatching { HistoryReplayStore.deleteConversationReplay(cleanProjectPath, cleanConversationId) }
             return null
         }
         return data
@@ -96,8 +84,11 @@ object AgentDockHistoryService {
         }.getOrElse { return false }
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
 
-        val file = HistoryStorage.conversationDataFile(cleanProjectPath, cleanConversationId)
-        HistoryReplayStore.writeConversationData(file, HistoryReplayStore.normalizeReplayData(data))
+        HistoryReplayStore.writeConversationData(
+            cleanProjectPath,
+            cleanConversationId,
+            HistoryReplayStore.normalizeReplayData(data)
+        )
         return true
     }
 
@@ -162,8 +153,6 @@ object AgentDockHistoryService {
         }
 
         val updatedData = current.copy(sessions = updatedSessions)
-        HistoryReplayStore.writeConversationData(file, updatedData)
-
         upsertRuntimeSessionMetadata(
             projectPath = cleanProjectPath,
             conversationId = cleanConversationId,
@@ -174,6 +163,7 @@ object AgentDockHistoryService {
             titleCandidate = HistoryReplayStore.titleCandidateFromReplayData(updatedData),
             touchUpdatedAt = true
         )
+        HistoryReplayStore.writeConversationData(cleanProjectPath, cleanConversationId, updatedData)
         return true
     }
 

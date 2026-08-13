@@ -223,6 +223,14 @@ class HistoryStorageTest {
         }
     }
 
+    @Test
+    fun `source file growth requires a saved baseline`() {
+        assertFalse(sourceFileHasGrown(null, 10L))
+        assertFalse(sourceFileHasGrown(10L, 10L))
+        assertFalse(sourceFileHasGrown(10L, 9L))
+        assertTrue(sourceFileHasGrown(10L, 11L))
+    }
+
     private fun replayPrompt(text: String): ConversationPromptReplayEntry {
         return ConversationPromptReplayEntry(
             blocks = listOf(textBlock(text)),
