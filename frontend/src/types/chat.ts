@@ -223,6 +223,8 @@ export interface ChatTab {
   historySession?: HistorySessionMeta;
   initialMessages?: Message[];
   metadataTitleOverride?: string;
+  /** Title given before the first prompt, written to the history index once the conversation is registered. */
+  pendingTitle?: string;
   inheritedAdapterNames?: string[];
   forkBase?: ForkConversationBase;
 }

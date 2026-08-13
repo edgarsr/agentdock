@@ -22,6 +22,8 @@ interface TabBarProps {
   onCloseAllTabs: () => void;
   onNewTab: () => void;
   onNewTabWithAgent: (agentId: string) => void;
+  renamableTabIds: Set<string>;
+  onRenameTab: (tabId: string, newTitle: string) => void;
   agents: AgentOption[];
   onOpenHistory: () => void;
   onOpenManagement: () => void;
@@ -42,6 +44,8 @@ export default function TabBar({
   onCloseAllTabs,
   onNewTab,
   onNewTabWithAgent,
+  renamableTabIds,
+  onRenameTab,
   agents,
   onOpenHistory,
   onOpenManagement,
@@ -58,6 +62,7 @@ export default function TabBar({
   const [isIslandsTheme, setIsIslandsTheme] = useState(readIslandsTheme);
   const [tabsViewportWidth, setTabsViewportWidth] = useState(0);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLDivElement>(null);
@@ -245,7 +250,7 @@ export default function TabBar({
           const flags = tabUi[tab.id];
           const hasWarning = flags?.warning;
           const hasUnread = flags?.unread;
-          const hasProcessing = !!flags?.processing;
+          const hasProcessing = flags?.processing;
           return (
             <TabItem
               key={tab.id}
@@ -264,6 +269,11 @@ export default function TabBar({
               onCloseTab={onCloseTab}
               onFocusTab={(id) => setFocusedTabId(lastInteractionWasTabRef.current ? id : null)}
               onBlurTab={(id) => setFocusedTabId((current) => current === id ? null : current)}
+              canRename={renamableTabIds.has(tab.id)}
+              isRenaming={renamingTabId === tab.id}
+              onStartRename={setRenamingTabId}
+              onRename={onRenameTab}
+              onStopRename={() => setRenamingTabId(null)}
               dropIndicator={dropTarget?.id === tab.id ? dropTarget.position : null}
             />
           );
@@ -331,6 +341,8 @@ export default function TabBar({
               onCloseTab={onCloseTab}
               onCloseAllTabs={onCloseAllTabs}
               onNewTabWithAgent={onNewTabWithAgent}
+              renamableTabIds={renamableTabIds}
+              onRenameTab={onRenameTab}
               onCloseMenu={() => setMenuOpen(false)}
             />
           )}

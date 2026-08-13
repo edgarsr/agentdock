@@ -1,6 +1,8 @@
 import { X } from 'lucide-react';
 import { AgentOption, ChatTab } from '../../types/chat';
+import { Tooltip } from '../chat/shared/Tooltip';
 import { getTabIcon } from './TabIcons';
+import { TabTitleInput } from './TabTitleInput';
 
 interface TabItemProps {
   tab: ChatTab;
@@ -18,6 +20,11 @@ interface TabItemProps {
   onCloseTab: (id: string) => void;
   onFocusTab: (id: string) => void;
   onBlurTab: (id: string) => void;
+  canRename: boolean;
+  isRenaming: boolean;
+  onStartRename: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onStopRename: () => void;
   dropIndicator: 'before' | 'after' | null;
 }
 
@@ -37,6 +44,11 @@ export function TabItem({
   onCloseTab,
   onFocusTab,
   onBlurTab,
+  canRename,
+  isRenaming,
+  onStartRename,
+  onRename,
+  onStopRename,
   dropIndicator
 }: TabItemProps) {
   const activeClassName = isActive
@@ -53,6 +65,13 @@ export function TabItem({
   const closeButtonClassName = isIslandsTheme
     ? 'ml-1 mr-0.5 mt-0'
     : 'ml-2 mr-0.5 -mt-0.5';
+  const contentClassName = `w-full h-full ${buttonPaddingClassName} pb-0.5 relative z-10 flex min-w-0 flex-1
+    items-center gap-2 overflow-hidden ${tabRadiusClassName} text-left`;
+  const tabIcon = (
+    <div className={`flex shrink-0 items-center relative left-[1px] ${iconOffsetClassName} opacity-80`}>
+      {getTabIcon(tab, agents)}
+    </div>
+  );
 
   return (
     <div
@@ -71,35 +90,54 @@ export function TabItem({
           className="pointer-events-none absolute inset-[1px] z-20 rounded-[3px] shadow-[inset_0_0_0_1px_var(--ide-Button-default-focusColor)]"
         />
       ) : null}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={isActive}
-        onClick={(event) => {
-          if (shouldSuppressClick(tab.id)) {
-            event.preventDefault();
-            return;
-          }
-          onSelectTab(tab.id);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
+      {isRenaming ? (
+        <div className={contentClassName}>
+          {tabIcon}
+          {/* Same width cap as the label, so switching to the editor never resizes the tab. */}
+          <div className={`relative top-[1px] flex min-w-0 flex-1 overflow-hidden
+            ${titleClassName === 'hidden' ? '' : titleClassName}`}
+          >
+            <TabTitleInput
+              initialTitle={tab.title}
+              onCommit={(title) => onRename(tab.id, title)}
+              onClose={onStopRename}
+              className="bg-transparent text-inherit"
+            />
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isActive}
+          onClick={(event) => {
+            if (shouldSuppressClick(tab.id)) {
+              event.preventDefault();
+              return;
+            }
             onSelectTab(tab.id);
-          }
-        }}
-        onFocus={() => onFocusTab(tab.id)}
-        onBlur={() => onBlurTab(tab.id)}
-        className={`w-full h-full ${buttonPaddingClassName} pb-0.5 relative z-10 flex min-w-0 flex-1 items-center gap-2 overflow-hidden
-          ${tabRadiusClassName} text-left cursor-default focus:outline-none`}
-      >
-        <div className={`flex shrink-0 items-center relative left-[1px] ${iconOffsetClassName} opacity-80`}>
-          {getTabIcon(tab, agents)}
-        </div>
-        <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
-          <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
-        </div>
-      </button>
+          }}
+          onDoubleClick={() => {
+            if (canRename) onStartRename(tab.id);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onSelectTab(tab.id);
+            }
+          }}
+          onFocus={() => onFocusTab(tab.id)}
+          onBlur={() => onBlurTab(tab.id)}
+          className={`${contentClassName} cursor-default focus:outline-none`}
+        >
+          {tabIcon}
+          <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
+            <Tooltip variant="minimal" placement="bottom" content={tab.title}>
+              <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
+            </Tooltip>
+          </div>
+        </button>
+      )}
       {hasWarning ? (
         <span className="relative z-10 ml-1 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning" />
       ) : hasUnread ? (

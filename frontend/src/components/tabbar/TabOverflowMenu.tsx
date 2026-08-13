@@ -1,10 +1,11 @@
-import { RefObject } from 'react';
-import { X } from 'lucide-react';
+import { RefObject, useState } from 'react';
+import { Pencil, X } from 'lucide-react';
 import { AgentOption, ChatTab, TabUiFlags } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
 import { Tooltip } from '../chat/shared/Tooltip';
 import { getAgentIcon, getTabIcon } from './TabIcons';
 import { moveMenuFocus } from './menuFocus';
+import { TabTitleInput } from './TabTitleInput';
 
 interface TabOverflowMenuProps {
   menuListRef: RefObject<HTMLDivElement>;
@@ -18,6 +19,8 @@ interface TabOverflowMenuProps {
   onCloseTab: (id: string) => void;
   onCloseAllTabs: () => void;
   onNewTabWithAgent: (agentId: string) => void;
+  renamableTabIds: Set<string>;
+  onRenameTab: (tabId: string, title: string) => void;
   onCloseMenu: () => void;
 }
 
@@ -33,8 +36,12 @@ export function TabOverflowMenu({
   onCloseTab,
   onCloseAllTabs,
   onNewTabWithAgent,
+  renamableTabIds,
+  onRenameTab,
   onCloseMenu,
 }: TabOverflowMenuProps) {
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+
   return (
     <div
       ref={menuListRef}
@@ -66,48 +73,83 @@ export function TabOverflowMenu({
           </div>
           {tabs.map((tab) => {
             const flags = tabUi[tab.id];
-            const hasWarning = !!flags?.warning;
-            const hasUnread = !!flags?.unread;
+            const hasWarning = flags?.warning;
+            const hasUnread = flags?.unread;
             const activeClassName = tab.id === activeTabId
               ? 'bg-accent text-accent-foreground'
               : 'text-foreground hover:bg-accent hover:text-accent-foreground';
+            const statusDot = hasWarning ? (
+              <span className="ml-2 w-2 h-2 rounded-full bg-warning flex-shrink-0" />
+            ) : hasUnread ? (
+              <span className="ml-2 w-2 h-2 rounded-full bg-sky-500 flex-shrink-0" />
+            ) : null;
             return (
               <div
                 key={tab.id}
                 className={`mb-0.5 mx-2 flex w-[calc(100%-1rem)] items-stretch rounded-[4px] transition-colors ${activeClassName}`}
               >
-                <button
-                  onClick={() => {
-                    onSelectTab(tab.id);
-                    onCloseMenu();
-                  }}
-                  className="flex min-h-8 min-w-0 flex-1 items-center rounded-l-[4px] px-3 text-left focus:outline-none
-                    focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-                  role="menuitem"
-                >
-                  <span className="mr-2 flex items-center justify-center">
-                    {getTabIcon(tab, agents)}
-                  </span>
-                  <span className="flex-1 truncate min-w-0">{tab.title}</span>
-                  {hasWarning ? (
-                    <span className="ml-2 w-2 h-2 rounded-full bg-warning flex-shrink-0" />
-                  ) : hasUnread ? (
-                    <span className="ml-2 w-2 h-2 rounded-full bg-sky-500 flex-shrink-0" />
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCloseTab(tab.id);
-                  }}
-                  className="flex min-h-8 w-8 flex-shrink-0 items-center justify-center rounded-r-[4px]
-                    text-foreground-secondary hover:bg-hover hover:text-foreground focus:outline-none
-                    focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-                  role="menuitem"
-                >
-                  <X size={14} aria-hidden="true" />
-                </button>
+                {renamingTabId === tab.id ? (
+                  <div className="flex min-h-8 min-w-0 flex-1 items-center pl-3">
+                    <span className="mr-2 flex items-center justify-center">
+                      {getTabIcon(tab, agents)}
+                    </span>
+                    {/* pr-8 stands in for the label's pr-2 plus the hidden rename button (mx-[2px] + w-5). */}
+                    <TabTitleInput
+                      initialTitle={tab.title}
+                      onCommit={(title) => onRenameTab(tab.id, title)}
+                      onClose={() => setRenamingTabId(null)}
+                      className="-ml-1 rounded-[3px] bg-background px-1 text-foreground"
+                      sizerClassName="pr-8"
+                    />
+                    {statusDot}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      onSelectTab(tab.id);
+                      onCloseMenu();
+                    }}
+                    className="flex min-h-8 min-w-0 flex-1 items-center rounded-l-[4px] pl-3 pr-2 text-left focus:outline-none
+                      focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                    role="menuitem"
+                  >
+                    <span className="mr-2 flex items-center justify-center">
+                      {getTabIcon(tab, agents)}
+                    </span>
+                    <span className="flex-1 truncate min-w-0">{tab.title}</span>
+                    {statusDot}
+                  </button>
+                )}
+                {renamableTabIds.has(tab.id) && renamingTabId !== tab.id ? (
+                  <Tooltip variant="minimal" placement="bottom" content="Rename" className="flex self-stretch">
+                    <button
+                      type="button"
+                      onClick={() => setRenamingTabId(tab.id)}
+                      className="flex mx-[2px] min-h-8 w-5 flex-shrink-0 items-center justify-center text-foreground-secondary
+                        hover:bg-hover hover:text-foreground focus:outline-none
+                        focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                      role="menuitem"
+                      aria-label={`Rename ${tab.title}`}
+                    >
+                      <Pencil size={12} strokeWidth={2.5} aria-hidden="true" />
+                    </button>
+                  </Tooltip>
+                ) : null}
+                <Tooltip variant="minimal" placement="bottom" content="Close" className="flex self-stretch">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCloseTab(tab.id);
+                    }}
+                    className="mr-1.5 flex min-h-8 w-5 flex-shrink-0 items-center justify-center rounded-r-[4px]
+                      text-foreground-secondary hover:bg-hover hover:text-foreground focus:outline-none
+                      focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                    role="menuitem"
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </Tooltip>
               </div>
             );
           })}

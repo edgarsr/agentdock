@@ -50,6 +50,8 @@ function App() {
     tabs,
     activeTabId,
     tabUi,
+    renamableTabIds,
+    handleRenameTab,
     availableAgents,
     runnableAgents,
     agentAvailabilityResolved,
@@ -90,6 +92,8 @@ function App() {
         onCloseAllTabs={handleCloseAllTabs}
         onNewTab={() => handleNewTab()}
         onNewTabWithAgent={(agentId) => handleNewTab(agentId)}
+        renamableTabIds={renamableTabIds}
+        onRenameTab={handleRenameTab}
         agents={availableAgents}
         onOpenHistory={() => openSingletonTab('history', 'History')}
         onOpenManagement={() => openSingletonTab('management', 'Service Providers')}
