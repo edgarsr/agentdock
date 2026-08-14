@@ -21,6 +21,7 @@ internal fun AcpBridge.recoverRuntimeAfterFailure(reason: String) {
     promptJobs.clear()
     livePromptCaptures.clear()
     historyReplayCaptures.clear()
+    replayFreshnessProbes.clear()
     suppressReplayForChatIds.clear()
 
     val affectedChatIds = lastStatusByChatId

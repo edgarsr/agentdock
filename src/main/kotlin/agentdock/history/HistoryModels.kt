@@ -69,8 +69,7 @@ data class ConversationSessionReplayEntry(
 
 @Serializable
 data class ConversationReplayData(
-    val sessions: List<ConversationSessionReplayEntry> = emptyList(),
-    val sourceFileSizeAtSave: Long? = null
+    val sessions: List<ConversationSessionReplayEntry> = emptyList()
 )
 
 data class ForkConversationBase(

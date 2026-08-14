@@ -80,6 +80,7 @@ class AcpBridge(
     internal val replaySeqByChatId = ConcurrentHashMap<String, Int>()
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
+    internal val replayFreshnessProbes = ConcurrentHashMap<String, ReplayFreshnessProbe>()
     internal val suppressReplayForChatIds: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
     internal val todoToolCallKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
     internal val emittedTodoPlanKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()

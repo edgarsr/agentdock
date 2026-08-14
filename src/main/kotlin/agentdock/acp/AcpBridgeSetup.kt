@@ -1,5 +1,6 @@
 package agentdock.acp
 
+import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CancellationException
@@ -24,6 +25,14 @@ internal fun AcpBridge.installServiceCallbacks() {
     }
     service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
         if (isReplay && suppressReplayForChatIds.contains(chatId)) {
+            replayFreshnessProbes[chatId]?.let { probe ->
+                when (update) {
+                    is SessionUpdate.UserMessageChunk -> probe.closeMessage()
+                    is SessionUpdate.AgentMessageChunk ->
+                        (update.content as? ContentBlock.Text)?.let { probe.appendAssistantText(it.text) }
+                    else -> Unit
+                }
+            }
             return@setOnSessionUpdate
         }
         val captureOnlyReplay = isReplay && historyReplayCaptures.containsKey(chatId)

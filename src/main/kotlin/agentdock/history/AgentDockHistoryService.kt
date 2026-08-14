@@ -68,7 +68,8 @@ object AgentDockHistoryService {
         }.getOrElse { return null }
         if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return null
         if (!hasConversationInCurrentEnvironment(cleanProjectPath, cleanConversationId)) return null
-        val data = HistoryReplayStore.readFreshConversationData(cleanProjectPath, cleanConversationId) ?: return null
+        val replayFile = HistoryStorage.conversationDataFile(cleanProjectPath, cleanConversationId)
+        val data = HistoryReplayStore.readConversationData(replayFile) ?: return null
         val lastPrompt = data.sessions.lastOrNull()?.prompts?.lastOrNull()
         if (lastPrompt != null && lastPrompt.assistantMeta == null) {
             runCatching { HistoryReplayStore.deleteConversationReplay(cleanProjectPath, cleanConversationId) }

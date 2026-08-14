@@ -18,8 +18,7 @@ internal object HistoryReplayStore {
 
     fun writeConversationData(projectPath: String, conversationId: String, data: ConversationReplayData) {
         val file = HistoryStorage.conversationDataFile(projectPath, conversationId)
-        val sourceFileSize = latestConversationSourceSessionFile(projectPath, conversationId)?.length()
-        file.atomicWriteText(HistoryStorage.json.encodeToString(data.copy(sourceFileSizeAtSave = sourceFileSize)))
+        file.atomicWriteText(HistoryStorage.json.encodeToString(data))
     }
 
     fun copyPromptPrefix(data: ConversationReplayData, promptCount: Int): ConversationReplayData {
@@ -128,16 +127,6 @@ internal object HistoryReplayStore {
         deleteHistoryFileIfExists(sourceFile)
     }
 
-    fun readFreshConversationData(projectPath: String, conversationId: String): ConversationReplayData? {
-        val replayFile = HistoryStorage.conversationDataFile(projectPath, conversationId)
-        if (!replayFile.exists() || !replayFile.isFile) return null
-        val data = readConversationData(replayFile) ?: return null
-
-        val latestSourceFile = latestConversationSourceSessionFile(projectPath, conversationId)
-            ?: return data
-        return data.takeUnless { sourceFileHasGrown(it.sourceFileSizeAtSave, latestSourceFile.length()) }
-    }
-
     private fun normalizeReplayPrompt(prompt: ConversationPromptReplayEntry): ConversationPromptReplayEntry {
         val normalizedBlocks = normalizeReplayBlocks(prompt.blocks)
         val normalizedEvents = normalizeReplayBlocks(prompt.events)
@@ -164,18 +153,4 @@ internal object HistoryReplayStore {
         if (text.isBlank()) return null
         return if (text.length <= 64) text else "${text.take(64)}..."
     }
-
-    private fun latestConversationSourceSessionFile(projectPath: String, conversationId: String): File? {
-        val conversation = HistoryStorage.readExistingProjectIndex(projectPath)
-            .firstOrNull { it.id == conversationId }
-            ?: return null
-        val latestSession = conversation.sessions.maxByOrNull { it.updatedAt } ?: return null
-        val sourceFilePath = latestSession.sourceFilePath?.trim().orEmpty()
-        if (sourceFilePath.isBlank()) return null
-        val sourceFile = File(sourceFilePath)
-        return sourceFile.takeIf { it.exists() && it.isFile }
-    }
 }
-
-internal fun sourceFileHasGrown(savedSize: Long?, currentSize: Long): Boolean =
-    savedSize != null && currentSize > savedSize
