@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChatAttachment, RichContentBlock } from '../../types/chat';
 import { QueuedPrompt, QueuePromptDraft } from './promptQueueTypes';
 
 const MAX_PROMPT_QUEUE_ITEMS = 10;
@@ -10,7 +9,6 @@ interface UsePromptQueueOptions {
   canPreempt: boolean;
   onDrain: (prompt: QueuedPrompt) => void;
   onPreempt: () => Promise<boolean>;
-  rebuildBlocks: (text: string, attachments: ChatAttachment[]) => RichContentBlock[];
 }
 
 let promptQueueCounter = 0;
@@ -20,7 +18,7 @@ function nextQueuedPromptId(): string {
   return `queued-${promptQueueCounter}-${Date.now()}`;
 }
 
-export function usePromptQueue({ enabled, canDrain, canPreempt, onDrain, onPreempt, rebuildBlocks }: UsePromptQueueOptions) {
+export function usePromptQueue({ enabled, canDrain, canPreempt, onDrain, onPreempt }: UsePromptQueueOptions) {
   const [items, setItems] = useState<QueuedPrompt[]>([]);
   const itemsRef = useRef<QueuedPrompt[]>([]);
   const onDrainRef = useRef(onDrain);
@@ -74,6 +72,7 @@ export function usePromptQueue({ enabled, canDrain, canPreempt, onDrain, onPreem
       {
         id: nextQueuedPromptId(),
         text: draft.text,
+        composerText: draft.composerText,
         blocks: draft.blocks,
         attachments: [...draft.attachments],
       },
@@ -85,16 +84,33 @@ export function usePromptQueue({ enabled, canDrain, canPreempt, onDrain, onPreem
     updateItems((prev) => prev.filter((item) => item.id !== id));
   }, [updateItems]);
 
-  const updateQueuedPromptText = useCallback((id: string, text: string) => {
-    updateItems((prev) => prev.map((item) => {
-      if (item.id !== id) return item;
-      return {
-        ...item,
-        text,
-        blocks: rebuildBlocks(text, item.attachments),
-      };
-    }));
-  }, [rebuildBlocks, updateItems]);
+  const takeQueuedPrompt = useCallback((id: string): QueuedPrompt | undefined => {
+    const item = itemsRef.current.find((queued) => queued.id === id);
+    if (!item) return undefined;
+    updateItems((prev) => prev.filter((queued) => queued.id !== id));
+    return item;
+  }, [updateItems]);
+
+  const reorderQueuedPrompt = useCallback((
+    draggedId: string,
+    targetId: string,
+    position: 'before' | 'after',
+  ) => {
+    if (draggedId === targetId) return;
+
+    updateItems((prev) => {
+      const draggedPrompt = prev.find((item) => item.id === draggedId);
+      if (!draggedPrompt || !prev.some((item) => item.id === targetId)) return prev;
+
+      const withoutDragged = prev.filter((item) => item.id !== draggedId);
+      const targetIndex = withoutDragged.findIndex((item) => item.id === targetId);
+      if (targetIndex === -1) return prev;
+
+      const next = [...withoutDragged];
+      next.splice(position === 'before' ? targetIndex : targetIndex + 1, 0, draggedPrompt);
+      return next;
+    });
+  }, [updateItems]);
 
   const drainNextQueuedPrompt = useCallback(() => {
     if (!enabled || !canDrain || isPreempting) return false;
@@ -137,7 +153,8 @@ export function usePromptQueue({ enabled, canDrain, canPreempt, onDrain, onPreem
     enqueuePrompt,
     clearQueue,
     removeQueuedPrompt,
-    updateQueuedPromptText,
+    takeQueuedPrompt,
+    reorderQueuedPrompt,
     sendQueuedPromptNow,
   };
 }

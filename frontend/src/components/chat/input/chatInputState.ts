@@ -12,6 +12,7 @@ export interface ChatInputProps {
   contextTokensUsed?: number;
   contextWindowSize?: number;
   inputValue: string;
+  composerLoadRevision?: number;
   onInputChange: (val: string) => void;
   onSend: () => void;
   onQueueDraft?: () => void;

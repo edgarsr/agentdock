@@ -105,6 +105,7 @@ export function useChatSession(
   const [historyMessages, setHistoryMessages] = useState<Message[]>(initialMessages);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [composerLoadRevision, setComposerLoadRevision] = useState(0);
   const [status, setStatus] = useState<string>('not started');
   const [isSending, setIsSending] = useState(false);
   const [isHistoryReplaying, setIsHistoryReplaying] = useState(!!historySession);
@@ -690,10 +691,6 @@ export function useChatSession(
   }, [status, conversationId, selectedAgentId,
       adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, markConfigValuesSubmitted, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
-  const rebuildQueuedPromptBlocks = useCallback((text: string, queuedAttachments: ChatAttachment[]) => {
-    return normalizeOutgoingBlocks(buildPromptBlocks(text, queuedAttachments));
-  }, []);
-
   const canDrainQueuedPrompts = status === 'ready'
     && !isSending
     && !isHistoryReplaying
@@ -725,7 +722,8 @@ export function useChatSession(
     enqueuePrompt,
     clearQueue,
     removeQueuedPrompt,
-    updateQueuedPromptText,
+    takeQueuedPrompt,
+    reorderQueuedPrompt,
     sendQueuedPromptNow,
   } = usePromptQueue({
     enabled: true,
@@ -733,8 +731,15 @@ export function useChatSession(
     canPreempt: canPreemptQueuedPrompts,
     onDrain: handleDrainQueuedPrompt,
     onPreempt: preemptActivePromptForQueue,
-    rebuildBlocks: rebuildQueuedPromptBlocks,
   });
+
+  const editQueuedPrompt = useCallback((id: string) => {
+    const prompt = takeQueuedPrompt(id);
+    if (!prompt) return;
+    setInputValue(prompt.composerText);
+    setAttachments([...prompt.attachments]);
+    setComposerLoadRevision((revision) => revision + 1);
+  }, [takeQueuedPrompt]);
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();
@@ -761,6 +766,7 @@ export function useChatSession(
 
     const enqueued = enqueuePrompt({
       text: plainTextFromBlocks(normalizedBlocks),
+      composerText: inputValue,
       blocks: normalizedBlocks,
       attachments: [...attachments],
     });
@@ -831,12 +837,14 @@ export function useChatSession(
     messages,
     inputValue,
     setInputValue,
+    composerLoadRevision,
     status,
     isSending,
     isHistoryReplaying,
     queuedPrompts,
     removeQueuedPrompt,
-    updateQueuedPromptText,
+    editQueuedPrompt,
+    reorderQueuedPrompt,
     sendQueuedPromptNow,
     selectedAgentId,
     agentOptions,

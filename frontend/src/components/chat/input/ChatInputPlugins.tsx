@@ -2,6 +2,8 @@ import { useEffect, useCallback, useRef } from 'react';
 import type { RefObject } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
+  $createLineBreakNode,
+  $createParagraphNode,
   $createTextNode,
   $getRoot,
   $getSelection,
@@ -17,7 +19,7 @@ import {
   PASTE_COMMAND,
   LexicalEditor
 } from 'lexical';
-import { ImageNode } from './ImageNode';
+import { $createImageNode, ImageNode } from './ImageNode';
 import { CodeReferenceNode, $createCodeReferenceNode, $isCodeReferenceNode } from './CodeReferenceNode';
 import { ChatAttachment } from '../../../types/chat';
 
@@ -445,6 +447,70 @@ export function ClearEditorPlugin({ inputValue }: { inputValue: string }) {
       });
     }
   }, [inputValue, editor]);
+
+  return null;
+}
+
+export function LoadComposerDraftPlugin({
+  revision,
+  inputValue,
+  attachments,
+}: {
+  revision: number;
+  inputValue: string;
+  attachments: ChatAttachment[];
+}) {
+  const [editor] = useLexicalComposerContext();
+  const draftRef = useRef({ inputValue, attachments });
+  draftRef.current = { inputValue, attachments };
+
+  useEffect(() => {
+    if (revision === 0) return;
+
+    const draft = draftRef.current;
+    const attachmentsById = new Map(draft.attachments.map((attachment) => [attachment.id, attachment]));
+
+    editor.update(() => {
+      const root = $getRoot();
+      const paragraph = $createParagraphNode();
+      const placeholderRegex = /\[(image|code-ref)-([a-z0-9-]+)]/g;
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+
+      const appendText = (value: string) => {
+        value.split('\n').forEach((part, index) => {
+          if (index > 0) paragraph.append($createLineBreakNode());
+          if (part) paragraph.append($createTextNode(part));
+        });
+      };
+
+      while ((match = placeholderRegex.exec(draft.inputValue)) !== null) {
+        appendText(draft.inputValue.slice(lastIndex, match.index));
+        const attachment = attachmentsById.get(match[2]);
+
+        if (match[1] === 'image' && attachment?.mimeType.startsWith('image/')) {
+          paragraph.append($createImageNode(attachment.id));
+        } else if (match[1] === 'code-ref' && attachment?.path) {
+          paragraph.append($createCodeReferenceNode(
+            attachment.id,
+            attachment.path,
+            attachment.name,
+            attachment.startLine,
+            attachment.endLine
+          ));
+        } else {
+          appendText(match[0]);
+        }
+
+        lastIndex = placeholderRegex.lastIndex;
+      }
+
+      appendText(draft.inputValue.slice(lastIndex));
+      root.clear();
+      root.append(paragraph);
+      paragraph.selectEnd();
+    });
+  }, [editor, revision]);
 
   return null;
 }

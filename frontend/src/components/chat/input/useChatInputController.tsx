@@ -17,6 +17,7 @@ import {ChatInputProps, emptyTranscriptionFeature} from './chatInputState';
 export function useChatInputController({
   conversationId,
   inputValue,
+  composerLoadRevision = 0,
   onInputChange,
   isSending,
   selectedAgentId,
@@ -202,7 +203,7 @@ export function useChatInputController({
     };
     const raf = requestAnimationFrame(focusEditor);
     return () => cancelAnimationFrame(raf);
-  }, [autoFocus, conversationId]);
+  }, [autoFocus, composerLoadRevision, conversationId]);
 
   const {
     commands: slashCommands,

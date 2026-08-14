@@ -16,6 +16,7 @@ import {
   ExternalCodeReferencePlugin,
   InlineAttachmentBackspacePlugin,
   KeyboardPlugin,
+  LoadComposerDraftPlugin,
   PasteLogPlugin,
   PlainTextFormattingGuardPlugin,
   RegisterEditorPlugin,
@@ -27,6 +28,7 @@ interface ChatInputEditorProps {
   initialConfig: ComponentProps<typeof LexicalComposer>['initialConfig'];
   editorContainerRef: RefObject<HTMLDivElement>;
   inputValue: string;
+  composerLoadRevision: number;
   attachments: ChatAttachment[];
   sendMode: 'enter' | 'ctrl-enter';
   isActive: boolean;
@@ -49,6 +51,7 @@ export function ChatInputEditor({
   initialConfig,
   editorContainerRef,
   inputValue,
+  composerLoadRevision,
   attachments,
   sendMode,
   isActive,
@@ -91,6 +94,11 @@ export function ChatInputEditor({
           }} />
           <ClearEditorPlugin inputValue={inputValue} />
           <AttachmentsSyncPlugin attachments={attachments} onAttachmentsChange={onAttachmentsChange} />
+          <LoadComposerDraftPlugin
+            revision={composerLoadRevision}
+            inputValue={inputValue}
+            attachments={attachments}
+          />
           <PasteLogPlugin onImagePaste={onImagePaste} />
           <KeyboardPlugin onSend={onSend} sendMode={sendMode} disabled={isSlashMenuOpen} />
           <PlainTextFormattingGuardPlugin />

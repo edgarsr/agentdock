@@ -12,6 +12,7 @@ export default function ChatInput(props: ChatInputProps) {
     contextTokensUsed,
     contextWindowSize,
     inputValue,
+    composerLoadRevision = 0,
     onInputChange,
     onSend,
     onQueueDraft,
@@ -103,6 +104,7 @@ export default function ChatInput(props: ChatInputProps) {
             initialConfig={initialConfig}
             editorContainerRef={editorContainerRef}
             inputValue={inputValue}
+            composerLoadRevision={composerLoadRevision}
             attachments={attachments}
             sendMode={sendMode}
             isActive={isActive}

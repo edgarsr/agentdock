@@ -71,12 +71,14 @@ export default function ChatSessionView({
     messages,
     inputValue,
     setInputValue,
+    composerLoadRevision,
     status,
     isSending,
     isHistoryReplaying,
     queuedPrompts,
     removeQueuedPrompt,
-    updateQueuedPromptText,
+    editQueuedPrompt,
+    reorderQueuedPrompt,
     sendQueuedPromptNow,
     agentOptions,
     selectedAgentId,
@@ -292,6 +294,17 @@ export default function ChatSessionView({
           />
         )}
 
+        {queuedPrompts.length > 0 && (
+          <PromptQueueList
+            items={queuedPrompts}
+            onRemove={removeQueuedPrompt}
+            onEdit={editQueuedPrompt}
+            onReorder={reorderQueuedPrompt}
+            onSendNow={sendQueuedPromptNow}
+            sendNowCancelsCurrent={status === 'prompting' && isSending}
+          />
+        )}
+
         {/* Resize Handle / Divider */}
         <div 
           onMouseDown={startResizing}
@@ -306,26 +319,13 @@ export default function ChatSessionView({
             group-hover:shadow-[0_0_6px_color-mix(in_srgb,var(--ide-Button-default-focusColor),transparent_45%)]" />
         </div>
 
-        {queuedPrompts.length > 0 && (
-          <div className="px-4 pt-2 pb-2">
-            <div className="mx-auto w-full max-w-[1200px] rounded-ide border border-[var(--ide-Button-startBorderColor)] bg-editor-bg">
-              <PromptQueueList
-                items={queuedPrompts}
-                onRemove={removeQueuedPrompt}
-                onChangeText={updateQueuedPromptText}
-                onSendNow={sendQueuedPromptNow}
-                sendNowCancelsCurrent={status === 'prompting' && isSending}
-              />
-            </div>
-          </div>
-        )}
-
         <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
           <ChatInput
             conversationId={conversationId}
             contextTokensUsed={lastAssistantMsgWithContext?.contextTokensUsed}
             contextWindowSize={lastAssistantMsgWithContext?.contextWindowSize}
             inputValue={inputValue}
+            composerLoadRevision={composerLoadRevision}
             onInputChange={setInputValue}
             onSend={handleSend}
             onQueueDraft={handleQueueDraft}
