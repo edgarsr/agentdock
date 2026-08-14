@@ -30,7 +30,7 @@ const IMPACTFUL_KEYWORDS = [
   'new-item', 'remove-item', 'move-item', 'copy-item', 'update',
   'curl', 'wget', 'scp', 'rsync', 'ssh', 'ftp', 'uninstall', 'publish',
   'add', 'commit', 'push', 'revert', 'restore', 'build', 'install',
-  'insert', 'mysql', 'pgsql', 'postgres', 'delete', 'drush'
+  'insert', 'mysql', 'pgsql', 'postgres', 'delete', 'drush', 'rm'
 ];
 
 const REPLAY_IGNORED_USER_COMMAND_TAGS = [

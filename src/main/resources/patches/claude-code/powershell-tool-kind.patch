@@ -1,0 +1,6 @@
+{
+  "path": "dist/tools.js",
+  "find": "        case \"Bash\": {\n            const input = toolUse.input;",
+  "replace": "        case \"PowerShell\":\n        case \"Bash\": {\n            const input = toolUse.input;",
+  "alreadyApplied": "        case \"PowerShell\":\n        case \"Bash\": {\n            const input"
+}

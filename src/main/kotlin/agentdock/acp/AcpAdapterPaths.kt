@@ -96,14 +96,6 @@ object AcpAdapterPaths {
         }
     }
 
-    internal fun ensurePatched(adapterName: String? = null, target: AcpExecutionTarget = currentTarget()) {
-        val adapterInfo = getAdapterInfo(adapterName)
-        val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
-        if (runtimeDir.isDirectory) {
-            applyPatches(runtimeDir, adapterInfo)
-        }
-    }
-
     internal fun installAdapterRuntime(
         targetDir: File,
         adapterInfo: AcpAdapterConfig.AdapterInfo,
@@ -139,7 +131,9 @@ object AcpAdapterPaths {
             ?: installedVersionFromRuntimeDir(targetDir, resolvedAdapterInfo)
         val downloaded = hasLaunchExecutable &&
             isInstalledVersionSupported(resolvedAdapterInfo, installedVersion)
-        if (downloaded) writeInstallMetadata(targetDir, resolvedAdapterInfo.distribution.version)
+        if (downloaded && resolvedAdapterInfo.distribution.type == AcpAdapterConfig.DistributionType.ARCHIVE) {
+            writeInstallMetadata(targetDir, resolvedAdapterInfo.distribution.version)
+        }
         return downloaded
     }
 

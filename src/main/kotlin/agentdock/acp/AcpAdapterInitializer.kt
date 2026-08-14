@@ -38,7 +38,6 @@ internal fun AcpClientService.initializeAdapterInBackground(adapterName: String)
         val currentJob = coroutineContext[Job] ?: return@launch
         var ownedSharedProcess: AcpClientService.SharedProcess? = null
         try {
-            AcpAdapterPaths.ensurePatched(adapterId)
             val sharedProcess = replaceSharedProcess(adapterId)
             ownedSharedProcess = sharedProcess
             startAndInitializeSharedProcess(sharedProcess, adapterInfo)
@@ -129,7 +128,6 @@ internal suspend fun AcpClientService.ensureSharedProcessStarted(
             AcpClientService.AdapterInitializationStatus.Initializing,
             detail = "Starting adapter process..."
         )
-        AcpAdapterPaths.ensurePatched(adapterInfo.id)
 
         try {
             startAndInitializeSharedProcess(sharedProcess, adapterInfo, forceRestart)

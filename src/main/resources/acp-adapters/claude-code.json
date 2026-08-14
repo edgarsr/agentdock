@@ -13,7 +13,9 @@
   "logoutMethod": "acp",
   "loginStatusMethod": "claudeCodeCliAuthStatus",
   "patches": [
-    "@patches/claude-code/disable-auto-updater.patch"
+    "@patches/claude-code/disable-auto-updater.patch",
+    "@patches/claude-code/powershell-tool-kind.patch",
+    "@patches/claude-code/powershell-tool-result.patch"
   ],
   "cli": {
     "executable": {
