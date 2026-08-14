@@ -147,25 +147,20 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
     val initialMetadata = context.runtimeMetadataRef.get() ?: return false
     if (preferredValues.isEmpty()) return true
-    val optionIds = initialMetadata.configOptions
-        .sortedBy { if (it.matchesCategory("model")) 0 else 1 }
-        .map { it.id }
-    if (!optionIds.containsAll(preferredValues.keys)) return false
+    val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
+    val orderedConfigIds = buildList {
+        modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
+        addAll(preferredValues.keys.filterNot { it == modelOption?.id })
+    }
 
-    for (configId in optionIds.filter(preferredValues::containsKey)) {
+    for (configId in orderedConfigIds) {
         val requestedValue = preferredValues.getValue(configId).trim()
         val metadata = context.runtimeMetadataRef.get() ?: return false
         // Applying one option can narrow the rest: agents drop options that the newly selected model
         // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
         val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
-        val effectiveOption = if (option.isReasoning()) {
-            val modelId = context.activeModelIdRef.get() ?: metadata.currentModelId
-            option.copy(options = metadata.reasoningEffortsByModel[modelId] ?: option.options)
-        } else {
-            option
-        }
-        if (effectiveOption.type == "select" && effectiveOption.options.isEmpty()) continue
-        if (!effectiveOption.accepts(requestedValue)) return false
+        if (option.type == "select" && option.options.isEmpty()) continue
+        if (!option.accepts(requestedValue)) return false
         if (context.activeConfigValues[configId] == requestedValue) continue
         val response = runCatching {
             protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)

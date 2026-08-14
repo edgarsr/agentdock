@@ -125,7 +125,7 @@ export interface ConfigOption {
 export interface SessionConfigOptionsPayload {
   chatId: string;
   configOptions: ConfigOption[];
-  reasoningEffortsByModel: Record<string, ConfigOptionValue[]>;
+  configOptionsByModel: Record<string, ConfigOption[]>;
 }
 
 export interface AvailableCommand {
@@ -152,7 +152,7 @@ export interface AgentOption {
   currentReasoningEffortId?: string;
   availableReasoningEfforts?: ReasoningEffortOption[];
   configOptions?: ConfigOption[];
-  reasoningEffortsByModel?: Record<string, ConfigOptionValue[]>;
+  configOptionsByModel?: Record<string, ConfigOption[]>;
   downloaded?: boolean;
   downloadedKnown?: boolean;
   downloadPath?: string;

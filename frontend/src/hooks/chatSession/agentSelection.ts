@@ -11,7 +11,7 @@ export type PinnedAgentSnapshot = {
   currentReasoningEffortId?: string;
   availableReasoningEfforts?: AgentOption['availableReasoningEfforts'];
   configOptions?: AgentOption['configOptions'];
-  reasoningEffortsByModel?: AgentOption['reasoningEffortsByModel'];
+  configOptionsByModel?: AgentOption['configOptionsByModel'];
 };
 
 export function toPinnedAgentSnapshot(agent: AgentOption): PinnedAgentSnapshot {
@@ -26,7 +26,7 @@ export function toPinnedAgentSnapshot(agent: AgentOption): PinnedAgentSnapshot {
     currentReasoningEffortId: agent.currentReasoningEffortId,
     availableReasoningEfforts: agent.availableReasoningEfforts,
     configOptions: agent.configOptions,
-    reasoningEffortsByModel: agent.reasoningEffortsByModel,
+    configOptionsByModel: agent.configOptionsByModel,
   };
 }
 
@@ -48,7 +48,7 @@ export function resolveSelectedAgent(
     currentReasoningEffortId: pinnedSnapshot.currentReasoningEffortId,
     availableReasoningEfforts: pinnedSnapshot.availableReasoningEfforts,
     configOptions: pinnedSnapshot.configOptions,
-    reasoningEffortsByModel: pinnedSnapshot.reasoningEffortsByModel,
+    configOptionsByModel: pinnedSnapshot.configOptionsByModel,
   } as AgentOption;
 }
 

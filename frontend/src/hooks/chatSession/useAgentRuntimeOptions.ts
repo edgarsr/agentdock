@@ -47,20 +47,15 @@ export function useAgentRuntimeOptions({
     ? (accepts(modelOption, modelValue) ? modelValue! : modelOption.currentValue || modelOption.options[0]?.value || '')
     : '';
 
-  const effectiveOptions = useMemo(() => options.map((option) => (
-    isReasoning(option) && selectedModelId
-      ? {
-          ...option,
-          options: sessionConfigOptions?.reasoningEffortsByModel[selectedModelId]
-            ?? effectiveSelectedAgent?.reasoningEffortsByModel?.[selectedModelId]
-            ?? option.options,
-        }
-      : option
-  )), [
-    effectiveSelectedAgent?.reasoningEffortsByModel,
+  const effectiveOptions = useMemo(() => selectedModelId
+    ? sessionConfigOptions?.configOptionsByModel[selectedModelId]
+      ?? effectiveSelectedAgent?.configOptionsByModel?.[selectedModelId]
+      ?? options
+    : options, [
+    effectiveSelectedAgent?.configOptionsByModel,
     options,
     selectedModelId,
-    sessionConfigOptions?.reasoningEffortsByModel,
+    sessionConfigOptions?.configOptionsByModel,
   ]);
   const configValues = useMemo(() => Object.fromEntries(effectiveOptions
     .filter((option) => option.type !== 'select' || option.options.length > 0)

@@ -180,22 +180,16 @@ private fun AcpBridge.buildAdapterPayload(
     val selectedModelId = modelOption?.id?.let { preferredValues[it] }
         ?.takeIf { preferred -> modelOption?.accepts(preferred) == true }
         ?: rawRuntimeMetadata.currentModelId
+    val modelConfigOptions = rawRuntimeMetadata.configOptionsForModel(selectedModelId)
     val runtimeMetadata = rawRuntimeMetadata.copy(
-        configOptions = rawRuntimeMetadata.configOptions.map { option ->
-            val values = if (
-                option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
-            ) {
-                rawRuntimeMetadata.reasoningEffortsByModel[selectedModelId] ?: option.options
-            } else {
-                option.options
-            }
+        configOptions = modelConfigOptions.map { option ->
             val candidate = preferredValues[option.id]
             val resolved = candidate
-                ?.takeIf { option.copy(options = values).accepts(it) }
-                ?: option.currentValue.takeIf { option.type != "select" || values.any { value -> value.value == it } }
-                ?: values.firstOrNull()?.value
+                ?.takeIf(option::accepts)
+                ?: option.currentValue.takeIf { option.type != "select" || option.options.any { value -> value.value == it } }
+                ?: option.options.firstOrNull()?.value
                 ?: option.currentValue
-            option.copy(currentValue = resolved, options = values)
+            option.copy(currentValue = resolved)
         }
     )
 
@@ -217,7 +211,7 @@ private fun AcpBridge.buildAdapterPayload(
             it.toReasoningEffortPayload()
         },
         configOptions = runtimeMetadata.configOptions,
-        reasoningEffortsByModel = runtimeMetadata.reasoningEffortsByModel,
+        configOptionsByModel = runtimeMetadata.configOptionsByModel,
         downloaded = downloaded,
         downloadedKnown = downloadedKnown,
         downloadPath = if (downloaded == true) AcpAdapterPaths.getDownloadPath(info.id, target) else "",

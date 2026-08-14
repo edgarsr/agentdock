@@ -31,7 +31,7 @@ internal data class AdapterReasoningEffortPayload(
 internal data class SessionConfigOptionsPayload(
     val chatId: String,
     val configOptions: List<AcpConfigOption>,
-    val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>>
+    val configOptionsByModel: Map<String, List<AcpConfigOption>>
 )
 
 @Serializable
@@ -54,7 +54,7 @@ internal data class AdapterPayload(
     val currentReasoningEffortId: String,
     val availableReasoningEfforts: List<AdapterReasoningEffortPayload>,
     val configOptions: List<AcpConfigOption>,
-    val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>> = emptyMap(),
+    val configOptionsByModel: Map<String, List<AcpConfigOption>> = emptyMap(),
     val downloaded: Boolean? = null,
     val downloadedKnown: Boolean = false,
     val downloadPath: String = "",

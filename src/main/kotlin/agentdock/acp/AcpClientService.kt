@@ -40,7 +40,7 @@ data class PermissionRequest(
 class AcpClientService private constructor(val project: Project) {
     internal data class AdapterRuntimeMetadata(
         val configOptions: List<AcpConfigOption>,
-        val reasoningEffortsByModel: Map<String, List<AcpConfigOptionValue>> = emptyMap()
+        val configOptionsByModel: Map<String, List<AcpConfigOption>> = emptyMap()
     ) {
         private fun option(vararg categories: String): AcpConfigOption? =
             configOptions.firstOrNull { option -> categories.any(option::matchesCategory) }
@@ -65,10 +65,8 @@ class AcpClientService private constructor(val project: Project) {
         }
         val reasoningEffortConfigId get() = reasoningOption?.id
 
-        fun reasoningEffortsForModel(modelId: String?): List<AcpAdapterConfig.ModeInfo> {
-            val values = modelId?.let { reasoningEffortsByModel[it] } ?: reasoningOption?.options.orEmpty()
-            return values.map { AcpAdapterConfig.ModeInfo(it.value, it.name, it.description) }
-        }
+        fun configOptionsForModel(modelId: String?): List<AcpConfigOption> =
+            modelId?.let { configOptionsByModel[it] } ?: configOptions
     }
 
     companion object {

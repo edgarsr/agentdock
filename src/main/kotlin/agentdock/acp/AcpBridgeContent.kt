@@ -312,7 +312,7 @@ internal fun AcpBridge.pushSessionConfigOptions(
         SessionConfigOptionsPayload(
             chatId = chatId,
             configOptions = metadata.configOptions,
-            reasoningEffortsByModel = metadata.reasoningEffortsByModel
+            configOptionsByModel = metadata.configOptionsByModel
         )
     ).escapeForJsString()
     runOnEdt {

@@ -332,21 +332,23 @@ class AcpRuntimeMetadataTest {
     }
 
     @Test
-    fun `fresh snapshot replaces adapter options and preserves untouched model effort catalog`() {
+    fun `fresh snapshot replaces current model options and preserves untouched model snapshots`() {
+        val modelAReasoning = AcpConfigOption(
+            "reasoning_effort", "Reasoning", category = "thought_level", type = "select",
+            currentValue = "high",
+            options = listOf(AcpConfigOptionValue("high", "High"))
+        )
+        val modelBFastMode = AcpConfigOption(
+            "fast_mode", "Fast mode", type = "boolean", currentValue = "true"
+        )
         val existing = CachedAdapterConfigOptions(
             adapterId = "codex",
             adapterVersion = "1.0.0",
             refreshedAtMillis = 100L,
-            configOptions = listOf(
-                AcpConfigOption(
-                    "reasoning_effort", "Reasoning", category = "thought_level", type = "select",
-                    currentValue = "high",
-                    options = listOf(AcpConfigOptionValue("high", "High"))
-                )
-            ),
-            reasoningEffortsByModel = mapOf(
-                "model-a" to listOf(AcpConfigOptionValue("high", "High", null)),
-                "model-b" to listOf(AcpConfigOptionValue("low", "Low", null))
+            configOptions = listOf(modelAReasoning),
+            configOptionsByModel = mapOf(
+                "model-a" to listOf(modelAReasoning),
+                "model-b" to listOf(modelBFastMode)
             )
         )
         val fresh = AcpClientService.AdapterRuntimeMetadata(
@@ -368,12 +370,14 @@ class AcpRuntimeMetadataTest {
         val updated = existing.updatedWithSnapshot(adapterInfo(), "1.0.0", fresh)
 
         assertEquals(100L, updated.refreshedAtMillis)
-        assertEquals(emptyList(), updated.reasoningEffortsByModel["model-a"])
-        assertEquals(listOf("low"), updated.reasoningEffortsByModel["model-b"]?.map { it.value })
-        assertEquals("reasoning_effort", updated.configOptions.first { it.isReasoning() }.id)
+        assertEquals(listOf("model", "mode"), updated.configOptionsByModel["model-a"]?.map { it.id })
+        assertEquals(listOf("fast_mode"), updated.configOptionsByModel["model-b"]?.map { it.id })
+        assertEquals(listOf("model", "mode"), updated.configOptions.map { it.id })
         val runtime = updated.toRuntimeMetadata(adapterInfo())
         assertEquals("new-mode", runtime.currentModeId)
         assertEquals(null, runtime.currentReasoningEffortId)
+        assertEquals(listOf("model", "mode"), runtime.configOptionsForModel("model-a").map { it.id })
+        assertEquals(listOf("fast_mode"), runtime.configOptionsForModel("model-b").map { it.id })
     }
 
     @Test

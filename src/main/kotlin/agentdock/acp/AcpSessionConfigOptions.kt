@@ -120,47 +120,29 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
     initialMetadata: AcpClientService.AdapterRuntimeMetadata,
     existingCache: CachedAdapterConfigOptions? = null
 ): CachedAdapterConfigOptions {
-    val effortsByModel = existingCache?.reasoningEffortsByModel.orEmpty().toMutableMap()
+    val optionsByModel = existingCache?.configOptionsByModel.orEmpty().toMutableMap()
     val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
-    val reasoningOption = initialMetadata.reasoningOption()
-    var reasoningTemplate = reasoningOption
-        ?: existingCache?.configOptions?.firstOrNull { it.isReasoning() }
-    initialMetadata.currentModelId?.let { effortsByModel[it] = reasoningOption?.options.orEmpty() }
+    initialMetadata.currentModelId?.let { optionsByModel[it] = initialMetadata.configOptions }
 
     modelOption?.options.orEmpty().forEach { model ->
-        if (effortsByModel.containsKey(model.value)) return@forEach
+        if (optionsByModel.containsKey(model.value)) return@forEach
         val metadata = if (model.value == initialMetadata.currentModelId) {
             initialMetadata
         } else {
             val response = setSessionConfigOptionRaw(sessionId, modelOption!!.id, model.value)
             runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
         }
-        val modelReasoning = metadata.reasoningOption()
-        effortsByModel[model.value] = modelReasoning?.options.orEmpty()
-        if (reasoningTemplate == null) reasoningTemplate = modelReasoning
-    }
-    val configOptions = if (
-        reasoningTemplate != null && initialMetadata.configOptions.none { it.isReasoning() }
-    ) {
-        initialMetadata.configOptions + reasoningTemplate!!.copy(currentValue = "", options = emptyList())
-    } else {
-        initialMetadata.configOptions
+        optionsByModel[model.value] = metadata.configOptions
     }
 
     return CachedAdapterConfigOptions(
         adapterId = adapterInfo.id,
         adapterVersion = adapterVersion,
         refreshedAtMillis = existingCache?.refreshedAtMillis ?: Instant.now().toEpochMilli(),
-        configOptions = configOptions,
-        reasoningEffortsByModel = effortsByModel
+        configOptions = initialMetadata.configOptions,
+        configOptionsByModel = optionsByModel
     )
 }
-
-private fun AcpClientService.AdapterRuntimeMetadata.reasoningOption(): AcpConfigOption? =
-    configOptions.firstOrNull { it.isReasoning() }
-
-internal fun AcpConfigOption.isReasoning(): Boolean =
-    matchesCategory("thought_level") || matchesCategory("reasoning_effort")
 
 internal fun extractConfigOptionsUpdate(params: JsonElement?): Pair<String, JsonElement>? {
     val sessionId = extractSessionUpdateSessionId(params) ?: return null
