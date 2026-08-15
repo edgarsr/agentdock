@@ -119,7 +119,7 @@ export interface ConfigOption {
   description?: string;
   category?: string;
   type: 'select' | 'boolean';
-  currentValue: string;
+  currentValue?: string;
   options: ConfigOptionValue[];
 }
 
@@ -515,6 +515,7 @@ declare global {
       configValues?: Record<string, string>
     ) => void;
     __requestAdapters?: (forceRefresh?: boolean) => void;
+    __rememberAgentConfigOption?: (adapterId: string, configId: string, value: string) => void;
     __notifyReady?: () => void;
     __respondPermission?: (requestId: string, decision: string) => void;
     __cancelPrompt?: (conversationId: string, requestId?: string) => void;

@@ -4,6 +4,7 @@ import com.agentclientprotocol.client.ClientOperationsFactory
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
+import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.SessionConfigOption
 import com.agentclientprotocol.model.SessionId
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import agentdock.history.SessionMeta
 
 internal fun AcpClientService.processKey(adapterName: String): String {
@@ -78,7 +81,6 @@ internal suspend fun AcpClientService.startAgent(
                 ensureSharedProcessStarted(sharedProc, adapterInfo, forceRestart)
                 ensureAsyncSessionUpdates(sharedProc)
 
-                val savedPreference = AcpAgentPreferencesStore.preferenceFor(requestedAdapterName)
                 val client = sharedProc.client
                     ?: throw IllegalStateException("ACP client was not initialized for adapter '$requestedAdapterName'")
                 val cwd = resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
@@ -112,17 +114,10 @@ internal suspend fun AcpClientService.startAgent(
                 } else {
                     context.runtimeMetadataRef.set(runtimeMetadata)
                 }
-                val availableConfigIds = runtimeMetadata
-                    ?.configOptions
-                    .orEmpty()
-                    .mapTo(mutableSetOf()) { it.id }
                 val applied = applySessionConfigOptions(
                     context = context,
                     adapterName = requestedAdapterName,
-                    preferredValues = savedPreference
-                        ?.configOptions
-                        .orEmpty()
-                        .filterKeys(availableConfigIds::contains) + preferredConfigValues
+                    preferredValues = preferredConfigValues
                 )
                 if (!applied) throw IllegalStateException("Failed to apply session config options")
 
@@ -143,10 +138,13 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     preferredValues: Map<String, String>
 ): Boolean {
     if (context.session == null) return false
-    val protocol = context.sharedProcess?.protocol ?: return false
-    val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
     val initialMetadata = context.runtimeMetadataRef.get() ?: return false
     if (preferredValues.isEmpty()) return true
+    if (initialMetadata.usesAdapterConfigOptions) {
+        return applyAdapterConfigOptions(context, adapterName, preferredValues)
+    }
+    val protocol = context.sharedProcess?.protocol ?: return false
+    val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
     val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
     val orderedConfigIds = buildList {
         modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
@@ -167,7 +165,51 @@ private suspend fun AcpClientService.applySessionConfigOptions(
         }.getOrElse { return false }
         updateMetadataFromConfigOptionResponse(adapterName, response, context)
     }
-    AcpAgentPreferencesStore.rememberConfigOptions(adapterName, preferredValues)
+    return true
+}
+
+@Suppress("OPT_IN_USAGE")
+private suspend fun AcpClientService.applyAdapterConfigOptions(
+    context: AcpClientService.AgentContext,
+    adapterName: String,
+    preferredValues: Map<String, String>
+): Boolean {
+    val metadata = context.runtimeMetadataRef.get() ?: return false
+    val options = metadata.configOptions
+    if (options.none { preferredValues.containsKey(it.id) }) return true
+    val modelOption = options.firstOrNull { it.matchesCategory("model") } ?: return false
+    val resolvedValues = options.associate { option ->
+        val requested = preferredValues[option.id]?.trim()
+        if (requested != null && !option.accepts(requested)) return false
+        val value = requested
+            ?: context.activeConfigValues[option.id]?.takeIf(option::accepts)
+            ?: option.currentValue.takeIf(option::accepts)
+            ?: option.options.firstOrNull()?.value
+            ?: return false
+        option.id to value
+    }
+    if (resolvedValues.all { (id, value) -> context.activeConfigValues[id] == value }) return true
+
+    val modelId = resolvedValues.getValue(modelOption.id)
+    val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
+    val meta = buildJsonObject {
+        options.forEach { option ->
+            val metaKey = adapterInfo.configOptionMetaKey(option.id) ?: return@forEach
+            put(metaKey, JsonPrimitive(resolvedValues.getValue(option.id)))
+        }
+    }.takeUnless { it.isEmpty() }
+
+    val session = context.session ?: return false
+    runCatching { session.setModel(ModelId(modelId), meta) }.getOrElse { return false }
+
+    val updatedOptions = metadata.configOptions.map { option ->
+        resolvedValues[option.id]?.let { option.copy(currentValue = it) } ?: option
+    }
+    updateSessionRuntimeMetadata(
+        adapterInfo,
+        metadata.copy(configOptions = updatedOptions),
+        context
+    )
     return true
 }
 

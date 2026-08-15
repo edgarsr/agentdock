@@ -8,8 +8,7 @@ import {
   Message,
   PendingHandoffContext,
   PermissionRequest,
-  RichContentBlock,
-  SessionConfigOptionsPayload
+  RichContentBlock
 } from '../types/chat';
 import {ACPBridge} from '../utils/bridge';
 import {buildReplayMessages} from '../utils/replay';
@@ -114,7 +113,6 @@ export function useChatSession(
   const permissionRequest = permissionQueue[0] ?? null;
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
-  const [sessionConfigOptions, setSessionConfigOptions] = useState<SessionConfigOptionsPayload>();
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
 
@@ -197,14 +195,6 @@ export function useChatSession(
   const availableCommands = useAvailableCommands(availableAgents, selectedAgentId);
   const effectiveSelectedAgent = resolvedSelectedAgent;
 
-  useEffect(() => ACPBridge.onSessionConfigOptions((event) => {
-    if (event.detail.payload.chatId === conversationId) {
-      setSessionConfigOptions(event.detail.payload);
-    }
-  }), [conversationId]);
-
-  useEffect(() => setSessionConfigOptions(undefined), [selectedAgentId]);
-
   const {
     availableModels,
     availableModes,
@@ -216,8 +206,9 @@ export function useChatSession(
     configValues,
     selectedConfigOptions,
     modelIdForStart,
-    markConfigValuesSubmitted,
+    handleSessionConfigOptions,
     handleModelChange,
+    handleReportedModeChange,
     handleModeChange,
     handleReasoningEffortChange,
     handleConfigOptionChange,
@@ -225,9 +216,13 @@ export function useChatSession(
     availableAgents,
     effectiveSelectedAgent,
     selectedAgentId,
-    historySession,
-    sessionConfigOptions,
   });
+
+  useEffect(() => ACPBridge.onSessionConfigOptions((event) => {
+    if (event.detail.payload.chatId === conversationId) {
+      handleSessionConfigOptions(event.detail.payload);
+    }
+  }), [conversationId, handleSessionConfigOptions]);
 
   const adapterDisplayName = resolvedSelectedAgent?.name || '';
   const agentOptions = useMemo(
@@ -372,7 +367,6 @@ export function useChatSession(
       clearBufferedChunks();
       statusRef.current = 'initializing';
       setStatus('initializing');
-      markConfigValuesSubmitted();
       ACPBridge.startAgent(
         conversationId,
         selectedAgentId,
@@ -388,7 +382,7 @@ export function useChatSession(
       console.warn('[useChatSession] Failed to auto-start agent:', e);
       return false;
     }
-  }, [clearBufferedChunks, configValues, conversationId, failActivePromptLocally, historySession, markConfigValuesSubmitted, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
+  }, [clearBufferedChunks, configValues, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
 
   useEffect(() => {
     if (!pendingHandoff) return;
@@ -465,7 +459,6 @@ export function useChatSession(
         
         // Assistant message is already added in handleSend, we just need to trigger the actual send
         const forkBaseToPersist = forkBaseRef.current;
-        markConfigValuesSubmitted();
         ACPBridge.sendPrompt(
           conversationId,
           JSON.stringify(blocksToSend),
@@ -494,6 +487,7 @@ export function useChatSession(
     const unsubMode = ACPBridge.onMode((e) => {
       if (e.detail.chatId !== conversationId) return;
       startedModeIdRef.current = e.detail.modeId;
+      handleReportedModeChange(e.detail.modeId);
     });
 
     // Permission request - filter by chatId when available
@@ -528,12 +522,12 @@ export function useChatSession(
     failActivePromptLocally,
     finishActivePromptAfterError,
     requestRuntimeRecovery,
-    markConfigValuesSubmitted,
     configValues,
     selectedAgentId,
     selectedModelId,
     selectedModeId,
     selectedReasoningEffortId,
+    handleReportedModeChange,
   ]);
 
   useEffect(() => {
@@ -669,7 +663,6 @@ export function useChatSession(
     }
 
     const forkBaseToPersist = forkBaseRef.current;
-    markConfigValuesSubmitted();
     ACPBridge.sendPrompt(
       conversationId,
       JSON.stringify(outgoingBlocks),
@@ -689,7 +682,7 @@ export function useChatSession(
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
   }, [status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, markConfigValuesSubmitted, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
   const canDrainQueuedPrompts = status === 'ready'
     && !isSending

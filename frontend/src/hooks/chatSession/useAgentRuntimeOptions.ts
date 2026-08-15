@@ -2,16 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AgentOption,
   ConfigOption,
-  HistorySessionMeta,
   SessionConfigOptionsPayload,
 } from '../../types/chat';
+import { ACPBridge } from '../../utils/bridge';
 
 type UseAgentRuntimeOptionsArgs = {
   availableAgents: AgentOption[];
   effectiveSelectedAgent: AgentOption | undefined;
   selectedAgentId: string;
-  historySession?: HistorySessionMeta;
-  sessionConfigOptions?: SessionConfigOptionsPayload;
 };
 
 const matches = (option: ConfigOption, category: string) =>
@@ -31,20 +29,36 @@ export function useAgentRuntimeOptions({
   availableAgents,
   effectiveSelectedAgent,
   selectedAgentId,
-  historySession,
-  sessionConfigOptions,
 }: UseAgentRuntimeOptionsArgs) {
+  const [sessionConfigOptions, setSessionConfigOptions] = useState<SessionConfigOptionsPayload>();
   const [selectedByAgent, setSelectedByAgent] = useState<Record<string, Record<string, string>>>({});
-  const dirtyConfigIdsByAgent = useRef<Record<string, Set<string>>>({});
+  const initialValuesByAgent = useRef<Record<string, Record<string, string>>>({});
   const sessionAgentId = effectiveSelectedAgent?.id;
+  const adapterOptions = effectiveSelectedAgent?.configOptions ?? [];
+  if (sessionAgentId && adapterOptions.length > 0 && initialValuesByAgent.current[sessionAgentId] === undefined) {
+    initialValuesByAgent.current[sessionAgentId] = Object.fromEntries(adapterOptions.map((option) => [
+      option.id,
+      accepts(option, option.currentValue)
+        ? option.currentValue ?? ''
+        : option.options[0]?.value ?? '',
+    ]));
+  }
+  const initialValues = sessionAgentId
+    ? initialValuesByAgent.current[sessionAgentId] ?? EMPTY_SELECTION
+    : EMPTY_SELECTION;
   const options = sessionConfigOptions?.configOptions ?? effectiveSelectedAgent?.configOptions ?? [];
   const selected = effectiveSelectedAgent
     ? selectedByAgent[effectiveSelectedAgent.id] ?? EMPTY_SELECTION
     : EMPTY_SELECTION;
   const modelOption = options.find((option) => matches(option, 'model'));
   const modelValue = selected[modelOption?.id ?? ''];
+  const initialModelValue = initialValues[modelOption?.id ?? ''];
   const selectedModelId = modelOption
-    ? (accepts(modelOption, modelValue) ? modelValue! : modelOption.currentValue || modelOption.options[0]?.value || '')
+    ? (accepts(modelOption, modelValue)
+      ? modelValue!
+      : accepts(modelOption, initialModelValue)
+        ? initialModelValue
+        : modelOption.options[0]?.value || '')
     : '';
 
   const effectiveOptions = useMemo(() => selectedModelId
@@ -61,15 +75,16 @@ export function useAgentRuntimeOptions({
     .filter((option) => option.type !== 'select' || option.options.length > 0)
     .map((option) => {
       const selectedValue = selected[option.id];
+      const initialValue = initialValues[option.id];
       const value = accepts(option, selectedValue)
         ? selectedValue!
-        : accepts(option, option.currentValue)
-          ? option.currentValue
-          : option.options[0]?.value ?? option.currentValue;
+        : accepts(option, initialValue)
+          ? initialValue!
+          : option.options[0]?.value ?? option.currentValue ?? '';
       return [option.id, value];
     })
     .filter(([, value]) => value !== '')),
-    [effectiveOptions, selected]
+    [effectiveOptions, initialValues, selected]
   );
   const selectedConfigOptions = effectiveOptions
     .filter((option) => configValues[option.id] !== undefined)
@@ -99,44 +114,31 @@ export function useAgentRuntimeOptions({
   })) ?? [];
   const additionalConfigOptions = effectiveOptions
     .filter((option) => !matches(option, 'model') && !matches(option, 'mode') && !isReasoning(option))
-    .map((option) => ({ ...option, currentValue: configValues[option.id] ?? option.currentValue }));
+    .map((option) => ({ ...option, currentValue: configValues[option.id] ?? option.currentValue ?? '' }));
 
-  useEffect(() => {
-    if (!sessionConfigOptions || !sessionAgentId) return;
-    const reported = Object.fromEntries(
-      sessionConfigOptions.configOptions
-        .filter((option) => option.currentValue !== '')
-        .map((option) => [option.id, option.currentValue])
-    );
-    const dirtyIds = dirtyConfigIdsByAgent.current[sessionAgentId];
+  const handleSessionConfigOptions = useCallback((payload: SessionConfigOptionsPayload) => {
+    if (!sessionAgentId) return;
+    setSessionConfigOptions(payload);
+    const reportedValues: Record<string, string> = {};
+    payload.configOptions.forEach((option) => {
+      if (option.currentValue) reportedValues[option.id] = option.currentValue;
+    });
     setSelectedByAgent((current) => ({
       ...current,
-      [sessionAgentId]: {
-        ...reported,
-        ...Object.fromEntries(
-          Object.entries(current[sessionAgentId] ?? {}).filter(([id]) => dirtyIds?.has(id))
-        ),
-      },
+      [sessionAgentId]: { ...current[sessionAgentId], ...reportedValues },
     }));
-  }, [sessionAgentId, sessionConfigOptions]);
+  }, [sessionAgentId]);
 
-  useEffect(() => {
-    if (!historySession || !sessionAgentId) return;
-    const historyValues = historySession.configOptions ?? {};
-    if (Object.keys(historyValues).length === 0) return;
-    dirtyConfigIdsByAgent.current[sessionAgentId] = new Set(Object.keys(historyValues));
-    setSelectedByAgent((current) => ({
-      ...current,
-      [sessionAgentId]: {
-        ...current[sessionAgentId],
-        ...historyValues,
-      },
-    }));
-  }, [historySession, sessionAgentId]);
+  useEffect(() => setSessionConfigOptions(undefined), [selectedAgentId]);
 
-  const selectConfigValue = (configId: string, value: string, targetAgentId = selectedAgentId) => {
+  const updateConfigValue = (
+    configId: string,
+    value: string,
+    targetAgentId = selectedAgentId,
+    remember = false,
+  ) => {
     if (!targetAgentId) return;
-    (dirtyConfigIdsByAgent.current[targetAgentId] ??= new Set()).add(configId);
+    if (remember) ACPBridge.rememberAgentConfigOption(targetAgentId, configId, value);
     setSelectedByAgent((current) => ({
       ...current,
       [targetAgentId]: {
@@ -146,9 +148,8 @@ export function useAgentRuntimeOptions({
     }));
   };
 
-  const markConfigValuesSubmitted = useCallback((targetAgentId = selectedAgentId) => {
-    if (targetAgentId) dirtyConfigIdsByAgent.current[targetAgentId] = new Set();
-  }, [selectedAgentId]);
+  const selectConfigValue = (configId: string, value: string, targetAgentId = selectedAgentId) =>
+    updateConfigValue(configId, value, targetAgentId, true);
 
   const handleModelChange = (modelId: string, targetAgentId?: string) => {
     const agentId = targetAgentId || selectedAgentId;
@@ -175,8 +176,10 @@ export function useAgentRuntimeOptions({
     selectedModeId,
     selectedReasoningEffortId,
     modelIdForStart: selectedAgentId ? selectedModelId : '',
-    markConfigValuesSubmitted,
+    handleSessionConfigOptions,
     handleModelChange,
+    handleReportedModeChange: (value: string) =>
+      modeOption && updateConfigValue(modeOption.id, value),
     handleModeChange: (value: string) => modeOption && selectConfigValue(modeOption.id, value),
     handleReasoningEffortChange: (value: string) =>
       reasoningOption && selectConfigValue(reasoningOption.id, value),

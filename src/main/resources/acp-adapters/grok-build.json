@@ -10,9 +10,30 @@
   "loginMethod": "acp",
   "logoutMethod": "cli",
   "loginStatusMethod": "grokBuildAuthFile",
+  "configOptions": [
+    {
+      "id": "model",
+      "name": "Model",
+      "options": [
+        { "value": "grok-4.6", "name": "Grok 4.6", "description": "SpaceXAI's latest frontier model" }
+      ]
+    },
+    {
+      "id": "reasoning_effort",
+      "name": "Reasoning Effort",
+      "metaKey": "reasoningEffort",
+      "options": [
+        { "value": "low" },
+        { "value": "medium" },
+        { "value": "high" },
+        { "value": "xhigh" }
+      ]
+    }
+  ],
   "distribution": {
     "type": "npm",
     "version": "latest",
+    "minimumVersion": "1.0.4",
     "packageName": "@xai-official/grok"
   },
   "launchBinary": {

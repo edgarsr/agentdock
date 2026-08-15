@@ -13,6 +13,7 @@ import agentdock.utils.escapeForJsString
 internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val startAgentInject = startAgentQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, adapterId: (adapterId || ''), configValues: (configValues || {}) })") ?: ""
     val listAdaptersInject = listAdaptersQuery?.inject("(forceRefresh === true ? 'refresh' : '')") ?: ""
+    val rememberConfigOptionInject = rememberConfigOptionQuery?.inject("JSON.stringify({ adapterId: adapterId, configValues: { [configId]: value } })") ?: ""
     val sendPromptInject = sendPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId, text: message, forkBase: forkBase || null, adapterId: (adapterId || ''), configValues: (configValues || {}) })") ?: ""
     val cancelPromptInject = cancelPromptQuery?.inject("JSON.stringify({ requestId: (requestId || ''), chatId: chatId })") ?: ""
     val stopAgentInject = stopAgentQuery?.inject("chatId") ?: ""
@@ -52,6 +53,9 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             window.__IS_DEV = ${BuildConfig.IS_DEV};
             window.__requestAdapters = function(forceRefresh) {
                 try { $listAdaptersInject } catch (e) { }
+            };
+            window.__rememberAgentConfigOption = function(adapterId, configId, value) {
+                try { $rememberConfigOptionInject } catch (e) { }
             };
             window.__startAgent = function(chatId, adapterId, configValues, requestId) {
                 try {
@@ -200,6 +204,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
             window.__pendingAdapterRefresh =
                 window.__pendingAdapterRefresh === true || forceRefresh === true;
         };
+        window.__rememberAgentConfigOption = window.__rememberAgentConfigOption || function(adapterId, configId, value) {};
         window.__downloadAgent = window.__downloadAgent || function(id) {};
         window.__cancelAgentInstall = window.__cancelAgentInstall || function(id) {};
         window.__deleteAgent = window.__deleteAgent || function(id) {};

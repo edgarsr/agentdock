@@ -298,6 +298,17 @@ internal fun AcpBridge.installAdapterQueries() {
         }
     }
 
+    rememberConfigOptionQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+        addHandler { payload ->
+            val parsed = parseStartRequestPayload(payload)
+            parsed.adapterId?.takeIf { parsed.configValues.isNotEmpty() }?.let { adapterId ->
+                AcpAgentPreferencesStore.rememberConfigOptions(adapterId, parsed.configValues)
+                pushAdapters()
+            }
+            JBCefJSQuery.Response("ok")
+        }
+    }
+
     downloadAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { payload ->
             val adapterId = parseIdOnlyPayload(payload)

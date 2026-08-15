@@ -40,7 +40,8 @@ data class PermissionRequest(
 class AcpClientService private constructor(val project: Project) {
     internal data class AdapterRuntimeMetadata(
         val configOptions: List<AcpConfigOption>,
-        val configOptionsByModel: Map<String, List<AcpConfigOption>> = emptyMap()
+        val configOptionsByModel: Map<String, List<AcpConfigOption>> = emptyMap(),
+        val usesAdapterConfigOptions: Boolean = false
     ) {
         private fun option(vararg categories: String): AcpConfigOption? =
             configOptions.firstOrNull { option -> categories.any(option::matchesCategory) }

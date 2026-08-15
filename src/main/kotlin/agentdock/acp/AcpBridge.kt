@@ -23,6 +23,7 @@ class AcpBridge(
     internal var sendPromptQuery: JBCefJSQuery? = null
     internal var startAgentQuery: JBCefJSQuery? = null
     internal var listAdaptersQuery: JBCefJSQuery? = null
+    internal var rememberConfigOptionQuery: JBCefJSQuery? = null
     internal var cancelPromptQuery: JBCefJSQuery? = null
     internal var stopAgentQuery: JBCefJSQuery? = null
     internal var respondPermissionQuery: JBCefJSQuery? = null

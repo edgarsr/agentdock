@@ -45,11 +45,6 @@ object AcpAgentPreferencesStore {
 
     fun lastAgentId(): String? = load().lastAgentId.takeIf { it.isNotBlank() }
 
-    fun preferenceFor(adapterId: String): AcpAgentPreference? {
-        if (adapterId.isBlank()) return null
-        return load().agents[adapterId]?.takeIf { it.configOptions.isNotEmpty() }
-    }
-
     fun rememberAgent(adapterId: String) {
         val trimmedAdapterId = adapterId.trim()
         if (trimmedAdapterId.isEmpty()) return
@@ -65,10 +60,10 @@ object AcpAgentPreferencesStore {
         }.toMap()
         if (trimmedAdapterId.isEmpty() || normalizedValues.isEmpty()) return
         updateState { current ->
-            current.copy(
-                lastAgentId = current.lastAgentId,
-                agents = current.agents + (trimmedAdapterId to AcpAgentPreference(normalizedValues))
-            )
+            val configOptions = current.agents[trimmedAdapterId]
+                ?.configOptions
+                .orEmpty() + normalizedValues
+            current.copy(agents = current.agents + (trimmedAdapterId to AcpAgentPreference(configOptions)))
         }
     }
 
