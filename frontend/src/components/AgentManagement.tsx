@@ -94,9 +94,13 @@ function CopilotUsageSection() {
 export function AgentManagementView({
   initialAgents = [],
   isActive = false,
+  hasOpenConversationsForAdapter,
+  onUpdateAgent,
 }: {
   initialAgents?: AgentOption[];
   isActive?: boolean;
+  hasOpenConversationsForAdapter: (adapterId: string) => boolean;
+  onUpdateAgent: (adapterId: string) => void;
 }) {
   const [agents, setAgents] = useState<AgentOption[]>(() => {
     if (Object.keys(serviceProviderAgentSnapshots).length > 0) {
@@ -189,9 +193,9 @@ export function AgentManagementView({
   };
 
   const performUpdate = () => {
-    if (confirmUpdateId && window.__updateAgent) {
+    if (confirmUpdateId) {
       setInstallingIds(prev => new Set(prev).add(confirmUpdateId));
-      window.__updateAgent(confirmUpdateId);
+      onUpdateAgent(confirmUpdateId);
       setConfirmUpdateId(null);
     }
   };
@@ -504,7 +508,10 @@ export function AgentManagementView({
       <ConfirmationModal
         isOpen={confirmUpdateId !== null}
         title="Update Service Provider"
-        message={`Do you want to update ${agents.find(a => a.id === confirmUpdateId)?.name || 'this service provider'} to the latest version?`}
+        message={`Do you want to update ${agents.find(a => a.id === confirmUpdateId)?.name || 'this service provider'} to the latest version?${
+          confirmUpdateId && hasOpenConversationsForAdapter(confirmUpdateId)
+            ? '\n\nOpen conversations using this service provider will be closed, and active prompts will be cancelled.' : ''
+        }`}
         onConfirm={performUpdate}
         onCancel={() => setConfirmUpdateId(null)}
       />

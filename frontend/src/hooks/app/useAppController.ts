@@ -438,6 +438,25 @@ export function useAppController() {
     }
   }, [activeTabId, cleanupTabUi, tabs]);
 
+  const tabUsesAdapter = (tab: ChatTab, adapterId: string) =>
+    tab.type === 'chat' && (tabSessionState[tab.id]?.adapterName || tab.agentId) === adapterId;
+
+  const hasOpenConversationsForAdapter = (adapterId: string) =>
+    tabs.some((tab) => tabUsesAdapter(tab, adapterId));
+
+  const handleUpdateAgent = (adapterId: string) => {
+    if (typeof window.__updateAgent !== 'function') return;
+
+    const currentTabs = tabsRef.current;
+    currentTabs.filter((tab) => tabUsesAdapter(tab, adapterId)).forEach((tab) => {
+      try { window.__stopAgent?.(tab.conversationId); } catch (_) {}
+      cleanupTabUi(tab.id);
+    });
+    setTabs(currentTabs.filter((tab) => !tabUsesAdapter(tab, adapterId)));
+
+    window.__updateAgent(adapterId);
+  };
+
   const handleReorderTabs = useCallback((draggedId: string, targetId: string, position: 'before' | 'after') => {
     if (draggedId === targetId) {
       return;
@@ -531,6 +550,8 @@ export function useAppController() {
     handleReorderTabs,
     handleCloseTab,
     handleCloseAllTabs,
+    hasOpenConversationsForAdapter,
+    handleUpdateAgent,
     handleNewTab,
     handleOpenHistory,
     openSingletonTab,

@@ -14,6 +14,8 @@ interface AppTabContentProps {
   isActive: boolean;
   availableAgents: AgentOption[];
   runnableAgents: AgentOption[];
+  hasOpenConversationsForAdapter: (adapterId: string) => boolean;
+  onUpdateAgent: (adapterId: string) => void;
   pendingHandoff?: PendingHandoffContext;
   onOpenHistory: Parameters<typeof HistoryPanel>[0]['onOpenSession'];
   onUserMessageSent: () => void;
@@ -33,6 +35,8 @@ export function AppTabContent({
   isActive,
   availableAgents,
   runnableAgents,
+  hasOpenConversationsForAdapter,
+  onUpdateAgent,
   pendingHandoff,
   onOpenHistory,
   onUserMessageSent,
@@ -81,7 +85,12 @@ export function AppTabContent({
       )}
       {tab.type !== 'chat' && hasBeenActiveRef.current && (
         <>
-          {tab.type === 'management' && <AgentManagementView initialAgents={availableAgents} isActive={isActive} />}
+          {tab.type === 'management' && (
+            <AgentManagementView
+              initialAgents={availableAgents} isActive={isActive}
+              hasOpenConversationsForAdapter={hasOpenConversationsForAdapter} onUpdateAgent={onUpdateAgent}
+            />
+          )}
           {tab.type === 'design' && <DesignSystemView />}
           {tab.type === 'history' && (
             <HistoryPanel availableAgents={availableAgents} onOpenSession={onOpenHistory} />

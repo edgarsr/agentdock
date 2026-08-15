@@ -62,6 +62,8 @@ function App() {
     handleReorderTabs,
     handleCloseTab,
     handleCloseAllTabs,
+    hasOpenConversationsForAdapter,
+    handleUpdateAgent,
     handleNewTab,
     handleOpenHistory,
     openSingletonTab,
@@ -116,6 +118,8 @@ function App() {
               isActive={isTabActive}
               availableAgents={availableAgents}
               runnableAgents={runnableAgents}
+              hasOpenConversationsForAdapter={hasOpenConversationsForAdapter}
+              onUpdateAgent={handleUpdateAgent}
               pendingHandoff={pendingHandoffsByTab[tab.id]}
               onOpenHistory={handleOpenHistory}
               onUserMessageSent={() => handleUserMessageSent(tab.id)}
