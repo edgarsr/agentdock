@@ -22,6 +22,7 @@ export default function FileMentionMenu({
   const items = files.map(file => ({
     primary: file.name,
     secondary: file.path,
+    filePath: file.path,
   }));
 
   return (

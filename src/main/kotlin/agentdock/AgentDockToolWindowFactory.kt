@@ -253,8 +253,12 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
         val connection = ApplicationManager.getApplication().messageBus.connect(browser)
         connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
             val script = IdeTheme.generateCssUpdateScript()
+            acpBridge.fileIconProvider?.invalidate()
             ApplicationManager.getApplication().invokeLater({
                 browser.cefBrowser.executeJavaScript(script, browser.cefBrowser.url ?: "", 0)
+                browser.cefBrowser.executeJavaScript(
+                    "if(window.__onThemeChanged) window.__onThemeChanged();", browser.cefBrowser.url ?: "", 0
+                )
             }, ModalityState.any())
             acpBridge.pushAdapters()
         })

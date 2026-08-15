@@ -1,8 +1,10 @@
 import { SlashMenuLayout } from './slashCommands';
+import { FileIcon } from '../shared/FileIcon';
 
 export interface MenuItem {
   primary: string;
   secondary?: string;
+  filePath?: string;
 }
 
 interface PopupMenuProps {
@@ -49,6 +51,7 @@ export default function PopupMenu({
                 isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
             >
+              {item.filePath && <FileIcon filePath={item.filePath} className="h-[14px] w-[14px] flex-shrink-0" />}
               <span className="w-40 shrink-0 truncate font-mono leading-5">
                 {item.primary}
               </span>

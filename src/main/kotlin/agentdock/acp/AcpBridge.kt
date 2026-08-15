@@ -56,6 +56,8 @@ class AcpBridge(
     internal var openAgentCliQuery: JBCefJSQuery? = null
     internal var openHistoryConversationCliQuery: JBCefJSQuery? = null
     internal var searchFilesQuery: JBCefJSQuery? = null
+    internal var iconFileQuery: JBCefJSQuery? = null
+    internal var fileIconProvider: FileIconProvider? = null
 
     internal val promptJobs = ConcurrentHashMap<String, Job>()
     internal val lastStatusByChatId = ConcurrentHashMap<String, String>()
@@ -101,6 +103,7 @@ class AcpBridge(
         installConversationQueries()
         installFileChangeQueries()
         installMiscQueries()
+        installFileIconQuery()
     }
 
     internal fun nextReplaySeq(chatId: String, isReplay: Boolean): Int? {

@@ -116,6 +116,13 @@ function awaitBridgeOperation(
   });
 }
 
+const FILE_ICON_REQUEST_TIMEOUT_MS = 5_000;
+const FILE_ICON_CACHE_LIMIT = 512;
+const fileIconCache = new Map<string, string>();
+const pendingFileIconRequests = new Map<string, Promise<string | null>>();
+// Bumped on theme change so icons resolved against the previous theme are not cached.
+let fileIconEpoch = 0;
+
 export const ACPBridge = {
   initialize: () => {
     if (typeof window === 'undefined') return;
@@ -315,6 +322,16 @@ export const ACPBridge = {
 
     window.__onAdapterDeleted = (adapterId) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.ADAPTER_DELETED, { detail: { adapterId } }));
+    };
+
+    window.__onFileIconResult = (result) => {
+      window.dispatchEvent(new CustomEvent('acp-file-icon-result', { detail: result }));
+    };
+
+    window.__onThemeChanged = () => {
+      fileIconEpoch += 1;
+      fileIconCache.clear();
+      window.dispatchEvent(new CustomEvent('acp-theme-changed'));
     };
 
     window.__onFilesResult = (filesJson) => {
@@ -551,6 +568,51 @@ export const ACPBridge = {
     const fn = (e: Event) => callback(e as CustomEvent);
     window.addEventListener('acp-files-result', fn);
     return () => window.removeEventListener('acp-files-result', fn);
+  },
+
+  requestFileIcon: (path: string): Promise<string | null> => {
+    const cached = fileIconCache.get(path);
+    if (cached) return Promise.resolve(cached);
+
+    const pending = pendingFileIconRequests.get(path);
+    if (pending) return pending;
+
+    const requestEpoch = fileIconEpoch;
+    const request = new Promise<string | null>((resolve) => {
+      let timeout: number | undefined;
+
+      const finish = (icon: string | null) => {
+        window.clearTimeout(timeout);
+        window.removeEventListener('acp-file-icon-result', handler);
+        if (icon && requestEpoch === fileIconEpoch) {
+          const oldest = fileIconCache.size >= FILE_ICON_CACHE_LIMIT ? fileIconCache.keys().next().value : undefined;
+          if (oldest !== undefined) fileIconCache.delete(oldest);
+          fileIconCache.set(path, icon);
+        }
+        resolve(icon);
+      };
+
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent).detail as { path: string; icon: string };
+        if (detail?.path === path) finish(detail.icon || null);
+      };
+
+      window.addEventListener('acp-file-icon-result', handler);
+      timeout = window.setTimeout(() => finish(null), FILE_ICON_REQUEST_TIMEOUT_MS);
+      if (typeof window.__requestFileIcon === 'function') window.__requestFileIcon(path);
+      else finish(null);
+    });
+
+    pendingFileIconRequests.set(path, request);
+    void request.then(() => {
+      if (pendingFileIconRequests.get(path) === request) pendingFileIconRequests.delete(path);
+    });
+    return request;
+  },
+
+  onThemeChanged: (callback: () => void) => {
+    window.addEventListener('acp-theme-changed', callback);
+    return () => window.removeEventListener('acp-theme-changed', callback);
   },
 
   loadMcpServers: () => {

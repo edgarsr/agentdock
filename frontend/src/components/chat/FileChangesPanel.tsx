@@ -2,6 +2,7 @@ import { useState, memo } from 'react';
 import { Check, Undo2, FileDiff, ChevronRight } from 'lucide-react';
 import { FileChangeSummary } from '../../types/chat';
 import { Tooltip } from './shared/Tooltip';
+import { FileIcon } from './shared/FileIcon';
 import { chatFocusClassName, chatInsetFocusClassName } from './shared/focusStyles';
 
 interface FileChangesPanelProps {
@@ -125,22 +126,25 @@ const FileChangesPanel = memo(({
                 {fileChanges.map((fc) => (
                   <div
                     key={fc.filePath}
-                    className="flex items-center justify-between h-9 px-3 transition-colors"
+                    className="flex items-center justify-between h-[32px] px-3 transition-colors"
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className={`font-mono w-4 text-center flex-shrink-0 font-bold ${
+                      <span className={`font-mono w-4 text-center flex-shrink-0 font-bold relative ${
                         fc.status === 'A' ? 'text-added' : 'text-warning'
                       }`}>
                         {fc.status}
                       </span>
-                      <Tooltip variant="minimal" content={fc.filePath} className="flex-1 min-w-0">
-                        <button type="button"
-                          className={`w-full truncate text-left text-foreground hover:underline transition-colors min-w-0 font-mono ${chatFocusClassName}`}
-                          onClick={() => onOpenFile?.(fc.filePath)}
-                        >
-                          {getFileName(fc.filePath)}
-                        </button>
-                      </Tooltip>
+                      <FileIcon filePath={fc.filePath} className="h-[14px] w-[14px] flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <Tooltip variant="minimal" content={fc.filePath}>
+                          <button type="button"
+                            className={`w-full truncate text-left text-foreground hover:underline transition-colors min-w-0 font-mono ${chatFocusClassName}`}
+                            onClick={() => onOpenFile?.(fc.filePath)}
+                          >
+                            {getFileName(fc.filePath)}
+                          </button>
+                        </Tooltip>
+                      </div>
                       <div className="flex items-center gap-1 flex-shrink-0 ml-1">
                         {fc.additions > 0 && <span className="text-sm font-bold text-added leading-none relative top-[1px]">+{fc.additions}</span>}
                         {fc.deletions > 0 && <span className="text-sm font-bold text-deleted leading-none relative top-[1px]">-{fc.deletions}</span>}

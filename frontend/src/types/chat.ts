@@ -579,6 +579,9 @@ declare global {
     __onMcpStatus?: (update: unknown) => void;
     __onFilesResult?: (filesJson: unknown) => void;
     __searchFiles?: (query: string) => void;
+    __requestFileIcon?: (path: string) => void;
+    __onFileIconResult?: (result: { path: string; icon: string }) => void;
+    __onThemeChanged?: () => void;
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;
     __checkMcpStatus?: () => void;

@@ -387,6 +387,32 @@ internal fun AcpBridge.installMiscQueries() {
 
 }
 
+internal fun AcpBridge.installFileIconQuery() {
+    val provider = FileIconProvider(service.project)
+    fileIconProvider = provider
+
+    iconFileQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
+        addHandler { payload ->
+            val path = runCatching {
+                Json.parseToJsonElement(payload ?: "{}").jsonObject["path"]?.jsonPrimitive?.content
+            }.getOrNull().orEmpty()
+
+            if (path.isNotBlank()) scope.launch(Dispatchers.IO) {
+                // One file per request, so the read action stays short enough not to stall writes.
+                val icon = readAction { provider.iconForPath(path) }.orEmpty()
+                runOnEdt {
+                    browser.cefBrowser.executeJavaScript(
+                        "if(window.__onFileIconResult) window.__onFileIconResult(" +
+                            "{\"path\":${escapeJsonString(path)},\"icon\":${escapeJsonString(icon)}});",
+                        browser.cefBrowser.url, 0
+                    )
+                }
+            }
+            JBCefJSQuery.Response("ok")
+        }
+    }
+}
+
 private data class UndoSingleFileRequest(
     val chatId: String,
     val filePath: String,

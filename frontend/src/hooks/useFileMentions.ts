@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LexicalEditor, $getSelection, $isRangeSelection, $isTextNode } from 'lexical';
 import { calculateSlashMenuLayout, computeViewportTopInset, SlashMenuLayout } from '../components/chat/input/slashCommands';
 import { ACPBridge } from '../utils/bridge';
+
+// A search walks the filename index, so let a burst of keystrokes settle before running one.
+const FILE_SEARCH_DEBOUNCE_MS = 150;
 
 export interface FileMentionItem {
   path: string;
@@ -24,6 +27,19 @@ export function useFileMentions({
   const [files, setFiles] = useState<FileMentionItem[]>([]);
   
   const [queryMatch, setQueryMatch] = useState<{ query: string, startOffset: number, endOffset: number, nodeKey: string } | null>(null);
+  const searchTimeoutRef = useRef<number | undefined>(undefined);
+
+  const searchFilesDebounced = useCallback((query: string) => {
+    window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = window.setTimeout(() => ACPBridge.searchFiles(query), FILE_SEARCH_DEBOUNCE_MS);
+  }, []);
+
+  const clearMention = useCallback(() => {
+    window.clearTimeout(searchTimeoutRef.current);
+    setQueryMatch(null);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(searchTimeoutRef.current), []);
 
   useEffect(() => {
     return ACPBridge.onFilesResult((e) => {
@@ -38,13 +54,13 @@ export function useFileMentions({
       editorState.read(() => {
         const selection = $getSelection();
         if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
-          setQueryMatch(null);
+          clearMention();
           return;
         }
 
         const node = selection.anchor.getNode();
         if (!$isTextNode(node)) {
-          setQueryMatch(null);
+          clearMention();
           return;
         }
 
@@ -65,22 +81,22 @@ export function useFileMentions({
                endOffset: anchorOffset,
                nodeKey: node.getKey()
             });
-            ACPBridge.searchFiles(matchedString);
+            searchFilesDebounced(matchedString);
             return;
           }
         }
-        
-        setQueryMatch(null);
+
+        clearMention();
       });
     });
-  }, [lexicalEditorRef]);
+  }, [clearMention, lexicalEditorRef, searchFilesDebounced]);
 
   const isOpen = queryMatch !== null && files.length > 0;
 
   const close = useCallback(() => {
-    setQueryMatch(null);
+    clearMention();
     setLayout(null);
-  }, []);
+  }, [clearMention]);
 
   const applyFile = useCallback((file: FileMentionItem) => {
     if (!lexicalEditorRef.current || !queryMatch) {

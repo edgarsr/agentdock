@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ToolCallBlock } from '../../../types/chat';
-import { FileCode, ChevronRight, FileDiff } from 'lucide-react';
+import { ChevronRight, FileDiff } from 'lucide-react';
+import { FileIcon } from '../shared/FileIcon';
 import { diff_match_patch } from 'diff-match-patch';
 import hljs, { getLanguageFromPath } from '../../../utils/highlight';
 import { sanitizeCodeHtml } from '../../../utils/sanitizeHtml';
@@ -74,7 +75,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
       }
 
       splitLines.forEach((line) => {
-        let highlightedHtml = line;
+        let highlightedHtml: string;
         try {
           highlightedHtml = sanitizeCodeHtml(hljs.highlight(line, { language, ignoreIllegals: true }).value);
         } catch {
@@ -157,7 +158,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
       >
         <div className="flex-shrink-0 text-foreground-secondary">
-          <FileCode className="text-foreground" size={14} />
+          <FileIcon filePath={diffData?.filePath} className="h-[14px] w-[14px] flex-shrink-0 text-foreground" />
         </div>
         <div className="flex-1 flex items-center gap-2 min-w-0">
           <span
