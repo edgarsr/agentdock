@@ -31,7 +31,6 @@
       "{sessionId}"
     ]
   },
-  "modelChangeStrategy": "restart-resume",
   "agentVersionConfig": {
     "args": ["--cli", "--version"],
     "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"

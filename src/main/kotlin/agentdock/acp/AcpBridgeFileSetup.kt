@@ -19,7 +19,6 @@ import agentdock.changes.ChangesState
 import agentdock.changes.ChangesStateService
 import agentdock.changes.UndoFileHandler
 import agentdock.changes.UndoOperation
-import agentdock.history.AgentDockHistoryService
 import agentdock.utils.LocalFilePathPolicy
 import java.io.File
 

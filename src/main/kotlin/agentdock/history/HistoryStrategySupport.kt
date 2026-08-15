@@ -9,7 +9,6 @@ import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
 
-internal const val MAX_HISTORY_LINES_TO_SCAN = 40
 internal val historyJson = Json { ignoreUnknownKeys = true }
 
 internal fun canonicalHistoryProjectPath(projectPath: String?): String {
@@ -90,12 +89,6 @@ internal fun historyComparablePath(path: String?): String {
     val canonical = runCatching { File(normalized).canonicalPath }.getOrDefault(normalized)
     val looksWindowsPath = isWindowsLikePath(canonical)
     return if (looksWindowsPath) canonical.lowercase() else canonical
-}
-
-internal fun readableHistorySourcePath(path: String?): String {
-    val value = path?.trim().orEmpty()
-    if (value.isEmpty()) return ""
-    return value
 }
 
 internal fun historyHashMd5(value: String): String {

@@ -97,8 +97,4 @@ object ChangesStateService {
         val current = loadState(projectPath, sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
         saveState(projectPath, current.copy(baseToolCallIndex = index, processedFileStates = emptyList()))
     }
-
-    fun deleteState(projectPath: String, sessionId: String, adapterName: String) {
-        AgentDockHistoryService.deleteSessionChanges(projectPath, sessionId, adapterName)
-    }
 }

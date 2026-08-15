@@ -41,10 +41,6 @@ import javax.swing.JProgressBar
 
 
 class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
-    companion object {
-        private val IS_DEV_MODE = BuildConfig.IS_DEV
-    }
-
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val rootPanel = JPanel(BorderLayout())
         val loadingPanel = JPanel(FlowLayout(FlowLayout.CENTER, 0, 0))

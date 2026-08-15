@@ -5,9 +5,8 @@ import {
   $isTextNode,
   DecoratorNode, 
   NodeKey, 
-  EditorConfig, 
-  LexicalNode, 
-  SerializedLexicalNode, 
+  EditorConfig,
+  SerializedLexicalNode,
   Spread, 
   LexicalEditor 
 } from 'lexical';
@@ -54,10 +53,6 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
 
 export function $createImageNode(id: string): ImageNode {
   return new ImageNode(id);
-}
-
-export function $isImageNode(node: LexicalNode | null | undefined): node is ImageNode {
-  return node instanceof ImageNode;
 }
 
 function ImageComponent({ id, nodeKey }: { id: string; nodeKey: NodeKey }) {

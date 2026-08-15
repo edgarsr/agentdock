@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import agentdock.history.AgentDockHistoryService
 import java.io.File
 internal fun AcpBridge.installServiceCallbacks() {
     if (BuildConfig.IS_DEV) {

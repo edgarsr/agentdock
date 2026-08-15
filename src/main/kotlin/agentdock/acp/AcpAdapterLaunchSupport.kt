@@ -14,10 +14,6 @@ internal fun platformBinaryForTarget(
     return if (isWindowsLocalTarget(target)) binary?.win else binary?.unix
 }
 
-internal fun resolveTargetDependenciesPath(
-    target: AcpExecutionTarget
-): String = AcpAdapterPaths.getDependenciesDir().absolutePath
-
 internal fun resolveDownloadPath(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     target: AcpExecutionTarget

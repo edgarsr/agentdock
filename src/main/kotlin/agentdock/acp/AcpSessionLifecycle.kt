@@ -14,7 +14,6 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import agentdock.history.SessionMeta
 
 internal fun AcpClientService.processKey(adapterName: String): String {
     return adapterName
@@ -260,50 +259,6 @@ internal suspend fun AcpClientService.loadSession(
                 )
                 context.ignoreUpdatesUntilPrompt = true
                 context.allowReplayDelivery = true
-                context.statusRef.set(AcpClientService.Status.Ready)
-            } catch (e: Exception) {
-                context.stop()
-                context.statusRef.set(AcpClientService.Status.Error)
-                throw e
-            }
-        }
-    }
-}
-
-@Suppress("OPT_IN_USAGE")
-internal suspend fun AcpClientService.loadConversation(chatId: String, sessionsChain: List<SessionMeta>) {
-    ensureExecutionTargetCurrent()
-    if (sessionsChain.isEmpty()) {
-        throw IllegalArgumentException("Conversation session chain is empty")
-    }
-
-    val context = sessions.computeIfAbsent(chatId) { createAgentContext(chatId) }
-
-    withContext(Dispatchers.IO) {
-        context.lifecycleMutex.withLock {
-            if (context.statusRef.get() != AcpClientService.Status.NotStarted) {
-                context.stop()
-            }
-
-            context.statusRef.set(AcpClientService.Status.Initializing)
-            context.lastHistoryLoadTime = System.currentTimeMillis()
-            context.activeAdapterNameRef.set(null)
-            context.activeModelIdRef.set(null)
-            context.activeModeIdRef.set(null)
-
-            try {
-                sessionsChain.forEachIndexed { index, session ->
-                    loadSessionIntoContext(
-                        context = context,
-                        adapterName = session.adapterName,
-                        sessionId = session.sessionId,
-                        preferredModelId = session.modelId,
-                        preferredModeId = session.modeId,
-                        keepLoadedSessionActive = index == sessionsChain.lastIndex
-                    )
-                }
-
-                context.ignoreUpdatesUntilPrompt = true
                 context.statusRef.set(AcpClientService.Status.Ready)
             } catch (e: Exception) {
                 context.stop()

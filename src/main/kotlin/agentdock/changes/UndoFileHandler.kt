@@ -188,8 +188,4 @@ object UndoFileHandler {
     internal fun isRestorablePath(filePath: String): Boolean {
         return LocalFilePathPolicy.isRestorableLocalPath(filePath)
     }
-
-    internal fun isPathInsideProject(projectBase: String, filePath: String): Boolean {
-        return LocalFilePathPolicy.isInsideProject(projectBase, filePath)
-    }
 }

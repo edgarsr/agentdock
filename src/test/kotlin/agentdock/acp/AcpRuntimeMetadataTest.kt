@@ -1,7 +1,6 @@
 package agentdock.acp
 
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -374,7 +373,9 @@ class AcpRuntimeMetadataTest {
         assertEquals(listOf("fast_mode"), updated.configOptionsByModel["model-b"]?.map { it.id })
         assertEquals(listOf("model", "mode"), updated.configOptions.map { it.id })
         val runtime = updated.toRuntimeMetadata(adapterInfo())
-        assertEquals("new-mode", runtime.currentModeId)
+        // The cached catalog never carries current values; those come from the live
+        // session, or from the preferences file when a conversation starts.
+        assertEquals(null, runtime.currentModeId)
         assertEquals(null, runtime.currentReasoningEffortId)
         assertEquals(listOf("model", "mode"), runtime.configOptionsForModel("model-a").map { it.id })
         assertEquals(listOf("fast_mode"), runtime.configOptionsForModel("model-b").map { it.id })
@@ -404,11 +405,14 @@ class AcpRuntimeMetadataTest {
         val cached = existing.updatedWithSnapshot(adapterInfo(), "1.0.0", metadata, refreshedAtMillis = 100L)
         val restored = cached.toRuntimeMetadata(adapterInfo())
 
-        assertEquals("build", restored.currentModeId)
+        // The option catalog survives the cache round-trip, but current values are
+        // intentionally dropped: they come from the live session, or from the
+        // preferences file when a conversation starts.
         assertEquals(listOf("build"), restored.availableModes.map { it.id })
-        assertEquals("medium", restored.currentReasoningEffortId)
         assertEquals(listOf("medium"), restored.availableReasoningEfforts.map { it.id })
-        assertEquals("brief", restored.configOptions.first { it.id == "verbosity" }.currentValue)
+        assertEquals(null, restored.currentModeId)
+        assertEquals(null, restored.currentReasoningEffortId)
+        assertEquals("", restored.configOptions.first { it.id == "verbosity" }.currentValue)
     }
 
     @Test

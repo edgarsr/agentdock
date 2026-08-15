@@ -34,7 +34,6 @@ class AcpBridge(
     internal var cancelAgentInstallQuery: JBCefJSQuery? = null
     internal var deleteAgentQuery: JBCefJSQuery? = null
     internal var updateAgentQuery: JBCefJSQuery? = null
-    internal var toggleAgentEnabledQuery: JBCefJSQuery? = null
     internal var loginAgentQuery: JBCefJSQuery? = null
     internal var logoutAgentQuery: JBCefJSQuery? = null
     internal var cancelAgentAuthQuery: JBCefJSQuery? = null

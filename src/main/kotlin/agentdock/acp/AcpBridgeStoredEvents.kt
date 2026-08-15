@@ -175,7 +175,7 @@ internal fun mergeEditDiffContent(
             val replacements = path?.let(incomingDiffsByPath::get)
             if (replacements == null) {
                 add(item)
-            } else if (path != null && emittedPaths.add(path)) {
+            } else if (emittedPaths.add(path)) {
                 replacements.forEach { replacement -> add(replacement) }
             }
         }
@@ -250,16 +250,6 @@ internal fun AcpBridge.storedReplayPromptBlockFromContentBlock(content: ContentB
     return buildJsonObject {
         put("type", serialized.type)
         put("text", sanitizedText)
-        serialized.data?.let { put("data", it) }
-        serialized.mimeType?.let { put("mimeType", it) }
-    }
-}
-
-internal fun AcpBridge.storedPromptBlockFromContentBlock(content: ContentBlock): JsonObject? {
-    val serialized = serializeContentBlock(content) ?: return null
-    return buildJsonObject {
-        put("type", serialized.type)
-        serialized.text?.let { put("text", it) }
         serialized.data?.let { put("data", it) }
         serialized.mimeType?.let { put("mimeType", it) }
     }

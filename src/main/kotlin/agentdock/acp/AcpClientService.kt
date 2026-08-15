@@ -1,20 +1,15 @@
 package agentdock.acp
 
 import com.agentclientprotocol.client.Client
-import com.agentclientprotocol.client.ClientInfo
-import com.agentclientprotocol.client.ClientOperationsFactory
 import com.agentclientprotocol.client.ClientSession
 import com.agentclientprotocol.common.ClientSessionOperations
-import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.*
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.rpc.JsonRpcNotification
-import com.agentclientprotocol.rpc.MethodName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -220,7 +215,6 @@ class AcpClientService private constructor(val project: Project) {
 
     fun status(chatId: String): Status = sessions[chatId]?.statusRef?.get() ?: Status.NotStarted
     fun sessionId(chatId: String): String? = sessions[chatId]?.sessionIdRef?.get()
-    fun activeModelId(chatId: String): String? = sessions[chatId]?.activeModelIdRef?.get()
     fun activeModeId(chatId: String): String? = sessions[chatId]?.activeModeIdRef?.get()
     fun adapterInitializationStatus(adapterName: String): AdapterInitializationStatus {
         return adapterInitializationState[adapterName] ?: AdapterInitializationStatus.NotStarted
@@ -311,14 +305,6 @@ class AcpClientService private constructor(val project: Project) {
         }
 
         return "Connection to the agent process was lost."
-    }
-
-    fun getAvailableModels(adapterName: String? = null): List<AcpAdapterConfig.ModelInfo> {
-        val name = adapterName ?: AcpAdapterPaths.resolveAdapterName(null)
-        if (!AcpAdapterPaths.isDownloaded(name)) {
-            return emptyList()
-        }
-        return adapterRuntimeMetadataMap[name]?.availableModels ?: emptyList()
     }
 
     internal inner class AgentContext(val chatId: String) {

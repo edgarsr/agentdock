@@ -67,7 +67,7 @@ class AcpPlatformCompatibilityTest {
         val adapter = AcpAdapterConfig.getAdapterInfo("grok-build")
 
         assertEquals("@xai-official/grok", adapter.distribution.packageName)
-        assertEquals(null, adapter.distribution.minimumVersion)
+        assertEquals("1.0.4", adapter.distribution.minimumVersion)
         assertEquals(listOf("--no-auto-update", "agent", "stdio"), adapter.args)
         assertEquals("grokCliSessions", adapter.sessionListMethod)
         assertEquals("grokCliSessionDelete", adapter.sessionDeleteMethod)

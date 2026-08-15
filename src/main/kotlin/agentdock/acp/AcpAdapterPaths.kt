@@ -42,10 +42,6 @@ object AcpAdapterPaths {
 
     internal fun getExecutionTarget(): AcpExecutionTarget = currentTarget()
 
-    internal fun getTargetDependenciesPath(
-        target: AcpExecutionTarget = currentTarget()
-    ): String = resolveTargetDependenciesPath(target)
-
     internal fun getDownloadPath(
         adapterName: String? = null,
         target: AcpExecutionTarget = currentTarget()
@@ -76,12 +72,6 @@ object AcpAdapterPaths {
     internal fun deleteAdapter(adapterName: String? = null, target: AcpExecutionTarget = currentTarget()): Boolean {
         val adapterInfo = getAdapterInfo(adapterName)
         return deleteLocalAdapterRuntime(File(getDependenciesDir(), adapterInfo.id), adapterInfo.id, target)
-    }
-
-    suspend fun getAdapterRoot(adapterName: String? = null): File? {
-        val adapterInfo = getAdapterInfo(adapterName)
-        val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
-        return if (isDownloaded(adapterName, AcpExecutionTarget.LOCAL)) runtimeDir else null
     }
 
     fun applyPatches(
@@ -153,12 +143,6 @@ object AcpAdapterPaths {
             "ACP adapter name is required. Provide it explicitly or set system property '$ADAPTER_NAME_OVERRIDE_PROPERTY'."
         )
     }
-
-    internal fun resolveLaunchFile(
-        adapterRoot: File,
-        adapterInfo: AcpAdapterConfig.AdapterInfo,
-        target: AcpExecutionTarget = currentTarget()
-    ): File? = resolveAdapterLaunchFile(adapterRoot, adapterInfo, target)
 
     internal fun resolveLaunchPath(
         adapterRootPath: String,

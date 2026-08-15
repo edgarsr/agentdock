@@ -19,9 +19,6 @@ object AudioCaptureManager {
     private val recording = AtomicBoolean(false)
 
     @Synchronized
-    fun isRecording(): Boolean = recording.get()
-
-    @Synchronized
     fun startRecording(): File {
         if (recording.get()) {
             throw IllegalStateException("Audio recording is already active.")
