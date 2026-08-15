@@ -78,6 +78,19 @@ tasks {
     val npmBuild by registering(Exec::class) {
         workingDir = file("frontend")
         commandLine(npm, "run", "build")
+
+        inputs.dir("frontend/src")
+        inputs.files(
+            "frontend/index.html",
+            "frontend/package.json",
+            "frontend/package-lock.json",
+            "frontend/postcss.config.js",
+            "frontend/tailwind.config.js",
+            "frontend/tsconfig.json",
+            "frontend/tsconfig.node.json",
+            "frontend/vite.config.ts",
+        )
+        outputs.dir("src/main/resources/webview")
     }
 
     compileKotlin {
