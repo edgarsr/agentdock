@@ -99,6 +99,7 @@ private fun AcpClientService.updateRuntimeMetadataFromConfigOptionsNotification(
 ) {
     val (sessionId, configOptions) = extractConfigOptionsUpdate(params) ?: return
     if (configProbeSessionKeys.contains(configProbeSessionKey(adapterName, sessionId))) return
+    if (replayOwnerBySessionId.containsKey(sessionId)) return
     val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
     val targetContext = synchronized(liveOwnerBySessionId) {
         liveOwnerBySessionId[sessionId]?.let { ownerChatId -> sessions[ownerChatId] }

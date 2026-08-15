@@ -23,6 +23,9 @@ internal fun AcpBridge.installServiceCallbacks() {
         scope.launch(Dispatchers.IO) { pushAdapters() }
     }
     service.setOnSessionConfigOptionsChanged { chatId, metadata ->
+        val adapterId = service.activeAdapterName(chatId) ?: return@setOnSessionConfigOptionsChanged
+        AcpAgentPreferencesStore.rememberConfigOptions(adapterId, metadata.configOptions.associate { it.id to it.currentValue })
+        pushAdapters()
         pushSessionConfigOptions(chatId, metadata)
     }
     service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->

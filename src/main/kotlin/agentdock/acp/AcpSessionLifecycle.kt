@@ -113,6 +113,7 @@ internal suspend fun AcpClientService.startAgent(
                 } else {
                     context.runtimeMetadataRef.set(runtimeMetadata)
                 }
+                context.activeAdapterNameRef.set(requestedAdapterName)
                 val applied = applySessionConfigOptions(
                     context = context,
                     adapterName = requestedAdapterName,
@@ -120,7 +121,6 @@ internal suspend fun AcpClientService.startAgent(
                 )
                 if (!applied) throw IllegalStateException("Failed to apply session config options")
 
-                context.activeAdapterNameRef.set(requestedAdapterName)
                 context.statusRef.set(AcpClientService.Status.Ready)
             } catch (e: Exception) {
                 context.stop()
@@ -331,7 +331,6 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
 
     if (keepLoadedSessionActive) {
         context.session = session
-        context.activeAdapterNameRef.set(requestedAdapterName)
 
         val runtimeMetadata = loadedSessionMetadata ?: adapterRuntimeMetadataMap[requestedAdapterName]
         if (loadedSessionMetadata != null) {
@@ -339,6 +338,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
         } else {
             context.runtimeMetadataRef.set(runtimeMetadata)
         }
+        context.activeAdapterNameRef.set(requestedAdapterName)
         if (loadedSessionMetadata == null) {
             preferredModelId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModelIdRef::set)
             preferredModeId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModeIdRef::set)

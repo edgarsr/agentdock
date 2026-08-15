@@ -95,7 +95,6 @@ private suspend fun AcpBridge.importConversationFromAgent(
     pushConversationReplayLoaded(chatId, capturedConversation ?: ConversationReplayData())
     pushStatus(chatId, service.status(chatId).name.lowercase())
     pushSessionId(chatId, service.sessionId(chatId))
-    pushMode(chatId, service.activeModeId(chatId))
 }
 
 internal fun AcpBridge.installConversationHistoryQueries() {
@@ -135,7 +134,6 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                                     pushAdapters()
                                     pushStatus(chatId, service.status(chatId).name.lowercase())
                                     pushSessionId(chatId, service.sessionId(chatId))
-                                    pushMode(chatId, service.activeModeId(chatId))
 
                                     if (!livePromptCaptures.containsKey(chatId) &&
                                         conversationWasContinuedElsewhere(probe, storedConversation)
