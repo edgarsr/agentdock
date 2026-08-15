@@ -1,5 +1,6 @@
 package agentdock.acp
 
+import agentdock.BuildConfig
 import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.ui.jcef.JBCefJSQuery
@@ -12,7 +13,9 @@ import kotlinx.serialization.json.*
 import agentdock.history.AgentDockHistoryService
 import java.io.File
 internal fun AcpBridge.installServiceCallbacks() {
-    service.setOnLogEntry { pushLogEntry(it) }
+    if (BuildConfig.IS_DEV) {
+        service.setOnLogEntry { pushLogEntry(it) }
+    }
     service.setOnPermissionRequest { pushPermissionRequest(it) }
     service.setOnAvailableCommands { adapterId, commands ->
         pushAvailableCommands(adapterId, commands)

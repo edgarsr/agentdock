@@ -8,6 +8,7 @@ import com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.transport.StdioTransport
 import java.io.File
+import java.io.OutputStream
 import java.util.concurrent.TimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -142,10 +143,21 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
         )
 
         Thread {
-            process.errorStream.bufferedReader().useLines { lines ->
-                lines.filter(String::isNotBlank).forEach { line ->
-                    onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line, AcpLogEntry.Category.STDERR))
+            if (BuildConfig.IS_DEV) {
+                process.errorStream.bufferedReader().useLines { lines ->
+                    lines.filter(String::isNotBlank).forEach { line ->
+                        onLogEntry(
+                            AcpLogEntry(
+                                adapterInfo.id,
+                                AcpLogEntry.Direction.RECEIVED,
+                                line,
+                                AcpLogEntry.Category.STDERR
+                            )
+                        )
+                    }
                 }
+            } else {
+                process.errorStream.use { it.copyTo(OutputStream.nullOutputStream()) }
             }
         }.apply {
             isDaemon = true
@@ -155,14 +167,14 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
 
         val inputStream = if (BuildConfig.IS_DEV) {
             LineLoggingInputStream(process.inputStream) { line ->
-                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.RECEIVED, line))
+                onLogEntry(AcpLogEntry(adapterInfo.id, AcpLogEntry.Direction.RECEIVED, line))
             }
         } else {
             process.inputStream
         }
         val outputStream = if (BuildConfig.IS_DEV) {
             LineLoggingOutputStream(process.outputStream) { line ->
-                onLogEntry(AcpLogEntry(AcpLogEntry.Direction.SENT, line))
+                onLogEntry(AcpLogEntry(adapterInfo.id, AcpLogEntry.Direction.SENT, line))
             }
         } else {
             process.outputStream

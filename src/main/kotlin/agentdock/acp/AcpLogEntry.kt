@@ -4,6 +4,7 @@ package agentdock.acp
  * A single raw JSON-RPC message captured for the debug log.
  */
 data class AcpLogEntry(
+    val adapterId: String,
     val direction: Direction,
     val json: String,
     val category: Category = Category.PROTOCOL,

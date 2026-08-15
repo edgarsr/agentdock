@@ -213,7 +213,8 @@ export const ACPBridge = {
         try {
           parsed = JSON.parse(payload.json);
         } catch (_) {}
-        if (isDev) console.log('[ACP JSON]', payload.direction, parsed);
+        const endpointDirection = payload.direction === 'SENT' ? 'TO' : 'FROM';
+        if (isDev) console.log('[ACP JSON]', payload.direction, endpointDirection, payload.adapterId, parsed);
 
         const message = parsed as Record<string, any> | null;
         if (message && typeof message === 'object') {

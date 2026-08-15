@@ -63,6 +63,7 @@ val devMode = providers.gradleProperty("devMode").map { it.toBoolean() }.getOrEl
 val generateBuildConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/buildConfig")
     val isDev = devMode
+    inputs.property("devMode", isDev)
     outputs.dir(outputDir)
     doLast {
         val file = outputDir.get().asFile.resolve("agentdock/BuildConfig.kt")
