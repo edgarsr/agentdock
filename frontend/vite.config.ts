@@ -8,7 +8,9 @@ export default defineConfig({
   build: {
     outDir: '../src/main/resources/webview',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 800,
+    // The UI ships as a single inlined <script> (see AssetLoader.kt) and is read
+    // from the plugin JAR, not over the network, so code splitting does not apply.
+    chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name].js`,
