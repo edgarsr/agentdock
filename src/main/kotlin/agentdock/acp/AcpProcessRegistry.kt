@@ -22,7 +22,11 @@ internal object AcpProcessRegistry {
         currentOwnerId = "${ProcessHandle.current().pid()}-${UUID.randomUUID()}",
         isProcessAlive = { pid -> runCatching { ProcessHandle.of(pid).map { it.isAlive }.orElse(false) }.getOrDefault(false) },
         destroyRegisteredProcess = { pid, root -> AcpProcessUtils.destroyProcessTreeIfUsingAdapterRoot(pid, File(root)) },
-        stopProcessesUsingRoot = { root -> AcpProcessUtils.stopProcessesUsingAdapterRootPath(File(root)) }
+        // Only reached while the last owner closes, where nothing will touch the adapter files
+        // again, so the kill is issued without waiting for the processes to confirm they died.
+        stopProcessesUsingRoots = { roots ->
+            AcpProcessUtils.stopProcessesUsingAdapterRootPaths(roots.map(::File), awaitExit = false)
+        }
     )
 
     // The registry is best-effort housekeeping: a failure here must never reach the UI or stop the
@@ -56,7 +60,7 @@ internal class AcpProcessRegistryStore(
     private val currentOwnerId: String,
     private val isProcessAlive: (Long) -> Boolean,
     private val destroyRegisteredProcess: (Long, String) -> Unit,
-    private val stopProcessesUsingRoot: (String) -> Unit
+    private val stopProcessesUsingRoots: (List<String>) -> Unit
 ) {
     private val ownersDir = File(baseDir, "owners")
     private val rootsDir = File(baseDir, "roots")
@@ -111,7 +115,7 @@ internal class AcpProcessRegistryStore(
             .map(::normalizeRoot)
             .filter { it.isNotBlank() }
             .distinct()
-        roots.forEach(stopProcessesUsingRoot)
+        stopProcessesUsingRoots(roots)
         rootsDir.listFiles().orEmpty().forEach { it.delete() }
     }
 

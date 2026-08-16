@@ -9,6 +9,7 @@ import com.agentclientprotocol.rpc.JsonRpcNotification
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.ShutDownTracker
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -66,25 +68,59 @@ class AcpClientService private constructor(val project: Project) {
     }
 
     companion object {
+        private const val CLEANUP_JOIN_TIMEOUT_MS = 3000L
+
         private val instances = ConcurrentHashMap<Project, AcpClientService>()
 
-        fun getInstance(project: Project): AcpClientService {
-            AcpProcessRegistry.registerOwner()
-            val service = instances.computeIfAbsent(project) { p ->
+        private val pendingCleanups: MutableSet<Thread> =
+            Collections.newSetFromMap(ConcurrentHashMap<Thread, Boolean>())
+        private val shutdownTaskRegistered = AtomicBoolean(false)
+
+        // Kept free of side effects: this runs on the EDT from the tool window and the commit action,
+        // so registry I/O and adapter initialization belong to AcpStartupActivity instead.
+        fun getInstance(project: Project): AcpClientService =
+            instances.computeIfAbsent(project) { p ->
                 val created = AcpClientService(p)
-                Disposer.register(p, Disposable {
-                    created.shutdown()
-                    instances.remove(p)
-                    if (instances.isEmpty()) {
-                        AcpProcessRegistry.closeOwnerAndCleanupIfLast()
-                    }
-                })
+                Disposer.register(p, Disposable { cleanupInBackground(created, p) })
                 created
             }
-            service.initializeDownloadedAdaptersInBackground()
-            return service
+
+        /**
+         * Project disposal runs on the EDT, and stopping agent processes must never hold the IDE
+         * window open. The work is handed to a plain thread that JVM shutdown waits for, so the
+         * kill is still guaranteed to be issued - see "Files written on the user's disk" in
+         * AGENTS.md.
+         */
+        private fun cleanupInBackground(service: AcpClientService, project: Project) {
+            instances.remove(project)
+            val lastOwner = instances.isEmpty()
+            registerShutdownTaskOnce()
+
+            val thread = Thread({
+                try {
+                    service.shutdown()
+                    if (lastOwner) {
+                        AcpProcessRegistry.closeOwnerAndCleanupIfLast()
+                    }
+                } finally {
+                    pendingCleanups.remove(Thread.currentThread())
+                }
+            }, "AgentDock process cleanup")
+            thread.isDaemon = true
+            pendingCleanups.add(thread)
+            thread.start()
         }
 
+        private fun registerShutdownTaskOnce() {
+            if (!shutdownTaskRegistered.compareAndSet(false, true)) return
+            runCatching {
+                ShutDownTracker.getInstance().registerShutdownTask {
+                    pendingCleanups.toList().forEach { thread ->
+                        runCatching { thread.join(CLEANUP_JOIN_TIMEOUT_MS) }
+                    }
+                }
+            }
+        }
     }
     @Volatile
     internal var logCallback: ((AcpLogEntry) -> Unit)? = null

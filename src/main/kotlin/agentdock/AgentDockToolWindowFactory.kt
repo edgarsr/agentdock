@@ -25,6 +25,7 @@ import agentdock.acp.AcpClientService
 import agentdock.acp.AcpBridge
 import agentdock.acp.pushAdapters
 import agentdock.acp.injectDebugApi
+import agentdock.acp.initializeDownloadedAdaptersInBackground
 import agentdock.acp.injectReadySignal
 import agentdock.acp.shutdown
 import agentdock.history.HistoryBridge
@@ -65,6 +66,12 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
             } catch (e: Exception) {
                 startupError = e
                 false
+            }
+
+            // The tool window can be restored while the project is still opening, so adapter
+            // initialization is warmed up here rather than relying on AcpStartupActivity ordering.
+            if (!project.isDisposed) {
+                runCatching { AcpClientService.getInstance(project).initializeDownloadedAdaptersInBackground() }
             }
 
             try {

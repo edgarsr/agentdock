@@ -363,7 +363,7 @@ class AcpPlatformCompatibilityTest {
             currentOwnerId = ownerId,
             isProcessAlive = { pid -> pid in alivePids },
             destroyRegisteredProcess = { pid, _ -> destroyedPids.add(pid) },
-            stopProcessesUsingRoot = { root -> cleanedRoots.add(root) }
+            stopProcessesUsingRoots = { roots -> cleanedRoots.addAll(roots) }
         )
     }
 }

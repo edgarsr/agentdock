@@ -8,6 +8,7 @@ import agentdock.settings.GlobalSettingsStore
 class AcpStartupActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         McpConfigStore.ensureConfigFileExists()
+        AcpProcessRegistry.registerOwner()
         AcpClientService.getInstance(project).initializeDownloadedAdaptersInBackground()
         if (GlobalSettingsStore.load().quotaWidgetEnabled) {
             AcpQuotaService.getInstance().updateQuotas()
