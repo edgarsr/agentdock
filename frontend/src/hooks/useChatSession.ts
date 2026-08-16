@@ -116,6 +116,10 @@ export function useChatSession(
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
 
+  useEffect(() => () => {
+    ACPBridge.clearConversationToolCache(conversationId);
+  }, [conversationId]);
+
   const pendingPromptRef = useRef<any[] | null>(null);
   const pendingHandoffRef = useRef<PendingHandoffContext | null>(null);
   const consumedHandoffIdRef = useRef<string | null>(null);
@@ -131,7 +135,6 @@ export function useChatSession(
   const lastMetadataFingerprintRef = useRef<string>('');
   const allowMetadataUpdateRef = useRef(!historySession);
   const touchUpdatedAtRef = useRef(!historySession);
-  const ignoreReplayChunksRef = useRef(!!historySession);
   const pinnedAgentSnapshotRef = useRef<PinnedAgentSnapshot | null>(null);
   const recoveryInFlightRef = useRef(false);
   const initialUserMessageCountRef = useRef(initialMessages.filter((message) => message.role === 'user').length);
@@ -216,6 +219,7 @@ export function useChatSession(
     availableAgents,
     effectiveSelectedAgent,
     selectedAgentId,
+    sessionActive: status === 'ready' || status === 'prompting',
   });
 
   useEffect(() => ACPBridge.onSessionConfigOptions((event) => {
@@ -394,15 +398,11 @@ export function useChatSession(
   // Chat Event Listeners (filtered by conversationId)
   // =========================================================================
   useEffect(() => {
-    // --- UNIFIED content handler: one handler for both streaming and replay ---
     const unsubContent = ACPBridge.onContentChunk((e) => {
       const chunk = e.detail.chunk;
       if (chunk.chatId !== conversationId) return;
-      if (chunk.isReplay && ignoreReplayChunksRef.current) {
-        return;
-      }
       enqueueChunk(chunk);
-      if (!chunk.isReplay && chunk.type === 'prompt_done') {
+      if (chunk.type === 'prompt_done') {
         markFlushUnscheduled();
         applyBufferedChunks('prompt-done');
       }
@@ -411,7 +411,6 @@ export function useChatSession(
     const unsubConversationReplayLoaded = ACPBridge.onConversationReplayLoaded((e) => {
       const payload = e.detail.payload;
       if (payload.chatId !== conversationId) return;
-      ignoreReplayChunksRef.current = true;
       clearBufferedChunks();
       setHistoryMessages(buildReplayMessages(payload.data));
       setIsHistoryReplaying(false);
@@ -464,7 +463,7 @@ export function useChatSession(
           JSON.stringify(blocksToSend),
           forkBaseToPersist,
           selectedAgentId,
-          configValues
+          {}
         ).then(() => {
           forkBaseRef.current = undefined;
           consumeHandoff();
@@ -556,7 +555,6 @@ export function useChatSession(
     setLiveMessages([]);
     setStatus('initializing');
     setIsHistoryReplaying(true);
-    ignoreReplayChunksRef.current = true;
 
     startedAgentIdRef.current = historySession.adapterName;
     startedModelIdRef.current = historySession.modelId || '';

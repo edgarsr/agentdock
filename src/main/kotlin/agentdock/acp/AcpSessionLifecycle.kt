@@ -139,32 +139,41 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     if (context.session == null) return false
     val initialMetadata = context.runtimeMetadataRef.get() ?: return false
     if (preferredValues.isEmpty()) return true
-    if (initialMetadata.usesAdapterConfigOptions) {
-        return applyAdapterConfigOptions(context, adapterName, preferredValues)
-    }
-    val protocol = context.sharedProcess?.protocol ?: return false
-    val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
-    val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
-    val orderedConfigIds = buildList {
-        modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
-        addAll(preferredValues.keys.filterNot { it == modelOption?.id })
-    }
+    context.configOptionsUpdateInProgress = true
+    return try {
+        if (initialMetadata.usesAdapterConfigOptions) {
+            applyAdapterConfigOptions(context, adapterName, preferredValues)
+        } else {
+            val protocol = context.sharedProcess?.protocol ?: return false
+            val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
+            val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
+            val orderedConfigIds = buildList {
+                modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
+                addAll(preferredValues.keys.filterNot { it == modelOption?.id })
+            }
 
-    for (configId in orderedConfigIds) {
-        val requestedValue = preferredValues.getValue(configId).trim()
-        val metadata = context.runtimeMetadataRef.get() ?: return false
-        // Applying one option can narrow the rest: agents drop options that the newly selected model
-        // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
-        val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
-        if (option.type == "select" && option.options.isEmpty()) continue
-        if (!option.accepts(requestedValue)) return false
-        if (context.activeConfigValues[configId] == requestedValue) continue
-        val response = runCatching {
-            protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
-        }.getOrElse { return false }
-        updateMetadataFromConfigOptionResponse(adapterName, response, context)
+            for (configId in orderedConfigIds) {
+                val requestedValue = preferredValues.getValue(configId).trim()
+                val metadata = context.runtimeMetadataRef.get() ?: return false
+                // Applying one option can narrow the rest: agents drop options that the newly selected model
+                // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
+                val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
+                if (option.type == "select" && option.options.isEmpty()) continue
+                if (!option.accepts(requestedValue)) return false
+                if (context.activeConfigValues[configId] == requestedValue) continue
+                val response = runCatching {
+                    protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
+                }.getOrElse { return false }
+                updateMetadataFromConfigOptionResponse(adapterName, response, context)
+            }
+            true
+        }
+    } finally {
+        context.configOptionsUpdateInProgress = false
+        if (context.runtimeMetadataRef.get() != initialMetadata) {
+            publishSessionConfigOptions(context)
+        }
     }
-    return true
 }
 
 @Suppress("OPT_IN_USAGE")

@@ -261,14 +261,17 @@ export interface HistorySessionMeta {
 export interface ContentChunk {
   chatId: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
+  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'code_ref' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
   text?: string;
   data?: string;
   path?: string;
   name?: string;
   mimeType?: string;
-  isReplay: boolean;
-  replaySeq?: number;
+  isInline?: boolean;
+  startLine?: number;
+  endLine?: number;
+  /** Set only for chunks synthesized from stored conversation data, never for live agent output. */
+  isReplay?: boolean;
   // tool_call specific
   toolCallId?: string;
   toolKind?: string;
@@ -344,11 +347,11 @@ export interface ToolCallDiff {
 }
 
 export interface ToolCallEvent {
+  eventId?: string;
   toolCallId: string;
   title: string;
   kind?: string;
   status?: string;
-  isReplay?: boolean;
   diffs: ToolCallDiff[];
   locations?: { path: string; line?: number }[];
 }
@@ -365,7 +368,7 @@ export interface FileChangeSummary {
   additions: number;
   deletions: number;
   operations: FileChangeOperation[];
-  latestToolCallIndex: number;
+  toolCallIds: string[];
 }
 
 export interface FileChangeStatsPayload {
@@ -381,13 +384,13 @@ export interface FileChangeStatsResultPayload {
 
 export interface ProcessedFileState {
   filePath: string;
-  toolCallIndex: number;
+  toolCallIds: string[];
 }
 
 export interface ChangesState {
   sessionId: string;
   adapterName: string;
-  baseToolCallIndex: number;
+  keptToolCallIds: string[];
   processedFileStates: ProcessedFileState[];
   hasPluginEdits?: boolean;
 }
@@ -540,7 +543,6 @@ declare global {
     __undoAllFiles?: (payload: string) => void;
     __processFile?: (payload: string) => void;
     __keepAll?: (payload: string) => void;
-    __removeProcessedFiles?: (payload: string) => void;
     __getChangesState?: (payload: string) => void;
     __computeFileChangeStats?: (payload: string) => void;
     __showDiff?: (payload: string) => void;

@@ -317,6 +317,7 @@ class AcpClientService private constructor(val project: Project) {
         val activeReasoningEffortIdRef = AtomicReference<String?>(null)
         val activeConfigValues = ConcurrentHashMap<String, String>()
         val runtimeMetadataRef = AtomicReference<AdapterRuntimeMetadata?>(null)
+        @Volatile var configOptionsUpdateInProgress: Boolean = false
         val promptGeneration = AtomicLong(0)
         @Volatile var lastHistoryLoadTime: Long = System.currentTimeMillis()
         @Volatile var allowReplayDelivery: Boolean = true
@@ -340,6 +341,7 @@ class AcpClientService private constructor(val project: Project) {
             activeReasoningEffortIdRef.set(null)
             activeConfigValues.clear()
             runtimeMetadataRef.set(null)
+            configOptionsUpdateInProgress = false
             promptGeneration.incrementAndGet()
             lastHistoryLoadTime = 0
             allowReplayDelivery = true
@@ -355,6 +357,7 @@ class AcpClientService private constructor(val project: Project) {
             session = null
             sharedProcess = null
             promptGeneration.incrementAndGet()
+            configOptionsUpdateInProgress = false
             ignoreUpdatesUntilPrompt = false
             allowReplayDelivery = true
             pendingRequests.values.forEach {

@@ -38,7 +38,6 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
     val undoAllFilesInject = undoAllFilesQuery?.inject("payload") ?: ""
     val processFileInject = processFileQuery?.inject("payload") ?: ""
     val keepAllInject = keepAllQuery?.inject("payload") ?: ""
-    val removeProcessedFilesInject = removeProcessedFilesQuery?.inject("payload") ?: ""
     val getChangesStateInject = getChangesStateQuery?.inject("payload") ?: ""
     val computeFileChangeStatsInject = computeFileChangeStatsQuery?.inject("payload") ?: ""
     val showDiffInject = showDiffQuery?.inject("payload") ?: ""
@@ -130,9 +129,6 @@ internal fun AcpBridge.injectDebugApi(cefBrowser: CefBrowser) {
             };
             window.__keepAll = function(payload) {
                 try { $keepAllInject } catch (e) { }
-            };
-            window.__removeProcessedFiles = function(payload) {
-                try { $removeProcessedFilesInject } catch (e) { }
             };
             window.__getChangesState = function(payload) {
                 try { $getChangesStateInject } catch (e) { }

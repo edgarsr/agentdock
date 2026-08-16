@@ -98,14 +98,14 @@ internal fun AcpBridge.installFileChangeQueries() {
                 val sessionId = obj["sessionId"]?.jsonPrimitive?.content ?: ""
                 val adapterName = obj["adapterName"]?.jsonPrimitive?.content ?: ""
                 val filePath = obj["filePath"]?.jsonPrimitive?.content ?: ""
-                val toolCallIndex = obj["toolCallIndex"]?.jsonPrimitive?.content?.toIntOrNull()
-                if (sessionId.isNotEmpty() && adapterName.isNotEmpty() && filePath.isNotEmpty() && toolCallIndex != null) {
+                val toolCallIds = obj["toolCallIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty()
+                if (sessionId.isNotEmpty() && adapterName.isNotEmpty() && filePath.isNotEmpty() && toolCallIds.isNotEmpty()) {
                     ChangesStateService.markFileProcessed(
                         service.project.basePath.orEmpty(),
                         sessionId,
                         adapterName,
                         filePath,
-                        toolCallIndex
+                        toolCallIds
                     )
                 }
             }
@@ -119,24 +119,14 @@ internal fun AcpBridge.installFileChangeQueries() {
                 val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
                 val sessionId = obj["sessionId"]?.jsonPrimitive?.content ?: ""
                 val adapterName = obj["adapterName"]?.jsonPrimitive?.content ?: ""
-                val toolCallIndex = obj["toolCallIndex"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                val toolCallIds = obj["toolCallIds"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty()
                 if (sessionId.isNotEmpty() && adapterName.isNotEmpty()) {
-                    ChangesStateService.setBaseIndex(service.project.basePath.orEmpty(), sessionId, adapterName, toolCallIndex)
-                }
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    removeProcessedFilesQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            runCatching {
-                val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
-                val sessionId = obj["sessionId"]?.jsonPrimitive?.content ?: ""
-                val adapterName = obj["adapterName"]?.jsonPrimitive?.content ?: ""
-                val filePaths = obj["filePaths"]?.jsonArray?.mapNotNull { it.jsonPrimitive?.content } ?: emptyList()
-                if (sessionId.isNotEmpty() && adapterName.isNotEmpty() && filePaths.isNotEmpty()) {
-                    ChangesStateService.removeProcessedFiles(service.project.basePath.orEmpty(), sessionId, adapterName, filePaths)
+                    ChangesStateService.markAllProcessed(
+                        service.project.basePath.orEmpty(),
+                        sessionId,
+                        adapterName,
+                        toolCallIds
+                    )
                 }
             }
             JBCefJSQuery.Response("ok")

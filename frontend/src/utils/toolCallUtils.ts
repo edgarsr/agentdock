@@ -129,12 +129,89 @@ export function mergeToolCallEvent(existing: ToolCallEvent, incoming: ToolCallEv
     title: incoming.title || existing.title,
     kind: incoming.kind || existing.kind,
     status: incoming.status || existing.status,
-    isReplay: incoming.isReplay ?? existing.isReplay,
     diffs: incoming.diffs.length > 0
       ? mergeToolCallDiffEntries(existing.diffs, incoming.diffs)
       : existing.diffs,
     locations: incoming.locations || existing.locations,
   };
+}
+
+/** Apply the accumulation rules used by the live tool-call stream. */
+export function applyToolCallEvent(
+  events: ToolCallEvent[],
+  incoming: ToolCallEvent,
+  eventType: 'tool_call' | 'tool_call_update'
+): ToolCallEvent[] {
+  const existingIndex = events.findIndex((event) => event.toolCallId === incoming.toolCallId);
+
+  if (incoming.diffs.length === 0) {
+    // A status-only update can finalize an existing edit, but must not create one.
+    if (eventType !== 'tool_call_update' || !incoming.toolCallId || !incoming.status || existingIndex < 0) {
+      return events;
+    }
+  }
+
+  if (existingIndex < 0) return [...events, incoming];
+
+  const updated = [...events];
+  updated[existingIndex] = mergeToolCallEvent(updated[existingIndex], incoming);
+  return updated;
+}
+
+export function stableToolCallEventId(
+  adapterName: string,
+  sessionId: string,
+  toolCallId: string
+): string {
+  return [adapterName, sessionId, toolCallId].map(encodeURIComponent).join(':');
+}
+
+export function pendingToolCallEvents(
+  replayEvents: ToolCallEvent[],
+  liveEvents: ToolCallEvent[],
+  keptToolCallIds: ReadonlySet<string>
+): ToolCallEvent[] {
+  return [...replayEvents, ...liveEvents].filter(
+    (event) => event.eventId && !keptToolCallIds.has(event.eventId)
+  );
+}
+
+export class ToolCallRawInputCache {
+  private readonly byChatId = new Map<string, Map<string, Record<string, any>>>();
+  private readonly sessionIdByChatId = new Map<string, string>();
+
+  rememberSession(chatId: string, sessionId: string): void {
+    const previousSessionId = this.sessionIdByChatId.get(chatId);
+    if (previousSessionId !== undefined && previousSessionId !== sessionId) {
+      this.byChatId.delete(chatId);
+    }
+    this.sessionIdByChatId.set(chatId, sessionId);
+  }
+
+  set(chatId: string, toolCallId: string, rawInput: Record<string, any>): void {
+    let entries = this.byChatId.get(chatId);
+    if (!entries) {
+      entries = new Map<string, Record<string, any>>();
+      this.byChatId.set(chatId, entries);
+    }
+    entries.set(toolCallId, rawInput);
+  }
+
+  get(chatId: string, toolCallId: string): Record<string, any> | undefined {
+    return this.byChatId.get(chatId)?.get(toolCallId);
+  }
+
+  delete(chatId: string, toolCallId: string): void {
+    const entries = this.byChatId.get(chatId);
+    if (!entries) return;
+    entries.delete(toolCallId);
+    if (entries.size === 0) this.byChatId.delete(chatId);
+  }
+
+  clearChat(chatId: string): void {
+    this.byChatId.delete(chatId);
+    this.sessionIdByChatId.delete(chatId);
+  }
 }
 
 function isExecutePermissionPayload(json: Record<string, any>): boolean {

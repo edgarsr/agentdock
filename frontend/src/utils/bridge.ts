@@ -13,7 +13,7 @@ import {
   SessionMetadataUpdatePayload,
   ToolCallEvent,
 } from '../types/chat';
-import { extractToolCallDiffEntries } from './toolCallUtils';
+import { extractToolCallDiffEntries, ToolCallRawInputCache } from './toolCallUtils';
 import { McpServerConfig } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
@@ -56,7 +56,7 @@ let fileChangeStatsCounter = 0;
 let bridgeOperationCounter = 0;
 const availableCommandsByAdapter = new Map<string, AvailableCommand[]>();
 const pendingRpcMethodsById = new Map<string | number, string>();
-const toolCallRawInputById = new Map<string, Record<string, any>>();
+const toolCallRawInputCache = new ToolCallRawInputCache();
 const BRIDGE_REQUEST_TIMEOUT_MS = 120_000;
 const BRIDGE_OPERATION_TIMEOUT_MS = 10_000;
 const CANCEL_PROMPT_OPERATION_TIMEOUT_MS = 15_000;
@@ -135,9 +135,12 @@ export const ACPBridge = {
           const raw = chunk.toolRawJson ? JSON.parse(chunk.toolRawJson) : {};
           const toolCallId = chunk.toolCallId || raw.toolCallId || '';
           if (chunk.type === 'tool_call' && toolCallId && raw.rawInput && typeof raw.rawInput === 'object') {
-            toolCallRawInputById.set(toolCallId, raw.rawInput);
+            toolCallRawInputCache.set(chunk.chatId, toolCallId, raw.rawInput);
           }
-          const diffs = extractToolCallDiffEntries(raw, toolCallId ? toolCallRawInputById.get(toolCallId) : undefined)
+          const diffs = extractToolCallDiffEntries(
+            raw,
+            toolCallId ? toolCallRawInputCache.get(chunk.chatId, toolCallId) : undefined
+          )
             .map((diff) => ({ path: diff.path, oldText: diff.oldText, newText: diff.newText }));
           const status = chunk.toolStatus || raw.status;
           if (diffs.length > 0) {
@@ -146,7 +149,6 @@ export const ACPBridge = {
               title: chunk.toolTitle || raw.title || '',
               kind: chunk.toolKind || raw.kind,
               status,
-              isReplay: chunk.isReplay,
               diffs,
               locations: raw.locations,
             };
@@ -158,13 +160,12 @@ export const ACPBridge = {
               title: chunk.toolTitle || raw.title || '',
               kind: chunk.toolKind || raw.kind,
               status,
-              isReplay: chunk.isReplay,
               diffs: [],
             };
             window.dispatchEvent(new CustomEvent(EVENT_NAMES.TOOL_CALL_UPDATE, { detail: { chatId: chunk.chatId, payload } }));
           }
-          if (chunk.type === 'tool_call_update' && toolCallId && status && !['pending', 'running', 'in_progress', 'active'].includes(String(status).toLowerCase())) {
-            toolCallRawInputById.delete(toolCallId);
+          if (toolCallId && status && !['pending', 'running', 'in_progress', 'active'].includes(String(status).toLowerCase())) {
+            toolCallRawInputCache.delete(chunk.chatId, toolCallId);
           }
         } catch (e) {
           console.warn('[bridge] Failed to process tool call chunk', e);
@@ -181,6 +182,7 @@ export const ACPBridge = {
     };
 
     window.__onSessionId = (chatId, id) => {
+      toolCallRawInputCache.rememberSession(chatId, id);
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.SESSION_ID, { detail: { chatId, sessionId: id } }));
     };
 
@@ -415,6 +417,10 @@ export const ACPBridge = {
       },
       CANCEL_PROMPT_OPERATION_TIMEOUT_MS,
     );
+  },
+
+  clearConversationToolCache: (conversationId: string) => {
+    toolCallRawInputCache.clearChat(conversationId);
   },
 
   recoverRuntime: (reason?: string) => {

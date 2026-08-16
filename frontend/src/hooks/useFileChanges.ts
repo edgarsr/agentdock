@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ToolCallEvent, FileChangeSummary, ProcessedFileState } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayToolCallEvents } from '../utils/replay';
-import { mergeToolCallEvent } from '../utils/toolCallUtils';
+import { applyToolCallEvent, pendingToolCallEvents, stableToolCallEventId } from '../utils/toolCallUtils';
 
 /**
  * Tool call statuses that confirm the operation was successfully applied.
@@ -12,15 +12,6 @@ import { mergeToolCallEvent } from '../utils/toolCallUtils';
  *  - Events that were denied / cancelled / failed are also hidden
  */
 const APPLIED_STATUSES = new Set(['success', 'completed']);
-
-function upsertToolCallEvent(events: ToolCallEvent[], incoming: ToolCallEvent): ToolCallEvent[] {
-  const existingIndex = events.findIndex((event) => event.toolCallId === incoming.toolCallId);
-  if (existingIndex < 0) return [...events, incoming];
-
-  const updated = [...events];
-  updated[existingIndex] = mergeToolCallEvent(updated[existingIndex], incoming);
-  return updated;
-}
 
 /**
  * Check if two file paths refer to the same file.
@@ -61,17 +52,18 @@ export function useFileChanges(
     source: FileChangeSummary[];
     byFilePath: Record<string, { additions: number; deletions: number }>;
   } | null>(null);
-  const [toolCallEvents, setToolCallEvents] = useState<ToolCallEvent[]>([]);
+  const [replayToolCallEvents, setReplayToolCallEvents] = useState<ToolCallEvent[]>([]);
+  const [liveToolCallEvents, setLiveToolCallEvents] = useState<ToolCallEvent[]>([]);
   const [processedFileStates, setProcessedFileStates] = useState<ProcessedFileState[]>([]);
-  const [baseToolCallIndex, setBaseToolCallIndex] = useState(0);
+  const [keptToolCallIds, setKeptToolCallIds] = useState<string[]>([]);
   const [hasPluginEdits, setHasPluginEdits] = useState(false);
   const [pendingUndoFilePaths, setPendingUndoFilePaths] = useState<string[] | null>(null);
   const pendingUndoFilePathsRef = useRef<string[] | null>(null);
   pendingUndoFilePathsRef.current = pendingUndoFilePaths;
   const initialHasPluginEditsRef = useRef<boolean | null>(null);
   const [loadedSessionKey, setLoadedSessionKey] = useState('');
-  const toolCallEventsRef = useRef<ToolCallEvent[]>([]);
-  toolCallEventsRef.current = toolCallEvents;
+  const replayToolCallEventsRef = useRef<ToolCallEvent[]>([]);
+  replayToolCallEventsRef.current = replayToolCallEvents;
   const fileChangesRef = useRef<FileChangeSummary[]>([]);
 
   // Load persisted state from backend on mount / session change
@@ -83,11 +75,12 @@ export function useFileChanges(
 
     // CRITICAL: Reset state when switching sessions to prevent old session data from contaminating new session
     // Reset refs IMMEDIATELY (synchronously) to prevent race conditions with event handlers
-    toolCallEventsRef.current = [];
+    replayToolCallEventsRef.current = [];
 
     setProcessedFileStates([]);
-    setBaseToolCallIndex(0);
-    setToolCallEvents([]);
+    setKeptToolCallIds([]);
+    setReplayToolCallEvents([]);
+    setLiveToolCallEvents([]);
     setComputedStats(null);
     setHasPluginEdits(false);
     setPendingUndoFilePaths(null);
@@ -115,62 +108,54 @@ export function useFileChanges(
           initialHasPluginEditsRef.current = hasEdits;
       }
 
-      let newBaseIndex = state.baseToolCallIndex;
+      setKeptToolCallIds(state.keptToolCallIds);
 
       // If this session loaded with NO plugin edits, and now the backend says it HAS edits,
       // it means the first live tool call just triggered state creation.
-      // We must update the baseToolCallIndex to bypass all previous replay events (from CLI etc).
-      if (!initialHasPluginEditsRef.current && hasEdits && state.baseToolCallIndex === 0) {
-         const replayCount = toolCallEventsRef.current.filter(ev => ev.isReplay).length;
-         if (replayCount > 0) {
-            newBaseIndex = replayCount;
+      // Mark the pre-existing replay events as handled before tracking this session's live edits.
+      if (!initialHasPluginEditsRef.current && hasEdits && state.keptToolCallIds.length === 0) {
+         const replayIds = replayToolCallEventsRef.current.flatMap((event) => event.eventId ? [event.eventId] : []);
+         if (replayIds.length > 0) {
+            setKeptToolCallIds(replayIds);
             if (window.__keepAll && sessionId && adapterName) {
                window.__keepAll(JSON.stringify({
                  sessionId,
                  adapterName,
-                 toolCallIndex: String(replayCount)
+                 toolCallIds: replayIds
                }));
             }
          }
          initialHasPluginEditsRef.current = true;
       }
 
-      setBaseToolCallIndex(newBaseIndex);
       setProcessedFileStates(state.processedFileStates);
       setHasPluginEdits(hasEdits);
     });
 
     const unsubToolCall = ACPBridge.onToolCall((e) => {
       if (e.detail.chatId !== conversationId) return;
-      const payload = e.detail.payload;
-      if (payload.diffs && payload.diffs.length > 0) {
-        // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
-        setToolCallEvents((prev) => upsertToolCallEvent(prev, payload));
-      }
+      // Backend creates the session changes state for the first live edit.
+      const payload = {
+        ...e.detail.payload,
+        eventId: stableToolCallEventId(adapterName, sessionId, e.detail.payload.toolCallId),
+      };
+      setLiveToolCallEvents((events) => applyToolCallEvent(events, payload, 'tool_call'));
     });
 
     const unsubToolCallUpdate = ACPBridge.onToolCallUpdate((e) => {
       if (e.detail.chatId !== conversationId) return;
-      const payload = e.detail.payload;
-      const hasDiffs = payload.diffs && payload.diffs.length > 0;
-
-      if (hasDiffs) {
-        // Backend clears stale per-file watermarks for live (non-replay) edits and pushes state via onChangesState.
-        setToolCallEvents((prevEvents) => upsertToolCallEvent(prevEvents, payload));
-      } else if (payload.toolCallId && payload.status) {
-        // Status-only update (no diffs) — update existing event's status
-        // This handles denied permissions, errors, etc.
-        setToolCallEvents((prevEvents) => (
-          prevEvents.some((event) => event.toolCallId === payload.toolCallId)
-            ? upsertToolCallEvent(prevEvents, payload)
-            : prevEvents
-        ));
-      }
+      const payload = {
+        ...e.detail.payload,
+        eventId: stableToolCallEventId(adapterName, sessionId, e.detail.payload.toolCallId),
+      };
+      setLiveToolCallEvents((events) => applyToolCallEvent(events, payload, 'tool_call_update'));
     });
 
     const unsubConversationReplayLoaded = ACPBridge.onConversationReplayLoaded((e) => {
       if (e.detail.payload.chatId !== conversationId) return;
-      setToolCallEvents(buildReplayToolCallEvents(e.detail.payload.data));
+      const replayEvents = buildReplayToolCallEvents(e.detail.payload.data);
+      replayToolCallEventsRef.current = replayEvents;
+      setReplayToolCallEvents(replayEvents);
     });
 
     return () => {
@@ -184,24 +169,35 @@ export function useFileChanges(
   // Build per-file operation chains from accumulated tool call events.
   const baseFileChanges = useMemo<FileChangeSummary[]>(() => {
     const changesMap = new Map<string, FileChangeSummary>();
-    const eventsToProcess = toolCallEvents.slice(baseToolCallIndex);
+    const keptIds = new Set(keptToolCallIds);
+    const eventsToProcess = pendingToolCallEvents(
+      replayToolCallEvents,
+      liveToolCallEvents,
+      keptIds
+    );
 
-    for (const [offset, event] of eventsToProcess.entries()) {
+    for (const event of eventsToProcess) {
       // Only show tool calls that have been explicitly confirmed as applied.
       // Events with no status yet (awaiting permission) or failed/denied events are excluded.
       if (!event.status || !APPLIED_STATUSES.has(event.status)) continue;
 
       for (const diff of event.diffs) {
         const filePath = diff.path;
+        if (processedFileStates.some((processed) => (
+          pathsMatch(processed.filePath, filePath)
+          && Boolean(event.eventId)
+          && processed.toolCallIds.includes(event.eventId!)
+        ))) continue;
         const fileName = filePath.split(/[\\/]/).pop() || filePath;
         const isNew = diff.oldText === null;
         const status: 'A' | 'M' = isNew ? 'A' : 'M';
 
-        const eventIndex = baseToolCallIndex + offset;
         const existing = changesMap.get(filePath);
         if (existing) {
           existing.operations.push({ oldText: diff.oldText || '', newText: diff.newText });
-          existing.latestToolCallIndex = eventIndex;
+          if (event.eventId && !existing.toolCallIds.includes(event.eventId)) {
+            existing.toolCallIds.push(event.eventId);
+          }
           if (status === 'A' && existing.status !== 'A') existing.status = 'M';
         } else {
           changesMap.set(filePath, {
@@ -211,18 +207,19 @@ export function useFileChanges(
             additions: 0,
             deletions: 0,
             operations: [{ oldText: diff.oldText || '', newText: diff.newText }],
-            latestToolCallIndex: eventIndex,
+            toolCallIds: event.eventId ? [event.eventId] : [],
           });
         }
       }
     }
 
-    return Array.from(changesMap.values()).filter(
-      (fc) => !processedFileStates.some(
-        (processed) => pathsMatch(processed.filePath, fc.filePath) && processed.toolCallIndex >= fc.latestToolCallIndex
-      )
-    );
-  }, [toolCallEvents, baseToolCallIndex, processedFileStates]);
+    return Array.from(changesMap.values());
+  }, [
+    replayToolCallEvents,
+    liveToolCallEvents,
+    keptToolCallIds,
+    processedFileStates,
+  ]);
 
   useEffect(() => {
     if (baseFileChanges.length === 0) {
@@ -284,18 +281,23 @@ export function useFileChanges(
   /** Remove all diffs for given file paths from accumulated tool call events */
   const removeDiffsForFiles = useCallback((paths: Set<string>) => {
     const pathsArray = Array.from(paths);
-    setToolCallEvents((prev) =>
+    const removeDiffs = (prev: ToolCallEvent[]) =>
       prev.map((event) => ({
         ...event,
         diffs: event.diffs.filter((d) => !pathsArray.some(p => pathsMatch(p, d.path))),
-      }))
-    );
+      }));
+    setReplayToolCallEvents(removeDiffs);
+    setLiveToolCallEvents(removeDiffs);
   }, []);
 
-  const upsertProcessedFileState = useCallback((filePath: string, toolCallIndex: number) => {
+  const upsertProcessedFileState = useCallback((filePath: string, toolCallIds: string[]) => {
     setProcessedFileStates((prev) => {
+      const existing = prev.find((processed) => pathsMatch(processed.filePath, filePath));
       const next = prev.filter((processed) => !pathsMatch(processed.filePath, filePath));
-      next.push({ filePath, toolCallIndex });
+      next.push({
+        filePath,
+        toolCallIds: Array.from(new Set([...(existing?.toolCallIds || []), ...toolCallIds])),
+      });
       return next;
     });
   }, []);
@@ -338,25 +340,38 @@ export function useFileChanges(
         sessionId,
         adapterName,
         filePath,
-        toolCallIndex: String(fc.latestToolCallIndex),
+        toolCallIds: fc.toolCallIds,
       }));
-      upsertProcessedFileState(filePath, fc.latestToolCallIndex);
+      upsertProcessedFileState(filePath, fc.toolCallIds);
     }
     // Remove this file's diffs from events so old ops won't be re-counted
     removeDiffsForFiles(new Set([filePath]));
   }, [sessionId, adapterName, fileChanges, removeDiffsForFiles, upsertProcessedFileState]);
 
   const handleKeepAll = useCallback(() => {
+    const allToolCallIds = Array.from(new Set([
+      ...keptToolCallIds,
+      ...processedFileStates.flatMap((processed) => processed.toolCallIds),
+      ...[...replayToolCallEvents, ...liveToolCallEvents]
+        .flatMap((event) => event.eventId ? [event.eventId] : []),
+    ]));
     if (window.__keepAll && sessionId && adapterName) {
       window.__keepAll(JSON.stringify({
         sessionId,
         adapterName,
-        toolCallIndex: String(toolCallEvents.length),
+        toolCallIds: allToolCallIds,
       }));
     }
-    setBaseToolCallIndex(toolCallEvents.length);
+    setKeptToolCallIds(allToolCallIds);
     setProcessedFileStates([]);
-  }, [sessionId, adapterName, toolCallEvents.length]);
+  }, [
+    sessionId,
+    adapterName,
+    keptToolCallIds,
+    processedFileStates,
+    replayToolCallEvents,
+    liveToolCallEvents,
+  ]);
 
   useEffect(() => {
     const unsubUndoResult = ACPBridge.onUndoResult((e) => {
@@ -379,9 +394,9 @@ export function useFileChanges(
             sessionId,
             adapterName,
             filePath: fc.filePath,
-            toolCallIndex: String(fc.latestToolCallIndex),
+            toolCallIds: fc.toolCallIds,
           }));
-          upsertProcessedFileState(fc.filePath, fc.latestToolCallIndex);
+          upsertProcessedFileState(fc.filePath, fc.toolCallIds);
         }
         removeDiffsForFiles(undoPaths);
       }

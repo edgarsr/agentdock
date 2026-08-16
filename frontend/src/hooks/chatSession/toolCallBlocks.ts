@@ -37,12 +37,12 @@ function hasMeaningfulDiff(entries: Record<string, any>[]): boolean {
   return oldText !== newText;
 }
 
-export function createToolCallBlocks(entry: ToolCallEntry, isReplay: boolean): ToolCallBlock[] {
+export function createToolCallBlocks(entry: ToolCallEntry, isReplay?: boolean): ToolCallBlock[] {
   if (entry.kind !== 'edit') {
     return [{ type: 'tool_call', entry, isReplay } as ToolCallBlock];
   }
   if (!Array.isArray(entry.content)) {
-    // Return a placeholder block so that subsequent tool_call_update chunks can locate it.
+    // Keep the initial call visible and available for a subsequent tool_call_update.
     return [{ type: 'tool_call', entry, isReplay } as ToolCallBlock];
   }
 

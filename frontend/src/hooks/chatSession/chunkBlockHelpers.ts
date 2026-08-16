@@ -1,10 +1,18 @@
 import { ContentChunk, ExploringBlock, Message, RichContentBlock } from '../../types/chat';
+import { safeParseJson } from '../../utils/toolCallUtils';
 
 export function isExploringChunk(chunk: ContentChunk): boolean {
-  const kind = chunk.toolKind || '';
+  // Stored tool_call_update events carry kind/title only inside the raw payload.
+  const raw: Record<string, unknown> = (chunk.toolKind && chunk.toolTitle)
+    ? {}
+    : safeParseJson(chunk.toolRawJson);
+  const rawKind: string = typeof raw.kind === 'string' ? raw.kind : '';
+  const rawTitle: string = typeof raw.title === 'string' ? raw.title : '';
+
+  const kind = chunk.toolKind || rawKind;
   if (kind === 'read' || kind === 'fetch' || kind === 'search') return true;
   if (kind === 'execute') {
-    const cmd = (chunk.toolTitle || '').toLowerCase().trim();
+    const cmd = (chunk.toolTitle || rawTitle).toLowerCase().trim();
     if (!cmd) return true;
 
     const IMPACTFUL_KEYWORDS = [
@@ -33,7 +41,7 @@ export function isExploringChunk(chunk: ContentChunk): boolean {
 export function stripTransferredContextForDisplay(
   text: string,
   role: 'user' | 'assistant',
-  isReplay: boolean
+  isReplay?: boolean
 ): string {
   if (!isReplay || role !== 'user') return text;
 

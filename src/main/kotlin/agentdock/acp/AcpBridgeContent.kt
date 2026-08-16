@@ -24,11 +24,11 @@ internal data class BridgeOperationResultPayload(
 )
 
 /**
- * Unified content delivery: ALL content (live streaming + history replay) goes
- * through pushContentChunk so the frontend has a single ingestion path.
+ * Unified content delivery: all live content goes through pushContentChunk so the
+ * frontend has a single ingestion path. History replay never reaches this pipeline;
+ * it is captured into ConversationReplayData and delivered by pushConversationReplayLoaded.
  */
-internal fun AcpBridge.pushContentChunk(chatId: String, role: String, type: String, text: String? = null, data: String? = null, mimeType: String? = null, isReplay: Boolean = false) {
-    val replaySeq = nextReplaySeq(chatId, isReplay)
+internal fun AcpBridge.pushContentChunk(chatId: String, role: String, type: String, text: String? = null, data: String? = null, mimeType: String? = null) {
     val json = buildJsonObject {
         put("chatId", chatId)
         put("role", role)
@@ -36,8 +36,6 @@ internal fun AcpBridge.pushContentChunk(chatId: String, role: String, type: Stri
         if (text != null) put("text", text)
         if (data != null) put("data", data)
         if (mimeType != null) put("mimeType", mimeType)
-        put("isReplay", isReplay)
-        if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)
 }
@@ -57,7 +55,7 @@ internal fun AcpBridge.pushConversationReplayLoaded(chatId: String, data: Conver
 }
 
 /** Convenience: send a ContentBlock from the ACP SDK through the unified pipeline. */
-internal fun AcpBridge.pushContentBlock(chatId: String, role: String, content: ContentBlock, isThought: Boolean, isReplay: Boolean) {
+internal fun AcpBridge.pushContentBlock(chatId: String, role: String, content: ContentBlock, isThought: Boolean) {
     val serialized = serializeContentBlock(content, if (isThought) "thinking" else "text") ?: return
     pushContentChunk(
         chatId = chatId,
@@ -65,13 +63,11 @@ internal fun AcpBridge.pushContentBlock(chatId: String, role: String, content: C
         type = serialized.type,
         text = serialized.text,
         data = serialized.data,
-        mimeType = serialized.mimeType,
-        isReplay = isReplay
+        mimeType = serialized.mimeType
     )
 }
 
-internal fun AcpBridge.pushToolCallChunk(chatId: String, rawJson: String, isReplay: Boolean = false) {
-    val replaySeq = nextReplaySeq(chatId, isReplay)
+internal fun AcpBridge.pushToolCallChunk(chatId: String, rawJson: String) {
     val displayRawJson = compactToolRawJsonForDisplay(rawJson)
     val parsed = try { Json.parseToJsonElement(displayRawJson).jsonObject } catch (e: Exception) {
         LOG.debug("Failed to parse tool call JSON", e)
@@ -86,19 +82,16 @@ internal fun AcpBridge.pushToolCallChunk(chatId: String, rawJson: String, isRepl
         put("chatId", chatId)
         put("role", "assistant")
         put("type", "tool_call")
-        put("isReplay", isReplay)
         put("toolCallId", toolCallId)
         put("toolKind", kind)
         put("toolTitle", title)
         put("toolStatus", status)
         put("toolRawJson", displayRawJson)
-        if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)
 }
 
-internal fun AcpBridge.pushToolCallUpdateChunk(chatId: String, toolCallId: String, rawJson: String, isReplay: Boolean = false) {
-    val replaySeq = nextReplaySeq(chatId, isReplay)
+internal fun AcpBridge.pushToolCallUpdateChunk(chatId: String, toolCallId: String, rawJson: String) {
     val displayRawJson = compactToolRawJsonForDisplay(rawJson)
     val parsed = try { Json.parseToJsonElement(displayRawJson).jsonObject } catch (e: Exception) {
         LOG.debug("Failed to parse tool call update JSON", e)
@@ -112,13 +105,11 @@ internal fun AcpBridge.pushToolCallUpdateChunk(chatId: String, toolCallId: Strin
         put("chatId", chatId)
         put("role", "assistant")
         put("type", "tool_call_update")
-        put("isReplay", isReplay)
         put("toolCallId", toolCallId)
         put("toolKind", kind)
         put("toolTitle", title)
         put("toolStatus", status)
         put("toolRawJson", displayRawJson)
-        if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)
 }
@@ -244,7 +235,7 @@ internal fun AcpBridge.extractPlanEntries(plan: SessionUpdate, _meta: JsonElemen
     }
 }
 
-internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, isReplay: Boolean = false, _meta: JsonElement? = null) {
+internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, _meta: JsonElement? = null) {
     val entries = try {
         extractPlanEntries(plan, _meta)
     } catch (e: Exception) {
@@ -255,21 +246,18 @@ internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, isRepl
         return
     }
 
-    pushPlanChunk(chatId, entries, isReplay)
+    pushPlanChunk(chatId, entries)
 }
 
-internal fun AcpBridge.pushPlanChunk(chatId: String, entries: JsonArray, isReplay: Boolean = false) {
+internal fun AcpBridge.pushPlanChunk(chatId: String, entries: JsonArray) {
     if (entries.isEmpty()) {
         return
     }
 
-    val replaySeq = nextReplaySeq(chatId, isReplay)
     val chunk = buildJsonObject {
         put("chatId", chatId)
         put("role", "assistant")
         put("type", "plan")
-        put("isReplay", isReplay)
-        if (replaySeq != null) put("replaySeq", replaySeq)
         put("planEntries", entries)
     }
 
@@ -416,13 +404,17 @@ internal fun AcpBridge.pushChangesState(chatId: String, state: ChangesState, has
     val payload = buildJsonObject {
         put("sessionId", state.sessionId)
         put("adapterName", state.adapterName)
-        put("baseToolCallIndex", state.baseToolCallIndex)
+        put("keptToolCallIds", buildJsonArray {
+            state.keptToolCallIds.forEach { toolCallId -> add(toolCallId) }
+        })
         put("hasPluginEdits", hasPluginEdits)
         put("processedFileStates", buildJsonArray {
             state.processedFileStates.forEach { processed ->
                 add(buildJsonObject {
                     put("filePath", processed.filePath)
-                    put("toolCallIndex", processed.toolCallIndex)
+                    put("toolCallIds", buildJsonArray {
+                        processed.toolCallIds.forEach { toolCallId -> add(toolCallId) }
+                    })
                 })
             }
         })
@@ -437,11 +429,9 @@ internal fun AcpBridge.pushChangesState(chatId: String, state: ChangesState, has
 }
 
 /**
- * When the agent modifies files in a live (non-replay) tool call, remove those paths from
- * processed file watermarks so the next edit to the same path is treated as new work.
- * Only called when isReplay == false.
+ * Create the per-session changes state when the first live file edit arrives.
  */
-internal fun AcpBridge.removeProcessedFilesForDiffs(chatId: String, content: List<ToolCallContent>?) {
+internal fun AcpBridge.ensureChangesStateForLiveDiffs(chatId: String, content: List<ToolCallContent>?) {
     val sessionId = service.sessionId(chatId) ?: return
     val adNameValue = service.activeAdapterName(chatId) ?: return
     val diffs = content?.filterIsInstance<ToolCallContent.Diff>() ?: return
@@ -452,8 +442,6 @@ internal fun AcpBridge.removeProcessedFilesForDiffs(chatId: String, content: Lis
         ChangesStateService.ensureState(projectPath, sessionId, adNameValue)
     }
 
-    val paths = diffs.map { it.path }
-    ChangesStateService.removeProcessedFiles(projectPath, sessionId, adNameValue, paths)
     val state = ChangesStateService.loadState(projectPath, sessionId, adNameValue) ?: ChangesStateService.ensureState(projectPath, sessionId, adNameValue)
     pushChangesState(chatId, state, true)
 }
@@ -461,15 +449,12 @@ internal fun AcpBridge.removeProcessedFilesForDiffs(chatId: String, content: Lis
 internal fun AcpBridge.pushPromptDoneChunk(
     chatId: String,
     metadata: ConversationAssistantMetadata,
-    outcome: String,
-    isReplay: Boolean = false
+    outcome: String
 ) {
-    val replaySeq = nextReplaySeq(chatId, isReplay)
     val json = buildJsonObject {
         put("chatId", chatId)
         put("role", "assistant")
         put("type", "prompt_done")
-        put("isReplay", isReplay)
         put("promptOutcome", outcome)
         metadata.agentId?.let { put("agentId", it) }
         metadata.agentName?.let { put("agentName", it) }
@@ -478,7 +463,6 @@ internal fun AcpBridge.pushPromptDoneChunk(
         metadata.contextTokensUsed?.let { put("contextTokensUsed", it) }
         metadata.contextWindowSize?.let { put("contextWindowSize", it) }
         put("configOptions", Json.encodeToJsonElement(metadata.configOptions))
-        if (replaySeq != null) put("replaySeq", replaySeq)
     }.toString()
     dispatchContentChunkJson(json)
 }

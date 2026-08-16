@@ -23,7 +23,7 @@ data class SessionMeta(
 )
 
 data class SessionChangesData(
-    val baseToolCallIndex: Int = 0,
+    val keptToolCallIds: List<String> = emptyList(),
     val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )
@@ -31,7 +31,7 @@ data class SessionChangesData(
 @Serializable
 data class ProcessedFileState(
     val filePath: String,
-    val toolCallIndex: Int
+    val toolCallIds: List<String> = emptyList()
 )
 
 @Serializable
@@ -91,7 +91,7 @@ data class DeleteConversationsResult(
 
 @Serializable
 internal data class HistorySessionChangesEntry(
-    val baseToolCallIndex: Int = 0,
+    val keptToolCallIds: List<String> = emptyList(),
     val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )

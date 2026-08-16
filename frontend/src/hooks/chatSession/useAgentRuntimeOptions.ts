@@ -10,6 +10,7 @@ type UseAgentRuntimeOptionsArgs = {
   availableAgents: AgentOption[];
   effectiveSelectedAgent: AgentOption | undefined;
   selectedAgentId: string;
+  sessionActive: boolean;
 };
 
 const matches = (option: ConfigOption, category: string) =>
@@ -29,13 +30,14 @@ export function useAgentRuntimeOptions({
   availableAgents,
   effectiveSelectedAgent,
   selectedAgentId,
+  sessionActive,
 }: UseAgentRuntimeOptionsArgs) {
   const [sessionConfigOptions, setSessionConfigOptions] = useState<SessionConfigOptionsPayload>();
   const [selectedByAgent, setSelectedByAgent] = useState<Record<string, Record<string, string>>>({});
   const initialValuesByAgent = useRef<Record<string, Record<string, string>>>({});
   const sessionAgentId = effectiveSelectedAgent?.id;
   const adapterOptions = effectiveSelectedAgent?.configOptions ?? [];
-  if (sessionAgentId && adapterOptions.length > 0 && initialValuesByAgent.current[sessionAgentId] === undefined) {
+  if (!sessionActive && sessionAgentId && adapterOptions.length > 0) {
     initialValuesByAgent.current[sessionAgentId] = Object.fromEntries(adapterOptions.map((option) => [
       option.id,
       accepts(option, option.currentValue)

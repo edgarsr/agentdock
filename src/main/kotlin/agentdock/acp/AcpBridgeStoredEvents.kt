@@ -114,10 +114,9 @@ private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: Json
         ?: existingRaw?.get("kind")?.jsonPrimitive?.contentOrNull
         ?: mergedRaw["kind"]?.jsonPrimitive?.contentOrNull
         ?: ""
-    val mergedRawFinal = if (mergedKind == "edit") {
-        mergeEditDiffContent(existingRaw, incomingRaw, mergedRaw)
-    } else {
-        mergedRaw
+    val mergedRawFinal = when (mergedKind) {
+        "edit" -> mergeEditDiffContent(existingRaw, incomingRaw, mergedRaw)
+        else -> mergeStoredToolOutput(existingRaw, incomingRaw, mergedRaw)
     }
     val mergedRawJson = storedToolRawJson(mergedRawFinal.toString())
 
@@ -144,6 +143,132 @@ private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: Json
         put("toolStatus", mergedStatus)
         put("toolRawJson", mergedRawJson)
     }
+}
+
+internal fun mergeStoredToolOutput(
+    existingRaw: JsonObject?,
+    incomingRaw: JsonObject,
+    mergedRaw: JsonObject
+): JsonObject {
+    val existingContent = (existingRaw?.get("content") as? JsonArray).orEmpty()
+    val incomingContent = (incomingRaw["content"] as? JsonArray).orEmpty()
+    val existingOutput = extractStoredToolOutputText(existingRaw)
+    val incomingOutput = extractStoredToolOutputText(incomingRaw)
+    if (existingContent.isEmpty() && incomingContent.isEmpty()
+        && (existingOutput == null || incomingOutput == null)
+    ) return mergedRaw
+
+    return buildJsonObject {
+        mergedRaw.forEach { (key, value) ->
+            if (key != "content") put(key, value)
+        }
+        put(
+            "content",
+            mergeStoredToolContent(
+                existingContent,
+                incomingContent,
+                existingOutput,
+                incomingOutput
+            )
+        )
+    }
+}
+
+private fun mergeStoredToolContent(
+    existingContent: List<JsonElement>,
+    incomingContent: List<JsonElement>,
+    existingOutput: String?,
+    incomingOutput: String?
+): JsonArray {
+    val mergedOutput = if (existingOutput != null && incomingOutput != null) {
+        mergeStoredExecuteOutput(existingOutput, incomingOutput)
+    } else {
+        incomingOutput ?: existingOutput
+    }
+    val incomingTextBlocks = incomingContent.filter { extractToolContentText(it) != null }
+    val incomingStructuredBlocks = incomingContent.filter { extractToolContentText(it) == null }
+    val existingHasTextBlock = existingContent.any { extractToolContentText(it) != null }
+    val isIncomingSnapshot = existingOutput != null
+        && incomingOutput != null
+        && mergedOutput == incomingOutput
+    val keepsExistingText = existingOutput != null
+        && incomingOutput != null
+        && mergedOutput == existingOutput
+
+    return buildJsonArray {
+        if (isIncomingSnapshot) {
+            var insertedText = false
+            existingContent.forEach { item ->
+                if (extractToolContentText(item) == null) {
+                    add(item)
+                } else if (!insertedText) {
+                    if (incomingTextBlocks.isEmpty()) {
+                        mergedOutput?.let { add(storedToolTextContent(it)) }
+                    } else {
+                        incomingTextBlocks.forEach { add(it) }
+                    }
+                    insertedText = true
+                }
+            }
+            if (!insertedText) {
+                if (incomingTextBlocks.isEmpty()) {
+                    mergedOutput?.let { add(storedToolTextContent(it)) }
+                } else {
+                    incomingTextBlocks.forEach { add(it) }
+                }
+            }
+            incomingStructuredBlocks.forEach { item ->
+                if (item !in existingContent) add(item)
+            }
+        } else {
+            existingContent.forEach { add(it) }
+            incomingContent.forEach { item ->
+                if (extractToolContentText(item) != null) {
+                    if (!keepsExistingText) add(item)
+                } else if (item !in existingContent) {
+                    add(item)
+                }
+            }
+            if (existingOutput != null && incomingOutput != null && incomingTextBlocks.isEmpty()) {
+                add(storedToolTextContent(
+                    if (existingHasTextBlock && !keepsExistingText) incomingOutput else mergedOutput.orEmpty()
+                ))
+            }
+        }
+    }
+}
+
+private fun storedToolTextContent(text: String): JsonObject = buildJsonObject {
+    put("type", "content")
+    put("content", buildJsonObject {
+        put("type", "text")
+        put("text", text)
+    })
+}
+
+private fun extractStoredToolOutputText(raw: JsonObject?): String? {
+    if (raw == null) return null
+    val contentTexts = (raw["content"] as? JsonArray)
+        ?.mapNotNull(::extractToolContentText)
+        .orEmpty()
+    if (contentTexts.isNotEmpty()) return contentTexts.joinToString("\n\n")
+
+    (raw["text"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let { return it }
+    val rawOutput = raw["rawOutput"] as? JsonObject
+    return listOf("message", "content")
+        .asSequence()
+        .mapNotNull { key -> (rawOutput?.get(key) as? JsonPrimitive)?.contentOrNull }
+        .firstOrNull { it.isNotEmpty() }
+}
+
+private fun mergeStoredExecuteOutput(existing: String, incoming: String): String {
+    val normalizedExisting = existing.replace("\r\n", "\n").replace('\r', '\n')
+    val normalizedIncoming = incoming.replace("\r\n", "\n").replace('\r', '\n')
+    if (normalizedIncoming == normalizedExisting || normalizedIncoming.startsWith(normalizedExisting)) {
+        return incoming
+    }
+    if (normalizedExisting.endsWith(normalizedIncoming)) return existing
+    return "$existing\n\n$incoming"
 }
 
 internal fun mergeEditDiffContent(

@@ -13,7 +13,7 @@ internal object HistorySessionChangesStore {
             ?: return null
         val changes = session.changes ?: return null
         return SessionChangesData(
-            baseToolCallIndex = changes.baseToolCallIndex,
+            keptToolCallIds = changes.keptToolCallIds,
             processedFileStates = changes.processedFileStates,
             updatedAt = changes.updatedAt
         )
@@ -23,14 +23,14 @@ internal object HistorySessionChangesStore {
         projectPath: String,
         sessionId: String,
         adapterName: String,
-        baseToolCallIndex: Int,
+        keptToolCallIds: List<String>,
         processedFileStates: List<ProcessedFileState>
     ): Boolean {
         val updatedAt = Instant.now().toEpochMilli()
         return updateSessionEntry(projectPath, sessionId, adapterName) { session ->
             session.copy(
                 changes = HistorySessionChangesEntry(
-                    baseToolCallIndex = baseToolCallIndex,
+                    keptToolCallIds = keptToolCallIds,
                     processedFileStates = processedFileStates,
                     updatedAt = updatedAt
                 )

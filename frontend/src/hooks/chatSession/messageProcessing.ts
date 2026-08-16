@@ -17,7 +17,7 @@ import {
   extractToolCallDiffEntries,
   mergeToolCallDiffEntries,
 } from '../../utils/toolCallUtils';
-import { nextMessageId } from './messageBasics';
+import { nextMessageId, plainTextFromBlocks } from './messageBasics';
 import {
   closeStreamingExploring,
   failPendingToolStatuses,
@@ -30,6 +30,10 @@ import { createToolCallBlocks, isExecuteToolKind, matchesToolCallId } from './to
 
 function nextThinkingId(): string {
   return `thinking-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function thinkingId(chunk: ContentChunk): string {
+  return chunk.toolCallId || nextThinkingId();
 }
 
 function collectToolCallDiffEntries(blocks: ToolCallBlock[]): ToolCallDiffEntry[] {
@@ -94,7 +98,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
     const newMsg: Message = {
       id: nextMessageId(chunk.role),
       role: chunk.role,
-      content: chunk.type === 'text' ? (displayText || '') : '',
+      content: plainTextFromBlocks(blocks),
       timestamp: chunk.isReplay ? undefined : Date.now()
     };
     if (chunk.role === 'assistant') {
@@ -135,7 +139,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
       } else {
         // Add new thinking entry
         prevEntries.push({
-          toolCallId: nextThinkingId(),
+          toolCallId: thinkingId(chunk),
           kind: 'thinking',
           text: displayText || '',
           rawJson: ''
@@ -150,19 +154,16 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
         isStreaming: !chunk.isReplay,
         isReplay: chunk.isReplay,
         entries: [{
-          toolCallId: nextThinkingId(),
+          toolCallId: thinkingId(chunk),
           kind: 'thinking',
           text: displayText || '',
           rawJson: ''
         }]
       });
     }
-  } else if (chunk.type === 'image') {
-    blocks.push({ type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any);
-  } else if (chunk.type === 'audio') {
-    blocks.push({ type: 'audio', data: chunk.data!, mimeType: chunk.mimeType! } as any);
-  } else if (chunk.type === 'video') {
-    blocks.push({ type: 'video', data: chunk.data!, mimeType: chunk.mimeType! } as any);
+  } else if (chunk.type === 'image' || chunk.type === 'audio' || chunk.type === 'video'
+      || chunk.type === 'file' || chunk.type === 'code_ref') {
+    blocks.push(...buildBlocks(chunk));
   } else if (chunk.type === 'tool_call') {
     handleToolCall(blocks, lastBlock, chunk);
   } else if (chunk.type === 'tool_call_update') {
@@ -173,8 +174,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
   }
 
   // Final rebuild
-  const txt = blocks.filter((b): b is TextBlock => b.type === 'text').map(b => b.text).join('');
-  newMessages[newMessages.length - 1] = setBlocks({ ...lastMsg, content: txt }, blocks);
+  newMessages[newMessages.length - 1] = setBlocks({ ...lastMsg, content: plainTextFromBlocks(blocks) }, blocks);
   return newMessages;
 }
 
@@ -186,25 +186,33 @@ function buildBlocks(chunk: ContentChunk): RichContentBlock[] {
         isStreaming: !chunk.isReplay,
         isReplay: chunk.isReplay,
         entries: [{
-          toolCallId: nextThinkingId(),
+          toolCallId: thinkingId(chunk),
           kind: 'thinking',
           text: chunk.text || '',
           rawJson: ''
         }]
       }];
     case 'image':
-      return [{ type: 'image', data: chunk.data!, mimeType: chunk.mimeType! } as any];
+      return [{ type: 'image', data: chunk.data!, mimeType: chunk.mimeType!, isInline: chunk.isInline } as any];
     case 'audio':
       return [{ type: 'audio', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'video':
       return [{ type: 'video', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'file':
-      return [{ 
-        type: 'file', 
-        name: chunk.name || 'file', 
+      return [{
+        type: 'file',
+        name: chunk.name || 'file',
         mimeType: chunk.mimeType || 'application/octet-stream',
         data: chunk.data,
         path: chunk.path
+      } as any];
+    case 'code_ref':
+      return [{
+        type: 'code_ref',
+        name: chunk.name || chunk.path || 'reference',
+        path: chunk.path || '',
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
       } as any];
     case 'tool_call': {
       const entry = buildToolCallEntry(chunk);

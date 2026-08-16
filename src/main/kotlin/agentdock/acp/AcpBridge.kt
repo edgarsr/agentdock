@@ -5,10 +5,15 @@ import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
 import agentdock.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
+internal class HistoryLoadMutexEntry {
+    val mutex = Mutex()
+    var references = 0
+}
 
 /**
  * Connects AcpClientService to the JCEF/React UI.
@@ -42,7 +47,6 @@ class AcpBridge(
     internal var undoAllFilesQuery: JBCefJSQuery? = null
     internal var processFileQuery: JBCefJSQuery? = null
     internal var keepAllQuery: JBCefJSQuery? = null
-    internal var removeProcessedFilesQuery: JBCefJSQuery? = null
     internal var getChangesStateQuery: JBCefJSQuery? = null
     internal var computeFileChangeStatsQuery: JBCefJSQuery? = null
     internal var showDiffQuery: JBCefJSQuery? = null
@@ -79,9 +83,9 @@ class AcpBridge(
     internal val initialAdapterRefreshStarted = AtomicBoolean(false)
     internal val fullAdapterRefreshInProgress = AtomicBoolean(false)
     internal val fullAdapterRefreshDispatching = AtomicBoolean(false)
-    internal val replaySeqByChatId = ConcurrentHashMap<String, Int>()
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
+    internal val historyLoadMutexes = ConcurrentHashMap<String, HistoryLoadMutexEntry>()
     internal val replayFreshnessProbes = ConcurrentHashMap<String, ReplayFreshnessProbe>()
     internal val suppressReplayForChatIds: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
     internal val todoToolCallKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
@@ -103,11 +107,6 @@ class AcpBridge(
         installFileChangeQueries()
         installMiscQueries()
         installFileIconQuery()
-    }
-
-    internal fun nextReplaySeq(chatId: String, isReplay: Boolean): Int? {
-        if (!isReplay) return null
-        return replaySeqByChatId.compute(chatId) { _, prev -> (prev ?: 0) + 1 }
     }
 
     internal fun runOnEdt(action: () -> Unit) = ApplicationManager.getApplication().invokeLater(action)

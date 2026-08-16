@@ -21,11 +21,11 @@ private const val CANCELLED_PROMPT_RESPONSE_TIMEOUT_MS = 10_000L
 private const val PREVIOUS_PROMPT_SETTLE_TIMEOUT_MS = 30_000L
 
 internal fun AcpBridge.pushConversationError(chatId: String, error: Throwable) {
-    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(error)}]", isReplay = false)
+    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(error)}]")
 }
 
 internal fun AcpBridge.pushConversationError(chatId: String, message: String) {
-    pushContentChunk(chatId, "assistant", "text", text = "[Error: $message]", isReplay = false)
+    pushContentChunk(chatId, "assistant", "text", text = "[Error: $message]")
 }
 
 internal fun AcpBridge.pushBridgeOperationResult(
@@ -101,7 +101,7 @@ private fun AcpBridge.completeCancelledPromptWhenAgentSettles(chatId: String, ca
 
         if (!promptSettled) {
             val message = "\n\n[Warning: The cancel request was sent, but the AI agent did not finish the cancelled prompt within 10 seconds.]\n\n"
-            pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
+            pushContentChunk(chatId, "assistant", "text", text = message)
             appendLivePromptTextEvent(chatId, message)
             service.markChatSessionBroken(chatId)
             if (cancelledJob != null) {
@@ -141,7 +141,7 @@ internal fun AcpBridge.installConversationQueries() {
                         pushMode(chatId, service.activeModeId(chatId))
                     } catch (e: Exception) {
                         pushStatus(chatId, "error")
-                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]", isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]")
                     }
                 }
             } else {
@@ -217,7 +217,7 @@ internal fun AcpBridge.installConversationQueries() {
                                 is AcpEvent.PromptDone -> {
                                     val fallbackText = "[The AI agent ended the turn without providing a response.]"
                                     if (ensureLivePromptNoResponseFallback(chatId, fallbackText, captureId)) {
-                                        pushContentChunk(chatId, "assistant", "text", text = fallbackText, isReplay = false)
+                                        pushContentChunk(chatId, "assistant", "text", text = fallbackText)
                                     }
                                     flushLivePromptCapture(chatId, captureId)?.let {
                                         pushPromptDoneChunk(chatId, it, outcome = "success")
@@ -225,7 +225,7 @@ internal fun AcpBridge.installConversationQueries() {
                                     pushStatus(chatId, "ready")
                                 }
                                 is AcpEvent.Error -> {
-                                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]", isReplay = false)
+                                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]")
                                     appendLivePromptTextEvent(chatId, "[Error: ${event.message}]", captureId)
                                     flushLivePromptCapture(chatId, captureId)?.let {
                                         pushPromptDoneChunk(chatId, it, outcome = "error")
@@ -246,7 +246,7 @@ internal fun AcpBridge.installConversationQueries() {
                         if (previousPromptJob != null) {
                             service.markChatSessionBroken(chatId)
                         }
-                        pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = message)
                         appendLivePromptTextEvent(chatId, message, captureId)
                         flushLivePromptCapture(chatId, captureId)?.let {
                             pushPromptDoneChunk(chatId, it, outcome = "error")
@@ -266,7 +266,7 @@ internal fun AcpBridge.installConversationQueries() {
                         val failure = service.promptDispatchFailure(chatId) ?: continue
                         val message = "[Error: $failure]"
                         service.markChatSessionBroken(chatId)
-                        pushContentChunk(chatId, "assistant", "text", text = message, isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = message)
                         appendLivePromptTextEvent(chatId, message, captureId)
                         flushLivePromptCapture(chatId, captureId)?.let {
                             pushPromptDoneChunk(chatId, it, outcome = "error")
@@ -309,7 +309,7 @@ internal fun AcpBridge.installConversationQueries() {
                         withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
                             service.cancel(chatId)
                         }
-                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n", isReplay = false)
+                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n")
                         appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
                         pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
                         completeCancelledPromptWhenAgentSettles(chatId, cancelledJob)

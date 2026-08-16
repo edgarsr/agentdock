@@ -9,7 +9,7 @@ import java.time.Instant
 data class ChangesState(
     val sessionId: String,
     val adapterName: String,
-    val baseToolCallIndex: Int = 0,
+    val keptToolCallIds: List<String> = emptyList(),
     val processedFileStates: List<ProcessedFileState> = emptyList(),
     val updatedAt: Long = Instant.now().toEpochMilli()
 )
@@ -41,7 +41,7 @@ object ChangesStateService {
             return ChangesState(
                 sessionId = sessionId,
                 adapterName = adapterName,
-                baseToolCallIndex = current.baseToolCallIndex,
+                keptToolCallIds = current.keptToolCallIds,
                 processedFileStates = current.processedFileStates,
                 updatedAt = current.updatedAt
             )
@@ -54,7 +54,7 @@ object ChangesStateService {
             projectPath = projectPath,
             sessionId = state.sessionId,
             adapterName = state.adapterName,
-            baseToolCallIndex = state.baseToolCallIndex,
+            keptToolCallIds = state.keptToolCallIds,
             processedFileStates = state.processedFileStates
         )
     }
@@ -72,29 +72,27 @@ object ChangesStateService {
         sessionId: String,
         adapterName: String,
         filePath: String,
-        toolCallIndex: Int
+        toolCallIds: List<String>
     ) {
         val current = loadState(projectPath, sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
+        val previous = current.processedFileStates.firstOrNull { pathsMatch(it.filePath, filePath) }
         val updated = current.processedFileStates
             .filterNot { pathsMatch(it.filePath, filePath) } + ProcessedFileState(
-            filePath = filePath,
-            toolCallIndex = toolCallIndex
-        )
+                filePath = filePath,
+                toolCallIds = (previous?.toolCallIds.orEmpty() + toolCallIds).distinct()
+            )
         saveState(projectPath, current.copy(processedFileStates = updated))
     }
 
-    fun removeProcessedFiles(projectPath: String, sessionId: String, adapterName: String, filePaths: List<String>) {
-        val current = loadState(projectPath, sessionId, adapterName) ?: return
-        val updated = current.processedFileStates.filter { processedState ->
-            !filePaths.any { pathsMatch(it, processedState.filePath) }
-        }
-        if (updated.size != current.processedFileStates.size) {
-            saveState(projectPath, current.copy(processedFileStates = updated))
-        }
-    }
-
-    fun setBaseIndex(projectPath: String, sessionId: String, adapterName: String, index: Int) {
+    fun markAllProcessed(projectPath: String, sessionId: String, adapterName: String, toolCallIds: List<String>) {
         val current = loadState(projectPath, sessionId, adapterName) ?: ChangesState(sessionId, adapterName)
-        saveState(projectPath, current.copy(baseToolCallIndex = index, processedFileStates = emptyList()))
+        saveState(projectPath, current.copy(
+            keptToolCallIds = (
+                current.keptToolCallIds
+                    + current.processedFileStates.flatMap { it.toolCallIds }
+                    + toolCallIds
+                ).distinct(),
+            processedFileStates = emptyList()
+        ))
     }
 }

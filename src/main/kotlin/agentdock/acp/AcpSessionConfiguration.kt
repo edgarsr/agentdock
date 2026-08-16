@@ -33,6 +33,14 @@ internal fun AcpClientService.updateSessionRuntimeMetadata(
     context.activeReasoningEffortIdRef.set(metadata.currentReasoningEffortId)
     context.activeConfigValues.clear()
     context.activeConfigValues.putAll(metadata.configOptions.associate { it.id to it.currentValue })
-    runCatching { sessionConfigOptionsHandler?.invoke(context.chatId, metadata) }
+    if (!context.configOptionsUpdateInProgress) {
+        publishSessionConfigOptions(context)
+    }
     return metadata
+}
+
+internal fun AcpClientService.publishSessionConfigOptions(context: AcpClientService.AgentContext) {
+    context.runtimeMetadataRef.get()?.let { metadata ->
+        runCatching { sessionConfigOptionsHandler?.invoke(context.chatId, metadata) }
+    }
 }

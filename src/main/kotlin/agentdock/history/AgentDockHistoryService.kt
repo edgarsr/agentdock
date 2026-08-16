@@ -224,14 +224,14 @@ object AgentDockHistoryService {
         projectPath: String,
         sessionId: String,
         adapterName: String,
-        baseToolCallIndex: Int,
+        keptToolCallIds: List<String>,
         processedFileStates: List<ProcessedFileState>
     ): Boolean {
         return HistorySessionChangesStore.saveSessionChanges(
             projectPath,
             sessionId,
             adapterName,
-            baseToolCallIndex,
+            keptToolCallIds,
             processedFileStates
         )
     }

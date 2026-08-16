@@ -40,13 +40,14 @@ internal fun AcpBridge.installServiceCallbacks() {
             }
             return@setOnSessionUpdate
         }
-        val captureOnlyReplay = isReplay && historyReplayCaptures.containsKey(chatId)
-        val sessionId = if (captureOnlyReplay) {
+        // Replay is capture-only: it is collected into ConversationReplayData and delivered
+        // to the UI in one piece by pushConversationReplayLoaded, never as streamed chunks.
+        val sessionId = if (isReplay) {
             historyReplayCaptures[chatId]?.currentSessionId.orEmpty()
         } else {
             service.sessionId(chatId).orEmpty()
         }
-        val adapterName = if (captureOnlyReplay) {
+        val adapterName = if (isReplay) {
             historyReplayCaptures[chatId]?.currentAdapterName.orEmpty()
         } else {
             service.activeAdapterName(chatId).orEmpty()
@@ -55,36 +56,33 @@ internal fun AcpBridge.installServiceCallbacks() {
             is SessionUpdate.UserMessageChunk -> {
                 if (isReplay) {
                     recordReplayUserBlock(chatId, sessionId, adapterName, update.content)
-                    if (!captureOnlyReplay) {
-                        pushContentBlock(chatId, "user", update.content, isThought = false, isReplay = true)
-                    }
                 }
             }
             is SessionUpdate.AgentMessageChunk -> {
                 recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = false, isReplay = isReplay)
-                if (!captureOnlyReplay) {
-                    if (!isReplay && contentBlockHasVisibleOutput(update.content)) {
+                if (!isReplay) {
+                    if (contentBlockHasVisibleOutput(update.content)) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
-                    pushContentBlock(chatId, "assistant", update.content, isThought = false, isReplay = isReplay)
+                    pushContentBlock(chatId, "assistant", update.content, isThought = false)
                 }
             }
             is SessionUpdate.AgentThoughtChunk -> {
                 recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = true, isReplay = isReplay)
-                if (!captureOnlyReplay) {
-                    if (!isReplay && contentBlockHasVisibleOutput(update.content, textType = "thinking")) {
+                if (!isReplay) {
+                    if (contentBlockHasVisibleOutput(update.content, textType = "thinking")) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
-                    pushContentBlock(chatId, "assistant", update.content, isThought = true, isReplay = isReplay)
+                    pushContentBlock(chatId, "assistant", update.content, isThought = true)
                 }
             }
             is SessionUpdate.CurrentModeUpdate -> {
-                if (!captureOnlyReplay) {
+                if (!isReplay) {
                     pushMode(chatId, update.currentModeId.value)
                 }
             }
             is SessionUpdate.ToolCall -> {
-                if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
+                if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
                 var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                 json = convertBrokenOtherPatchToolCallJson(json)
                 val isPermissionRequest = update.toolCallId.value.endsWith("-permission")
@@ -102,19 +100,19 @@ internal fun AcpBridge.installServiceCallbacks() {
                         recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallChunk(json), isReplay)
                     }
                 }
-                if (!isPermissionRequest && !captureOnlyReplay) {
-                    if (!isReplay && (!isTodoWrite || shouldEmitTodoPlan)) {
+                if (!isPermissionRequest && !isReplay) {
+                    if (!isTodoWrite || shouldEmitTodoPlan) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
                     if (shouldEmitTodoPlan) {
-                        pushPlanChunk(chatId, todoPlanEntries, isReplay)
+                        pushPlanChunk(chatId, todoPlanEntries)
                     } else if (!isTodoWrite) {
-                        pushToolCallChunk(chatId, json, isReplay)
+                        pushToolCallChunk(chatId, json)
                     }
                 }
             }
             is SessionUpdate.ToolCallUpdate -> {
-                if (!isReplay) removeProcessedFilesForDiffs(chatId, update.content)
+                if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
                 var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                 json = convertBrokenOtherPatchToolCallJson(json)
                 val isPermissionRequest = update.toolCallId.value.endsWith("-permission")
@@ -132,14 +130,14 @@ internal fun AcpBridge.installServiceCallbacks() {
                         recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallUpdateChunk(update.toolCallId.value, json), isReplay)
                     }
                 }
-                if (!isPermissionRequest && !captureOnlyReplay) {
-                    if (!isReplay && (!isTodoWrite || shouldEmitTodoPlan)) {
+                if (!isPermissionRequest && !isReplay) {
+                    if (!isTodoWrite || shouldEmitTodoPlan) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
                     if (shouldEmitTodoPlan) {
-                        pushPlanChunk(chatId, todoPlanEntries, isReplay)
+                        pushPlanChunk(chatId, todoPlanEntries)
                     } else if (!isTodoWrite) {
-                        pushToolCallUpdateChunk(chatId, update.toolCallId.value, json, isReplay)
+                        pushToolCallUpdateChunk(chatId, update.toolCallId.value, json)
                     }
                 }
             }
@@ -149,11 +147,11 @@ internal fun AcpBridge.installServiceCallbacks() {
                     recordUsageUpdate(chatId, sessionId, adapterName, usage.first, usage.second, isReplay)
                 } else if (isPlanUpdate(update, _meta)) {
                     buildStoredPlanChunk(update, _meta)?.let { recordStoredEvent(chatId, sessionId, adapterName, it, isReplay) }
-                    if (!captureOnlyReplay) {
-                        if (!isReplay && extractPlanEntries(update, _meta)?.isNotEmpty() == true) {
+                    if (!isReplay) {
+                        if (extractPlanEntries(update, _meta)?.isNotEmpty() == true) {
                             markLivePromptVisibleAssistantOutput(chatId)
                         }
-                        pushPlanChunk(chatId, update, isReplay, _meta)
+                        pushPlanChunk(chatId, update, _meta)
                     }
                 }
             }

@@ -18,16 +18,15 @@ export function useBufferedMessageChunks({
     const chunks = chunkBufferRef.current;
     chunkBufferRef.current = [];
     if (chunks.length === 0 && reason !== 'status-ready') return;
-    const replayChunks = chunks.filter((chunk) => chunk.isReplay);
-    const liveChunks = chunks.filter((chunk) => !chunk.isReplay);
 
-    setHistoryMessages(prev => {
-      const result = replayChunks.length > 0 ? applyChunks(prev, replayChunks) : prev;
-      return reason === 'status-ready' ? closeAllStreamingThinking(result) : result;
-    });
+    // Buffered chunks are always live agent output; stored conversations are applied
+    // to history messages in one piece when the replay payload arrives.
+    if (reason === 'status-ready') {
+      setHistoryMessages(closeAllStreamingThinking);
+    }
 
     setLiveMessages(prev => {
-      const result = liveChunks.length > 0 ? applyChunks(prev, liveChunks) : prev;
+      const result = chunks.length > 0 ? applyChunks(prev, chunks) : prev;
       return reason === 'status-ready' ? closeAllStreamingThinking(result) : result;
     });
   }, [setHistoryMessages, setLiveMessages]);
