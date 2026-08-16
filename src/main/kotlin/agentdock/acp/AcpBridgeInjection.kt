@@ -233,7 +233,7 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
 }
 
 internal fun AcpBridge.pushLogEntry(entry: AcpLogEntry) {
-    if (!BuildConfig.IS_DEV) return
+    if (!BuildConfig.IS_DEV || browser.isDisposed) return
     val payload = """{"adapterId":${escapeJsonString(entry.adapterId)},"direction":"${entry.direction}","category":"${entry.category}","json":${escapeJsonString(entry.json)},"timestamp":${entry.timestampMillis}}"""
     val escaped = payload.escapeForJsString()
     runOnEdt {

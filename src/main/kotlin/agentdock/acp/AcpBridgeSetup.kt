@@ -12,6 +12,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.io.File
 internal fun AcpBridge.installServiceCallbacks() {
+    service.callbackOwner = this
     if (BuildConfig.IS_DEV) {
         service.setOnLogEntry { pushLogEntry(it) }
     }

@@ -27,7 +27,6 @@ import agentdock.acp.pushAdapters
 import agentdock.acp.injectDebugApi
 import agentdock.acp.initializeDownloadedAdaptersInBackground
 import agentdock.acp.injectReadySignal
-import agentdock.acp.shutdown
 import agentdock.history.HistoryBridge
 import agentdock.mcp.McpBridge
 import agentdock.promptlibrary.PromptLibraryBridge
@@ -204,16 +203,12 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
                             override fun dispose() {
                                 ExternalCodeReferenceDispatcher.unregister(project, browser)
                                 dropTarget.component = null
+                                service.releaseUiCallbacks(acpBridge)
                             }
                         })
                         Disposer.register(content, object : Disposable {
                             override fun dispose() {
                                 scope.coroutineContext[Job]?.cancel()
-                            }
-                        })
-                        Disposer.register(content, object : Disposable {
-                            override fun dispose() {
-                                service.shutdown()
                             }
                         })
 

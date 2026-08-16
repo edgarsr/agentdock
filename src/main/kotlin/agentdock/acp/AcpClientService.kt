@@ -168,6 +168,25 @@ class AcpClientService private constructor(val project: Project) {
         sessionConfigOptionsHandler = handler
     }
 
+    /**
+     * The handlers above capture the bridge, and through it the JCEF browser. This service outlives
+     * the tool window content, so the content has to hand them back when it goes away. The owner
+     * check keeps a late disposal of an old bridge from unhooking a newer one.
+     */
+    @Volatile
+    internal var callbackOwner: Any? = null
+
+    internal fun releaseUiCallbacks(owner: Any) {
+        if (callbackOwner !== owner) return
+        callbackOwner = null
+        logCallback = null
+        permissionRequestHandler = null
+        sessionUpdateHandler = null
+        availableCommandsHandler = null
+        adapterInitializationStateHandler = null
+        sessionConfigOptionsHandler = null
+    }
+
     internal fun bindLiveSessionOwner(chatId: String, sessionId: String?) {
         val normalizedSessionId = sessionId?.trim().orEmpty()
         synchronized(liveOwnerBySessionId) {

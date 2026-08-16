@@ -137,6 +137,7 @@ class AcpBridge(
     internal fun jsStringLiteral(value: String) = "'${value.escapeForJsString()}'"
 
     internal fun dispatchContentChunkJson(json: String) {
+        if (browser.isDisposed) return
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
                 """
