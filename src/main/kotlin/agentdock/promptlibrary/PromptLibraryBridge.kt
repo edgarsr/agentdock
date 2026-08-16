@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -66,10 +66,10 @@ class PromptLibraryBridge(
     }
 
     private fun push(prompts: List<PromptLibraryItem>) {
-        val payload = Json.encodeToString(ListSerializer(PromptLibraryItem.serializer()), prompts).escapeForJsString()
+        val payload = Json.encodeToString(ListSerializer(PromptLibraryItem.serializer()), prompts).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onPromptLibrary) window.__onPromptLibrary(JSON.parse('$payload'));",
+                "if(window.__onPromptLibrary) window.__onPromptLibrary(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )

@@ -191,7 +191,7 @@ export interface PermissionRequest {
   requestId: string;
   chatId?: string;
   title: string;
-  options: { optionId: string; label: string }[];
+  options: { optionId: string; label: string; kind: string }[];
 }
 
 export type ApprovalMode = 'ask' | 'auto';

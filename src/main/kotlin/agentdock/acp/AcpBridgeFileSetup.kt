@@ -20,6 +20,7 @@ import agentdock.changes.ChangesStateService
 import agentdock.changes.UndoFileHandler
 import agentdock.changes.UndoOperation
 import agentdock.utils.LocalFilePathPolicy
+import agentdock.utils.jsStringLiteral
 import java.io.File
 
 
@@ -152,10 +153,16 @@ internal fun AcpBridge.installFileChangeQueries() {
 
     computeFileChangeStatsQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
         addHandler { payload ->
-            runCatching {
-                val request = adapterJson.decodeFromString<FileChangeStatsRequestPayload>(payload ?: "{}")
-                if (request.requestId.isNotBlank()) {
-                    val files = request.files.mapNotNull { file ->
+            val raw = payload ?: "{}"
+            // The id is read before anything that can fail, so a failure is still answered
+            // instead of leaving the frontend request pending until its timeout.
+            val requestId = runCatching {
+                Json.parseToJsonElement(raw).jsonObject["requestId"]?.jsonPrimitive?.content
+            }.getOrNull().orEmpty()
+
+            if (requestId.isNotBlank()) {
+                val files = runCatching {
+                    adapterJson.decodeFromString<FileChangeStatsRequestPayload>(raw).files.mapNotNull { file ->
                         val operations = file.operations.map { UndoOperation(oldText = it.oldText, newText = it.newText) }
                         AgentChangeCalculator.computeFileStats(
                             project = service.project,
@@ -170,8 +177,8 @@ internal fun AcpBridge.installFileChangeQueries() {
                             )
                         }
                     }
-                    pushFileChangeStats(FileChangeStatsResultPayload(requestId = request.requestId, files = files))
-                }
+                }.getOrDefault(emptyList())
+                pushFileChangeStats(FileChangeStatsResultPayload(requestId = requestId, files = files))
             }
             JBCefJSQuery.Response("ok")
         }
@@ -364,7 +371,7 @@ internal fun AcpBridge.installMiscQueries() {
 
                         val jsonArrayStr = results.joinToString(",")
                         browser.cefBrowser.executeJavaScript(
-                            "if(window.__onAttachmentsAdded) window.__onAttachmentsAdded(${jsStringLiteral(normalizedChatId)}, [$jsonArrayStr]);",
+                            "if(window.__onAttachmentsAdded) window.__onAttachmentsAdded(${normalizedChatId.jsStringLiteral()}, [$jsonArrayStr]);",
                             browser.cefBrowser.url, 0
                         )
                     }
@@ -392,7 +399,7 @@ internal fun AcpBridge.installFileIconQuery() {
                 runOnEdt {
                     browser.cefBrowser.executeJavaScript(
                         "if(window.__onFileIconResult) window.__onFileIconResult(" +
-                            "{\"path\":${escapeJsonString(path)},\"icon\":${escapeJsonString(icon)}});",
+                            "${buildJsonObject { put("path", path); put("icon", icon) }});",
                         browser.cefBrowser.url, 0
                     )
                 }

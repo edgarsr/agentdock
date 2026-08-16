@@ -10,7 +10,7 @@ import agentdock.changes.ChangesState
 import agentdock.changes.ChangesStateService
 import agentdock.history.ConversationAssistantMetadata
 import agentdock.history.ConversationReplayData
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 
 private val LOG = logger<AcpBridge>()
 
@@ -44,10 +44,10 @@ internal fun AcpBridge.pushConversationReplayLoaded(chatId: String, data: Conver
     val payload = buildJsonObject {
         put("chatId", chatId)
         put("data", Json.encodeToJsonElement(data))
-    }.toString().escapeForJsString()
+    }.toString().jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onConversationReplayLoaded) window.__onConversationReplayLoaded(JSON.parse('$payload'));",
+            "if(window.__onConversationReplayLoaded) window.__onConversationReplayLoaded(JSON.parse($payload));",
             browser.cefBrowser.url,
             0
         )
@@ -267,8 +267,8 @@ internal fun AcpBridge.pushPlanChunk(chatId: String, entries: JsonArray) {
 
 internal fun AcpBridge.pushStatus(chatId: String, status: String) {
     val previousStatus = lastStatusByChatId.put(chatId, status)
-    val escapedStatus = jsStringLiteral(status)
-    val escapedChatId = jsStringLiteral(chatId)
+    val escapedStatus = status.jsStringLiteral()
+    val escapedChatId = chatId.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
             "if(window.__onStatus) window.__onStatus($escapedChatId, $escapedStatus);",
@@ -282,8 +282,8 @@ internal fun AcpBridge.pushStatus(chatId: String, status: String) {
 
 internal fun AcpBridge.pushMode(chatId: String, modeId: String?) {
     if (modeId == null) return
-    val escapedModeId = jsStringLiteral(modeId)
-    val escapedChatId = jsStringLiteral(chatId)
+    val escapedModeId = modeId.jsStringLiteral()
+    val escapedChatId = chatId.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
             "if(window.__onMode) window.__onMode($escapedChatId, $escapedModeId);",
@@ -302,10 +302,10 @@ internal fun AcpBridge.pushSessionConfigOptions(
             configOptions = metadata.configOptions,
             configOptionsByModel = metadata.configOptionsByModel
         )
-    ).escapeForJsString()
+    ).jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onSessionConfigOptions) window.__onSessionConfigOptions(JSON.parse('$payload'));",
+            "if(window.__onSessionConfigOptions) window.__onSessionConfigOptions(JSON.parse($payload));",
             browser.cefBrowser.url, 0
         )
     }
@@ -313,11 +313,11 @@ internal fun AcpBridge.pushSessionConfigOptions(
 
 internal fun AcpBridge.pushAvailableCommands(adapterId: String, commands: List<AvailableCommandPayload>) {
     val payloadJson = adapterJson.encodeToString(commands)
-    val escapedAdapterId = jsStringLiteral(adapterId)
-    val escapedPayload = payloadJson.escapeForJsString()
+    val escapedAdapterId = adapterId.jsStringLiteral()
+    val escapedPayload = payloadJson.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onAvailableCommands) window.__onAvailableCommands($escapedAdapterId, JSON.parse('$escapedPayload'));",
+            "if(window.__onAvailableCommands) window.__onAvailableCommands($escapedAdapterId, JSON.parse($escapedPayload));",
             browser.cefBrowser.url, 0
         )
     }
@@ -331,8 +331,8 @@ internal fun AcpBridge.pushAllAvailableCommands() {
 
 internal fun AcpBridge.pushSessionId(chatId: String, sid: String?) {
     if (sid == null) return
-    val escapedSessionId = jsStringLiteral(sid)
-    val escapedChatId = jsStringLiteral(chatId)
+    val escapedSessionId = sid.jsStringLiteral()
+    val escapedChatId = chatId.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
             "if(window.__onSessionId) window.__onSessionId($escapedChatId, $escapedSessionId);",
@@ -342,15 +342,23 @@ internal fun AcpBridge.pushSessionId(chatId: String, sid: String?) {
 }
 
 internal fun AcpBridge.pushPermissionRequest(request: PermissionRequest) {
-    val requestIdLiteral = jsStringLiteral(request.requestId)
-    val chatIdLiteral = jsStringLiteral(request.chatId)
-    val titleLiteral = jsStringLiteral(request.title)
-    val optionsJson = request.options.joinToString(",") { opt ->
-        "{optionId: ${jsStringLiteral(opt.optionId.value)}, label: ${jsStringLiteral(opt.name)}}"
-    }
+    val payload = buildJsonObject {
+        put("requestId", request.requestId)
+        put("chatId", request.chatId)
+        put("title", request.title)
+        put("options", buildJsonArray {
+            request.options.forEach { opt ->
+                add(buildJsonObject {
+                    put("optionId", opt.optionId.value)
+                    put("label", opt.name)
+                    put("kind", Json.encodeToJsonElement(opt.kind))
+                })
+            }
+        })
+    }.toString().jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onPermissionRequest) window.__onPermissionRequest({ requestId: $requestIdLiteral, chatId: $chatIdLiteral, title: $titleLiteral, options: [$optionsJson] });",
+            "if(window.__onPermissionRequest) window.__onPermissionRequest(JSON.parse($payload));",
             browser.cefBrowser.url, 0
         )
     }
@@ -368,11 +376,11 @@ internal fun AcpBridge.pushUndoResult(chatId: String, result: agentdock.changes.
                 put("message", fileResult.message)
             }
         }))
-    }.toString().escapeForJsString()
-    val chatIdLiteral = jsStringLiteral(chatId)
+    }.toString().jsStringLiteral()
+    val chatIdLiteral = chatId.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onUndoResult) window.__onUndoResult($chatIdLiteral, JSON.parse('$payloadJson'));",
+            "if(window.__onUndoResult) window.__onUndoResult($chatIdLiteral, JSON.parse($payloadJson));",
             browser.cefBrowser.url, 0
         )
     }
@@ -380,10 +388,10 @@ internal fun AcpBridge.pushUndoResult(chatId: String, result: agentdock.changes.
 
 internal fun AcpBridge.pushConversationTranscriptSaved(result: SaveConversationTranscriptResultPayload) {
     val payloadJson = adapterJson.encodeToString(result)
-    val escaped = payloadJson.escapeForJsString()
+    val escaped = payloadJson.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onConversationTranscriptSaved) window.__onConversationTranscriptSaved(JSON.parse('$escaped'));",
+            "if(window.__onConversationTranscriptSaved) window.__onConversationTranscriptSaved(JSON.parse($escaped));",
             browser.cefBrowser.url, 0
         )
     }
@@ -391,10 +399,10 @@ internal fun AcpBridge.pushConversationTranscriptSaved(result: SaveConversationT
 
 internal fun AcpBridge.pushFileChangeStats(result: FileChangeStatsResultPayload) {
     val payloadJson = adapterJson.encodeToString(result)
-    val escaped = payloadJson.escapeForJsString()
+    val escaped = payloadJson.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onFileChangeStats) window.__onFileChangeStats(JSON.parse('$escaped'));",
+            "if(window.__onFileChangeStats) window.__onFileChangeStats(JSON.parse($escaped));",
             browser.cefBrowser.url, 0
         )
     }
@@ -418,11 +426,11 @@ internal fun AcpBridge.pushChangesState(chatId: String, state: ChangesState, has
                 })
             }
         })
-    }.toString().escapeForJsString()
-    val chatIdLiteral = jsStringLiteral(chatId)
+    }.toString().jsStringLiteral()
+    val chatIdLiteral = chatId.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onChangesState) window.__onChangesState($chatIdLiteral, JSON.parse('$payload'));",
+            "if(window.__onChangesState) window.__onChangesState($chatIdLiteral, JSON.parse($payload));",
             browser.cefBrowser.url, 0
         )
     }
@@ -469,10 +477,10 @@ internal fun AcpBridge.pushPromptDoneChunk(
 
 internal fun AcpBridge.pushBridgeOperationResult(result: BridgeOperationResultPayload) {
     val payloadJson = adapterJson.encodeToString(result)
-    val escaped = payloadJson.escapeForJsString()
+    val escaped = payloadJson.jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onBridgeOperationResult) window.__onBridgeOperationResult(JSON.parse('$escaped'));",
+            "if(window.__onBridgeOperationResult) window.__onBridgeOperationResult(JSON.parse($escaped));",
             browser.cefBrowser.url,
             0
         )

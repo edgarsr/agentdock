@@ -63,14 +63,11 @@ internal class AcpBridgeCli(
         return adapterInfo to command
     }
 
-    private fun openInIdeTerminal(workingDir: String, title: String, command: String): Boolean {
-        val bridge = project.ideTerminalBridge() ?: return false
-        return runCatching {
-            runOnEdt {
-                bridge.openInTerminal(workingDir, title, command)
-            }
-            true
-        }.getOrElse { false }
+    private fun openInIdeTerminal(workingDir: String, title: String, command: String) {
+        val bridge = project.ideTerminalBridge() ?: return
+        runOnEdt {
+            runCatching { bridge.openInTerminal(workingDir, title, command) }
+        }
     }
 
     private fun detectIdeTerminalShellFlavor(): TerminalShellFlavor {

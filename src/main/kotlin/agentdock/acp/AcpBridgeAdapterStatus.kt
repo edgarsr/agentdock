@@ -7,7 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import agentdock.IdeTheme
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 import com.intellij.openapi.diagnostic.Logger
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -365,10 +365,10 @@ internal fun AcpBridge.pushAdapters(
         }
 
         val payload = adapterJson.encodeToString(adapters)
-        val escaped = payload.escapeForJsString()
+        val escaped = payload.jsStringLiteral()
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAdapters) window.__onAdapters(JSON.parse('$escaped'));",
+                "if(window.__onAdapters) window.__onAdapters(JSON.parse($escaped));",
                 browser.cefBrowser.url, 0
             )
         }

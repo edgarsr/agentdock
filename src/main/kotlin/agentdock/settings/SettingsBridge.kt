@@ -13,7 +13,7 @@ import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
 import agentdock.acp.AcpQuotaService
 import agentdock.ui.AgentDockQuotaWidgetFactory
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.impl.status.widget.StatusBarWidgetsManager
 
@@ -280,10 +280,10 @@ class SettingsBridge(
     }
 
     private fun push(state: AudioTranscriptionFeatureState) {
-        val payload = json.encodeToString(state).escapeForJsString()
+        val payload = json.encodeToString(state).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAudioTranscriptionFeature) window.__onAudioTranscriptionFeature(JSON.parse('$payload'));",
+                "if(window.__onAudioTranscriptionFeature) window.__onAudioTranscriptionFeature(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )
@@ -291,10 +291,10 @@ class SettingsBridge(
     }
 
     private fun pushResult(result: AudioTranscriptionResultPayload) {
-        val payload = json.encodeToString(result).escapeForJsString()
+        val payload = json.encodeToString(result).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAudioTranscriptionResult) window.__onAudioTranscriptionResult(JSON.parse('$payload'));",
+                "if(window.__onAudioTranscriptionResult) window.__onAudioTranscriptionResult(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )
@@ -302,10 +302,10 @@ class SettingsBridge(
     }
 
     private fun pushRecordingState(state: AudioRecordingStatePayload) {
-        val payload = json.encodeToString(state).escapeForJsString()
+        val payload = json.encodeToString(state).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAudioRecordingState) window.__onAudioRecordingState(JSON.parse('$payload'));",
+                "if(window.__onAudioRecordingState) window.__onAudioRecordingState(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )
@@ -313,10 +313,10 @@ class SettingsBridge(
     }
 
     private fun pushTranscriptionSettings(settings: AudioTranscriptionSettings) {
-        val payload = json.encodeToString(settings).escapeForJsString()
+        val payload = json.encodeToString(settings).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onAudioTranscriptionSettings) window.__onAudioTranscriptionSettings(JSON.parse('$payload'));",
+                "if(window.__onAudioTranscriptionSettings) window.__onAudioTranscriptionSettings(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )
@@ -335,10 +335,10 @@ class SettingsBridge(
     }
 
     private fun pushGlobalSettings(settings: GlobalSettingsPayload) {
-        val payload = json.encodeToString(settings).escapeForJsString()
+        val payload = json.encodeToString(settings).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onGlobalSettings) window.__onGlobalSettings(JSON.parse('$payload'));",
+                "if(window.__onGlobalSettings) window.__onGlobalSettings(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )

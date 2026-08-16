@@ -2,7 +2,9 @@ package agentdock.acp
 
 import org.cef.browser.CefBrowser
 import agentdock.BuildConfig
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 
 /**
@@ -188,9 +190,6 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
         window.__onPermissionRequest = window.__onPermissionRequest || function(request) {};
         window.__respondPermission = window.__respondPermission || function(requestId, decision) {};
         window.__stopAgent = window.__stopAgent || function(chatId) {};
-        window.__onToolCall = window.__onToolCall || function(chatId, payload) {};
-        window.__onToolCallUpdate = window.__onToolCallUpdate || function(chatId, payload) {};
-        window.__onPlan = window.__onPlan || function(chatId, payload) {};
         window.__onUndoResult = window.__onUndoResult || function(chatId, result) {};
         window.__onChangesState = window.__onChangesState || function(chatId, state) {};
         window.__onFileChangeStats = window.__onFileChangeStats || function(payload) {};
@@ -234,11 +233,16 @@ internal fun AcpBridge.injectReadySignal(cefBrowser: CefBrowser) {
 
 internal fun AcpBridge.pushLogEntry(entry: AcpLogEntry) {
     if (!BuildConfig.IS_DEV || browser.isDisposed) return
-    val payload = """{"adapterId":${escapeJsonString(entry.adapterId)},"direction":"${entry.direction}","category":"${entry.category}","json":${escapeJsonString(entry.json)},"timestamp":${entry.timestampMillis}}"""
-    val escaped = payload.escapeForJsString()
+    val payload = buildJsonObject {
+        put("adapterId", entry.adapterId)
+        put("direction", entry.direction.toString())
+        put("category", entry.category.toString())
+        put("json", entry.json)
+        put("timestamp", entry.timestampMillis)
+    }.toString().jsStringLiteral()
     runOnEdt {
         browser.cefBrowser.executeJavaScript(
-            "if(window.__onAcpLog) window.__onAcpLog(JSON.parse('$escaped'));",
+            "if(window.__onAcpLog) window.__onAcpLog(JSON.parse($payload));",
             browser.cefBrowser.url, 0
         )
     }

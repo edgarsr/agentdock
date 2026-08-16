@@ -14,7 +14,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -126,20 +126,20 @@ class McpBridge(
     }
 
     private fun push(servers: List<McpServerConfig>) {
-        val escaped = Json.encodeToString(ListSerializer(McpServerConfig.serializer()), servers).escapeForJsString()
+        val escaped = Json.encodeToString(ListSerializer(McpServerConfig.serializer()), servers).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onMcpServers) window.__onMcpServers(JSON.parse('$escaped'));",
+                "if(window.__onMcpServers) window.__onMcpServers(JSON.parse($escaped));",
                 browser.cefBrowser.url, 0
             )
         }
     }
 
     private fun pushStatus(update: McpStatusUpdate) {
-        val escaped = json.encodeToString(update).escapeForJsString()
+        val escaped = json.encodeToString(update).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onMcpStatus) window.__onMcpStatus(JSON.parse('$escaped'));",
+                "if(window.__onMcpStatus) window.__onMcpStatus(JSON.parse($escaped));",
                 browser.cefBrowser.url, 0
             )
         }

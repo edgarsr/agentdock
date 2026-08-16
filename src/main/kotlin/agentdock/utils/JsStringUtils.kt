@@ -1,13 +1,11 @@
 package agentdock.utils
 
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+
 /**
- * Escapes a string for safe injection into JavaScript code within single quotes.
- * Handles common escape sequences: backslash, single quote, newline, carriage return.
+ * Renders a string as a JavaScript string literal, quotes included, ready to be interpolated
+ * into executeJavaScript source. JSON string literals are a subset of JavaScript string
+ * literals, so the JSON encoder does the escaping and nothing is escaped by hand.
  */
-fun String.escapeForJsString(): String {
-    return this
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-}
+fun String.jsStringLiteral(): String = Json.encodeToString(String.serializer(), this)

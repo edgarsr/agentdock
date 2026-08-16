@@ -8,7 +8,7 @@ import com.intellij.util.concurrency.AppExecutorUtil
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -38,13 +38,13 @@ object ExternalCodeReferenceDispatcher {
 
         val browser = browsers[project]
         if (browser != null) {
-            val payload = json.encodeToString(reference).escapeForJsString()
+            val payload = json.encodeToString(reference).jsStringLiteral()
             ApplicationManager.getApplication().invokeLater {
                 if (!project.isDisposed) {
                     browser.cefBrowser.executeJavaScript(
                         """
                         (function() {
-                          const payload = JSON.parse('$payload');
+                          const payload = JSON.parse($payload);
                           window.dispatchEvent(new CustomEvent('external-code-reference', { detail: payload }));
                         })();
                         """.trimIndent(),

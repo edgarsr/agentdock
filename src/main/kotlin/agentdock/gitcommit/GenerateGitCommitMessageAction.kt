@@ -10,6 +10,7 @@ import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.CommitMessageI
 import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.vcs.changes.Change
+import com.intellij.vcs.commit.CommitMessageUi
 import kotlinx.coroutines.launch
 import org.jetbrains.annotations.NotNull
 import agentdock.acp.AcpClientService
@@ -75,8 +76,8 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
 
         val workflowUi = e.getData(VcsDataKeys.COMMIT_WORKFLOW_UI)
         if (workflowUi != null) {
-            commitMessageTarget = ReflectionCommitMessageTarget.fromWorkflowUi(workflowUi)
-            changes = readWorkflowUiIncludedChanges(workflowUi)
+            commitMessageTarget = WorkflowUiCommitMessageTarget(workflowUi.commitMessageUi)
+            changes = workflowUi.getIncludedChanges()
         }
 
         val workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER)
@@ -121,6 +122,9 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         }
     }
 
+    // CommitMessageI declares only setCommitMessage, so a bare implementation offers no way to read the
+    // current text back. Reflection is the only option left for that case; every other commit UI the action
+    // touches is reached through a typed interface instead.
     private fun readCommitMessage(panel: CommitMessageI): String {
         val methodNames = listOf("getCommitMessage", "getComment", "getText")
         methodNames.forEach { methodName ->
@@ -132,13 +136,6 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
             }
         }
         return ""
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun readWorkflowUiIncludedChanges(workflowUi: Any): Collection<Change> {
-        return runCatching {
-            workflowUi.javaClass.getMethod("getIncludedChanges").invoke(workflowUi) as? Collection<Change>
-        }.getOrNull().orEmpty()
     }
 
     private data class CommitActionContext(
@@ -156,46 +153,25 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
     private inner class LegacyCommitMessageTarget(
         private val panel: CommitMessageI
     ) : CommitMessageTarget {
-        override fun read(): String = readCommitMessage(panel)
+        override fun read(): String =
+            (panel as? CheckinProjectPanel)?.commitMessage ?: readCommitMessage(panel)
+
         override fun write(message: String) {
             panel.setCommitMessage(message)
         }
     }
 
-    private class ReflectionCommitMessageTarget(
-        private val messageUi: Any
+    private class WorkflowUiCommitMessageTarget(
+        private val messageUi: CommitMessageUi
     ) : CommitMessageTarget {
-        companion object {
-            fun fromWorkflowUi(workflowUi: Any): ReflectionCommitMessageTarget? {
-                val messageUi = runCatching {
-                    workflowUi.javaClass.getMethod("getCommitMessageUi").invoke(workflowUi)
-                }.getOrNull() ?: return null
-                return ReflectionCommitMessageTarget(messageUi)
-            }
-        }
-
-        override fun read(): String {
-            return runCatching {
-                messageUi.javaClass.getMethod("getText").invoke(messageUi) as? String
-            }.getOrNull().orEmpty()
-        }
+        override fun read(): String = messageUi.getText()
 
         override fun write(message: String) {
-            runCatching {
-                messageUi.javaClass.getMethod("setText", String::class.java).invoke(messageUi, message)
-            }
+            messageUi.setText(message)
         }
 
-        override fun startLoading() {
-            runCatching {
-                messageUi.javaClass.getMethod("startLoading").invoke(messageUi)
-            }
-        }
+        override fun startLoading() = messageUi.startLoading()
 
-        override fun stopLoading() {
-            runCatching {
-                messageUi.javaClass.getMethod("stopLoading").invoke(messageUi)
-            }
-        }
+        override fun stopLoading() = messageUi.stopLoading()
     }
 }

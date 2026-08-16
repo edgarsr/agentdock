@@ -6,7 +6,6 @@ import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
-import agentdock.utils.escapeForJsString
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -110,31 +109,6 @@ class AcpBridge(
     }
 
     internal fun runOnEdt(action: () -> Unit) = ApplicationManager.getApplication().invokeLater(action)
-
-    internal fun escapeJsonString(s: String): String = buildString(s.length + 2) {
-        append('"')
-        s.forEach { ch ->
-            when (ch) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\b' -> append("\\b")
-                '\u000C' -> append("\\f")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> {
-                    if (ch.code < 0x20) {
-                        append("\\u")
-                        append(ch.code.toString(16).padStart(4, '0'))
-                    } else {
-                        append(ch)
-                    }
-                }
-            }
-        }
-        append('"')
-    }
-    internal fun jsStringLiteral(value: String) = "'${value.escapeForJsString()}'"
 
     internal fun dispatchContentChunkJson(json: String) {
         if (browser.isDisposed) return

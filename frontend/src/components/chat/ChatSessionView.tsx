@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useChatSession } from '../../hooks/useChatSession';
+import { useChatSession, UseChatSessionOptions } from '../../hooks/useChatSession';
 import { useFileChanges } from '../../hooks/useFileChanges';
-import { AgentOption, FileChangeSummary, ForkConversationBase, HistorySessionMeta, Message, PendingHandoffContext } from '../../types/chat';
+import { FileChangeSummary, Message } from '../../types/chat';
 import { Check, Copy, Download, X } from 'lucide-react';
 import { acquireJcefLivePromptRepaint } from '../../utils/jcefHostRepaint';
 import {
@@ -22,18 +22,8 @@ import { useChatInputResize } from './session/useChatInputResize';
 import { useChatSessionNotifications } from './session/useChatSessionNotifications';
 import { useImageOverlayActions } from './session/useImageOverlayActions';
 
-interface ChatSessionProps {
-  initialAgentId?: string;
-  conversationId: string;
-  availableAgents: AgentOption[];
-  historySession?: HistorySessionMeta;
-  pendingHandoff?: PendingHandoffContext;
-  initialMessages?: Message[];
-  metadataTitleOverride?: string;
-  inheritedAdapterNames?: string[];
-  forkBase?: ForkConversationBase;
+interface ChatSessionProps extends UseChatSessionOptions {
   isActive?: boolean;
-  onUserMessageSent?: () => void;
   onAssistantActivity?: () => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
   onCanMarkReadChange?: (canMarkRead: boolean) => void;
@@ -41,7 +31,6 @@ interface ChatSessionProps {
   onProcessingChange?: (isProcessing: boolean) => void;
   onAgentChangeRequest?: (payload: { agentId: string; handoffText: string }) => void;
   onForkRequest?: (payload: { agentId: string; messages: Message[]; handoffText: string }) => void;
-  onHandoffConsumed?: (handoffId: string) => void;
   onSessionStateChange?: (state: { acpSessionId: string; adapterName: string }) => void;
 }
 
@@ -104,10 +93,9 @@ export default function ChatSessionView({
     setAttachments,
     availableCommands,
     acpSessionId,
-    adapterName,
     adapterDisplayName,
     adapterIconPath
-  } = useChatSession(
+  } = useChatSession({
     conversationId,
     availableAgents,
     initialAgentId,
@@ -119,7 +107,7 @@ export default function ChatSessionView({
     forkBase,
     onHandoffConsumed,
     onUserMessageSent
-  );
+  });
 
   const {
     hasPluginEdits,
@@ -132,7 +120,7 @@ export default function ChatSessionView({
     handleUndoAllFiles,
     handleKeepFile,
     handleKeepAll,
-  } = useFileChanges(conversationId, acpSessionId, adapterName);
+  } = useFileChanges(conversationId, acpSessionId, selectedAgentId);
 
   const lastAssistantMsgWithContext = useMemo(() => {
     // Fork messages keep their original context metadata for transcript/history display,
@@ -191,7 +179,7 @@ export default function ChatSessionView({
     isHistoryReplaying,
     permissionRequest,
     acpSessionId,
-    adapterName,
+    adapterName: selectedAgentId,
     onAssistantActivity,
     onAtBottomChange,
     onCanMarkReadChange,

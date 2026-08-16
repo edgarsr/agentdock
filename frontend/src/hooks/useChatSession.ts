@@ -49,40 +49,11 @@ function saveApprovalMode(mode: ApprovalMode) {
   localStorage.setItem(APPROVAL_MODE_STORAGE_KEY, mode);
 }
 
-function normalizePermissionText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
-function isDenyPermissionOption(option: PermissionRequest['options'][number]): boolean {
-  const text = normalizePermissionText(`${option.optionId} ${option.label}`);
-  return /\b(deny|reject|cancel|no|block|disallow)\b/.test(text);
-}
-
-function isPersistentPermissionOption(option: PermissionRequest['options'][number]): boolean {
-  const text = normalizePermissionText(`${option.optionId} ${option.label}`);
-  return /\b(always|forever|permanent|persist|remember)\b/.test(text);
-}
-
-function isPositivePermissionOption(option: PermissionRequest['options'][number]): boolean {
-  const text = normalizePermissionText(`${option.optionId} ${option.label}`);
-  return /\b(allow|approve|accept|yes|ok|continue|proceed|run|execute|apply)\b/.test(text);
-}
-
+// ACP marks every permission option with a kind. `allow_once` is the only one that grants a
+// single operation without persisting the grant, so it is the only one auto mode may pick.
+// When an agent offers none, the request falls through to the normal dialog and the user decides.
 function findAutoApproveOption(request: PermissionRequest): PermissionRequest['options'][number] | null {
-  const transientOptions = request.options.filter((option) =>
-    !isDenyPermissionOption(option) && !isPersistentPermissionOption(option)
-  );
-
-  const positiveOption = transientOptions.find(isPositivePermissionOption);
-  if (positiveOption) return positiveOption;
-
-  const hasDenyOption = request.options.some(isDenyPermissionOption);
-  const firstOption = request.options[0];
-  if (hasDenyOption && firstOption && transientOptions[0] === firstOption) {
-    return firstOption;
-  }
-
-  return null;
+  return request.options.find((option) => option.kind === 'allow_once') ?? null;
 }
 
 function respondToPermission(request: PermissionRequest, decision: string): boolean {
@@ -91,19 +62,33 @@ function respondToPermission(request: PermissionRequest, decision: string): bool
   return true;
 }
 
-export function useChatSession(
-  conversationId: string,
-  availableAgents: AgentOption[],
-  initialAgentId?: string,
-  historySession?: HistorySessionMeta,
-  pendingHandoff?: PendingHandoffContext,
-  initialMessages: Message[] = [],
-  metadataTitleOverride?: string,
-  inheritedAdapterNames: string[] = EMPTY_ADAPTER_NAMES,
-  forkBase?: ForkConversationBase,
-  onHandoffConsumed?: (handoffId: string) => void,
-  onUserMessageSent?: () => void
-) {
+export interface UseChatSessionOptions {
+  conversationId: string;
+  availableAgents: AgentOption[];
+  initialAgentId?: string;
+  historySession?: HistorySessionMeta;
+  pendingHandoff?: PendingHandoffContext;
+  initialMessages?: Message[];
+  metadataTitleOverride?: string;
+  inheritedAdapterNames?: string[];
+  forkBase?: ForkConversationBase;
+  onHandoffConsumed?: (handoffId: string) => void;
+  onUserMessageSent?: () => void;
+}
+
+export function useChatSession({
+  conversationId,
+  availableAgents,
+  initialAgentId,
+  historySession,
+  pendingHandoff,
+  initialMessages = [],
+  metadataTitleOverride,
+  inheritedAdapterNames = EMPTY_ADAPTER_NAMES,
+  forkBase,
+  onHandoffConsumed,
+  onUserMessageSent,
+}: UseChatSessionOptions) {
   const [historyMessages, setHistoryMessages] = useState<Message[]>(initialMessages);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -359,9 +344,9 @@ export function useChatSession(
       });
   }, []);
 
-  useEffect(() => {
-    allowMetadataUpdateRef.current = false;
-    lastMetadataFingerprintRef.current = '';
+  // Drops the session back to its pre-start state. Every value the agent start records has to be
+  // cleared together, so both reset paths go through here rather than repeating the list.
+  const resetSessionToNotStarted = useCallback(() => {
     statusRef.current = 'not started';
     setStatus('not started');
     setAcpSessionId('');
@@ -369,7 +354,13 @@ export function useChatSession(
     startedModelIdRef.current = '';
     startedModeIdRef.current = '';
     startedReasoningEffortIdRef.current = '';
-  }, [selectedAgentId]);
+  }, []);
+
+  useEffect(() => {
+    allowMetadataUpdateRef.current = false;
+    lastMetadataFingerprintRef.current = '';
+    resetSessionToNotStarted();
+  }, [resetSessionToNotStarted, selectedAgentId]);
 
   useEffect(() => {
     if (!historySession) return;
@@ -468,13 +459,7 @@ export function useChatSession(
       statusRef.current = s;
       if (s === 'ready' && resetSessionAfterInitialCancelRef.current) {
         resetSessionAfterInitialCancelRef.current = false;
-        statusRef.current = 'not started';
-        setStatus('not started');
-        setAcpSessionId('');
-        startedAgentIdRef.current = '';
-        startedModelIdRef.current = '';
-        startedModeIdRef.current = '';
-        startedReasoningEffortIdRef.current = '';
+        resetSessionToNotStarted();
         setIsSending(false);
       } else {
         setStatus(s);
@@ -510,7 +495,7 @@ export function useChatSession(
           JSON.stringify(blocksToSend),
           forkBaseToPersist,
           selectedAgentId,
-          {}
+          configValues
         ).then(() => {
           forkBaseRef.current = undefined;
           consumeHandoff();
@@ -569,6 +554,7 @@ export function useChatSession(
     failActivePromptLocally,
     finishActivePromptAfterError,
     requestRuntimeRecovery,
+    resetSessionToNotStarted,
     configValues,
     selectedAgentId,
     selectedModelId,
@@ -900,7 +886,6 @@ export function useChatSession(
     reasoningEffortOptions,
     handleReasoningEffortChange,
     additionalConfigOptions,
-    configValues,
     handleConfigOptionChange,
     approvalMode,
     setApprovalMode,
@@ -914,7 +899,6 @@ export function useChatSession(
     setAttachments,
     availableCommands,
     acpSessionId,
-    adapterName: selectedAgentId,
     adapterDisplayName,
     adapterIconPath: resolvedSelectedAgent?.iconPath || ''
   };

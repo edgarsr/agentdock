@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -66,10 +66,10 @@ class SystemInstructionsBridge(
     }
 
     private fun push(instructions: List<SystemInstruction>) {
-        val payload = Json.encodeToString(ListSerializer(SystemInstruction.serializer()), instructions).escapeForJsString()
+        val payload = Json.encodeToString(ListSerializer(SystemInstruction.serializer()), instructions).jsStringLiteral()
         ApplicationManager.getApplication().invokeLater {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onSystemInstructions) window.__onSystemInstructions(JSON.parse('$payload'));",
+                "if(window.__onSystemInstructions) window.__onSystemInstructions(JSON.parse($payload));",
                 browser.cefBrowser.url,
                 0
             )

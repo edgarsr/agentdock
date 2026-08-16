@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import agentdock.BuildConfig
+import agentdock.utils.jsStringLiteral
 import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.ui.jcef.JBCefJSQuery
@@ -353,6 +354,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             setDownloadProbeState(adapterId, target, downloaded = true, installedVersion = installedVersion)
                             service.initializeAdapterInBackground(adapterId)
                             refreshAdapterLoginStatus(adapterId)
+                            pushAdapters(includeRuntimeChecks = true, adapterIdToRefresh = adapterId)
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
                                 previous?.takeIf { it.startsWith("Error:") }
@@ -405,10 +407,11 @@ internal fun AcpBridge.installAdapterQueries() {
                     val deleted = AcpAdapterPaths.deleteAdapter(adapterId, target)
                     if (deleted) {
                         downloadStatuses.remove(adapterId)
+                        authErrors.remove(adapterId)
                         setDownloadProbeState(adapterId, target, downloaded = false)
                         runOnEdt {
                             browser.cefBrowser.executeJavaScript(
-                                "if(window.__onAdapterDeleted) window.__onAdapterDeleted(${jsStringLiteral(adapterId)});",
+                                "if(window.__onAdapterDeleted) window.__onAdapterDeleted(${adapterId.jsStringLiteral()});",
                                 browser.cefBrowser.url, 0
                             )
                         }
@@ -486,6 +489,7 @@ internal fun AcpBridge.installAdapterQueries() {
                             setDownloadProbeState(adapterId, target, downloaded = true, installedVersion = latestVersion)
                             service.initializeAdapterInBackground(adapterId)
                             refreshAdapterLoginStatus(adapterId)
+                            pushAdapters(includeRuntimeChecks = true, adapterIdToRefresh = adapterId)
                         } else {
                             downloadStatuses.compute(adapterId) { _, previous ->
                                 previous?.takeIf { it.startsWith("Error:") }
@@ -569,8 +573,8 @@ internal fun AcpBridge.installAdapterQueries() {
                 if (result.isNotBlank()) {
                     AcpQuotaService.getInstance().updateQuotaForAdapter(adapterId, result)
                 }
-                val escapedAdapterId = jsStringLiteral(adapterId)
-                val escapedResult = jsStringLiteral(result)
+                val escapedAdapterId = adapterId.jsStringLiteral()
+                val escapedResult = result.jsStringLiteral()
                 runOnEdt {
                     browser.cefBrowser.executeJavaScript(
                         "if(window.__onUsageData) window.__onUsageData($escapedAdapterId, $escapedResult);",

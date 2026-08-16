@@ -12,7 +12,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.cef.browser.CefBrowser
-import agentdock.utils.escapeForJsString
+import agentdock.utils.jsStringLiteral
 
 private val permissiveJson = Json {
     ignoreUnknownKeys = true
@@ -187,20 +187,20 @@ class HistoryBridge(
     }
 
     private fun pushHistoryList(jsonArray: String) {
-        val escaped = jsonArray.escapeForJsString()
+        val escaped = jsonArray.jsStringLiteral()
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onHistoryList) window.__onHistoryList(JSON.parse('$escaped'));",
+                "if(window.__onHistoryList) window.__onHistoryList(JSON.parse($escaped));",
                 browser.cefBrowser.url, 0
             )
         }
     }
 
     private fun pushDeleteResult(result: DeleteHistoryResultPayload) {
-        val escaped = permissiveJson.encodeToString(result).escapeForJsString()
+        val escaped = permissiveJson.encodeToString(result).jsStringLiteral()
         runOnEdt {
             browser.cefBrowser.executeJavaScript(
-                "if(window.__onHistoryDeleteResult) window.__onHistoryDeleteResult(JSON.parse('$escaped'));",
+                "if(window.__onHistoryDeleteResult) window.__onHistoryDeleteResult(JSON.parse($escaped));",
                 browser.cefBrowser.url, 0
             )
         }
@@ -208,7 +208,7 @@ class HistoryBridge(
 
     private fun sendJsError(msg: String) {
         runOnEdt {
-            browser.cefBrowser.executeJavaScript("console.error('[HistoryBridge] ' + '${msg.escapeForJsString()}');", browser.cefBrowser.url, 0)
+            browser.cefBrowser.executeJavaScript("console.error('[HistoryBridge] ' + ${msg.jsStringLiteral()});", browser.cefBrowser.url, 0)
         }
     }
 
