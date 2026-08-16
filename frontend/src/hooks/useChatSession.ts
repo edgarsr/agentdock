@@ -37,6 +37,9 @@ import {QueuedPrompt} from './chatSession/promptQueueTypes';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
 const APPROVAL_MODE_STORAGE_KEY = 'chat-approval-mode';
+// The backend always reports a terminal status for a session start within its own
+// start timeout, so a deferred prompt that outlives it will never be sent.
+const PENDING_PROMPT_READY_TIMEOUT_MS = 375_000;
 
 function loadApprovalMode(): ApprovalMode {
   return localStorage.getItem(APPROVAL_MODE_STORAGE_KEY) === 'auto' ? 'auto' : 'ask';
@@ -116,8 +119,14 @@ export function useChatSession(
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
 
+  const pendingPromptWatchdogRef = useRef<number | null>(null);
+
   useEffect(() => () => {
     ACPBridge.clearConversationToolCache(conversationId);
+    if (pendingPromptWatchdogRef.current !== null) {
+      window.clearTimeout(pendingPromptWatchdogRef.current);
+      pendingPromptWatchdogRef.current = null;
+    }
   }, [conversationId]);
 
   const pendingPromptRef = useRef<any[] | null>(null);
@@ -318,6 +327,23 @@ export function useChatSession(
     selectedConfigOptions,
   ]);
 
+  const clearPendingPromptWatchdog = useCallback(() => {
+    if (pendingPromptWatchdogRef.current === null) return;
+    window.clearTimeout(pendingPromptWatchdogRef.current);
+    pendingPromptWatchdogRef.current = null;
+  }, []);
+
+  // A deferred prompt must never wait forever: if the agent never reports back,
+  // fail the prompt locally so the user sees the reason instead of a spinner.
+  const armPendingPromptWatchdog = useCallback(() => {
+    clearPendingPromptWatchdog();
+    pendingPromptWatchdogRef.current = window.setTimeout(() => {
+      pendingPromptWatchdogRef.current = null;
+      if (!pendingPromptRef.current) return;
+      failActivePromptLocally('The agent never became ready, so the message was not sent. Send it again to retry.');
+    }, PENDING_PROMPT_READY_TIMEOUT_MS);
+  }, [clearPendingPromptWatchdog, failActivePromptLocally]);
+
   const requestRuntimeRecovery = useCallback((reason: string) => {
     if (recoveryInFlightRef.current) return;
     recoveryInFlightRef.current = true;
@@ -388,6 +414,26 @@ export function useChatSession(
     }
   }, [clearBufferedChunks, configValues, conversationId, failActivePromptLocally, historySession, modelIdForStart, requestRuntimeRecovery, selectedAgent, selectedAgentId, selectedModeId, selectedReasoningEffortId]);
 
+  // Restarts whatever backend work can bring the session back to 'ready' after it
+  // broke, so a prompt does not have to wait for a session that nobody restarts.
+  const restartSessionForPendingPrompt = useCallback((): boolean => {
+    if (!historySession) return startSelectedAgent();
+    if (!historySession.projectPath || !historySession.conversationId) return false;
+
+    // The stored replay already holds every finished turn, so keep only the prompt
+    // being sent; reloading it back into history would otherwise duplicate them.
+    setLiveMessages((prev) => prev.slice(-2));
+    clearBufferedChunks();
+    statusRef.current = 'initializing';
+    setStatus('initializing');
+    ACPBridge.loadHistoryConversation(
+      conversationId,
+      historySession.projectPath,
+      historySession.conversationId
+    );
+    return true;
+  }, [clearBufferedChunks, conversationId, historySession, startSelectedAgent]);
+
   useEffect(() => {
     if (!pendingHandoff) return;
     if (consumedHandoffIdRef.current === pendingHandoff.id) return;
@@ -435,6 +481,7 @@ export function useChatSession(
       }
 
       if (s === 'ready' || s === 'error') {
+        clearPendingPromptWatchdog();
         startTimeRef.current = null;
 
         // Flush any remaining buffered chunks through the same path as RAF flush.
@@ -516,6 +563,7 @@ export function useChatSession(
     enqueueChunk,
     applyBufferedChunks,
     clearBufferedChunks,
+    clearPendingPromptWatchdog,
     markFlushUnscheduled,
     consumeHandoff,
     failActivePromptLocally,
@@ -655,8 +703,12 @@ export function useChatSession(
       // Defer the active prompt until the agent finishes starting.
       pendingPromptRef.current = outgoingBlocks;
       if (status === 'not started' || status === 'error') {
-        startSelectedAgent();
+        if (!restartSessionForPendingPrompt()) {
+          failActivePromptLocally('The agent is not available and the session could not be restarted, so the message was not sent.');
+          return;
+        }
       }
+      armPendingPromptWatchdog();
       return;
     }
 
@@ -680,7 +732,7 @@ export function useChatSession(
   // Refs (pendingHandoffRef, allowMetadataUpdateRef, touchUpdatedAtRef, startTimeRef)
   // are intentionally excluded — their identity is stable across renders.
   }, [status, conversationId, selectedAgentId,
-      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, startSelectedAgent, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
+      adapterDisplayName, selectedModelId, selectedModeId, selectedReasoningEffortId, configValues, selectedConfigOptions, armPendingPromptWatchdog, restartSessionForPendingPrompt, consumeHandoff, failActivePromptLocally, requestRuntimeRecovery, onUserMessageSent]);
 
   const canDrainQueuedPrompts = status === 'ready'
     && !isSending

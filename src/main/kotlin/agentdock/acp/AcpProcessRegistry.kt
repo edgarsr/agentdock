@@ -25,21 +25,27 @@ internal object AcpProcessRegistry {
         stopProcessesUsingRoot = { root -> AcpProcessUtils.stopProcessesUsingAdapterRootPath(File(root)) }
     )
 
-    fun registerOwner() {
+    // The registry is best-effort housekeeping: a failure here must never reach the UI or stop the
+    // caller, and nothing is logged - see "Failure handling" in AGENTS.md.
+    private fun runQuietly(action: () -> Unit) {
+        runCatching(action)
+    }
+
+    fun registerOwner() = runQuietly {
         store.registerOwner()
     }
 
-    fun registerProcess(adapterId: String, adapterRoot: String, process: Process) {
-        val pid = runCatching { process.toHandle().pid() }.getOrNull() ?: return
+    fun registerProcess(adapterId: String, adapterRoot: String, process: Process) = runQuietly {
+        val pid = runCatching { process.toHandle().pid() }.getOrNull() ?: return@runQuietly
         store.registerProcess(adapterId, adapterRoot, pid)
     }
 
-    fun unregisterProcess(process: Process?) {
-        val pid = runCatching { process?.toHandle()?.pid() }.getOrNull() ?: return
+    fun unregisterProcess(process: Process?) = runQuietly {
+        val pid = runCatching { process?.toHandle()?.pid() }.getOrNull() ?: return@runQuietly
         store.unregisterProcess(pid)
     }
 
-    fun closeOwnerAndCleanupIfLast() {
+    fun closeOwnerAndCleanupIfLast() = runQuietly {
         store.closeOwnerAndCleanupIfLast()
     }
 }
@@ -110,24 +116,32 @@ internal class AcpProcessRegistryStore(
     }
 
     private fun cleanupDeadOwnersLocked() {
-        readOwnerStatesLocked()
-            .filter { it.ownerId != currentOwnerId && !isProcessAlive(it.ownerPid) }
-            .forEach { owner ->
-                owner.processes.forEach { process -> destroyRegisteredProcess(process.pid, process.adapterRoot) }
-                File(ownersDir, "${owner.ownerId}.json").delete()
+        ownerFilesLocked().forEach { file ->
+            val owner = readOwnerStateLocked(file)
+            if (owner == null) {
+                // Damaged state carries no information any more, so the file is litter either way.
+                // Removing it here is what keeps a crash from leaving something behind for good.
+                file.delete()
+                return@forEach
             }
+            if (owner.ownerId == currentOwnerId || isProcessAlive(owner.ownerPid)) return@forEach
+            owner.processes.forEach { process -> destroyRegisteredProcess(process.pid, process.adapterRoot) }
+            file.delete()
+        }
     }
 
     private fun readCurrentOwnerLocked(): OwnerState? = readOwnerStateLocked(ownerFile)
 
-    private fun readOwnerStatesLocked(): List<OwnerState> {
-        val files = ownersDir.listFiles { file -> file.isFile && file.extension == "json" }.orEmpty()
-        return files.mapNotNull(::readOwnerStateLocked)
-    }
+    private fun ownerFilesLocked(): List<File> =
+        ownersDir.listFiles { file -> file.isFile && file.extension == "json" }.orEmpty().toList()
+
+    private fun readOwnerStatesLocked(): List<OwnerState> = ownerFilesLocked().mapNotNull(::readOwnerStateLocked)
 
     private fun readOwnerStateLocked(file: File): OwnerState? {
         if (!file.isFile) return null
-        val json = Json.parseToJsonElement(file.readText()).jsonObject
+        // A truncated or unreadable owner file (crash mid-write, full disk) is treated as absent
+        // instead of failing the whole registry operation - see "Failure handling" in AGENTS.md.
+        val json = runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull() ?: return null
         val ownerId = json["ownerId"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
         val ownerPid = json["ownerPid"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return null
         val roots = json["adapterRoots"]?.jsonArray?.mapNotNull { element ->

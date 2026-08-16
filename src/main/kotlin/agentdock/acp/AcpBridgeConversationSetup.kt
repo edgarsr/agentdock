@@ -205,11 +205,21 @@ internal fun AcpBridge.installConversationQueries() {
                         }
                         // Prompt dispatch is the final configuration barrier: anything shown as
                         // selected in the UI must be applied before the agent receives the prompt.
-                        service.startAgent(
-                            chatId = chatId,
-                            adapterName = parsed.adapterId,
-                            preferredConfigValues = parsed.configValues
-                        )
+                        // Bounded like every other start, so a stuck agent fails the prompt
+                        // instead of leaving the user waiting on a prompt that never runs.
+                        val started = withTimeoutOrNull(AcpBridge.START_AGENT_TIMEOUT_MS) {
+                            service.startAgent(
+                                chatId = chatId,
+                                adapterName = parsed.adapterId,
+                                preferredConfigValues = parsed.configValues
+                            )
+                            true
+                        }
+                        if (started == null) {
+                            throw IllegalStateException(
+                                "The agent did not become ready within ${AcpBridge.START_AGENT_TIMEOUT_MS / 1000}s."
+                            )
+                        }
                         pushAdapters(includeRuntimeChecks = false)
                         pushStatus(chatId, "prompting")
                         service.prompt(chatId, blocks).collect { event ->
