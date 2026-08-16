@@ -217,7 +217,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
         <div className="overflow-hidden">
           {diffData && (
             <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ">
-              <div className="syntax-highlighted font-mono text-ide-small cursor-text py-2 min-w-max inline-block w-full">
+              <div className="syntax-highlighted font-mono text-ide-small py-2 min-w-max inline-block w-full">
                 {diffData.lines.map((line, i) => (
                   <React.Fragment key={i}>
                     {i > 0 && line.hunkIndex !== diffData.lines[i - 1].hunkIndex && (
@@ -238,7 +238,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
                         {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
                       </div>
                       <div
-                        className="flex-1 px-1 whitespace-pre break-all py-0.5 text-editor-fg"
+                        className="flex-none w-max cursor-text px-1 whitespace-pre break-all py-0.5 text-editor-fg"
                         dangerouslySetInnerHTML={{ __html: line.highlightedHtml || ' ' }}
                       />
                     </div>

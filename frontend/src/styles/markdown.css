@@ -82,19 +82,6 @@
 .markdown-body {
     @apply my-4 text-inherit break-words;
 
-    /* Text cursor only for regular markdown text nodes */
-    & p,
-    & h1,
-    & h2,
-    & h3,
-    & h4,
-    & h5,
-    & h6,
-    & li,
-    & blockquote {
-        cursor: text;
-    }
-
     & p {
         @apply mt-1;
         @apply mb-2;
@@ -153,7 +140,7 @@
     }
 
     & pre {
-        @apply my-3 overflow-hidden rounded-[8px] border border-border p-0;
+        @apply my-3 overflow-x-auto rounded-[8px] border border-border p-3;
         background-color: var(--ide-editor-bg);
     }
 
@@ -161,12 +148,8 @@
         @apply my-0;
     }
 
-    & .markdown-code-block pre code {
-        @apply overflow-visible whitespace-pre-wrap break-words [overflow-wrap:anywhere];
-    }
-
     & pre code {
-        @apply block overflow-x-auto bg-transparent p-3 rounded-none;
+        @apply inline cursor-text whitespace-pre break-normal bg-transparent p-0 rounded-none;
     }
 
     & blockquote {

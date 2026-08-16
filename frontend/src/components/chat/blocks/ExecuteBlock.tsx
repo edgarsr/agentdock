@@ -85,8 +85,8 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false, t
           <div tabIndex={-1} className="p-3 text-ide-small bg-editor-bg max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb
               border-t border-border scrollbar-track-transparent [&_.markdown-body]:my-0 [&_.markdown-body_pre]:my-0
               [&_.markdown-body_pre]:border-0 [&_.markdown-body_pre]:rounded-none
-              [&_.markdown-body_pre]:bg-transparent [&_.markdown-body_pre]:overflow-visible
-              [&_.markdown-body_pre_code]:overflow-visible [&_.markdown-body_pre_code]:p-0">
+              [&_.markdown-body_pre]:bg-transparent [&_.markdown-body_pre]:overflow-visible [&_.markdown-body_pre]:p-0
+              [&_.markdown-body_pre_code]:p-0">
             <div className="text-editor-fg font-mono min-h-[0.5rem]">
               <div className="mb-1 text-editor-fg">
                 <span className="text-foreground-secondary mr-1 select-none">$</span>{command}
