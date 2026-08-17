@@ -44,6 +44,11 @@ kotlin {
 
 intellijPlatform {
     buildSearchableOptions = false
+    pluginConfiguration {
+        ideaVersion {
+            sinceBuild = "253"
+        }
+    }
     signing {
         privateKeyFile.set(layout.projectDirectory.file("signing/private.pem"))
         certificateChainFile.set(layout.projectDirectory.file("signing/chain.crt"))

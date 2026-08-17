@@ -1,3 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="-3 -6 38 39.5" fill="none">
-    <path fill-rule="evenodd" clip-rule="evenodd" d="M0 0H32V24H22L16 32L10 24H0V0ZM16 2Q16 12 5 12Q16 12 16 22Q16 12 27 12Q16 12 16 2Z" fill="#CED0D6"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="-4 -5 40 40" fill="none">
+  <g fill="none" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+    <path stroke="#CED0D6" d="M4 1H28C29.6569 1 31 2.34315 31 4V20C31 21.6569 29.6569 23 28 23H20.74L16 28.47L11.26 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1Z"/>
+    <polyline stroke="#CED0D6" points="10.4,8.2 6.8,12 10.4,15.8"/>
+    <line stroke="#CED0D6" x1="14.85" y1="16.3" x2="17.15" y2="7.7"/>
+    <polyline stroke="#CED0D6" points="21.6,8.2 25.2,12 21.6,15.8"/>
+  </g>
 </svg>

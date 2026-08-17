@@ -1,7 +1,6 @@
 <idea-plugin>
     <id>agentdock</id>
     <name>Agent Dock</name>
-    <version>1.5.0</version>
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
@@ -50,14 +49,12 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>Chats can now be renamed directly in the chat tab.</li>
+            <li>Files are now shown with native IDE file type icons.</li>
             <li>Raised the minimum supported IntelliJ Platform version to 2025.3.</li>
-            <li>Added support for Grok Build.</li>
-            <li>Added support for Kimi Code.</li>
-            <li>Updated the Qoder integration.</li>
-            <li>Updated the GitHub Copilot integration and changed its usage data source.</li>
-            <li>Reworked agent management, including login and logout flows and the related UI.</li>
-            <li>Added a menu exposing all agent configuration options.</li>
-            <li>Fixed minor front-end issues.</li>
+            <li>Fixed several performance issues.</li>
+            <li>Added a config option fallback for Grok Build.</li>
+            <li>Improved the prompt queue.</li>
         </ul>
     ]]></change-notes>
 
