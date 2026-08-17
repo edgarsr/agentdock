@@ -20,8 +20,7 @@ private const val CACHE_LIMIT = 256
  * Renders the icon the IDE shows for a file into a base64 PNG data URI.
  *
  * Resolution goes through [PsiManager] so icons contributed by IconProvider extensions
- * (Atom Material Icons and friends) are honoured, and [IconUtil.deepRetrieveIconNow]
- * unwraps the deferred icon those extensions return. The cache is keyed by file name
+ * (Atom Material Icons and friends) are honoured. The cache is keyed by file name
  * because such providers key on the name rather than on the individual file.
  */
 internal class FileIconProvider(private val project: Project) {
@@ -48,11 +47,9 @@ internal class FileIconProvider(private val project: Project) {
 
     private fun resolveIcon(path: String, fileName: String): javax.swing.Icon {
         val virtualFile = findVirtualFile(path)?.takeIf { it.isValid }
-        val icon = virtualFile?.let { PsiManager.getInstance(project).findFile(it)?.getIcon(0) ?: it.fileType.icon }
+        return virtualFile?.let { PsiManager.getInstance(project).findFile(it)?.getIcon(0) ?: it.fileType.icon }
             ?: FileTypeManager.getInstance().getFileTypeByFileName(fileName).icon
             ?: AllIcons.FileTypes.Any_type
-        // Unwraps the deferred icon that IconProvider extensions return; only evaluates off the EDT.
-        return IconUtil.deepRetrieveIconNow(icon)
     }
 
     private fun findVirtualFile(path: String) = runCatching {

@@ -9,7 +9,6 @@ import com.agentclientprotocol.rpc.JsonRpcNotification
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.ShutDownTracker
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -114,11 +113,11 @@ class AcpClientService private constructor(val project: Project) {
         private fun registerShutdownTaskOnce() {
             if (!shutdownTaskRegistered.compareAndSet(false, true)) return
             runCatching {
-                ShutDownTracker.getInstance().registerShutdownTask {
+                Runtime.getRuntime().addShutdownHook(Thread {
                     pendingCleanups.toList().forEach { thread ->
                         runCatching { thread.join(CLEANUP_JOIN_TIMEOUT_MS) }
                     }
-                }
+                })
             }
         }
     }

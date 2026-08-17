@@ -151,7 +151,7 @@ const FileChangesPanel = memo(({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2 relative top-[1px]">
                       {onShowDiff && (
                         <Tooltip variant="minimal" content="View changes (diff)">
                           <button type="button"
