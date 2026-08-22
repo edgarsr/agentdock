@@ -1,13 +1,24 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.tasks.aware.SplitModeAware
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.2.20"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
-    id("org.jetbrains.intellij.platform") version "2.12.0"
+    id("org.jetbrains.intellij.platform")
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization") apply false
+    id("rpc") apply false
 }
 
 group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
+
+subprojects {
+    group = rootProject.group
+    version = rootProject.version
+    apply(plugin = "org.jetbrains.intellij.platform.module")
+    apply(plugin = "org.jetbrains.kotlin.jvm")
+    apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+    apply(plugin = "rpc")
+}
 
 repositories {
     mavenCentral()
@@ -20,30 +31,37 @@ dependencies {
     intellijPlatform {
         intellijIdea("2025.3")
         jetbrainsRuntime()
-        bundledPlugin("org.jetbrains.plugins.terminal")
+        pluginModule(implementation(project(":shared")))
+        pluginModule(implementation(project(":frontend")))
+        pluginModule(implementation(project(":frontend-vcs")))
+        pluginModule(implementation(project(":backend")))
+        pluginModule(implementation(project(":frontend-terminal")))
     }
-    implementation("com.agentclientprotocol:acp:0.24.0") {
-        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
-        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
-        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
-        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
-    }
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("io.github.java-diff-utils:java-diff-utils:4.15")
-    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-    testImplementation(kotlin("test-junit"))
 }
 
+// The root project only assembles the plugin; every source file belongs to a content module.
 kotlin {
     jvmToolchain(21)
-    compilerOptions {
-        freeCompilerArgs.add("-Xjvm-default=all")
+    sourceSets["main"].kotlin.setSrcDirs(emptyList<String>())
+    sourceSets["test"].kotlin.setSrcDirs(emptyList<String>())
+}
+
+sourceSets {
+    main {
+        resources {
+            setSrcDirs(listOf("src/main/resources"))
+            include("META-INF/plugin.xml")
+            include("META-INF/pluginIcon.svg")
+            include("META-INF/pluginIcon_dark.svg")
+        }
     }
-    sourceSets["main"].kotlin.srcDir(layout.buildDirectory.dir("generated/buildConfig"))
 }
 
 intellijPlatform {
     buildSearchableOptions = false
+    splitMode = true
+    pluginInstallationTarget = SplitModeAware.PluginInstallationTarget.BOTH
+
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "253"
@@ -73,37 +91,31 @@ val generateBuildConfig by tasks.registering {
     doLast {
         val file = outputDir.get().asFile.resolve("agentdock/BuildConfig.kt")
         file.parentFile.mkdirs()
-        file.writeText("package agentdock\n\ninternal object BuildConfig {\n    const val IS_DEV: Boolean = $isDev\n}\n")
+        // Public rather than internal: both the frontend and the backend content module read it.
+        file.writeText("package agentdock\n\nobject BuildConfig {\n    const val IS_DEV: Boolean = $isDev\n}\n")
     }
 }
 
-tasks {
-    val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
+val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
 
-    val npmBuild by registering(Exec::class) {
-        workingDir = file("frontend")
-        commandLine(npm, "run", "build")
+val npmBuild by tasks.registering(Exec::class) {
+    workingDir = file("frontend")
+    commandLine(npm, "run", "build")
 
-        inputs.dir("frontend/src")
-        inputs.files(
-            "frontend/index.html",
-            "frontend/package.json",
-            "frontend/package-lock.json",
-            "frontend/postcss.config.js",
-            "frontend/tailwind.config.js",
-            "frontend/tsconfig.json",
-            "frontend/tsconfig.node.json",
-            "frontend/vite.config.ts",
-        )
-        outputs.dir("src/main/resources/webview")
-    }
+    inputs.dir("frontend/src")
+    inputs.files(
+        "frontend/index.html",
+        "frontend/package.json",
+        "frontend/package-lock.json",
+        "frontend/postcss.config.js",
+        "frontend/tailwind.config.js",
+        "frontend/tsconfig.json",
+        "frontend/tsconfig.node.json",
+        "frontend/vite.config.ts",
+    )
+    outputs.dir("src/main/resources/webview")
+}
 
-    compileKotlin {
-        dependsOn(generateBuildConfig)
-    }
-
-    processResources {
-        dependsOn(npmBuild)
-    }
-
+tasks.named<Delete>("clean") {
+    delete(layout.projectDirectory.dir("src/main/resources/webview"))
 }

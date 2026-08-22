@@ -1,4 +1,9 @@
 <idea-plugin>
+    <dependencies>
+        <module name="agent-dock.frontend"/>
+        <module name="intellij.terminal.frontend"/>
+    </dependencies>
+
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceInterface="agentdock.acp.IdeTerminalBridge"
                         serviceImplementation="agentdock.acp.IdeTerminalBridgeImpl"/>

@@ -1,8 +1,11 @@
 package agentdock.gitcommit
 
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
+import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangesUtil
 
 internal object GitCommitPromptBuilder {
@@ -10,9 +13,22 @@ internal object GitCommitPromptBuilder {
     private const val MAX_NEW_FILE_CHARS = 1_200
     private const val MAX_CHANGED_LINES = 80
 
-    fun build(changes: Collection<Change>, instructions: String): String {
+    fun build(project: Project, selectedPaths: Collection<String>, instructions: String): String {
+        val requestedPaths = selectedPaths
+            .flatMap { path -> pathVariants(project.basePath, path) }
+            .toSet()
+        val changes = ChangeListManager.getInstance(project).allChanges.filter { change ->
+            sequenceOf(change.beforeRevision?.file?.path, change.afterRevision?.file?.path)
+                .filterNotNull()
+                .flatMap { path -> pathVariants(project.basePath, path).asSequence() }
+                .any(requestedPaths::contains)
+        }
+        if (changes.isEmpty()) {
+            throw IllegalStateException("The selected changes are no longer available.")
+        }
+
         val diffText = buildDiffSummary(changes)
-        val selectedPaths = changes.mapNotNull { change ->
+        val promptPaths = changes.mapNotNull { change ->
             runCatching { ChangesUtil.getFilePath(change).path }.getOrNull()
         }
         val prompt = buildString {
@@ -36,10 +52,10 @@ internal object GitCommitPromptBuilder {
                 appendLine()
             }
             appendLine("Selected file paths:")
-            if (selectedPaths.isEmpty()) {
+            if (promptPaths.isEmpty()) {
                 appendLine("(no files)")
             } else {
-                selectedPaths.forEach { path ->
+                promptPaths.forEach { path ->
                     appendLine("- $path")
                 }
             }
@@ -53,6 +69,19 @@ internal object GitCommitPromptBuilder {
             appendLine("</commit_message>")
         }
         return prompt.trim()
+    }
+
+    private fun pathVariants(basePath: String?, path: String): Set<String> {
+        val normalized = FileUtil.toSystemIndependentName(path)
+        val variants = mutableSetOf(normalized)
+        if (!basePath.isNullOrBlank()) {
+            FileUtil.getRelativePath(
+                FileUtil.toSystemIndependentName(basePath),
+                normalized,
+                '/',
+            )?.let(variants::add)
+        }
+        return variants
     }
 
     private fun buildDiffSummary(changes: Collection<Change>): String {

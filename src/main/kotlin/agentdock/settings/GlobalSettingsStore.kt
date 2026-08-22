@@ -3,7 +3,6 @@ package agentdock.settings
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import agentdock.acp.AcpAdapterPaths
-import agentdock.gitcommit.GitCommitFeatureRuntimeState
 import agentdock.utils.atomicWriteText
 import java.io.File
 import java.io.RandomAccessFile
@@ -28,7 +27,6 @@ object GlobalSettingsStore {
         val loaded = runCatching {
             json.decodeFromString<GlobalSettings>(file.readText())
         }.getOrDefault(GlobalSettings())
-        GitCommitFeatureRuntimeState.setEnabled(loaded.gitCommitGeneration.enabled)
         loaded
     }
 
@@ -53,7 +51,6 @@ object GlobalSettingsStore {
         val file = settingsFile()
         file.parentFile?.mkdirs()
         file.atomicWriteText(json.encodeToString(normalized))
-        GitCommitFeatureRuntimeState.setEnabled(normalized.gitCommitGeneration.enabled)
         return normalized
     }
 
@@ -90,7 +87,6 @@ object GlobalSettingsStore {
         val loaded = runCatching {
             json.decodeFromString<GlobalSettings>(file.readText())
         }.getOrDefault(GlobalSettings())
-        GitCommitFeatureRuntimeState.setEnabled(loaded.gitCommitGeneration.enabled)
         return loaded
     }
 

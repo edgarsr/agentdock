@@ -1,8 +1,7 @@
 package agentdock.acp
 
+import agentdock.bridge.BridgeHost
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
@@ -20,45 +19,10 @@ internal class HistoryLoadMutexEntry {
  * pushes content chunks, status, adapters, permissions (to frontend).
  */
 class AcpBridge(
-    internal val browser: JBCefBrowser,
+    internal val host: BridgeHost,
     internal val service: AcpClientService,
     internal val scope: CoroutineScope
 ) {
-    internal var sendPromptQuery: JBCefJSQuery? = null
-    internal var startAgentQuery: JBCefJSQuery? = null
-    internal var listAdaptersQuery: JBCefJSQuery? = null
-    internal var rememberConfigOptionQuery: JBCefJSQuery? = null
-    internal var cancelPromptQuery: JBCefJSQuery? = null
-    internal var stopAgentQuery: JBCefJSQuery? = null
-    internal var respondPermissionQuery: JBCefJSQuery? = null
-    internal var readyQuery: JBCefJSQuery? = null
-    internal var loadConversationQuery: JBCefJSQuery? = null
-    internal var recoverRuntimeQuery: JBCefJSQuery? = null
-    internal var downloadAgentQuery: JBCefJSQuery? = null
-    internal var cancelAgentInstallQuery: JBCefJSQuery? = null
-    internal var deleteAgentQuery: JBCefJSQuery? = null
-    internal var updateAgentQuery: JBCefJSQuery? = null
-    internal var loginAgentQuery: JBCefJSQuery? = null
-    internal var logoutAgentQuery: JBCefJSQuery? = null
-    internal var cancelAgentAuthQuery: JBCefJSQuery? = null
-    internal var fetchUsageQuery: JBCefJSQuery? = null
-    internal var undoFileQuery: JBCefJSQuery? = null
-    internal var undoAllFilesQuery: JBCefJSQuery? = null
-    internal var processFileQuery: JBCefJSQuery? = null
-    internal var keepAllQuery: JBCefJSQuery? = null
-    internal var getChangesStateQuery: JBCefJSQuery? = null
-    internal var computeFileChangeStatsQuery: JBCefJSQuery? = null
-    internal var showDiffQuery: JBCefJSQuery? = null
-    internal var openFileQuery: JBCefJSQuery? = null
-    internal var openUrlQuery: JBCefJSQuery? = null
-    internal var attachFileQuery: JBCefJSQuery? = null
-    internal var updateSessionMetadataQuery: JBCefJSQuery? = null
-    internal var continueConversationQuery: JBCefJSQuery? = null
-    internal var saveConversationTranscriptQuery: JBCefJSQuery? = null
-    internal var openAgentCliQuery: JBCefJSQuery? = null
-    internal var openHistoryConversationCliQuery: JBCefJSQuery? = null
-    internal var searchFilesQuery: JBCefJSQuery? = null
-    internal var iconFileQuery: JBCefJSQuery? = null
     internal var fileIconProvider: FileIconProvider? = null
 
     internal val promptJobs = ConcurrentHashMap<String, Job>()
@@ -72,7 +36,6 @@ class AcpBridge(
     internal val authActionMethodIds = ConcurrentHashMap<String, String>()
     internal val authErrors = ConcurrentHashMap<String, String>()
     internal val loginStatusJobs = ConcurrentHashMap<String, Job>()
-    internal val loginStatusStates = ConcurrentHashMap<String, Boolean>()
     internal val pendingLoginStatusStates = ConcurrentHashMap<String, Boolean>()
     internal val completedLoginStatusRefreshes = ConcurrentHashMap.newKeySet<String>()
     internal val updateCheckJobs = ConcurrentHashMap<String, Job>()
@@ -90,8 +53,7 @@ class AcpBridge(
     internal val todoToolCallKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
     internal val emittedTodoPlanKeys: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
-    internal val cli = AcpBridgeCli(service.project) { action -> runOnEdt(action) }
-    internal val audio = AcpAudioPlayer(scope)
+    internal val cli = AcpBridgeCli(service.project, host::openTerminal)
 
     companion object {
         // The service owns the 300s adapter-initialization budget. Leave time
@@ -111,17 +73,12 @@ class AcpBridge(
     internal fun runOnEdt(action: () -> Unit) = ApplicationManager.getApplication().invokeLater(action)
 
     internal fun dispatchContentChunkJson(json: String) {
-        if (browser.isDisposed) return
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                """
+        if (!host.isAttached) return
+        host.eval("""
                 if(window.__onContentChunk){
                     var __chunk = $json;
                     window.__onContentChunk(__chunk);
                 }
-                """.trimIndent(),
-                browser.cefBrowser.url, 0
-            )
-        }
+                """.trimIndent())
     }
 }

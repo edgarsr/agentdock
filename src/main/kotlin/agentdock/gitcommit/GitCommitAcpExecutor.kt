@@ -13,7 +13,6 @@ import com.agentclientprotocol.model.SessionId
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.changes.Change
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
@@ -51,7 +50,7 @@ internal class GitCommitAcpExecutor(
     @OptIn(UnstableApi::class)
     suspend fun generateMessage(
         config: GitCommitGenerationConfig,
-        changes: Collection<Change>
+        prompt: String,
     ): String = withContext(Dispatchers.IO) {
         acpService.ensureExecutionTargetCurrent()
 
@@ -63,7 +62,6 @@ internal class GitCommitAcpExecutor(
 
         val client = sharedProcess.client ?: error("ACP client is not initialized for ${adapterInfo.id}")
         val cwd = acpService.resolveSessionCwd(project.basePath ?: System.getProperty("user.dir"))
-        val prompt = GitCommitPromptBuilder.build(changes, config.instructions)
         val runtimeMetadata = acpService.adapterRuntimeMetadata(adapterInfo.id)
         val selectedModelId = acpService.resolveModelToApply(
             config.modelId,

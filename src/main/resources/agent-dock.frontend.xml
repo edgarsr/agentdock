@@ -1,0 +1,31 @@
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.frontend"/>
+        <module name="intellij.platform.ui.jcef"/>
+        <module name="agent-dock.shared"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="agentdock.bridge.frontend.FrontendNativeStateActivity"/>
+        <toolWindow id="Agent Dock" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
+                    factoryClass="agentdock.AgentDockToolWindowFactory"/>
+        <statusBarWidgetFactory id="AgentDockQuotaWidget" implementation="agentdock.ui.AgentDockQuotaWidgetFactory"/>
+    </extensions>
+
+    <actions>
+        <action id="AgentDock.AddCodeReferenceToChatAction"
+                class="agentdock.AddCodeReferenceToChatAction"
+                text="Add to Chat"
+                description="Add the selected code range to the chat input"
+                icon="/icons/agent_dock_toolwindow.svg">
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+        </action>
+        <action id="AgentDock.AddFileReferenceToChatAction"
+                class="agentdock.AddFileReferenceToChatAction"
+                text="Add to Chat"
+                description="Add the selected file reference to the chat"
+                icon="/icons/agent_dock_toolwindow.svg">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>

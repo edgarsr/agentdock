@@ -4,7 +4,7 @@ import com.intellij.ui.JBColor
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColors
-import agentdock.settings.GlobalSettingsStore
+import agentdock.bridge.frontend.FrontendSettings
 import java.awt.Color
 import java.util.Locale
 import javax.swing.UIManager
@@ -79,7 +79,7 @@ object IdeTheme {
         val baseFont = com.intellij.util.ui.JBFont.regular()
         sb.append("  --ide-font-family: '${baseFont.family}', sans-serif;\n")
         sb.append("  --ide-font-size: ${baseFont.size2D + 1}px;\n")
-        sb.append("  --ui-font-size-offset: ${GlobalSettingsStore.uiFontSizeOffsetPx()}px;\n")
+        sb.append("  --ui-font-size-offset: ${FrontendSettings.current.uiFontSizeOffsetPx}px;\n")
 
         sb.append("  --ide-code-font-family: '${scheme.editorFontName}', monospace;\n")
         sb.append("  --ide-code-font-size: ${scheme.editorFontSize + 1}px;\n")
@@ -184,7 +184,7 @@ object IdeTheme {
         val scrollbarColor = adjustBrightness(borderColor, if (isDark) 1.15 else 0.90)
         sb.append("  --ide-scrollbar-color: ${toCssColor(scrollbarColor)};\n")
 
-        val userMessageStyle = GlobalSettingsStore.userMessageBackgroundStyle()
+        val userMessageStyle = FrontendSettings.current.userMessageBackgroundStyle
         val userMessageBackgroundVar = when (userMessageStyle) {
             "default" -> "--ide-user-message-default-bg"
             "blue" -> "--ide-user-message-blue-bg"

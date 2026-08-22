@@ -3,7 +3,7 @@ package agentdock.acp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import agentdock.settings.GlobalSettingsStore
+import agentdock.bridge.frontend.FrontendSettings
 import java.io.BufferedInputStream
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
@@ -24,7 +24,7 @@ internal class AcpAudioPlayer(private val scope: CoroutineScope) {
 
     private fun playSound(resourcePath: String) {
         scope.launch(Dispatchers.IO) {
-            if (!GlobalSettingsStore.areAudioNotificationsEnabled()) {
+            if (!FrontendSettings.current.audioNotificationsEnabled) {
                 return@launch
             }
             try {

@@ -262,6 +262,7 @@ class AcpClientService private constructor(val project: Project) {
     internal val adapterInitializationErrors = ConcurrentHashMap<String, String>()
     internal val adapterInitializationDetails = ConcurrentHashMap<String, String>()
     internal val adapterRuntimeMetadataMap = ConcurrentHashMap<String, AdapterRuntimeMetadata>()
+    internal val loginStatusStates = ConcurrentHashMap<String, Boolean>()
     internal val availableCommandsByAdapter = ConcurrentHashMap<String, List<AvailableCommandPayload>>()
     internal val systemInstructionsInjectedSessionIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
     internal val historySyncAfterInitializationInFlight = AtomicBoolean(false)

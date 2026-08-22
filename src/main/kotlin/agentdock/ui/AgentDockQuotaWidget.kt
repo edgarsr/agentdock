@@ -1,8 +1,8 @@
 package agentdock.ui
 
-import agentdock.acp.AcpQuotaService
 import agentdock.acp.QuotaDetail
-import agentdock.settings.GlobalSettingsStore
+import agentdock.bridge.frontend.FrontendSettings
+import agentdock.bridge.frontend.QuotaSnapshot
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.IconLoader
 import com.intellij.util.IconUtil
@@ -29,7 +29,7 @@ import javax.swing.*
 class AgentDockQuotaWidgetFactory : StatusBarWidgetFactory {
     override fun getId(): String = "AgentDockQuotaWidget"
     override fun getDisplayName(): String = "AgentDock Quota"
-    override fun isAvailable(project: Project): Boolean = GlobalSettingsStore.load().quotaWidgetEnabled
+    override fun isAvailable(project: Project): Boolean = FrontendSettings.current.quotaWidgetEnabled
     override fun createWidget(project: Project): StatusBarWidget = AgentDockQuotaWidget(project)
     override fun disposeWidget(widget: StatusBarWidget) {
         widget.dispose()
@@ -99,7 +99,7 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
         })
 
         scope.launch {
-            AcpQuotaService.getInstance().quotas.collect { quotas ->
+            QuotaSnapshot.quotas.collect { quotas ->
                 updateUI(quotas)
             }
         }
@@ -158,7 +158,7 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
     }
 
     private fun showQuotaPopup() {
-        val quotas = AcpQuotaService.getInstance().quotas.value.values.toList()
+        val quotas = QuotaSnapshot.quotas.value.values.toList()
         if (quotas.isEmpty()) return
 
         val container = JPanel().apply {

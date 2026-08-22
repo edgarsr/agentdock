@@ -237,7 +237,7 @@ private suspend fun AcpClientService.fetchAndStoreRuntimeMetadata(
     updateAdapterInitializationState(
         adapterInfo.id,
         AcpClientService.AdapterInitializationStatus.Initializing,
-        detail = "Fetching models and modes..."
+        detail = "Fetching config options..."
     )
     val protocol = sharedProcess.protocol
         ?: throw IllegalStateException("ACP protocol was not initialized for adapter '${adapterInfo.id}'")

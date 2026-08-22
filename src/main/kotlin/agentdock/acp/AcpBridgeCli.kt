@@ -1,5 +1,7 @@
 package agentdock.acp
 
+import agentdock.rpc.TerminalCapability
+import agentdock.rpc.TerminalLaunchRequest
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.runBlocking
 import agentdock.history.AgentDockHistoryService
@@ -10,14 +12,52 @@ import java.io.File
  */
 internal class AcpBridgeCli(
     private val project: Project,
-    private val runOnEdt: (() -> Unit) -> Unit
+    private val openTerminal: (TerminalLaunchRequest) -> Unit,
 ) {
+    @Volatile
+    private var terminalCapability = TerminalCapability(available = false)
+
+    fun updateTerminalCapability(capability: TerminalCapability) {
+        terminalCapability = capability
+    }
+
     fun openAgentCliInTerminal(adapterId: String) {
         val shellFlavor = detectIdeTerminalShellFlavor()
         val (adapterInfo, command) = buildCliCommand(adapterId, emptyList(), shellFlavor) ?: return
         if (command.isBlank()) return
         val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, AcpAdapterPaths.getExecutionTarget())
         openInIdeTerminal(resolveTerminalWorkingDir(adapterRoot), "${adapterInfo.name} CLI", command)
+    }
+
+    fun openAgentAuthInTerminal(
+        adapterId: String,
+        title: String,
+        args: List<String>,
+        environment: Map<String, String>
+    ) {
+        check(terminalCapability.available) { "IDE terminal is unavailable" }
+
+        val adapterInfo = AcpAdapterConfig.getAdapterInfo(adapterId)
+        val target = AcpAdapterPaths.getExecutionTarget()
+        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
+        val commandParts = AcpAdapterPaths.buildLaunchCommand(
+            adapterRootPath = adapterRoot,
+            adapterInfo = adapterInfo.copy(args = emptyList()),
+            projectPath = project.basePath,
+            target = target
+        ) + args
+        val shellFlavor = detectIdeTerminalShellFlavor()
+        val command = toShellCommand(
+            commandParts.map { normalizeInteractiveShellPart(it, shellFlavor) },
+            shellFlavor,
+            environment
+        )
+
+        openInIdeTerminal(
+            resolveTerminalWorkingDir(adapterRoot),
+            title.ifBlank { "${adapterInfo.name} Login" },
+            command
+        )
     }
 
     fun openHistoryConversationCliInTerminal(projectPath: String, conversationId: String) {
@@ -50,7 +90,7 @@ internal class AcpBridgeCli(
     private fun resolveTerminalWorkingDir(fallback: String): String =
         project.basePath?.takeIf { it.isNotBlank() } ?: fallback
 
-    fun isIdeTerminalAvailable(): Boolean = project.ideTerminalBridge() != null
+    fun isIdeTerminalAvailable(): Boolean = terminalCapability.available
 
     private fun buildCliCommand(
         adapterId: String,
@@ -64,14 +104,12 @@ internal class AcpBridgeCli(
     }
 
     private fun openInIdeTerminal(workingDir: String, title: String, command: String) {
-        val bridge = project.ideTerminalBridge() ?: return
-        runOnEdt {
-            runCatching { bridge.openInTerminal(workingDir, title, command) }
-        }
+        if (!terminalCapability.available) return
+        openTerminal(TerminalLaunchRequest(workingDir, title, command))
     }
 
     private fun detectIdeTerminalShellFlavor(): TerminalShellFlavor {
-        val shellPath = resolveIdeTerminalShellPath()?.lowercase().orEmpty()
+        val shellPath = terminalCapability.shellPath.lowercase()
         return when {
             shellPath.contains("powershell") || shellPath.endsWith("pwsh.exe") -> TerminalShellFlavor.POWERSHELL
             shellPath.endsWith("cmd.exe") -> TerminalShellFlavor.CMD
@@ -81,8 +119,6 @@ internal class AcpBridgeCli(
         }
     }
 
-    private fun resolveIdeTerminalShellPath(): String? =
-        project.ideTerminalBridge()?.resolveShellPath()
 }
 
 internal enum class TerminalShellFlavor {
@@ -132,15 +168,22 @@ internal fun resolveCliPath(adapterRoot: String, raw: String, target: AcpExecuti
     return if (relative.exists()) relative.absolutePath else path
 }
 
-internal fun toShellCommand(parts: List<String>, shellFlavor: TerminalShellFlavor): String {
+internal fun toShellCommand(
+    parts: List<String>,
+    shellFlavor: TerminalShellFlavor,
+    environment: Map<String, String> = emptyMap()
+): String {
     val filtered = parts.filter { it.isNotBlank() }
     if (filtered.isEmpty()) return ""
+    environment.keys.forEach { key ->
+        require(key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid environment variable name '$key'" }
+    }
 
     return when (shellFlavor) {
         TerminalShellFlavor.POWERSHELL -> {
             val executable = filtered.first()
             val args = filtered.drop(1).joinToString(" ") { quotePowerShellArg(it) }
-            buildString {
+            val invocation = buildString {
                 append("& ")
                 append(quotePowerShellArg(executable))
                 if (args.isNotBlank()) {
@@ -148,9 +191,33 @@ internal fun toShellCommand(parts: List<String>, shellFlavor: TerminalShellFlavo
                     append(args)
                 }
             }
+            if (environment.isEmpty()) invocation else buildString {
+                append("& { ")
+                environment.forEach { (key, value) ->
+                    append("\$env:")
+                    append(key)
+                    append(" = ")
+                    append(quotePowerShellArg(value))
+                    append("; ")
+                }
+                append(invocation)
+                append(" }")
+            }
         }
-        TerminalShellFlavor.CMD -> filtered.joinToString(" ") { quoteCmdArg(it) }
-        TerminalShellFlavor.POSIX -> filtered.joinToString(" ") { quoteUnixShellArg(it) }
+        TerminalShellFlavor.CMD -> {
+            val invocation = filtered.joinToString(" ") { quoteCmdArg(it) }
+            if (environment.isEmpty()) invocation else environment.entries.joinToString(" && ", postfix = " && $invocation") {
+                (key, value) -> "set \"$key=${value.replace("%", "%%")}\""
+            }
+        }
+        TerminalShellFlavor.POSIX -> {
+            val command = filtered.toMutableList()
+            if (environment.isNotEmpty()) {
+                command.add(0, "env")
+                environment.entries.reversed().forEach { (key, value) -> command.add(1, "$key=$value") }
+            }
+            command.joinToString(" ") { quoteUnixShellArg(it) }
+        }
     }
 }
 

@@ -1,5 +1,10 @@
 package agentdock
 
+import agentdock.bridge.frontend.BridgeScripts
+import agentdock.bridge.frontend.FrontendBridge
+import agentdock.bridge.frontend.FrontendSettings
+import agentdock.utils.jsStringLiteral
+import com.intellij.ide.IdeEventQueue
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -12,7 +17,6 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.net.ProxySettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,25 +25,22 @@ import kotlinx.coroutines.SupervisorJob
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
-import agentdock.acp.AcpClientService
-import agentdock.acp.AcpBridge
-import agentdock.acp.pushAdapters
-import agentdock.acp.injectDebugApi
-import agentdock.acp.initializeDownloadedAdaptersInBackground
-import agentdock.acp.injectReadySignal
-import agentdock.history.HistoryBridge
-import agentdock.mcp.McpBridge
-import agentdock.promptlibrary.PromptLibraryBridge
-import agentdock.settings.SettingsBridge
-import agentdock.systeminstructions.SystemInstructionsBridge
+import java.awt.AWTEvent
 import java.awt.BorderLayout
-import java.awt.Cursor
 import java.awt.FlowLayout
+import java.awt.KeyboardFocusManager
+import java.awt.event.KeyEvent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JProgressBar
+import javax.swing.SwingUtilities
 
 
+/**
+ * Creates the tool window in whichever process owns the UI: the IDE itself, or the JetBrains Client
+ * in Remote Development. It only builds the browser and hands it to [FrontendBridge]; the agents,
+ * the history and the settings all stay on the side that has the project files.
+ */
 class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val rootPanel = JPanel(BorderLayout())
@@ -67,16 +68,10 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
                 false
             }
 
-            // The tool window can be restored while the project is still opening, so adapter
-            // initialization is warmed up here rather than relying on AcpStartupActivity ordering.
-            if (!project.isDisposed) {
-                runCatching { AcpClientService.getInstance(project).initializeDownloadedAdaptersInBackground() }
-            }
-
             try {
                 ApplicationManager.getApplication().invokeLater({
                     if (project.isDisposed || toolWindow.isDisposed) return@invokeLater
-                    
+
                     try {
                         if (startupError != null) {
                             rootPanel.removeAll()
@@ -96,96 +91,21 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
 
                         val browser = JBCefBrowser()
                         ExternalCodeReferenceDispatcher.register(project, browser)
+                        installDirectJcefInput(browser, content)
 
                         val dropTarget = JcefDragAndDropSupport.install(project, browser)
 
-                        val service = AcpClientService.getInstance(project)
                         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-                        
-                        val acpBridge = AcpBridge(browser, service, scope)
-                        val historyBridge = HistoryBridge(browser, project, scope)
-                        val mcpBridge = McpBridge(browser, scope)
-                        val systemInstructionsBridge = SystemInstructionsBridge(browser, scope)
-                        val promptLibraryBridge = PromptLibraryBridge(browser, scope)
-                        val settingsBridge = SettingsBridge(browser, scope)
-
-                        acpBridge.install()
-                        historyBridge.install()
-                        mcpBridge.install()
-                        systemInstructionsBridge.install()
-                        promptLibraryBridge.install()
-                        settingsBridge.install()
-
-
-                        // Solve JCEF cursor: pointer not working issue on Windows
-                        val cursorQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase)
-                        cursorQuery.addHandler { cursorType ->
-                            ApplicationManager.getApplication().invokeLater {
-                                val component = browser.component
-                                val awtCursor = when (cursorType) {
-                                    "pointer", "grab", "grabbing" -> Cursor.HAND_CURSOR
-                                    "text" -> Cursor.TEXT_CURSOR
-                                    "move", "all-scroll" -> Cursor.MOVE_CURSOR
-                                    "wait", "progress" -> Cursor.WAIT_CURSOR
-                                    "crosshair" -> Cursor.CROSSHAIR_CURSOR
-                                    "n-resize", "ns-resize", "row-resize" -> Cursor.N_RESIZE_CURSOR
-                                    "s-resize" -> Cursor.S_RESIZE_CURSOR
-                                    "e-resize", "ew-resize", "col-resize" -> Cursor.E_RESIZE_CURSOR
-                                    "w-resize" -> Cursor.W_RESIZE_CURSOR
-                                    "ne-resize", "nesw-resize" -> Cursor.NE_RESIZE_CURSOR
-                                    "nw-resize", "nwse-resize" -> Cursor.NW_RESIZE_CURSOR
-                                    "se-resize" -> Cursor.SE_RESIZE_CURSOR
-                                    "sw-resize" -> Cursor.SW_RESIZE_CURSOR
-                                    else -> Cursor.DEFAULT_CURSOR
-                                }
-                                component.cursor = Cursor.getPredefinedCursor(awtCursor)
-                            }
-                            JBCefJSQuery.Response("ok")
-                        }
-
-                        val repaintQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase)
-                        repaintQuery.addHandler {
-                            ApplicationManager.getApplication().invokeLater({
-                                forceBrowserRepaint(browser)
-                            }, com.intellij.openapi.application.ModalityState.any())
-                            JBCefJSQuery.Response("ok")
-                        }
+                        val bridge = FrontendBridge(project, browser, scope) { loadContent(browser) }
+                        bridge.install()
 
                         browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
                             override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                                 if (frame.isMain) {
-                                    val cursorInjection = """
-                                        window.__lastSentCursor = 'default';
-                                        window.__cursorThrottleTimer = null;
-                                        document.addEventListener('mousemove', function(e) {
-                                          if (window.__cursorThrottleTimer !== null) return;
-                                          window.__cursorThrottleTimer = setTimeout(function() {
-                                            window.__cursorThrottleTimer = null;
-                                            const cursor = window.getComputedStyle(e.target).cursor;
-                                            if (window.__lastSentCursor !== cursor) {
-                                              window.__lastSentCursor = cursor;
-                                              ${cursorQuery.inject("cursor")}
-                                            }
-                                          }, 50);
-                                        });
-                                    """.trimIndent()
-                                    cefBrowser.executeJavaScript(cursorInjection, cefBrowser.url, 0)
-
-                                    val repaintInjection = """
-                                        window.__requestHostRepaint = function(reason) {
-                                          try {
-                                            ${repaintQuery.inject("reason || ''")}
-                                          } catch (e) {}
-                                        };
-                                    """.trimIndent()
-                                    cefBrowser.executeJavaScript(repaintInjection, cefBrowser.url, 0)
-                                    acpBridge.injectReadySignal(cefBrowser)
-                                    acpBridge.injectDebugApi(cefBrowser)
-                                    historyBridge.injectApi(cefBrowser)
-                                    mcpBridge.injectApi(cefBrowser)
-                                    systemInstructionsBridge.injectApi(cefBrowser)
-                                    promptLibraryBridge.injectApi(cefBrowser)
-                                    settingsBridge.injectApi(cefBrowser)
+                                    // The invoke function first: everything else is written against it.
+                                    cefBrowser.executeJavaScript(bridge.invokeApiScript(), cefBrowser.url, 0)
+                                    cefBrowser.executeJavaScript(BridgeScripts.bridgeApi(), cefBrowser.url, 0)
+                                    cefBrowser.executeJavaScript(BridgeScripts.cursorTracking(), cefBrowser.url, 0)
                                 }
                             }
                         }, browser.cefBrowser)
@@ -199,23 +119,18 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
                         })
 
                         Disposer.register(content, browser)
+                        Disposer.register(content, bridge)
                         Disposer.register(content, object : Disposable {
                             override fun dispose() {
                                 ExternalCodeReferenceDispatcher.unregister(project, browser)
                                 dropTarget.component = null
-                                service.releaseUiCallbacks(acpBridge)
-                            }
-                        })
-                        Disposer.register(content, object : Disposable {
-                            override fun dispose() {
                                 scope.coroutineContext[Job]?.cancel()
                             }
                         })
 
-
                         // Swap placeholder with real browser
                         rootPanel.removeAll()
-                        rootPanel.add(createBrowserPanel(browser, acpBridge), BorderLayout.CENTER)
+                        rootPanel.add(createBrowserPanel(browser, bridge), BorderLayout.CENTER)
                         rootPanel.revalidate()
                         rootPanel.repaint()
 
@@ -241,7 +156,89 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
         ProxySettings.getInstance().getProxyConfiguration()
     }
 
-    private fun createBrowserPanel(browser: JBCefBrowser, acpBridge: AcpBridge): JPanel {
+    private fun installDirectJcefInput(browser: JBCefBrowser, parentDisposable: Disposable) {
+        val dispatcher = object : IdeEventQueue.NonLockedEventDispatcher {
+            override fun dispatch(e: AWTEvent): Boolean {
+                if (e !is KeyEvent || !e.shouldGoDirectlyToJcef()) return false
+
+                val focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+                if (focusOwner == null ||
+                    focusOwner !== browser.component &&
+                    !SwingUtilities.isDescendingFrom(focusOwner, browser.component)
+                ) {
+                    return false
+                }
+
+                browser.cefBrowser.sendKeyEvent(e)
+                return true
+            }
+        }
+        IdeEventQueue.getInstance().addDispatcher(dispatcher, parentDisposable)
+    }
+
+    private fun KeyEvent.shouldGoDirectlyToJcef(): Boolean {
+        if (id != KeyEvent.KEY_TYPED && id != KeyEvent.KEY_PRESSED && id != KeyEvent.KEY_RELEASED) {
+            return false
+        }
+        if (isAltGraphDown) return keyChar != KeyEvent.CHAR_UNDEFINED
+        if (isAltDown || isMetaDown) return false
+        if (isControlDown) return isTextControlShortcut()
+
+        val isBrowserCharacter = when (keyChar) {
+            KeyEvent.CHAR_UNDEFINED -> false
+            '\b', '\t', '\n', '\r', '\u001B' -> true
+            else -> !Character.isISOControl(keyChar)
+        }
+        return isBrowserCharacter || when (keyCode) {
+            KeyEvent.VK_BACK_SPACE,
+            KeyEvent.VK_DELETE,
+            KeyEvent.VK_LEFT,
+            KeyEvent.VK_RIGHT,
+            KeyEvent.VK_UP,
+            KeyEvent.VK_DOWN,
+            KeyEvent.VK_HOME,
+            KeyEvent.VK_END,
+            KeyEvent.VK_PAGE_UP,
+            KeyEvent.VK_PAGE_DOWN,
+            KeyEvent.VK_ENTER,
+            KeyEvent.VK_TAB,
+            KeyEvent.VK_ESCAPE,
+            KeyEvent.VK_INSERT -> true
+            else -> false
+        }
+    }
+
+    private fun KeyEvent.isTextControlShortcut(): Boolean {
+        if (isShiftDown) {
+            return when (keyCode) {
+                KeyEvent.VK_Z,
+                KeyEvent.VK_LEFT,
+                KeyEvent.VK_RIGHT,
+                KeyEvent.VK_HOME,
+                KeyEvent.VK_END -> true
+                else -> false
+            }
+        }
+
+        return when (keyCode) {
+            KeyEvent.VK_A,
+            KeyEvent.VK_C,
+            KeyEvent.VK_X,
+            KeyEvent.VK_V,
+            KeyEvent.VK_Z,
+            KeyEvent.VK_Y,
+            KeyEvent.VK_INSERT,
+            KeyEvent.VK_BACK_SPACE,
+            KeyEvent.VK_DELETE,
+            KeyEvent.VK_LEFT,
+            KeyEvent.VK_RIGHT,
+            KeyEvent.VK_HOME,
+            KeyEvent.VK_END -> true
+            else -> false
+        }
+    }
+
+    private fun createBrowserPanel(browser: JBCefBrowser, bridge: FrontendBridge): JPanel {
         val panel = JPanel(BorderLayout())
 
         loadContent(browser)
@@ -250,16 +247,19 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
         // which would steal focus and cause the tool window to reopen).
         val connection = ApplicationManager.getApplication().messageBus.connect(browser)
         connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
-            val script = IdeTheme.generateCssUpdateScript()
-            acpBridge.fileIconProvider?.invalidate()
-            ApplicationManager.getApplication().invokeLater({
-                browser.cefBrowser.executeJavaScript(script, browser.cefBrowser.url ?: "", 0)
-                browser.cefBrowser.executeJavaScript(
-                    "if(window.__onThemeChanged) window.__onThemeChanged();", browser.cefBrowser.url ?: "", 0
-                )
-            }, ModalityState.any())
-            acpBridge.pushAdapters()
+            bridge.eval(IdeTheme.generateCssUpdateScript())
+            bridge.eval("if(window.__onThemeChanged) window.__onThemeChanged();")
+            // File icons are rendered where the agents run, so the invalidation has to travel there.
+            val theme = (if (IdeTheme.isDarkTheme()) "dark" else "light").jsStringLiteral()
+            bridge.eval("window.__agentDockInvoke && window.__agentDockInvoke('themeChanged', $theme);")
         })
+
+        // The font size and the user message style come from the backend's settings file.
+        val settingsListener: (agentdock.settings.GlobalSettings) -> Unit = {
+            bridge.eval(IdeTheme.generateCssUpdateScript())
+        }
+        FrontendSettings.addListener(settingsListener)
+        Disposer.register(browser) { FrontendSettings.removeListener(settingsListener) }
 
         panel.add(browser.component, BorderLayout.CENTER)
         return panel
@@ -268,18 +268,5 @@ class AgentDockToolWindowFactory : ToolWindowFactory, DumbAware {
     private fun loadContent(browser: JBCefBrowser) {
         val html = AssetLoader.loadAndInlineAssets(javaClass)
         browser.loadHTML(html)
-    }
-
-    private fun forceBrowserRepaint(browser: JBCefBrowser) {
-        val component = browser.component
-        component.invalidate()
-        component.revalidate()
-        component.repaint()
-
-        component.parent?.let { parent ->
-            parent.invalidate()
-            parent.revalidate()
-            parent.repaint()
-        }
     }
 }

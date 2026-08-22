@@ -151,6 +151,7 @@ internal fun AcpClientService.resetExecutionEnvironment(
     adapterInitializationErrors.clear()
     adapterInitializationDetails.clear()
     adapterRuntimeMetadataMap.clear()
+    loginStatusStates.clear()
     availableCommandsByAdapter.clear()
     systemInstructionsInjectedSessionIds.clear()
     replayOwnerBySessionId.clear()

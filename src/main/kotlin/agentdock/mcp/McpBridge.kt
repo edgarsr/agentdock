@@ -1,8 +1,6 @@
 package agentdock.mcp
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefJSQuery
+import agentdock.bridge.BridgeHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,79 +11,42 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.cef.browser.CefBrowser
 import agentdock.utils.jsStringLiteral
 
 private val json = Json { ignoreUnknownKeys = true }
 
 class McpBridge(
-    private val browser: JBCefBrowser,
+    private val host: BridgeHost,
     private val scope: CoroutineScope
 ) {
-    private var loadQuery: JBCefJSQuery? = null
-    private var saveQuery: JBCefJSQuery? = null
-    private var checkStatusQuery: JBCefJSQuery? = null
     private val statusJobMutex = Mutex()
     private var statusJob: Job? = null
     private var nextStatusRunId = 0L
 
     fun install() {
-        loadQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-            addHandler {
-                scope.launch(Dispatchers.IO) {
-                    push(McpConfigStore.load())
-                }
-                JBCefJSQuery.Response("ok")
+        host.register("loadMcpServers") {
+            scope.launch(Dispatchers.IO) {
+                push(McpConfigStore.load())
             }
         }
 
-        saveQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-            addHandler { payload ->
-                if (!payload.isNullOrBlank()) {
-                    scope.launch(Dispatchers.IO) {
-                        val servers = runCatching {
-                            json.decodeFromString<List<McpServerConfig>>(payload)
-                        }.getOrNull()
-                        if (servers != null) {
-                            McpConfigStore.save(servers)
-                            push(servers)
-                        }
+        host.register("saveMcpServers") { payload ->
+            if (payload.isNotBlank()) {
+                scope.launch(Dispatchers.IO) {
+                    val servers = runCatching {
+                        json.decodeFromString<List<McpServerConfig>>(payload)
+                    }.getOrNull()
+                    if (servers != null) {
+                        McpConfigStore.save(servers)
+                        push(servers)
                     }
                 }
-                JBCefJSQuery.Response("ok")
             }
         }
 
-        checkStatusQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-            addHandler {
-                requestStatusCheck()
-                JBCefJSQuery.Response("ok")
-            }
+        host.register("checkMcpStatus") {
+            requestStatusCheck()
         }
-    }
-
-    fun injectApi(cefBrowser: CefBrowser) {
-        val loadInject = loadQuery?.inject("") ?: "console.error('[McpBridge] Load query not ready')"
-        val saveInject = saveQuery?.inject("json") ?: "console.error('[McpBridge] Save query not ready')"
-        val checkStatusInject = checkStatusQuery?.inject("") ?: "console.error('[McpBridge] Status query not ready')"
-
-        val script = """
-            (function() {
-                window.__onMcpServers = window.__onMcpServers || function(servers) {};
-                window.__onMcpStatus = window.__onMcpStatus || function(update) {};
-                window.__loadMcpServers = function() {
-                    try { $loadInject } catch(e) { console.error('[McpBridge] Load error', e); }
-                };
-                window.__saveMcpServers = function(json) {
-                    if (!json) return;
-                    try { $saveInject } catch(e) { console.error('[McpBridge] Save error', e); }
-                };
-                window.__checkMcpStatus = function() {
-                    try { $checkStatusInject } catch(e) { console.error('[McpBridge] Status check error', e); }
-                };
-            })();
-        """.trimIndent()
-        cefBrowser.executeJavaScript(script, cefBrowser.url, 0)
     }
 
     private fun requestStatusCheck(serversSnapshot: List<McpServerConfig>? = null) {
@@ -127,21 +88,11 @@ class McpBridge(
 
     private fun push(servers: List<McpServerConfig>) {
         val escaped = Json.encodeToString(ListSerializer(McpServerConfig.serializer()), servers).jsStringLiteral()
-        ApplicationManager.getApplication().invokeLater {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onMcpServers) window.__onMcpServers(JSON.parse($escaped));",
-                browser.cefBrowser.url, 0
-            )
-        }
+        host.eval("if(window.__onMcpServers) window.__onMcpServers(JSON.parse($escaped));")
     }
 
     private fun pushStatus(update: McpStatusUpdate) {
         val escaped = json.encodeToString(update).jsStringLiteral()
-        ApplicationManager.getApplication().invokeLater {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onMcpStatus) window.__onMcpStatus(JSON.parse($escaped));",
-                browser.cefBrowser.url, 0
-            )
-        }
+        host.eval("if(window.__onMcpStatus) window.__onMcpStatus(JSON.parse($escaped));")
     }
 }

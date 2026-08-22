@@ -6,7 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
-import agentdock.IdeTheme
+import agentdock.bridge.ClientTheme
 import agentdock.utils.jsStringLiteral
 import com.intellij.openapi.diagnostic.Logger
 import java.io.File
@@ -55,7 +55,7 @@ private fun parseAgentVersion(config: AcpAdapterConfig.AgentVersionConfig, outpu
 }
 
 private fun AcpAdapterConfig.AdapterInfo.resolveIconPath(): String? {
-    val themePath = if (IdeTheme.isDarkTheme()) iconPathDark else iconPathLight
+    val themePath = if (ClientTheme.isDark) iconPathDark else iconPathLight
     return themePath?.takeIf { it.isNotBlank() } ?: iconPath
 }
 
@@ -221,7 +221,7 @@ private fun AcpBridge.buildAdapterPayload(
         authenticatingMethodId = authActionMethodIds[info.id].orEmpty(),
         authError = authErrors[info.id].orEmpty(),
         loginStatusSupported = info.loginStatusMethod != null,
-        loggedIn = loginStatusStates[info.id],
+        loggedIn = service.loginStatusStates[info.id],
         logoutAvailable = logoutAvailable,
         initializing = isInitializing,
         initializationDetail = initializationDetail,
@@ -291,17 +291,22 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
     if (info.loginStatusMethod == null) return
     val stageForFullRefresh = fullAdapterRefreshInProgress.get()
     if (stageForFullRefresh && completedLoginStatusRefreshes.contains(info.id)) return
-    if (!force && loginStatusStates.containsKey(info.id)) return
+    if (!force && service.loginStatusStates.containsKey(info.id)) return
 
     launchRuntimeCheck(loginStatusJobs, info.id) {
         runRuntimeCheckWithRetries { attempt ->
             try {
                 val loggedIn = AcpLoginStatus.resolve(info, target)
                 if (loggedIn != null) {
+                    val becameLoggedIn = loggedIn && service.loginStatusStates[info.id] == false
                     if (stageForFullRefresh) {
                         pendingLoginStatusStates[info.id] = loggedIn
                     } else {
-                        loginStatusStates[info.id] = loggedIn
+                        service.loginStatusStates[info.id] = loggedIn
+                    }
+                    if (becameLoggedIn) {
+                        service.stopSharedProcess(info.id)
+                        service.initializeAdapterInBackground(info.id)
                     }
                     true
                 } else {
@@ -366,12 +371,7 @@ internal fun AcpBridge.pushAdapters(
 
         val payload = adapterJson.encodeToString(adapters)
         val escaped = payload.jsStringLiteral()
-        runOnEdt {
-            browser.cefBrowser.executeJavaScript(
-                "if(window.__onAdapters) window.__onAdapters(JSON.parse($escaped));",
-                browser.cefBrowser.url, 0
-            )
-        }
+        host.eval("if(window.__onAdapters) window.__onAdapters(JSON.parse($escaped));")
 
         unique.values.forEach { info ->
             if (!includeRuntimeChecks) return@forEach
@@ -487,12 +487,7 @@ internal fun AcpBridge.pushAdapters(
 }
 
 internal fun AcpBridge.pushAdapterRefreshState(refreshing: Boolean) {
-    runOnEdt {
-        browser.cefBrowser.executeJavaScript(
-            "if(window.__onAdapterRefreshState) window.__onAdapterRefreshState($refreshing);",
-            browser.cefBrowser.url, 0
-        )
-    }
+    host.eval("if(window.__onAdapterRefreshState) window.__onAdapterRefreshState($refreshing);")
 }
 
 internal fun AcpBridge.finishFullAdapterRefreshIfIdle() {
@@ -505,7 +500,7 @@ internal fun AcpBridge.finishFullAdapterRefreshIfIdle() {
             agentVersionJobs.values.any { !it.isCompleted }
     if (!hasActiveChecks) {
         if (fullAdapterRefreshInProgress.compareAndSet(true, false)) {
-            loginStatusStates.putAll(pendingLoginStatusStates)
+            service.loginStatusStates.putAll(pendingLoginStatusStates)
             pendingLoginStatusStates.clear()
             completedLoginStatusRefreshes.clear()
             pushAdapters()
@@ -515,6 +510,7 @@ internal fun AcpBridge.finishFullAdapterRefreshIfIdle() {
 }
 
 internal fun AcpBridge.resetAdapterRefreshState() {
+    authErrors.clear()
     downloadStatuses.forEach { (adapterId, status) ->
         if (status.startsWith("Error:")) {
             downloadStatuses.remove(adapterId, status)
@@ -543,7 +539,7 @@ internal fun AcpBridge.resetDownloadProbeState(adapterId: String? = null) {
         downloadProbeStates.clear()
         loginStatusJobs.values.forEach { it.cancel() }
         loginStatusJobs.clear()
-        loginStatusStates.clear()
+        service.loginStatusStates.clear()
         pendingLoginStatusStates.clear()
         completedLoginStatusRefreshes.clear()
         agentVersionJobs.values.forEach { it.cancel() }
@@ -557,7 +553,7 @@ internal fun AcpBridge.resetDownloadProbeState(adapterId: String? = null) {
         downloadProbeStates.remove(key)
     }
     loginStatusJobs.remove(adapterId)?.cancel()
-    loginStatusStates.remove(adapterId)
+    service.loginStatusStates.remove(adapterId)
     pendingLoginStatusStates.remove(adapterId)
     completedLoginStatusRefreshes.remove(adapterId)
     agentVersionJobs.remove(adapterId)?.cancel()

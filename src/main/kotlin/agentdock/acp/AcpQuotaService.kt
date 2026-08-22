@@ -11,13 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.*
 
-data class QuotaDetail(
-    val adapterId: String,
-    val adapterName: String,
-    val mainPercentage: Int,
-    val details: List<String> = emptyList()
-)
-
 @Service(Service.Level.APP)
 class AcpQuotaService : Disposable {
     private val log = Logger.getInstance(AcpQuotaService::class.java)

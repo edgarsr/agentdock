@@ -1,5 +1,9 @@
 package agentdock.gitcommit
 
+import agentdock.bridge.frontend.FrontendSettings
+import agentdock.bridge.frontend.FrontendNativeStateService
+import agentdock.rpc.AgentDockRpcApi
+import agentdock.rpc.LocalBridgeHost
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -11,9 +15,8 @@ import com.intellij.openapi.vcs.CommitMessageI
 import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.vcs.commit.CommitMessageUi
-import kotlinx.coroutines.launch
+import com.intellij.platform.project.projectId
 import org.jetbrains.annotations.NotNull
-import agentdock.acp.AcpClientService
 
 class GenerateGitCommitMessageAction : AnAction(), DumbAware {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -22,12 +25,13 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         val project = e.project
         e.presentation.text = "Generate Commit Message"
         e.presentation.description = "Generate a commit message with the configured AI agent"
-        e.presentation.isEnabledAndVisible = project != null && GitCommitFeatureRuntimeState.isEnabled()
+        e.presentation.isEnabledAndVisible = project != null && FrontendSettings.current.gitCommitGeneration.enabled
     }
 
     override fun actionPerformed(e: @NotNull AnActionEvent) {
         val project = e.project ?: return
-        if (!GitCommitFeatureRuntimeState.isEnabled()) {
+        val settings = FrontendSettings.current.gitCommitGeneration
+        if (!settings.enabled) {
             return
         }
         val commitContext = resolveCommitContext(e)
@@ -45,12 +49,17 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         commitMessageTarget.startLoading()
         commitMessageTarget.write("Generating commit message...")
 
-        val acpService = AcpClientService.getInstance(project)
-        acpService.scope.launch {
+        project.getService(FrontendNativeStateService::class.java).launch {
             val result = runCatching {
-                val config = GitCommitGenerationSettingsFacade.resolve(project)
-                    ?: error("Git commit generation is disabled or not configured.")
-                GitCommitAcpExecutor(project, acpService).generateMessage(config, commitContext.changes)
+                val selectedPaths = commitContext.changes.flatMap { change ->
+                    listOfNotNull(change.beforeRevision?.file?.path, change.afterRevision?.file?.path)
+                }.distinct()
+                val local = LocalBridgeHost.getInstanceOrNull(project)
+                if (local != null) {
+                    local.generateGitCommitMessage(selectedPaths)
+                } else {
+                    AgentDockRpcApi.getInstance().generateGitCommitMessage(project.projectId(), selectedPaths)
+                }
             }
 
             ApplicationManager.getApplication().invokeLater {

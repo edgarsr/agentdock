@@ -26,12 +26,12 @@ internal data class ParsedCancelPayload(
     val chatId: String?
 )
 
-internal fun parseIdOnlyPayload(payload: String?): String? {
-    return payload?.trim()?.takeIf { it.isNotEmpty() }
+internal fun parseIdOnlyPayload(payload: String): String? {
+    return payload.trim().takeIf { it.isNotEmpty() }
 }
 
-internal fun parseAdapterAuthMethodPayload(payload: String?): Pair<String?, String?> {
-    val raw = payload?.trim().orEmpty()
+internal fun parseAdapterAuthMethodPayload(payload: String): Pair<String?, String?> {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return null to null
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
@@ -43,8 +43,8 @@ internal fun parseAdapterAuthMethodPayload(payload: String?): Pair<String?, Stri
     }
 }
 
-internal fun parseStartRequestPayload(payload: String?): ParsedStartPayload {
-    val raw = payload?.trim().orEmpty()
+internal fun parseStartRequestPayload(payload: String): ParsedStartPayload {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return ParsedStartPayload(null, null, null, emptyMap())
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
@@ -55,8 +55,8 @@ internal fun parseStartRequestPayload(payload: String?): ParsedStartPayload {
     } catch (_: Exception) { ParsedStartPayload(null, null, null, emptyMap()) }
 }
 
-internal fun parseConversationLoadPayload(payload: String?): Triple<String?, String?, String?> {
-    val raw = payload?.trim().orEmpty()
+internal fun parseConversationLoadPayload(payload: String): Triple<String?, String?, String?> {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return Triple(null, null, null)
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
@@ -67,8 +67,8 @@ internal fun parseConversationLoadPayload(payload: String?): Triple<String?, Str
     } catch (_: Exception) { Triple(null, null, null) }
 }
 
-internal fun parseHistoryConversationCliPayload(payload: String?): Pair<String?, String?> {
-    val raw = payload?.trim().orEmpty()
+internal fun parseHistoryConversationCliPayload(payload: String): Pair<String?, String?> {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return null to null
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
@@ -80,8 +80,8 @@ internal fun parseHistoryConversationCliPayload(payload: String?): Pair<String?,
     }
 }
 
-internal fun parseBlocksPayload(payload: String?): ParsedBlocksPayload {
-    val raw = payload?.trim().orEmpty()
+internal fun parseBlocksPayload(payload: String): ParsedBlocksPayload {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return ParsedBlocksPayload(null, null, emptyList(), emptyList(), null, null, emptyMap())
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject
@@ -160,8 +160,8 @@ private fun parseForkConversationBase(element: JsonElement?): ForkConversationBa
     return ForkConversationBase(sourceConversationId = sourceConversationId, promptCount = promptCount)
 }
 
-internal fun parseCancelPayload(payload: String?): ParsedCancelPayload {
-    val raw = payload?.trim().orEmpty()
+internal fun parseCancelPayload(payload: String): ParsedCancelPayload {
+    val raw = payload.trim().orEmpty()
     if (raw.isEmpty()) return ParsedCancelPayload(null, null)
     return try {
         val obj = Json.parseToJsonElement(raw).jsonObject

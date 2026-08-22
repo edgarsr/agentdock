@@ -7,24 +7,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal object AcpAuthenticationService {
     private const val AUTH_TIMEOUT_MS = 300_000L
+    private const val AUTH_STATUS_POLL_INTERVAL_MS = 1_000L
     private const val LOGOUT_TIMEOUT_MS = 15_000L
 
     @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
     suspend fun login(
         adapterId: String,
         methodId: String,
-        service: AcpClientService
-    ): Boolean {
+        service: AcpClientService,
+        openTerminalAuth: (String, List<String>, Map<String, String>) -> Unit
+    ) {
         val adapterInfo = AcpAdapterConfig.getAdapterInfo(adapterId)
-        return when (adapterInfo.loginMethod) {
-            "acp" -> acpLogin(adapterId, methodId, service)
-            "cli" -> {
-                cliLogin(adapterInfo)
-                true
-            }
+        when (adapterInfo.loginMethod) {
+            "acp" -> acpLogin(adapterId, methodId, service, openTerminalAuth)
+            "cli" -> cliLogin(adapterInfo)
             else -> throw IllegalStateException("Login is not configured for '$adapterId'")
         }
     }
@@ -33,8 +33,10 @@ internal object AcpAuthenticationService {
     private suspend fun acpLogin(
         adapterId: String,
         methodId: String,
-        service: AcpClientService
-    ): Boolean {
+        service: AcpClientService,
+        openTerminalAuth: (String, List<String>, Map<String, String>) -> Unit
+    ) {
+        val adapterInfo = AcpAdapterConfig.getAdapterInfo(adapterId)
         val sharedProcess = initializedProcess(adapterId, service)
         val method = sharedProcess.authMethods.firstOrNull { it.id.value == methodId }
             ?: throw IllegalStateException(
@@ -48,18 +50,33 @@ internal object AcpAuthenticationService {
                 withTimeout(AUTH_TIMEOUT_MS) {
                     client.authenticate(method.id)
                 }
-                return false
             }
 
             is AuthMethod.TerminalAuth -> {
-                runCommandAuth(adapterId, method, service)
-                return true
+                openTerminalAuth(method.name, method.args.orEmpty(), method.env.orEmpty())
+                waitForLogin(adapterInfo)
             }
 
             else -> throw IllegalStateException(
                 "ACP auth method '${method.name}' has an unsupported type"
             )
         }
+    }
+
+    private suspend fun waitForLogin(adapterInfo: AcpAdapterConfig.AdapterInfo) {
+        check(adapterInfo.loginStatusMethod != null) {
+            "Authentication status is not configured for '${adapterInfo.id}'"
+        }
+        val target = AcpAdapterPaths.getExecutionTarget()
+        val authenticated = withTimeoutOrNull(AUTH_TIMEOUT_MS) {
+            while (true) {
+                if (withContext(Dispatchers.IO) { AcpLoginStatus.resolve(adapterInfo, target) } == true) {
+                    return@withTimeoutOrNull true
+                }
+                delay(AUTH_STATUS_POLL_INTERVAL_MS)
+            }
+        }
+        check(authenticated == true) { "Authentication timed out" }
     }
 
     private suspend fun cliLogin(adapterInfo: AcpAdapterConfig.AdapterInfo) {
@@ -144,35 +161,6 @@ internal object AcpAuthenticationService {
         }
         service.ensureSharedProcessStarted(sharedProcess, adapterInfo)
         return sharedProcess
-    }
-
-    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
-    private suspend fun runCommandAuth(
-        adapterId: String,
-        method: AuthMethod.TerminalAuth,
-        service: AcpClientService
-    ) {
-        val adapterInfo = AcpAdapterConfig.getAdapterInfo(adapterId)
-        val target = AcpAdapterPaths.getExecutionTarget()
-        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId, target)
-        val command = AcpAdapterPaths.buildLaunchCommand(
-            adapterRootPath = adapterRoot,
-            adapterInfo = adapterInfo,
-            projectPath = service.project.basePath,
-            target = target
-        ) + method.args.orEmpty()
-        val workingDirectory = service.project.basePath
-            ?.takeIf { it.isNotBlank() }
-            ?.let(::File)
-            ?: File(adapterRoot)
-        runCommand(
-            adapterId = adapterId,
-            command = command,
-            workingDirectory = workingDirectory,
-            environment = method.env.orEmpty(),
-            timeoutMs = AUTH_TIMEOUT_MS,
-            actionName = "Authentication"
-        )
     }
 
     private suspend fun runCommand(

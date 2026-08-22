@@ -1,6 +1,7 @@
 package agentdock.settings
 
-import agentdock.acp.AcpAdapterPaths
+import agentdock.bridge.frontend.FrontendSettings
+import agentdock.utils.AgentDockPaths
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -26,7 +27,7 @@ object WhisperFeatureManager {
         .connectTimeout(Duration.ofSeconds(30))
         .build()
 
-    private fun featureRoot(): File = File(AcpAdapterPaths.getBaseRuntimeDir(), "features/whisper")
+    private fun featureRoot(): File = File(AgentDockPaths.baseRuntimeDir(), "features/whisper")
     private fun runtimeRoot(): File = File(featureRoot(), "runtime")
     private fun modelRoot(): File = File(featureRoot(), "models")
     private fun modelFile(): File = File(modelRoot(), MODEL_FILE_NAME)
@@ -136,7 +137,7 @@ object WhisperFeatureManager {
         val outputBase = File(inputFile.parentFile, inputFile.nameWithoutExtension)
         val outputFile = File(inputFile.parentFile, "${inputFile.nameWithoutExtension}.txt")
         try {
-            val language = GlobalSettingsStore.loadAudioTranscriptionSettings().language
+            val language = FrontendSettings.current.audioTranscription.language
             val args = mutableListOf(
                 command,
                 "-m", model.absolutePath,

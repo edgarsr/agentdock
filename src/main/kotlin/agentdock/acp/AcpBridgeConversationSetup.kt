@@ -1,6 +1,5 @@
 package agentdock.acp
 
-import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,9 +46,9 @@ internal fun AcpBridge.pushBridgeOperationResult(
     )
 }
 
-private fun parsePermissionDecisionPayload(payload: String?): PermissionDecisionPayload? {
+private fun parsePermissionDecisionPayload(payload: String): PermissionDecisionPayload? {
     return runCatching {
-        val obj = Json.parseToJsonElement(payload ?: "{}").jsonObject
+        val obj = Json.parseToJsonElement(payload).jsonObject
         val requestId = obj["requestId"]?.jsonPrimitive?.content?.trim().orEmpty()
         val decision = obj["decision"]?.jsonPrimitive?.content?.trim().orEmpty()
         if (requestId.isBlank() || decision.isBlank()) null else PermissionDecisionPayload(requestId, decision)
@@ -118,249 +117,231 @@ private fun AcpBridge.completeCancelledPromptWhenAgentSettles(chatId: String, ca
 
 
 internal fun AcpBridge.installConversationQueries() {
-    startAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val parsed = parseStartRequestPayload(payload)
-            val chatId = parsed.chatId
-            val adapterName = parsed.adapterId
-            if (chatId != null) {
-                pushBridgeOperationResult(parsed.requestId, chatId, "start_agent", ok = true)
+    host.register("startAgent") { payload ->
+        val parsed = parseStartRequestPayload(payload)
+        val chatId = parsed.chatId
+        val adapterName = parsed.adapterId
+        if (chatId != null) {
+            pushBridgeOperationResult(parsed.requestId, chatId, "start_agent", ok = true)
+            scope.launch(Dispatchers.Default) {
+                pushStatus(chatId, "initializing")
+                try {
+                    withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
+                        service.startAgent(
+                            chatId,
+                            adapterName,
+                            parsed.configValues
+                        )
+                    }
+                    pushAdapters()
+                    pushStatus(chatId, service.status(chatId).name.lowercase())
+                    pushSessionId(chatId, service.sessionId(chatId))
+                    pushMode(chatId, service.activeModeId(chatId))
+                } catch (e: Exception) {
+                    pushStatus(chatId, "error")
+                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]")
+                }
+            }
+        } else {
+            pushBridgeOperationResult(parsed.requestId, null, "start_agent", ok = false, error = "Invalid start request.")
+        }
+    }
+
+    host.register("listAdapters") { payload ->
+        if (payload == "refresh") {
+            initialAdapterRefreshStarted.set(true)
+            startFullAdapterRefresh()
+        } else {
+            startInitialAdapterRefresh()
+        }
+    }
+
+    host.register("sendPrompt") { payload ->
+        val parsed = parseBlocksPayload(payload)
+        val chatId = parsed.chatId
+        val blocks = parsed.blocks
+        if (chatId != null && blocks.isNotEmpty()) {
+            val dispatchFailure = service.promptDispatchFailure(chatId)
+            if (dispatchFailure != null) {
+                pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = dispatchFailure)
                 scope.launch(Dispatchers.Default) {
-                    pushStatus(chatId, "initializing")
-                    try {
-                        withTimeout(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                            service.startAgent(
-                                chatId,
-                                adapterName,
-                                parsed.configValues
-                            )
-                        }
-                        pushAdapters()
-                        pushStatus(chatId, service.status(chatId).name.lowercase())
-                        pushSessionId(chatId, service.sessionId(chatId))
-                        pushMode(chatId, service.activeModeId(chatId))
-                    } catch (e: Exception) {
-                        pushStatus(chatId, "error")
-                        pushContentChunk(chatId, "assistant", "text", text = "[Error: ${formatAcpError(e)}]")
-                    }
+                    service.markChatSessionBroken(chatId)
+                    pushConversationError(chatId, dispatchFailure)
+                    pushStatus(chatId, "error")
+                    recoverRuntimeAfterFailure(dispatchFailure)
                 }
-            } else {
-                pushBridgeOperationResult(parsed.requestId, null, "start_agent", ok = false, error = "Invalid start request.")
+                return@register
             }
-            JBCefJSQuery.Response("ok")
-        }
-    }
 
-    listAdaptersQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            if (payload == "refresh") {
-                initialAdapterRefreshStarted.set(true)
-                startFullAdapterRefresh()
-            } else {
-                startInitialAdapterRefresh()
-            }
-            JBCefJSQuery.Response("ok")
-        }
-    }
-
-    sendPromptQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val parsed = parseBlocksPayload(payload)
-            val chatId = parsed.chatId
-            val blocks = parsed.blocks
-            if (chatId != null && blocks.isNotEmpty()) {
-                val dispatchFailure = service.promptDispatchFailure(chatId)
-                if (dispatchFailure != null) {
-                    pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = dispatchFailure)
-                    scope.launch(Dispatchers.Default) {
-                        service.markChatSessionBroken(chatId)
-                        pushConversationError(chatId, dispatchFailure)
-                        pushStatus(chatId, "error")
-                        recoverRuntimeAfterFailure(dispatchFailure)
-                    }
-                    return@addHandler JBCefJSQuery.Response("ok")
-                }
-
-                pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
-                val captureId = beginLivePromptCapture(
-                    chatId,
-                    parsed.rawBlocks,
-                    parsed.forkBase,
-                    parsed.configValues
-                )
-                val previousPromptJob = promptJobs[chatId]?.takeIf { it.isActive }
-                lateinit var job: Job
-                job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
-                    try {
-                        if (previousPromptJob != null) {
-                            val previousPromptSettled = withTimeoutOrNull(PREVIOUS_PROMPT_SETTLE_TIMEOUT_MS) {
-                                previousPromptJob.join()
-                                true
-                            } ?: false
-                            if (!previousPromptSettled) {
-                                throw IllegalStateException(
-                                    "Previous prompt did not finish after cancellation. Start a new session or restart the agent."
-                                )
-                            }
-                        }
-                        // Prompt dispatch is the final configuration barrier: anything shown as
-                        // selected in the UI must be applied before the agent receives the prompt.
-                        // Bounded like every other start, so a stuck agent fails the prompt
-                        // instead of leaving the user waiting on a prompt that never runs.
-                        val started = withTimeoutOrNull(AcpBridge.START_AGENT_TIMEOUT_MS) {
-                            service.startAgent(
-                                chatId = chatId,
-                                adapterName = parsed.adapterId,
-                                preferredConfigValues = parsed.configValues
-                            )
+            pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = true)
+            val captureId = beginLivePromptCapture(
+                chatId,
+                parsed.rawBlocks,
+                parsed.forkBase,
+                parsed.configValues
+            )
+            val previousPromptJob = promptJobs[chatId]?.takeIf { it.isActive }
+            lateinit var job: Job
+            job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+                try {
+                    if (previousPromptJob != null) {
+                        val previousPromptSettled = withTimeoutOrNull(PREVIOUS_PROMPT_SETTLE_TIMEOUT_MS) {
+                            previousPromptJob.join()
                             true
-                        }
-                        if (started == null) {
+                        } ?: false
+                        if (!previousPromptSettled) {
                             throw IllegalStateException(
-                                "The agent did not become ready within ${AcpBridge.START_AGENT_TIMEOUT_MS / 1000}s."
+                                "Previous prompt did not finish after cancellation. Start a new session or restart the agent."
                             )
                         }
-                        pushAdapters(includeRuntimeChecks = false)
-                        pushStatus(chatId, "prompting")
-                        service.prompt(chatId, blocks).collect { event ->
-                            when (event) {
-                                is AcpEvent.PromptDone -> {
-                                    val fallbackText = "[The AI agent ended the turn without providing a response.]"
-                                    if (ensureLivePromptNoResponseFallback(chatId, fallbackText, captureId)) {
-                                        pushContentChunk(chatId, "assistant", "text", text = fallbackText)
-                                    }
-                                    flushLivePromptCapture(chatId, captureId)?.let {
-                                        pushPromptDoneChunk(chatId, it, outcome = "success")
-                                    }
-                                    pushStatus(chatId, "ready")
+                    }
+                    // Prompt dispatch is the final configuration barrier: anything shown as
+                    // selected in the UI must be applied before the agent receives the prompt.
+                    // Bounded like every other start, so a stuck agent fails the prompt
+                    // instead of leaving the user waiting on a prompt that never runs.
+                    val started = withTimeoutOrNull(AcpBridge.START_AGENT_TIMEOUT_MS) {
+                        service.startAgent(
+                            chatId = chatId,
+                            adapterName = parsed.adapterId,
+                            preferredConfigValues = parsed.configValues
+                        )
+                        true
+                    }
+                    if (started == null) {
+                        throw IllegalStateException(
+                            "The agent did not become ready within ${AcpBridge.START_AGENT_TIMEOUT_MS / 1000}s."
+                        )
+                    }
+                    pushAdapters(includeRuntimeChecks = false)
+                    pushStatus(chatId, "prompting")
+                    service.prompt(chatId, blocks).collect { event ->
+                        when (event) {
+                            is AcpEvent.PromptDone -> {
+                                val fallbackText = "[The AI agent ended the turn without providing a response.]"
+                                if (ensureLivePromptNoResponseFallback(chatId, fallbackText, captureId)) {
+                                    pushContentChunk(chatId, "assistant", "text", text = fallbackText)
                                 }
-                                is AcpEvent.Error -> {
-                                    pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]")
-                                    appendLivePromptTextEvent(chatId, "[Error: ${event.message}]", captureId)
-                                    flushLivePromptCapture(chatId, captureId)?.let {
-                                        pushPromptDoneChunk(chatId, it, outcome = "error")
-                                    }
-                                    pushStatus(chatId, "error")
+                                flushLivePromptCapture(chatId, captureId)?.let {
+                                    pushPromptDoneChunk(chatId, it, outcome = "success")
                                 }
+                                pushStatus(chatId, "ready")
+                            }
+                            is AcpEvent.Error -> {
+                                pushContentChunk(chatId, "assistant", "text", text = "[Error: ${event.message}]")
+                                appendLivePromptTextEvent(chatId, "[Error: ${event.message}]", captureId)
+                                flushLivePromptCapture(chatId, captureId)?.let {
+                                    pushPromptDoneChunk(chatId, it, outcome = "error")
+                                }
+                                pushStatus(chatId, "error")
                             }
                         }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        if (service.status(chatId) == AcpClientService.Status.Error) {
-                            pushStatus(chatId, "error")
-                        } else {
-                            pushStatus(chatId, "ready")
-                        }
-                        throw e
-                    } catch (e: Exception) {
-                        val message = "[Error: ${formatAcpError(e)}]"
-                        if (previousPromptJob != null) {
-                            service.markChatSessionBroken(chatId)
-                        }
-                        pushContentChunk(chatId, "assistant", "text", text = message)
-                        appendLivePromptTextEvent(chatId, message, captureId)
-                        flushLivePromptCapture(chatId, captureId)?.let {
-                            pushPromptDoneChunk(chatId, it, outcome = "error")
-                        }
-                        pushStatus(chatId, "error")
-                    } finally {
-                        promptJobs.remove(chatId, job)
                     }
-                }
-                promptJobs[chatId] = job
-                job.start()
-                val watcher = scope.launch(Dispatchers.Default) {
-                    while (job.isActive) {
-                        delay(PROMPT_HEALTH_POLL_INTERVAL_MS)
-                        if (!job.isActive) break
-                        if (service.status(chatId) != AcpClientService.Status.Prompting) break
-                        val failure = service.promptDispatchFailure(chatId) ?: continue
-                        val message = "[Error: $failure]"
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    if (service.status(chatId) == AcpClientService.Status.Error) {
+                        pushStatus(chatId, "error")
+                    } else {
+                        pushStatus(chatId, "ready")
+                    }
+                    throw e
+                } catch (e: Exception) {
+                    val message = "[Error: ${formatAcpError(e)}]"
+                    if (previousPromptJob != null) {
                         service.markChatSessionBroken(chatId)
-                        pushContentChunk(chatId, "assistant", "text", text = message)
-                        appendLivePromptTextEvent(chatId, message, captureId)
-                        flushLivePromptCapture(chatId, captureId)?.let {
-                            pushPromptDoneChunk(chatId, it, outcome = "error")
-                        }
-                        pushStatus(chatId, "error")
-                        job.cancel(kotlinx.coroutines.CancellationException(failure))
-                        recoverRuntimeAfterFailure(failure)
-                        break
                     }
+                    pushContentChunk(chatId, "assistant", "text", text = message)
+                    appendLivePromptTextEvent(chatId, message, captureId)
+                    flushLivePromptCapture(chatId, captureId)?.let {
+                        pushPromptDoneChunk(chatId, it, outcome = "error")
+                    }
+                    pushStatus(chatId, "error")
+                } finally {
+                    promptJobs.remove(chatId, job)
                 }
-                job.invokeOnCompletion {
-                    watcher.cancel()
-                }
-            } else {
-                pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = "Invalid prompt request.")
             }
-            JBCefJSQuery.Response("ok")
+            promptJobs[chatId] = job
+            job.start()
+            val watcher = scope.launch(Dispatchers.Default) {
+                while (job.isActive) {
+                    delay(PROMPT_HEALTH_POLL_INTERVAL_MS)
+                    if (!job.isActive) break
+                    if (service.status(chatId) != AcpClientService.Status.Prompting) break
+                    val failure = service.promptDispatchFailure(chatId) ?: continue
+                    val message = "[Error: $failure]"
+                    service.markChatSessionBroken(chatId)
+                    pushContentChunk(chatId, "assistant", "text", text = message)
+                    appendLivePromptTextEvent(chatId, message, captureId)
+                    flushLivePromptCapture(chatId, captureId)?.let {
+                        pushPromptDoneChunk(chatId, it, outcome = "error")
+                    }
+                    pushStatus(chatId, "error")
+                    job.cancel(kotlinx.coroutines.CancellationException(failure))
+                    recoverRuntimeAfterFailure(failure)
+                    break
+                }
+            }
+            job.invokeOnCompletion {
+                watcher.cancel()
+            }
+        } else {
+            pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = "Invalid prompt request.")
         }
     }
 
-    cancelPromptQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            val parsed = parseCancelPayload(payload)
-            val chatId = parsed.chatId.orEmpty()
-            if (chatId.isNotEmpty()) {
-                val dispatchFailure = service.cancelDispatchFailure(chatId)
-                if (dispatchFailure != null) {
-                    val message = "Cancel request could not be delivered. $dispatchFailure"
-                    pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
-                    scope.launch(Dispatchers.Default) {
-                        service.markChatSessionBroken(chatId)
-                        pushStatus(chatId, "error")
-                    }
-                    return@addHandler JBCefJSQuery.Response("ok")
-                }
-
+    host.register("cancelPrompt") { payload ->
+        val parsed = parseCancelPayload(payload)
+        val chatId = parsed.chatId.orEmpty()
+        if (chatId.isNotEmpty()) {
+            val dispatchFailure = service.cancelDispatchFailure(chatId)
+            if (dispatchFailure != null) {
+                val message = "Cancel request could not be delivered. $dispatchFailure"
+                pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
                 scope.launch(Dispatchers.Default) {
-                    try {
-                        val cancelledJob = promptJobs[chatId]?.takeIf { it.isActive }
-                        withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
-                            service.cancel(chatId)
-                        }
-                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n")
-                        appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
-                        pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
-                        completeCancelledPromptWhenAgentSettles(chatId, cancelledJob)
-                    } catch (e: Exception) {
-                        val message = "Cancel request failed. ${formatAcpError(e)}"
-                        service.markChatSessionBroken(chatId)
-                        pushStatus(chatId, "error")
-                        pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
-                    }
+                    service.markChatSessionBroken(chatId)
+                    pushStatus(chatId, "error")
                 }
-            } else {
-                pushBridgeOperationResult(parsed.requestId, parsed.chatId, "cancel_prompt", ok = false, error = "Invalid cancel request.")
+                return@register
             }
-            JBCefJSQuery.Response("ok")
+
+            scope.launch(Dispatchers.Default) {
+                try {
+                    val cancelledJob = promptJobs[chatId]?.takeIf { it.isActive }
+                    withTimeout(CANCEL_REQUEST_TIMEOUT_MS) {
+                        service.cancel(chatId)
+                    }
+                    pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n")
+                    appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
+                    pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
+                    completeCancelledPromptWhenAgentSettles(chatId, cancelledJob)
+                } catch (e: Exception) {
+                    val message = "Cancel request failed. ${formatAcpError(e)}"
+                    service.markChatSessionBroken(chatId)
+                    pushStatus(chatId, "error")
+                    pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = false, error = message)
+                }
+            }
+        } else {
+            pushBridgeOperationResult(parsed.requestId, parsed.chatId, "cancel_prompt", ok = false, error = "Invalid cancel request.")
         }
     }
 
     installRuntimeRecoveryQuery()
 
-    stopAgentQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { chatIdPayload ->
-            val chatId = chatIdPayload?.trim().orEmpty()
-            if (chatId.isNotEmpty()) {
-                scope.launch(Dispatchers.Default) {
-                    service.stopAgent(chatId)
-                    livePromptCaptures.remove(chatId)
-                    historyReplayCaptures.remove(chatId)
-                }
+    host.register("stopAgent") { chatIdPayload ->
+        val chatId = chatIdPayload.trim()
+        if (chatId.isNotEmpty()) {
+            scope.launch(Dispatchers.Default) {
+                service.stopAgent(chatId)
+                livePromptCaptures.remove(chatId)
+                historyReplayCaptures.remove(chatId)
             }
-            JBCefJSQuery.Response("ok")
         }
     }
 
-    respondPermissionQuery = JBCefJSQuery.create(browser as com.intellij.ui.jcef.JBCefBrowserBase).apply {
-        addHandler { payload ->
-            parsePermissionDecisionPayload(payload)?.let { request ->
-                scope.launch(Dispatchers.Default) {
-                    service.respondToPermissionRequest(request.requestId, request.decision)
-                }
+    host.register("respondPermission") { payload ->
+        parsePermissionDecisionPayload(payload)?.let { request ->
+            scope.launch(Dispatchers.Default) {
+                service.respondToPermissionRequest(request.requestId, request.decision)
             }
-            JBCefJSQuery.Response("ok")
         }
     }
 

@@ -1,9 +1,10 @@
 package agentdock.acp
 
+import agentdock.rpc.TerminalLaunchRequest
 import com.intellij.openapi.project.Project
 
-internal interface IdeTerminalBridge {
-    fun openInTerminal(workingDir: String, title: String, command: String)
+interface IdeTerminalBridge {
+    fun open(request: TerminalLaunchRequest)
 
     fun resolveShellPath(): String?
 }
