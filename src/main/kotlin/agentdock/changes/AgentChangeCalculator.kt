@@ -18,6 +18,7 @@ data class AgentLineStats(
 
 data class AgentFileStats(
     val filePath: String,
+    val status: String,
     val additions: Int,
     val deletions: Int
 )
@@ -44,12 +45,22 @@ object AgentChangeCalculator {
         project: Project,
         filePath: String,
         status: String,
-        operations: List<UndoOperation>
+        operations: List<UndoOperation>,
+        allowDeleted: Boolean = true
     ): AgentFileStats? {
+        val resolvedPath = UndoFileHandler.resolveFilePath(project, filePath)
+        val fileDeleted = !File(resolvedPath).exists()
+        if (fileDeleted && (
+                status == "A"
+                    || !allowDeleted
+                    || operations.lastOrNull()?.newText?.isEmpty() != true
+            )) return null
+
         val snapshot = buildSnapshot(project, filePath, status, operations) ?: return null
         val lineStats = computeLineStats(snapshot.beforeContent, snapshot.afterContent)
         return AgentFileStats(
             filePath = filePath,
+            status = if (fileDeleted) "D" else status,
             additions = lineStats.additions,
             deletions = lineStats.deletions
         )

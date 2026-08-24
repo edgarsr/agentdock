@@ -364,7 +364,7 @@ export interface FileChangeOperation {
 export interface FileChangeSummary {
   filePath: string;
   fileName: string;
-  status: 'A' | 'M';
+  status: 'A' | 'M' | 'D';
   additions: number;
   deletions: number;
   operations: FileChangeOperation[];
@@ -373,6 +373,7 @@ export interface FileChangeSummary {
 
 export interface FileChangeStatsPayload {
   filePath: string;
+  status: 'A' | 'M' | 'D';
   additions: number;
   deletions: number;
 }

@@ -151,10 +151,12 @@ internal fun AcpBridge.installFileChangeQueries() {
                         project = service.project,
                         filePath = file.filePath,
                         status = file.status,
-                        operations = operations
+                        operations = operations,
+                        allowDeleted = file.allowDeleted
                     )?.let {
                         FileChangeStatsPayload(
                             filePath = it.filePath,
+                            status = it.status,
                             additions = it.additions,
                             deletions = it.deletions
                         )

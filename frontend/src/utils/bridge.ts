@@ -154,7 +154,7 @@ export const ACPBridge = {
             };
             const eventName = chunk.type === 'tool_call' ? EVENT_NAMES.TOOL_CALL : EVENT_NAMES.TOOL_CALL_UPDATE;
             window.dispatchEvent(new CustomEvent(eventName, { detail: { chatId: chunk.chatId, payload } }));
-          } else if (chunk.type === 'tool_call_update' && toolCallId && status) {
+          } else if (toolCallId && status) {
             const payload: ToolCallEvent = {
               toolCallId,
               title: chunk.toolTitle || raw.title || '',
@@ -162,7 +162,8 @@ export const ACPBridge = {
               status,
               diffs: [],
             };
-            window.dispatchEvent(new CustomEvent(EVENT_NAMES.TOOL_CALL_UPDATE, { detail: { chatId: chunk.chatId, payload } }));
+            const eventName = chunk.type === 'tool_call' ? EVENT_NAMES.TOOL_CALL : EVENT_NAMES.TOOL_CALL_UPDATE;
+            window.dispatchEvent(new CustomEvent(eventName, { detail: { chatId: chunk.chatId, payload } }));
           }
           if (toolCallId && status && !['pending', 'running', 'in_progress', 'active'].includes(String(status).toLowerCase())) {
             toolCallRawInputCache.delete(chunk.chatId, toolCallId);
@@ -523,7 +524,12 @@ export const ACPBridge = {
 
   onChangesState: (callback: (e: CustomEvent<ChangesStateEvent>) => void) => onBridgeEvent(EVENT_NAMES.CHANGES_STATE, callback),
 
-  computeFileChangeStats: (files: { filePath: string; status: 'A' | 'M'; operations: FileChangeOperation[] }[]): Promise<FileChangeStatsResultPayload> => {
+  computeFileChangeStats: (files: {
+    filePath: string;
+    status: 'A' | 'M' | 'D';
+    operations: FileChangeOperation[];
+    allowDeleted: boolean;
+  }[]): Promise<FileChangeStatsResultPayload> => {
     return new Promise((resolve, reject) => {
       if (typeof window.__computeFileChangeStats !== 'function') {
         reject(new Error('File change stats bridge is not available.'));

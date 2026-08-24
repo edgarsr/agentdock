@@ -130,7 +130,7 @@ const FileChangesPanel = memo(({
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className={`font-mono w-4 text-center flex-shrink-0 font-bold relative ${
-                        fc.status === 'A' ? 'text-added' : 'text-warning'
+                        fc.status === 'A' ? 'text-added' : fc.status === 'D' ? 'text-deleted' : 'text-warning'
                       }`}>
                         {fc.status}
                       </span>

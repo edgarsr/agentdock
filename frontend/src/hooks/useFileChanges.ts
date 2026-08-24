@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ToolCallEvent, FileChangeSummary, ProcessedFileState } from '../types/chat';
+import { ToolCallEvent, FileChangeStatsPayload, FileChangeSummary, ProcessedFileState } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { buildReplayToolCallEvents } from '../utils/replay';
 import { applyToolCallEvent, pendingToolCallEvents, stableToolCallEventId } from '../utils/toolCallUtils';
@@ -50,8 +50,13 @@ export function useFileChanges(
   const [undoErrorMessage, setUndoErrorMessage] = useState<string | null>(null);
   const [computedStats, setComputedStats] = useState<{
     source: FileChangeSummary[];
-    byFilePath: Record<string, { additions: number; deletions: number }>;
+    byFilePath: Record<string, FileChangeStatsPayload>;
   } | null>(null);
+  const [refreshRevision, setRefreshRevision] = useState(0);
+  // Status-only tools may change files through the shell without supplying diffs.
+  const editToolCallIdsRef = useRef(new Set<string>());
+  const knownEditDeletedPathsRef = useRef(new Set<string>());
+  const externalRefreshRef = useRef(false);
   const [replayToolCallEvents, setReplayToolCallEvents] = useState<ToolCallEvent[]>([]);
   const [liveToolCallEvents, setLiveToolCallEvents] = useState<ToolCallEvent[]>([]);
   const [processedFileStates, setProcessedFileStates] = useState<ProcessedFileState[]>([]);
@@ -82,10 +87,14 @@ export function useFileChanges(
     setReplayToolCallEvents([]);
     setLiveToolCallEvents([]);
     setComputedStats(null);
+    setRefreshRevision(0);
     setHasPluginEdits(false);
     setPendingUndoFilePaths(null);
     setUndoErrorMessage(null);
     initialHasPluginEditsRef.current = null;
+    editToolCallIdsRef.current.clear();
+    knownEditDeletedPathsRef.current.clear();
+    externalRefreshRef.current = false;
 
     try {
       if (window.__getChangesState) {
@@ -98,6 +107,19 @@ export function useFileChanges(
 
   // Listen for changes state from backend + tool call events
   useEffect(() => {
+    const trackFileSystemRefresh = (payload: ToolCallEvent) => {
+      if (payload.diffs.length > 0) {
+        editToolCallIdsRef.current.add(payload.toolCallId);
+        externalRefreshRef.current = false;
+      } else if (payload.status
+        && APPLIED_STATUSES.has(payload.status.toLowerCase())
+        && !editToolCallIdsRef.current.has(payload.toolCallId)) {
+        externalRefreshRef.current = true;
+        setComputedStats(null);
+        setRefreshRevision((revision) => revision + 1);
+      }
+    };
+
     const unsubChangesState = ACPBridge.onChangesState((e) => {
       if (e.detail.chatId !== conversationId) return;
       
@@ -139,6 +161,7 @@ export function useFileChanges(
         ...e.detail.payload,
         eventId: stableToolCallEventId(adapterName, sessionId, e.detail.payload.toolCallId),
       };
+      trackFileSystemRefresh(payload);
       setLiveToolCallEvents((events) => applyToolCallEvent(events, payload, 'tool_call'));
     });
 
@@ -148,6 +171,7 @@ export function useFileChanges(
         ...e.detail.payload,
         eventId: stableToolCallEventId(adapterName, sessionId, e.detail.payload.toolCallId),
       };
+      trackFileSystemRefresh(payload);
       setLiveToolCallEvents((events) => applyToolCallEvent(events, payload, 'tool_call_update'));
     });
 
@@ -228,24 +252,27 @@ export function useFileChanges(
     }
 
     let cancelled = false;
+    const externalRefresh = externalRefreshRef.current;
     ACPBridge.computeFileChangeStats(baseFileChanges.map((fc) => ({
       filePath: fc.filePath,
       status: fc.status,
       operations: fc.operations,
+      allowDeleted: !externalRefresh || knownEditDeletedPathsRef.current.has(fc.filePath),
     })))
       .then((result) => {
         if (cancelled) return;
-        const nextStats: Record<string, { additions: number; deletions: number }> = {};
+        if (externalRefresh) externalRefreshRef.current = false;
+        const nextStats: Record<string, FileChangeStatsPayload> = {};
         result.files.forEach((file) => {
-          nextStats[file.filePath] = {
-            additions: file.additions,
-            deletions: file.deletions,
-          };
+          if (file.status === 'D') knownEditDeletedPathsRef.current.add(file.filePath);
+          else knownEditDeletedPathsRef.current.delete(file.filePath);
+          nextStats[file.filePath] = file;
         });
         setComputedStats({ source: baseFileChanges, byFilePath: nextStats });
       })
       .catch((err) => {
         if (!cancelled) {
+          if (externalRefresh) externalRefreshRef.current = false;
           console.error('[useFileChanges] Failed to compute file change stats:', err);
           setComputedStats({ source: baseFileChanges, byFilePath: {} });
         }
@@ -254,19 +281,20 @@ export function useFileChanges(
     return () => {
       cancelled = true;
     };
-  }, [baseFileChanges]);
+  }, [baseFileChanges, refreshRevision]);
 
   const statsPending = baseFileChanges.length > 0 && computedStats?.source !== baseFileChanges;
   const statsByFilePath = computedStats?.source === baseFileChanges ? computedStats.byFilePath : {};
 
   const fileChanges = useMemo<FileChangeSummary[]>(() => {
-    if (statsPending) return baseFileChanges;
+    if (statsPending) return [];
 
     return baseFileChanges.flatMap((fc) => {
       const stats = statsByFilePath[fc.filePath];
-      if (!stats || (stats.additions === 0 && stats.deletions === 0)) return [];
+      if (!stats || (stats.status !== 'D' && stats.additions === 0 && stats.deletions === 0)) return [];
       return [{
         ...fc,
+        status: stats.status,
         additions: stats.additions,
         deletions: stats.deletions,
       }];

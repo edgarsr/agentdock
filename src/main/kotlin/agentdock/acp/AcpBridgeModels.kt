@@ -117,7 +117,8 @@ internal data class FileChangeOperationPayload(
 internal data class FileChangeStatsRequestFilePayload(
     val filePath: String,
     val status: String,
-    val operations: List<FileChangeOperationPayload>
+    val operations: List<FileChangeOperationPayload>,
+    val allowDeleted: Boolean
 )
 
 @Serializable
@@ -129,6 +130,7 @@ internal data class FileChangeStatsRequestPayload(
 @Serializable
 internal data class FileChangeStatsPayload(
     val filePath: String,
+    val status: String,
     val additions: Int,
     val deletions: Int
 )
