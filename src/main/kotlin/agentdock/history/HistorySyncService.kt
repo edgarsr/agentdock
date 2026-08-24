@@ -110,6 +110,7 @@ internal object HistorySyncService {
         val scannedAdapters = availableSessionResult.scannedAdapters
 
         val availableByKey = availableSessions.associateBy { "${it.adapterName}:${it.sessionId}" }
+        val discoveredAt = System.currentTimeMillis()
         val keptKeys = linkedSetOf<String>()
         var changed = existing.size != rawExisting.size
 
@@ -124,8 +125,8 @@ internal object HistorySyncService {
                 }
                 if (!keptKeys.add(key)) return@mapNotNull null
                 val syncedSession = session.copy(
-                    createdAt = resolveSyncedCreatedAt(session.createdAt, meta.createdAt),
-                    updatedAt = resolveSyncedUpdatedAt(session.updatedAt, meta.updatedAt),
+                    createdAt = resolveSyncedCreatedAt(session.createdAt, meta.createdAt).orDiscovered(discoveredAt),
+                    updatedAt = resolveSyncedUpdatedAt(session.updatedAt, meta.updatedAt).orDiscovered(discoveredAt),
                     sourceFilePath = meta.filePath.takeIf { it.isNotBlank() } ?: session.sourceFilePath
                 )
                 if (syncedSession != session) {
@@ -192,8 +193,8 @@ internal object HistorySyncService {
                             sessionId = meta.sessionId,
                             adapterName = meta.adapterName,
                             configOptions = meta.configOptions,
-                            createdAt = meta.createdAt,
-                            updatedAt = meta.updatedAt,
+                            createdAt = meta.createdAt.orDiscovered(discoveredAt),
+                            updatedAt = meta.updatedAt.orDiscovered(discoveredAt),
                             sourceFilePath = meta.filePath.takeIf { it.isNotBlank() },
                             changes = null
                         )
@@ -395,6 +396,9 @@ internal object HistorySyncService {
         val sessions: List<SessionMeta>
     )
 }
+
+/** Agents that omit session timestamps are pinned to the moment the plugin first saw the session. */
+private fun Long.orDiscovered(discoveredAt: Long): Long = if (this > 0L) this else discoveredAt
 
 internal fun resolveSyncedCreatedAt(currentCreatedAt: Long, discoveredCreatedAt: Long): Long {
     return when {

@@ -19,7 +19,16 @@ internal data class CommandResult(
 
 internal object AcpExecutionMode {
 
-    fun isWindowsHost(): Boolean = System.getProperty("os.name").lowercase().contains("win")
+    fun isWindowsHost(): Boolean = hostPlatform() == "windows"
+
+    fun hostPlatform(): String {
+        val os = System.getProperty("os.name").lowercase()
+        return when {
+            os.contains("win") -> "windows"
+            os.contains("mac") -> "macos"
+            else -> "linux"
+        }
+    }
 
     fun currentTarget(): AcpExecutionTarget = AcpExecutionTarget.LOCAL
 

@@ -12,6 +12,7 @@ import agentdock.acp.deleteHistorySession
 import com.intellij.openapi.project.ProjectManager
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.util.UUID
 
 internal object SessionListDeleteSupport {
     fun resolveSourceFilePath(projectPath: String, adapterName: String, sessionId: String): String {
@@ -26,6 +27,7 @@ internal object SessionListDeleteSupport {
 
     fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
         when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
+            "antigravitySessionDelete" -> return deleteAntigravitySession(sessionId)
             "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
             "kimiCodeSessionDelete" -> return KimiSessionHistory.kimiCodeSessionDelete(projectPath, sessionId)
             null -> Unit
@@ -45,6 +47,23 @@ internal object SessionListDeleteSupport {
             }.isSuccess
             "qoder" -> deleteQoderSession(sessionId)
             else -> false
+        }
+    }
+
+    private fun deleteAntigravitySession(sessionId: String): Boolean {
+        val cleanSessionId = runCatching { UUID.fromString(sessionId.trim()).toString() }.getOrNull() ?: return false
+        val dataDir = File(System.getProperty("user.home"), ".gemini/antigravity-acp")
+        val conversationsDir = File(dataDir, "conversations")
+        val sessionFiles = listOf(
+            File(conversationsDir, "$cleanSessionId.db-wal"),
+            File(conversationsDir, "$cleanSessionId.db-shm"),
+            File(conversationsDir, "$cleanSessionId.db"),
+            File(dataDir, "brain/$cleanSessionId"),
+            File(conversationsDir, "$cleanSessionId.meta")
+        )
+
+        return sessionFiles.all { file ->
+            if (file.isDirectory) deleteHistoryDirectoryIfExists(file) else deleteHistoryFileIfExists(file)
         }
     }
 

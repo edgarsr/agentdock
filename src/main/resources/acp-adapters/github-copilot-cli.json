@@ -4,6 +4,7 @@
   "iconPath": "/icons/copilot.svg",
   "iconPathLight": "/icons/copilot-light.svg",
   "iconPathDark": "/icons/copilot-dark.svg",
+  "sessionListPosixCwd": true,
   "distribution": {
     "type": "npm",
     "version": "1.0.75",

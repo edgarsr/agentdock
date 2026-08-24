@@ -71,6 +71,8 @@ function mergeAgentSnapshots(
 
 let serviceProviderAgentSnapshots: Record<string, AgentOption> = {};
 
+const formatVersion = (version: string) => /^\d/.test(version) ? `v${version}` : version;
+
 const linkButtonFocusClassName = [
   'focus:outline-none',
   'focus-visible:rounded-[3px]',
@@ -276,11 +278,11 @@ export function AgentManagementView({
             const canResolveStatus = isDownloaded && agent.readyKnown === true;
             const isStatusUnknown = isDownloaded && !isStarting && !canResolveStatus;
             const canUpdate = isDownloaded && agent.updateAvailable === true && !isInstalling;
-            const agentVersionSuffix = agent.agentVersion ? ` (v${agent.agentVersion})` : '';
+            const agentVersionSuffix = agent.agentVersion ? ` (${formatVersion(agent.agentVersion)})` : '';
             const versionLabel = agent.installedVersion
               ? (canUpdate && agent.latestVersion
-                  ? `v${agent.installedVersion}${agentVersionSuffix} -> v${agent.latestVersion}`
-                  : `v${agent.installedVersion}${agentVersionSuffix}`)
+                  ? `${formatVersion(agent.installedVersion)}${agentVersionSuffix} -> ${formatVersion(agent.latestVersion)}`
+                  : `${formatVersion(agent.installedVersion)}${agentVersionSuffix}`)
               : null;
             const statusLabel = isStarting
               ? 'Starting'

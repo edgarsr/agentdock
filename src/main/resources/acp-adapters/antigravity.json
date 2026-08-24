@@ -1,0 +1,28 @@
+{
+  "id": "antigravity",
+  "name": "Google Antigravity",
+  "iconPath": "/icons/antigravity.svg",
+  "sessionListPosixCwd": true,
+  "sessionDeleteMethod": "antigravitySessionDelete",
+  "loginMethod": "acp",
+  "logoutMethod": "acp",
+  "loginStatusMethod": "antigravityAuthFile",
+  "distribution": {
+    "type": "archive",
+    "version": "agy_acp_server_20260818_01_RC01",
+    "downloadUrl": "https://dl.google.com/agy-extensions/releases/{osDir}/agy-acp-server-{version}-{platform}-{archToken}.zip",
+    "binaryName": {
+      "win": "agy_acp_server.exe",
+      "unix": "agy_acp_server.par"
+    }
+  },
+  "platformArgs": {
+    "linux": ["--uid="]
+  },
+  "cli": {
+    "executable": {
+      "win": "agy",
+      "unix": "agy"
+    }
+  }
+}

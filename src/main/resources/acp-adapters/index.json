@@ -8,6 +8,7 @@
     "acp-adapters/kimi-code.json",
     "acp-adapters/kilo.json",
     "acp-adapters/qoder.json",
-    "acp-adapters/opencode.json"
+    "acp-adapters/opencode.json",
+    "acp-adapters/antigravity.json"
   ]
 }

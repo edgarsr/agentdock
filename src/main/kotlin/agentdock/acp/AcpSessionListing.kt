@@ -41,7 +41,7 @@ private suspend fun AcpClientService.acpSessionList(
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' does not have an initialized ACP client")
     val expectedProjectPath = historyComparablePath(projectPath)
     val sessionListCwd = resolveSessionCwd(projectPath).let { cwd ->
-        if (adapterInfo.id == "github-copilot-cli") cwd.replace('\\', '/') else cwd
+        if (adapterInfo.sessionListPosixCwd) cwd.replace('\\', '/') else cwd
     }
 
     return client.listSessions(cwd = sessionListCwd).toList().mapNotNull { session ->

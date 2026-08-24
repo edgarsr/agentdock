@@ -76,6 +76,7 @@ internal fun buildAdapterLaunchCommand(
         else -> mutableListOf(launchFile.absolutePath)
     }
     base.addAll(adapterInfo.args)
+    base.addAll(adapterInfo.platformArgs[AcpExecutionMode.hostPlatform()].orEmpty())
     return base
 }
 

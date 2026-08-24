@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 internal object AcpLoginStatus {
+    private const val ANTIGRAVITY_METHOD = "antigravityAuthFile"
     private const val CLAUDE_CODE_METHOD = "claudeCodeCliAuthStatus"
     private const val CODEX_METHOD = "codexCliLoginStatus"
     private const val CURSOR_METHOD = "cursorCliStatus"
@@ -22,6 +23,7 @@ internal object AcpLoginStatus {
         adapterInfo: AcpAdapterConfig.AdapterInfo,
         target: AcpExecutionTarget
     ): Boolean? = when (adapterInfo.loginStatusMethod) {
+        ANTIGRAVITY_METHOD -> resolveAntigravity()
         CLAUDE_CODE_METHOD -> resolveClaudeCode(adapterInfo, target)
         CODEX_METHOD -> resolveCodex(adapterInfo)
         CURSOR_METHOD -> resolveCursor(adapterInfo)
@@ -54,6 +56,13 @@ internal object AcpLoginStatus {
 
     private fun resolveCursor(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? =
         runCliStatusCommand(adapterInfo, listOf("status"))?.let(::parseCursorLoginStatus)
+
+    private fun resolveAntigravity(): Boolean? {
+        val authFile = File(System.getProperty("user.home"), ".gemini/antigravity-acp/acp_token.json")
+        if (!authFile.isFile) return false
+        val content = runCatching { authFile.readText() }.getOrNull() ?: return null
+        return parseAntigravityLoginStatus(content)
+    }
 
     private fun resolveGrokBuild(): Boolean? {
         val authFile = File(System.getProperty("user.home"), ".grok/auth.json")
@@ -118,6 +127,13 @@ internal fun parseCursorLoginStatus(output: String): Boolean =
 
 internal fun parseQoderLoginStatus(output: String): Boolean =
     !output.contains("Account: Not logged in", ignoreCase = true)
+
+internal fun parseAntigravityLoginStatus(content: String): Boolean? = runCatching {
+    Json.parseToJsonElement(content).jsonObject["refresh_token"]
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.isNotBlank() == true
+}.getOrNull()
 
 internal fun parseGrokBuildLoginStatus(content: String): Boolean? = runCatching {
     Json.parseToJsonElement(content).jsonObject.values.any { authEntry ->

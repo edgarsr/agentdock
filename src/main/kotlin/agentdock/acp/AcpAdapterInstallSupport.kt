@@ -9,8 +9,10 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import java.util.zip.ZipInputStream
 
 private const val ARCHIVE_COMMAND_TIMEOUT_MINUTES = 10L
+private const val ZIP_COPY_BUFFER_BYTES = 64 * 1024
 private const val INSTALL_METADATA_FILE = ".install-metadata.json"
 private val adapterMetadataJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -25,7 +27,8 @@ private data class RuntimePlatform(
     val archiveExt: String,
     val target: String,
     val libc: String,
-    val libcSuffix: String
+    val libcSuffix: String,
+    val archToken: String
 )
 
 internal fun resolveInstallAdapterInfo(
@@ -64,14 +67,14 @@ internal fun downloadArchiveDistributionLocal(
         return false
     }
     val downloadUrl = resolveArchiveDownloadUrl(rawUrl, adapterInfo, runtime)
-    val tempFile = File(targetDir, "tool-download.${runtime.archiveExt}")
+    val archiveExt = if (downloadUrl.lowercase().endsWith(".zip")) "zip" else runtime.archiveExt
+    val tempFile = File(targetDir, "tool-download.$archiveExt")
 
     return try {
         cancellation?.throwIfCancelled()
         statusCallback?.invoke("Downloading ${adapterInfo.name}...")
-        if (runtime.platform == "windows") {
-            statusCallback?.invoke("Downloading package...")
-            val downloadExitCode = runArchiveCommand(
+        val downloadExitCode = if (runtime.platform == "windows") {
+            runArchiveCommand(
                 ProcessBuilder(
                     "powershell",
                     "-NoProfile",
@@ -82,47 +85,51 @@ internal fun downloadArchiveDistributionLocal(
                 statusCallback,
                 cancellation
             )
-            if (downloadExitCode != 0) return false
-
-            statusCallback?.invoke("Extracting package...")
-            val extractExitCode = runArchiveCommand(
+        } else {
+            runArchiveCommand(
                 ProcessBuilder(
-                    "powershell",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    "\$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '${tempFile.absolutePath}' -DestinationPath '${targetDir.absolutePath}' -Force"
+                    "sh",
+                    "-c",
+                    "curl -fsSL ${quoteUnixShellArg(downloadUrl)} -o ${quoteUnixShellArg(tempFile.absolutePath)}"
                 ),
                 statusCallback,
                 cancellation
             )
-            if (extractExitCode != 0) return false
+        }
+        if (downloadExitCode != 0) return false
+
+        cancellation?.throwIfCancelled()
+        statusCallback?.invoke("Extracting package...")
+        if (archiveExt == "zip") {
+            try {
+                extractZipArchive(tempFile, targetDir, cancellation)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                statusCallback?.invoke("Error: ${e.message}")
+                return false
+            }
         } else {
-            statusCallback?.invoke("Downloading and extracting package...")
-            val exitCode = runArchiveCommand(
+            val extractExitCode = runArchiveCommand(
                 ProcessBuilder(
                     "sh",
                     "-c",
                     """
                     set -e
-                    temp_file=${quoteUnixShellArg("${targetDir.absolutePath}/tool-download.${runtime.archiveExt}")}
-                    curl -fsSL ${quoteUnixShellArg(downloadUrl)} -o "${'$'}temp_file"
+                    temp_file=${quoteUnixShellArg(tempFile.absolutePath)}
                     first_entry=${'$'}(tar -tzf "${'$'}temp_file" | sed -n '1p')
                     case "${'$'}first_entry" in
                       */*) tar --strip-components=1 -xzf "${'$'}temp_file" -C ${quoteUnixShellArg(targetDir.absolutePath)} ;;
                       *) tar -xzf "${'$'}temp_file" -C ${quoteUnixShellArg(targetDir.absolutePath)} ;;
                     esac
-                    rm -f "${'$'}temp_file"
                     """.trimIndent()
                 ),
                 statusCallback,
                 cancellation
             )
-            if (exitCode != 0) return false
-
+            if (extractExitCode != 0) return false
         }
 
-        cancellation?.throwIfCancelled()
         flattenConfiguredExtractSubdir(targetDir, adapterInfo)
         if (runtime.platform != "windows") {
             statusCallback?.invoke("Ensuring executables...")
@@ -194,11 +201,12 @@ private fun detectRuntimePlatform(target: AcpExecutionTarget): RuntimePlatform {
     val isArm64 = arch.contains("aarch64") || arch.contains("arm64")
     val archiveArch = if (isArm64) "arm64" else "x64"
     val targetArch = if (isArm64) "aarch64" else "x86_64"
+    val archToken = if (isArm64) "arm64" else "x86_64"
 
     return when {
-        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "")
-        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "")
-        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "")
+        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "", archToken)
+        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "", archToken)
+        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "", archToken)
     }
 }
 
@@ -210,6 +218,8 @@ private fun resolveArchiveDownloadUrl(
     return template
         .replace("{platform}", runtime.platform)
         .replace("{arch}", runtime.archiveArch)
+        .replace("{archToken}", runtime.archToken)
+        .replace("{osDir}", AcpExecutionMode.hostPlatform())
         .replace("{ext}", runtime.archiveExt)
         .replace("{target}", runtime.target)
         .replace("{libc}", runtime.libc)
@@ -232,6 +242,41 @@ private fun ensureExtractedFilesExecutable(targetDir: File) {
     targetDir.walkTopDown()
         .filter { it.isFile }
         .forEach { it.setExecutable(true) }
+}
+
+private fun extractZipArchive(
+    zipFile: File,
+    targetDir: File,
+    cancellation: AcpAdapterInstallCancellation?
+) {
+    val canonicalTarget = targetDir.canonicalFile
+    val buffer = ByteArray(ZIP_COPY_BUFFER_BYTES)
+    ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
+        while (true) {
+            cancellation?.throwIfCancelled()
+            val entry = zip.nextEntry ?: break
+            val outFile = File(targetDir, entry.name)
+            if (!outFile.canonicalFile.toPath().startsWith(canonicalTarget.toPath())) {
+                throw SecurityException("Blocked archive entry outside target directory: ${entry.name}")
+            }
+            if (entry.isDirectory) {
+                outFile.mkdirs()
+            } else {
+                outFile.parentFile?.mkdirs()
+                outFile.outputStream().use { output ->
+                    // Entries can reach hundreds of megabytes, so cancellation is checked per chunk
+                    // instead of once per entry.
+                    while (true) {
+                        cancellation?.throwIfCancelled()
+                        val read = zip.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            zip.closeEntry()
+        }
+    }
 }
 
 private fun runArchiveCommand(
