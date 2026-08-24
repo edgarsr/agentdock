@@ -1,6 +1,7 @@
 package agentdock.utils
 
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.AccessDeniedException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -11,14 +12,26 @@ import java.nio.file.StandardCopyOption
  * and then moving it to the destination, replacing the original.
  * This prevents data corruption if the process crashes during write.
  */
-fun File.atomicWriteText(text: String, charset: java.nio.charset.Charset = Charsets.UTF_8) {
+fun File.atomicWriteText(
+    text: String,
+    charset: java.nio.charset.Charset = Charsets.UTF_8,
+    forceToDisk: Boolean = false
+) {
     val parent = parentFile ?: File(".")
     parent.mkdirs()
     val tempPrefix = name.takeIf { it.length >= 3 } ?: "tmp"
     val tempPath = Files.createTempFile(parent.toPath(), "$tempPrefix.", ".tmp")
     var moved = false
     try {
-        tempPath.toFile().writeText(text, charset)
+        if (forceToDisk) {
+            FileOutputStream(tempPath.toFile()).use { output ->
+                output.write(text.toByteArray(charset))
+                output.flush()
+                output.channel.force(true)
+            }
+        } else {
+            tempPath.toFile().writeText(text, charset)
+        }
         moveWithRetry(tempPath, toPath())
         moved = true
     } finally {

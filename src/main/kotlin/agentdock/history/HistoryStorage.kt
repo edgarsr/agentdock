@@ -10,6 +10,11 @@ import java.io.File
 internal object HistoryStorage {
     private val conversationIdPattern = Regex("[A-Za-z0-9_-]{1,256}")
 
+    private data class StoredProjectIndex(
+        val text: String,
+        val conversations: MutableList<HistoryConversationIndexEntry>
+    )
+
     val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
@@ -69,26 +74,58 @@ internal object HistoryStorage {
             indexFile.parentFile.mkdirs()
         }
         if (!indexFile.exists()) {
-            indexFile.atomicWriteText("[]")
+            if (recoverProjectIndexFromBackup(indexFile) == null) {
+                indexFile.atomicWriteText("[]", forceToDisk = true)
+            }
         }
         return indexFile
     }
 
     fun readProjectIndex(indexFile: File): MutableList<HistoryConversationIndexEntry> {
-        return runCatching {
-            json.decodeFromString<List<HistoryConversationIndexEntry>>(indexFile.readText()).toMutableList()
-        }.getOrElse { mutableListOf() }
+        return readValidProjectIndex(indexFile)?.conversations
+            ?: recoverProjectIndexFromBackup(indexFile)
+            ?: mutableListOf()
     }
 
     fun readExistingProjectIndex(projectPath: String): List<HistoryConversationIndexEntry> {
         if (projectPath.isBlank()) return emptyList()
         val indexFile = projectIndexFile(projectPath)
-        if (!indexFile.exists() || !indexFile.isFile) return emptyList()
+        if ((!indexFile.exists() || !indexFile.isFile) && !projectIndexBackupFile(indexFile).isFile) {
+            return emptyList()
+        }
         return readProjectIndex(indexFile)
     }
 
     fun writeProjectIndex(indexFile: File, conversations: List<HistoryConversationIndexEntry>) {
-        indexFile.atomicWriteText(json.encodeToString(conversations))
+        readValidProjectIndex(indexFile)?.let { current ->
+            runCatching {
+                projectIndexBackupFile(indexFile).atomicWriteText(current.text, forceToDisk = true)
+            }
+        }
+        indexFile.atomicWriteText(json.encodeToString(conversations), forceToDisk = true)
+    }
+
+    private fun projectIndexBackupFile(indexFile: File): File {
+        return File(indexFile.parentFile, "${indexFile.name}.bak")
+    }
+
+    private fun readValidProjectIndex(file: File): StoredProjectIndex? {
+        if (!file.isFile) return null
+        return runCatching {
+            val text = file.readText()
+            StoredProjectIndex(
+                text = text,
+                conversations = json.decodeFromString<List<HistoryConversationIndexEntry>>(text).toMutableList()
+            )
+        }.getOrNull()
+    }
+
+    private fun recoverProjectIndexFromBackup(indexFile: File): MutableList<HistoryConversationIndexEntry>? {
+        val backup = readValidProjectIndex(projectIndexBackupFile(indexFile)) ?: return null
+        runCatching {
+            indexFile.atomicWriteText(backup.text, forceToDisk = true)
+        }
+        return backup.conversations
     }
 
     fun readEphemeralSessions(projectPath: String): MutableList<EphemeralSessionEntry> {
