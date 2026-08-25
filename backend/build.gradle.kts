@@ -4,6 +4,8 @@ dependencies {
         bundledModule("intellij.platform.kernel.backend")
         bundledModule("intellij.platform.rpc.backend")
         bundledModule("intellij.platform.vcs")
+        // ChangesListView, used by the commit message action, lives here rather than in the VCS API.
+        bundledModule("intellij.platform.vcs.impl.shared")
     }
     implementation(project(":shared"))
     // Runtime copies are packaged as separate JARs in the root plugin lib directory. The

@@ -4,6 +4,7 @@
         <module name="intellij.platform.kernel.backend"/>
         <module name="intellij.platform.rpc.backend"/>
         <module name="intellij.platform.vcs"/>
+        <module name="intellij.platform.vcs.impl.shared"/>
         <module name="agent-dock.shared"/>
         <module name="agent-dock.backend-libraries"/>
     </dependencies>
