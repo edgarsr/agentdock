@@ -19,7 +19,7 @@ const defaultGlobalSettings: GlobalSettingsPayload = {
     uiFontSizeOffsetPx: 0,
     userMessageBackgroundStyle: 'default',
     audioTranscription: { language: 'auto' },
-    gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', instructions: '' },
+    gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', reasoningEffortId: '', instructions: '' },
     quotaWidgetEnabled: false
   }
 };
@@ -35,6 +35,7 @@ function normalizeGitCommitGenerationSettings(
     enabled: Boolean(payload?.enabled),
     adapterId: payload?.adapterId?.trim() ?? '',
     modelId: payload?.modelId?.trim() ?? '',
+    reasoningEffortId: payload?.reasoningEffortId?.trim() ?? '',
     instructions: payload?.instructions ?? ''
   };
 }

@@ -6,6 +6,7 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.ContentBlock
+import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.PermissionOption
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
@@ -21,11 +22,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import java.util.concurrent.ConcurrentLinkedQueue
+import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpAdapterPaths
 import agentdock.acp.AcpClientService
 import agentdock.acp.awaitPendingSessionUpdates
 import agentdock.acp.ensureExecutionTargetCurrent
 import agentdock.acp.ensureSharedProcessStarted
+import agentdock.acp.fallbackRuntimeMetadata
+import agentdock.acp.configOptionMetaKey
 import agentdock.acp.processKey
 import agentdock.acp.resolveModelToApply
 import agentdock.acp.resolveSessionCwd
@@ -36,6 +40,10 @@ import agentdock.acp.storeFreshAdapterRuntimeMetadata
 import agentdock.history.AgentDockHistoryService
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
+import com.agentclientprotocol.protocol.Protocol
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 internal class GitCommitAcpExecutor(
@@ -104,22 +112,14 @@ internal class GitCommitAcpExecutor(
             ephemeralSessionId = session.sessionId.value
             AgentDockHistoryService.registerEphemeralSession(project.basePath, adapterInfo.id, ephemeralSessionId)
 
-            if (!selectedModelId.isNullOrBlank()) {
-                val configId = runtimeMetadata?.modelConfigId
-                if (configId == null) {
-                    if (selectedModelId != runtimeMetadata?.currentModelId) {
-                        error("ACP adapter '${adapterInfo.id}' does not provide a model config option")
-                    }
-                } else {
-                    val protocol = sharedProcess.protocol
-                        ?: error("ACP protocol is not initialized for ${adapterInfo.id}")
-                    val response = protocol.setSessionConfigOptionRaw(session.sessionId.value, configId, selectedModelId)
-                    acpService.storeFreshAdapterRuntimeMetadata(
-                        adapterInfo,
-                        runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
-                    )
-                }
-            }
+            applyConfiguration(
+                session = session,
+                protocol = sharedProcess.protocol,
+                adapterInfo = adapterInfo,
+                initialMetadata = runtimeMetadata ?: adapterInfo.fallbackRuntimeMetadata(),
+                selectedModelId = selectedModelId,
+                selectedReasoningEffortId = config.reasoningEffortId,
+            )
 
             val responseText = StringBuilder()
             try {
@@ -169,6 +169,92 @@ internal class GitCommitAcpExecutor(
                 }
             }
         }
+    }
+
+    @OptIn(UnstableApi::class)
+    private suspend fun applyConfiguration(
+        session: ClientSession,
+        protocol: Protocol?,
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        initialMetadata: AcpClientService.AdapterRuntimeMetadata,
+        selectedModelId: String?,
+        selectedReasoningEffortId: String,
+    ) {
+        if (initialMetadata.usesAdapterConfigOptions) {
+            applyAdapterConfiguration(
+                session,
+                adapterInfo,
+                initialMetadata,
+                selectedModelId,
+                selectedReasoningEffortId,
+            )
+            return
+        }
+
+        var metadata = initialMetadata
+        if (!selectedModelId.isNullOrBlank()) {
+            val configId = metadata.modelConfigId
+            if (configId == null) {
+                if (selectedModelId != metadata.currentModelId) {
+                    error("ACP adapter '${adapterInfo.id}' does not provide a model config option")
+                }
+            } else {
+                val activeProtocol = protocol
+                    ?: error("ACP protocol is not initialized for ${adapterInfo.id}")
+                val response = activeProtocol.setSessionConfigOptionRaw(
+                    session.sessionId.value,
+                    configId,
+                    selectedModelId,
+                )
+                metadata = runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
+                acpService.storeFreshAdapterRuntimeMetadata(adapterInfo, metadata)
+            }
+        }
+
+        val effortId = selectedReasoningEffortId.trim().takeIf(String::isNotEmpty) ?: return
+        val effortOption = metadata.configOptions.firstOrNull { option ->
+            option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
+        } ?: return
+        if (!effortOption.accepts(effortId)) return
+
+        val activeProtocol = protocol
+            ?: error("ACP protocol is not initialized for ${adapterInfo.id}")
+        val response = activeProtocol.setSessionConfigOptionRaw(
+            session.sessionId.value,
+            effortOption.id,
+            effortId,
+            effortOption.type,
+        )
+        acpService.storeFreshAdapterRuntimeMetadata(
+            adapterInfo,
+            runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo),
+        )
+    }
+
+    @OptIn(UnstableApi::class)
+    private suspend fun applyAdapterConfiguration(
+        session: ClientSession,
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        metadata: AcpClientService.AdapterRuntimeMetadata,
+        selectedModelId: String?,
+        selectedReasoningEffortId: String,
+    ) {
+        val modelId = selectedModelId
+            ?: metadata.currentModelId
+            ?: metadata.availableModels.firstOrNull()?.modelId
+            ?: return
+        val effortId = selectedReasoningEffortId.trim().takeIf(String::isNotEmpty)
+        val effortOption = metadata.configOptionsForModel(modelId).firstOrNull { option ->
+            option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
+        }
+        val meta = if (effortId != null && effortOption?.accepts(effortId) == true) {
+            adapterInfo.configOptionMetaKey(effortOption.id)?.let { metaKey ->
+                buildJsonObject { put(metaKey, JsonPrimitive(effortId)) }
+            }
+        } else {
+            null
+        }
+        session.setModel(ModelId(modelId), meta)
     }
 
     private fun appendVisibleAssistantText(buffer: StringBuilder, update: SessionUpdate) {

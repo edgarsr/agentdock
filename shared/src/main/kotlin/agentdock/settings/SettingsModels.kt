@@ -49,6 +49,7 @@ data class GitCommitGenerationSettings(
     val enabled: Boolean = false,
     val adapterId: String = "",
     val modelId: String = "",
+    val reasoningEffortId: String = "",
     val instructions: String = ""
 )
 

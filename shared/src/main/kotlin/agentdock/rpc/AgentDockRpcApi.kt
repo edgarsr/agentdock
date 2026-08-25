@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 package agentdock.rpc
 
 import agentdock.acp.QuotaDetail
@@ -33,8 +35,8 @@ data class NativeState(
 
 /**
  * The whole frontend/backend contract of the plugin. The JCEF bridge remains two generic,
- * one-way operations; native state and commit generation are typed because they exist outside the
- * browser lifecycle.
+ * one-way operations, while native state uses a typed flow because it exists outside the browser
+ * lifecycle.
  *
  * This API is only reached in Split Mode. In a monolithic IDE the tool window talks to the backend
  * services directly, so nothing here is serialized.
@@ -56,8 +58,6 @@ interface AgentDockRpcApi : RemoteApi<Unit> {
     suspend fun uiMessages(projectId: ProjectId): Flow<List<UiMessage>>
 
     suspend fun nativeState(projectId: ProjectId): Flow<NativeState>
-
-    suspend fun generateGitCommitMessage(projectId: ProjectId, selectedPaths: List<String>): String
 
     companion object {
         suspend fun getInstance(): AgentDockRpcApi =

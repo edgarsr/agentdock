@@ -7,6 +7,7 @@ import agentdock.settings.GlobalSettingsStore
 data class GitCommitGenerationConfig(
     val adapterId: String,
     val modelId: String,
+    val reasoningEffortId: String,
     val instructions: String
 )
 
@@ -33,6 +34,7 @@ object GitCommitGenerationSettingsFacade {
             GitCommitGenerationConfig(
                 adapterId = adapterInfo.id,
                 modelId = settings.modelId.trim(),
+                reasoningEffortId = settings.reasoningEffortId.trim(),
                 instructions = settings.instructions.trim()
             )
         }.getOrNull()

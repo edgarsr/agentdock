@@ -59,7 +59,6 @@
     <content>
         <module name="agent-dock.shared" loading="required"/>
         <module name="agent-dock.frontend"/>
-        <module name="agent-dock.frontend-vcs"/>
         <module name="agent-dock.frontend-terminal"/>
         <module name="agent-dock.backend"/>
     </content>

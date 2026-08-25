@@ -10,6 +10,9 @@ import java.io.RandomAccessFile
 object GlobalSettingsStore {
     private val storeLock = Any()
 
+    @Volatile
+    private var gitCommitGenerationEnabled = false
+
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
@@ -27,6 +30,7 @@ object GlobalSettingsStore {
         val loaded = runCatching {
             json.decodeFromString<GlobalSettings>(file.readText())
         }.getOrDefault(GlobalSettings())
+        gitCommitGenerationEnabled = loaded.gitCommitGeneration.enabled
         loaded
     }
 
@@ -45,14 +49,18 @@ object GlobalSettingsStore {
             gitCommitGeneration = settings.gitCommitGeneration.copy(
                 adapterId = settings.gitCommitGeneration.adapterId.trim(),
                 modelId = settings.gitCommitGeneration.modelId.trim(),
+                reasoningEffortId = settings.gitCommitGeneration.reasoningEffortId.trim(),
                 instructions = settings.gitCommitGeneration.instructions.trim()
             )
         )
         val file = settingsFile()
         file.parentFile?.mkdirs()
         file.atomicWriteText(json.encodeToString(normalized))
+        gitCommitGenerationEnabled = normalized.gitCommitGeneration.enabled
         return normalized
     }
+
+    fun isGitCommitGenerationEnabled(): Boolean = gitCommitGenerationEnabled
 
     fun areAudioNotificationsEnabled(): Boolean = load().audioNotificationsEnabled
 
@@ -87,6 +95,7 @@ object GlobalSettingsStore {
         val loaded = runCatching {
             json.decodeFromString<GlobalSettings>(file.readText())
         }.getOrDefault(GlobalSettings())
+        gitCommitGenerationEnabled = loaded.gitCommitGeneration.enabled
         return loaded
     }
 

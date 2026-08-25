@@ -13,6 +13,8 @@ import agentdock.settings.GlobalSettings
 import agentdock.settings.GlobalSettingsStore
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FilePath
+import com.intellij.openapi.vcs.changes.Change
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -87,10 +89,13 @@ class BridgeHost(private val project: Project, private val scope: CoroutineScope
 
     override fun nativeState(): Flow<NativeState> = nativeState.asStateFlow()
 
-    override suspend fun generateGitCommitMessage(selectedPaths: List<String>): String {
+    suspend fun generateGitCommitMessage(
+        changes: Collection<Change>,
+        unversionedFiles: Collection<FilePath>,
+    ): String {
         val config = GitCommitGenerationSettingsFacade.resolve(project)
             ?: error("Git commit generation is disabled or not configured.")
-        val prompt = GitCommitPromptBuilder.build(project, selectedPaths, config.instructions)
+        val prompt = GitCommitPromptBuilder.build(project, changes, unversionedFiles, config.instructions)
         return GitCommitAcpExecutor(project, AcpClientService.getInstance(project)).generateMessage(config, prompt)
     }
 

@@ -14,4 +14,14 @@
         <postStartupActivity implementation="agentdock.acp.AcpStartupActivity"/>
         <platform.rpc.backend.remoteApiProvider implementation="agentdock.bridge.AgentDockRemoteApiProvider"/>
     </extensions>
+
+    <actions>
+        <action id="AgentDock.GenerateGitCommitMessageAction"
+                class="agentdock.gitcommit.GenerateGitCommitMessageAction"
+                text="Generate Commit Message"
+                description="Generate a commit message with the configured AI agent"
+                icon="/icons/agent_dock_toolwindow.svg">
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

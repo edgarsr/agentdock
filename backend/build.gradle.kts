@@ -43,7 +43,6 @@ kotlin {
         exclude("agentdock/AgentDockToolWindowFactory.kt")
         exclude("agentdock/AssetLoader.kt")
         exclude("agentdock/ExternalCodeReferenceDispatcher.kt")
-        exclude("agentdock/gitcommit/GenerateGitCommitMessageAction.kt")
         exclude("agentdock/IdeTheme.kt")
         exclude("agentdock/JcefDragAndDropSupport.kt")
         exclude("agentdock/acp/AcpAudioPlayer.kt")

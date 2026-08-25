@@ -33,7 +33,6 @@ dependencies {
         jetbrainsRuntime()
         pluginModule(implementation(project(":shared")))
         pluginModule(implementation(project(":frontend")))
-        pluginModule(implementation(project(":frontend-vcs")))
         pluginModule(implementation(project(":backend")))
         pluginModule(implementation(project(":frontend-terminal")))
     }

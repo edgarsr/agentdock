@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 package agentdock.bridge
 
 import agentdock.rpc.AgentDockRpcApi
@@ -29,11 +31,6 @@ private class AgentDockRemoteApi : AgentDockRpcApi {
     override suspend fun nativeState(projectId: ProjectId): Flow<NativeState> {
         val project = projectId.findProjectOrNull() ?: return emptyFlow()
         return BridgeHost.getInstance(project).nativeState()
-    }
-
-    override suspend fun generateGitCommitMessage(projectId: ProjectId, selectedPaths: List<String>): String {
-        val project = projectId.findProjectOrNull() ?: error("Project is no longer available.")
-        return BridgeHost.getInstance(project).generateGitCommitMessage(selectedPaths)
     }
 }
 

@@ -22,8 +22,6 @@ interface LocalBridgeHost {
 
     fun nativeState(): Flow<NativeState>
 
-    suspend fun generateGitCommitMessage(selectedPaths: List<String>): String
-
     companion object {
         fun getInstanceOrNull(project: Project): LocalBridgeHost? =
             project.getService(LocalBridgeHost::class.java)

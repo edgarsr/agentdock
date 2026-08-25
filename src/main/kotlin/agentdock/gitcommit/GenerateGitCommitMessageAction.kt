@@ -1,9 +1,10 @@
+@file:Suppress("UnstableApiUsage")
+
 package agentdock.gitcommit
 
-import agentdock.bridge.frontend.FrontendSettings
-import agentdock.bridge.frontend.FrontendNativeStateService
-import agentdock.rpc.AgentDockRpcApi
-import agentdock.rpc.LocalBridgeHost
+import agentdock.acp.AcpClientService
+import agentdock.bridge.BridgeHost
+import agentdock.settings.GlobalSettingsStore
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -12,10 +13,12 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vcs.CheckinProjectPanel
 import com.intellij.openapi.vcs.CommitMessageI
+import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.vcs.changes.Change
+import com.intellij.openapi.vcs.changes.ui.ChangesListView
 import com.intellij.vcs.commit.CommitMessageUi
-import com.intellij.platform.project.projectId
+import kotlinx.coroutines.launch
 import org.jetbrains.annotations.NotNull
 
 class GenerateGitCommitMessageAction : AnAction(), DumbAware {
@@ -25,13 +28,12 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         val project = e.project
         e.presentation.text = "Generate Commit Message"
         e.presentation.description = "Generate a commit message with the configured AI agent"
-        e.presentation.isEnabledAndVisible = project != null && FrontendSettings.current.gitCommitGeneration.enabled
+        e.presentation.isEnabledAndVisible = project != null && GlobalSettingsStore.isGitCommitGenerationEnabled()
     }
 
     override fun actionPerformed(e: @NotNull AnActionEvent) {
         val project = e.project ?: return
-        val settings = FrontendSettings.current.gitCommitGeneration
-        if (!settings.enabled) {
+        if (!GlobalSettingsStore.isGitCommitGenerationEnabled()) {
             return
         }
         val commitContext = resolveCommitContext(e)
@@ -40,8 +42,8 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
             showWarning(project, "Git Commit Generation", "Unable to access the commit message field.")
             return
         }
-        if (commitContext.changes.isEmpty()) {
-            showWarning(project, "Git Commit Generation", "Select changes in the commit view first.")
+        if (commitContext.changes.isEmpty() && commitContext.unversionedFiles.isEmpty()) {
+            showWarning(project, "Git Commit Generation", "Select changes or unversioned files in the commit view first.")
             return
         }
 
@@ -49,17 +51,13 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         commitMessageTarget.startLoading()
         commitMessageTarget.write("Generating commit message...")
 
-        project.getService(FrontendNativeStateService::class.java).launch {
+        val acpService = AcpClientService.getInstance(project)
+        acpService.scope.launch {
             val result = runCatching {
-                val selectedPaths = commitContext.changes.flatMap { change ->
-                    listOfNotNull(change.beforeRevision?.file?.path, change.afterRevision?.file?.path)
-                }.distinct()
-                val local = LocalBridgeHost.getInstanceOrNull(project)
-                if (local != null) {
-                    local.generateGitCommitMessage(selectedPaths)
-                } else {
-                    AgentDockRpcApi.getInstance().generateGitCommitMessage(project.projectId(), selectedPaths)
-                }
+                BridgeHost.getInstance(project).generateGitCommitMessage(
+                    commitContext.changes,
+                    commitContext.unversionedFiles,
+                )
             }
 
             ApplicationManager.getApplication().invokeLater {
@@ -82,11 +80,13 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
     private fun resolveCommitContext(e: AnActionEvent): CommitActionContext {
         var commitMessageTarget: CommitMessageTarget? = null
         var changes: Collection<Change> = emptyList()
+        var unversionedFiles: Collection<FilePath> = emptyList()
 
         val workflowUi = e.getData(VcsDataKeys.COMMIT_WORKFLOW_UI)
         if (workflowUi != null) {
             commitMessageTarget = WorkflowUiCommitMessageTarget(workflowUi.commitMessageUi)
             changes = workflowUi.getIncludedChanges()
+            unversionedFiles = workflowUi.getIncludedUnversionedFiles()
         }
 
         val workflowHandler = e.getData(VcsDataKeys.COMMIT_WORKFLOW_HANDLER)
@@ -122,7 +122,18 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
             }
         }
 
-        return CommitActionContext(commitMessageTarget = commitMessageTarget, changes = changes)
+        if (unversionedFiles.isEmpty()) {
+            val selectedUnversionedFiles = e.getData(ChangesListView.UNVERSIONED_FILE_PATHS_DATA_KEY)
+            if (selectedUnversionedFiles != null) {
+                unversionedFiles = selectedUnversionedFiles.toList()
+            }
+        }
+
+        return CommitActionContext(
+            commitMessageTarget = commitMessageTarget,
+            changes = changes,
+            unversionedFiles = unversionedFiles,
+        )
     }
 
     private fun showWarning(project: com.intellij.openapi.project.Project, title: String, message: String) {
@@ -149,7 +160,8 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
 
     private data class CommitActionContext(
         val commitMessageTarget: CommitMessageTarget?,
-        val changes: Collection<Change>
+        val changes: Collection<Change>,
+        val unversionedFiles: Collection<FilePath>,
     )
 
     private interface CommitMessageTarget {

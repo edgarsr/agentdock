@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 package agentdock.bridge.frontend
 
 import agentdock.rpc.AgentDockRpcApi

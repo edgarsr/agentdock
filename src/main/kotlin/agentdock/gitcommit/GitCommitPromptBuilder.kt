@@ -1,36 +1,31 @@
 package agentdock.gitcommit
 
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.Change
-import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.ChangesUtil
+import java.io.Reader
 
 internal object GitCommitPromptBuilder {
     private const val MAX_TOTAL_DIFF_CHARS = 12_000
     private const val MAX_NEW_FILE_CHARS = 1_200
     private const val MAX_CHANGED_LINES = 80
 
-    fun build(project: Project, selectedPaths: Collection<String>, instructions: String): String {
-        val requestedPaths = selectedPaths
-            .flatMap { path -> pathVariants(project.basePath, path) }
-            .toSet()
-        val changes = ChangeListManager.getInstance(project).allChanges.filter { change ->
-            sequenceOf(change.beforeRevision?.file?.path, change.afterRevision?.file?.path)
-                .filterNotNull()
-                .flatMap { path -> pathVariants(project.basePath, path).asSequence() }
-                .any(requestedPaths::contains)
-        }
-        if (changes.isEmpty()) {
-            throw IllegalStateException("The selected changes are no longer available.")
+    fun build(
+        project: Project,
+        changes: Collection<Change>,
+        unversionedFiles: Collection<FilePath>,
+        instructions: String,
+    ): String {
+        if (changes.isEmpty() && unversionedFiles.isEmpty()) {
+            throw IllegalStateException("The selected changes and unversioned files are no longer available.")
         }
 
-        val diffText = buildDiffSummary(changes)
+        val diffText = buildDiffSummary(project, changes, unversionedFiles)
         val promptPaths = changes.mapNotNull { change ->
             runCatching { ChangesUtil.getFilePath(change).path }.getOrNull()
-        }
+        } + unversionedFiles.map(FilePath::getPath)
         val prompt = buildString {
             appendLine("You generate Git commit messages from IDE commit changes.")
             appendLine("Return only the final commit message wrapped in <commit_message> and </commit_message> tags.")
@@ -71,21 +66,12 @@ internal object GitCommitPromptBuilder {
         return prompt.trim()
     }
 
-    private fun pathVariants(basePath: String?, path: String): Set<String> {
-        val normalized = FileUtil.toSystemIndependentName(path)
-        val variants = mutableSetOf(normalized)
-        if (!basePath.isNullOrBlank()) {
-            FileUtil.getRelativePath(
-                FileUtil.toSystemIndependentName(basePath),
-                normalized,
-                '/',
-            )?.let(variants::add)
-        }
-        return variants
-    }
-
-    private fun buildDiffSummary(changes: Collection<Change>): String {
-        if (changes.isEmpty()) {
+    private fun buildDiffSummary(
+        project: Project,
+        changes: Collection<Change>,
+        unversionedFiles: Collection<FilePath>,
+    ): String {
+        if (changes.isEmpty() && unversionedFiles.isEmpty()) {
             return "(no changes)"
         }
 
@@ -98,6 +84,16 @@ internal object GitCommitPromptBuilder {
             val filePath = ChangesUtil.getFilePath(change)
             diff.appendLine("=== ${change.type.name}: ${filePath.path} ===")
             diff.appendLine(renderChange(change, filePath))
+            diff.appendLine()
+        }
+
+        unversionedFiles.forEach { filePath ->
+            if (diff.length >= MAX_TOTAL_DIFF_CHARS) {
+                return@forEach
+            }
+
+            diff.appendLine("=== NEW: ${filePath.path} ===")
+            diff.appendLine(renderUnversionedFile(project, filePath))
             diff.appendLine()
         }
 
@@ -138,6 +134,46 @@ internal object GitCommitPromptBuilder {
             appendLine("New file content excerpt:")
             append(content.take(MAX_NEW_FILE_CHARS))
             if (content.length > MAX_NEW_FILE_CHARS) {
+                appendLine()
+                append("...[truncated]")
+            }
+        }
+    }
+
+    private fun renderUnversionedFile(project: Project, filePath: FilePath): String {
+        if (filePath.isDirectory) {
+            return "New directory."
+        }
+        if (filePath.fileType.isBinary) {
+            return "New binary file."
+        }
+
+        return runCatching {
+            filePath.ioFile.reader(filePath.getCharset(project)).use(::readExcerpt)
+        }.getOrElse {
+            "Unable to inspect file content."
+        }
+    }
+
+    private fun readExcerpt(reader: Reader): String {
+        val buffer = CharArray(MAX_NEW_FILE_CHARS + 1)
+        var length = 0
+        while (length < buffer.size) {
+            val count = reader.read(buffer, length, buffer.size - length)
+            if (count < 0) {
+                break
+            }
+            length += count
+        }
+
+        if (length == 0) {
+            return "New empty file."
+        }
+
+        return buildString {
+            appendLine("New file content excerpt:")
+            append(buffer, 0, minOf(length, MAX_NEW_FILE_CHARS))
+            if (length > MAX_NEW_FILE_CHARS) {
                 appendLine()
                 append("...[truncated]")
             }
