@@ -11,6 +11,7 @@
             <li>Codex</li>
             <li>Cursor</li>
             <li>GitHub Copilot</li>
+            <li>Google Antigravity</li>
             <li>Grok Build</li>
             <li>Kilo</li>
             <li>Kimi Code</li>
@@ -41,7 +42,7 @@
         </ul>
         <h4>Requirements:</h4>
         <ul>
-            <li>JetBrains IDE based on IntelliJ Platform 2025.3 or newer.</li>
+            <li>JetBrains IDE 2025.3+ with Web Browser (JCEF) support.</li>
             <li>Some agents use JetBrains IDE terminal for authentication.</li>
             <li>On macOS and Linux, installing some agents requires curl and tar.</li>
         </ul>
@@ -49,12 +50,9 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Chats can now be renamed directly in the chat tab.</li>
-            <li>Files are now shown with native IDE file type icons.</li>
-            <li>Raised the minimum supported IntelliJ Platform version to 2025.3.</li>
-            <li>Fixed several performance issues.</li>
-            <li>Added a config option fallback for Grok Build.</li>
-            <li>Improved the prompt queue.</li>
+            <li>Added JetBrains Remote Development split-mode support.</li>
+            <li>Added Google Antigravity support.</li>
+            <li>Fixed minor bugs.</li>
         </ul>
     ]]></change-notes>
 
