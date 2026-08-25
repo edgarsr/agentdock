@@ -22,6 +22,7 @@ const REPLAY_IGNORED_USER_COMMAND_TAGS = [
   'command-args',
   'local-command-stdout',
   'local-command-stderr',
+  'task-notification',
 ];
 
 const REPLAY_IGNORED_USER_COMMAND_PATTERNS = REPLAY_IGNORED_USER_COMMAND_TAGS.map(

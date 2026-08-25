@@ -12,7 +12,8 @@ private val replayIgnoredUserCommandTags = listOf(
     "command-message",
     "command-args",
     "local-command-stdout",
-    "local-command-stderr"
+    "local-command-stderr",
+    "task-notification"
 )
 
 private val replayIgnoredUserCommandRegexes = replayIgnoredUserCommandTags.map { tag ->
