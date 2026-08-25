@@ -28,12 +28,23 @@ repositories {
 }
 
 dependencies {
+    implementation("com.agentclientprotocol:acp:0.24.0") {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-serialization-json")
+    }
+    implementation("io.github.java-diff-utils:java-diff-utils:4.15")
+
     intellijPlatform {
         intellijIdea("2025.3")
         jetbrainsRuntime()
         pluginModule(implementation(project(":shared")))
         pluginModule(implementation(project(":frontend")))
         pluginModule(implementation(project(":backend")))
+        pluginModule(implementation(project(":backend-libraries")))
         pluginModule(implementation(project(":frontend-terminal")))
     }
 }

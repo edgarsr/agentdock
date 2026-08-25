@@ -5,6 +5,7 @@
         <module name="intellij.platform.rpc.backend"/>
         <module name="intellij.platform.vcs"/>
         <module name="agent-dock.shared"/>
+        <module name="agent-dock.backend-libraries"/>
     </dependencies>
 
     <extensions defaultExtensionNs="com.intellij">

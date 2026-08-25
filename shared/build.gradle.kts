@@ -1,8 +1,8 @@
 dependencies {
     // RPC serializers must use the IntelliJ Platform's serialization runtime. Bundling another
     // copy here would give platform RPC and this content module different KSerializer identities.
-    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3")
-    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 

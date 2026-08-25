@@ -9,9 +9,9 @@ pluginManagement {
         maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies/")
     }
     plugins {
-        id("rpc") version "2.1.20-0.1"
-        id("org.jetbrains.kotlin.jvm") version "2.1.20"
-        id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
+        id("rpc") version "2.2.20-0.1"
+        id("org.jetbrains.kotlin.jvm") version "2.2.20"
+        id("org.jetbrains.kotlin.plugin.serialization") version "2.2.20"
     }
 }
 
@@ -34,4 +34,5 @@ dependencyResolutionManagement {
 include("shared")
 include("frontend")
 include("backend")
+include("backend-libraries")
 include("frontend-terminal")
