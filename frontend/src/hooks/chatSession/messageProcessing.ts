@@ -36,6 +36,13 @@ function thinkingId(chunk: ContentChunk): string {
   return chunk.toolCallId || nextThinkingId();
 }
 
+function isCommandlessBashToolCall(chunk: ContentChunk): boolean {
+  if (chunk.type !== 'tool_call') return false;
+  const json = safeParseJson(chunk.toolRawJson);
+  const title = chunk.toolTitle || json.title;
+  return String(title || '').trim().toLowerCase() === 'bash' && !json.rawInput?.command;
+}
+
 function collectToolCallDiffEntries(blocks: ToolCallBlock[]): ToolCallDiffEntry[] {
   return blocks.flatMap((block) => {
     const content = block.entry.content;
@@ -88,6 +95,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
 
   // Skip empty text/thinking chunks
   if ((chunk.type === 'text' || chunk.type === 'thinking') && !displayText) return messages;
+  if (isCommandlessBashToolCall(chunk)) return messages;
 
   const newMessages = [...messages];
   let lastMsg = newMessages.length > 0 ? { ...newMessages[newMessages.length - 1] } : null;

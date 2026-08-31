@@ -238,6 +238,9 @@ export function extractResultTexts(json: Record<string, any>): string | undefine
     texts.push(json.text);
   }
   if (texts.length === 0) {
+    if (typeof json.rawOutput === 'string' && json.rawOutput.trim()) return json.rawOutput.trim();
+    const formattedOutput = json.rawOutput?.formatted_output;
+    if (typeof formattedOutput === 'string' && formattedOutput.trim()) return formattedOutput.trim();
     const msg = json.rawOutput?.message;
     if (typeof msg === 'string' && msg.trim()) return msg.trim();
     const rawContent = json.rawOutput?.content;
