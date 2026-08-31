@@ -58,7 +58,13 @@ internal fun AcpBridge.installServiceCallbacks() {
         when (update) {
             is SessionUpdate.UserMessageChunk -> {
                 if (isReplay) {
-                    recordReplayUserBlock(chatId, sessionId, adapterName, update.content)
+                    recordReplayUserBlock(
+                        chatId,
+                        sessionId,
+                        adapterName,
+                        sessionUpdateMessageIdFromMeta(_meta),
+                        update.content
+                    )
                 }
             }
             is SessionUpdate.AgentMessageChunk -> {

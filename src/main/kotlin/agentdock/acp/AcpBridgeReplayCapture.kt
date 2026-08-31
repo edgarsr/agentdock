@@ -61,13 +61,42 @@ internal fun AcpBridge.flushHistoryReplayCapture(chatId: String): ConversationRe
     return data
 }
 
-internal fun AcpBridge.recordReplayUserBlock(chatId: String, sessionId: String, adapterName: String, content: ContentBlock) {
+internal fun AcpBridge.recordReplayUserBlock(
+    chatId: String,
+    sessionId: String,
+    adapterName: String,
+    messageId: String?,
+    content: ContentBlock
+) {
     val capture = historyReplayCaptures[chatId] ?: return
     if (sessionId.isBlank() || adapterName.isBlank()) return
     val block = storedReplayPromptBlockFromContentBlock(content) ?: return
     val session = getOrCreateReplaySession(capture, sessionId, adapterName)
-    val prompt = getOrCreateReplayPrompt(session, startNewIfNeeded = true)
+    val prompt = getOrCreateReplayUserPrompt(session, messageId)
     prompt.blocks.add(block)
+}
+
+private fun getOrCreateReplayUserPrompt(
+    session: ReplaySessionCapture,
+    messageId: String?
+): ReplayPromptCapture {
+    val normalizedMessageId = messageId?.trim()?.takeIf(String::isNotEmpty)
+    val current = session.prompts.lastOrNull()
+    if (current != null && normalizedMessageId == null) {
+        // Message IDs are optional. Preserve the legacy one-chunk-per-prompt fallback
+        // instead of guessing boundaries for agents that do not provide them.
+        if (current.events.isEmpty() && current.blocks.isEmpty()) return current
+    }
+    if (normalizedMessageId != null &&
+        current != null &&
+        current.sourceMessageId == normalizedMessageId &&
+        current.events.isEmpty() &&
+        current.assistantMeta == null
+    ) return current
+
+    return ReplayPromptCapture(sourceMessageId = normalizedMessageId).also {
+        session.prompts.add(it)
+    }
 }
 
 internal fun AcpBridge.getOrCreateReplaySession(
@@ -84,15 +113,9 @@ internal fun AcpBridge.getOrCreateReplaySession(
     }
 }
 
-internal fun AcpBridge.getOrCreateReplayPrompt(
-    session: ReplaySessionCapture,
-    startNewIfNeeded: Boolean
-): ReplayPromptCapture {
+internal fun AcpBridge.getOrCreateReplayPrompt(session: ReplaySessionCapture): ReplayPromptCapture {
     val current = session.prompts.lastOrNull()
     if (current == null) {
-        return ReplayPromptCapture().also { session.prompts.add(it) }
-    }
-    if (startNewIfNeeded && (current.events.isNotEmpty() || current.blocks.isNotEmpty())) {
         return ReplayPromptCapture().also { session.prompts.add(it) }
     }
     return current

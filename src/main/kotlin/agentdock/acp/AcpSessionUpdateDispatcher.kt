@@ -18,6 +18,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
+private const val SESSION_UPDATE_MESSAGE_ID_META_KEY = "agentdock/sessionUpdateMessageId"
+
 internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProcess: AcpClientService.SharedProcess) {
     synchronized(sharedProcess) {
         if (sharedProcess.sessionUpdateWrapped) return
@@ -73,7 +75,7 @@ private suspend fun dispatchQueuedSessionUpdate(
     when (entry) {
         is QueuedSessionUpdate.Notification -> {
             try {
-                original(entry.notification)
+                original(entry.notification.withSessionUpdateMessageIdMeta())
                 entry.completed.complete(Unit)
             } catch (error: Throwable) {
                 entry.completed.completeExceptionally(error)
@@ -82,6 +84,25 @@ private suspend fun dispatchQueuedSessionUpdate(
         is QueuedSessionUpdate.Barrier -> entry.completed.complete(Unit)
     }
 }
+
+private fun JsonRpcNotification.withSessionUpdateMessageIdMeta(): JsonRpcNotification {
+    val paramsObject = params as? JsonObject ?: return this
+    val updateObject = paramsObject["update"] as? JsonObject ?: return this
+    if ((updateObject["sessionUpdate"] as? JsonPrimitive)?.contentOrNull != "user_message_chunk") return this
+    val messageId = (updateObject["messageId"] as? JsonPrimitive)
+        ?.contentOrNull
+        ?.trim()
+        ?.takeIf(String::isNotEmpty) ?: return this
+    val meta = paramsObject["_meta"] as? JsonObject ?: JsonObject(emptyMap())
+    val enrichedMeta = JsonObject(meta + (SESSION_UPDATE_MESSAGE_ID_META_KEY to JsonPrimitive(messageId)))
+    return copy(params = JsonObject(paramsObject + ("_meta" to enrichedMeta)))
+}
+
+internal fun sessionUpdateMessageIdFromMeta(meta: kotlinx.serialization.json.JsonElement?): String? =
+    ((meta as? JsonObject)?.get(SESSION_UPDATE_MESSAGE_ID_META_KEY) as? JsonPrimitive)
+        ?.contentOrNull
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
 
 private fun AcpClientService.SharedProcess.clearSessionUpdateDispatcher() {
     sessionUpdateQueue?.close()

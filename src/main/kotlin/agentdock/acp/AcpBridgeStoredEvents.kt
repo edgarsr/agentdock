@@ -20,6 +20,8 @@ private val replayIgnoredUserCommandRegexes = replayIgnoredUserCommandTags.map {
     Regex("<$tag>.*?</$tag>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 }
 
+private val replayImageMimeTypeRegex = Regex("^image/[A-Za-z0-9.+-]+$", RegexOption.IGNORE_CASE)
+
 private const val MAX_TOOL_OUTPUT_LINES = 300
 private const val MAX_TOOL_OUTPUT_CHARS = 5000
 
@@ -47,7 +49,7 @@ internal fun AcpBridge.recordStoredEvent(
         val capture = historyReplayCaptures[chatId] ?: return
         if (sessionId.isBlank() || adapterName.isBlank()) return
         val session = getOrCreateReplaySession(capture, sessionId, adapterName)
-        val prompt = getOrCreateReplayPrompt(session, startNewIfNeeded = false)
+        val prompt = getOrCreateReplayPrompt(session)
         val role = event["role"]?.jsonPrimitive?.contentOrNull
         if (role == "assistant" && prompt.assistantMeta == null) {
             prompt.assistantMeta = buildAssistantMetadata(
@@ -373,12 +375,53 @@ internal fun AcpBridge.storedReplayPromptBlockFromContentBlock(content: ContentB
     }
 
     val sanitizedText = sanitizeReplayUserText(serialized.text ?: return null) ?: return null
+    replayDataUriImageBlock(sanitizedText)?.let { return it }
     return buildJsonObject {
         put("type", serialized.type)
         put("text", sanitizedText)
         serialized.data?.let { put("data", it) }
         serialized.mimeType?.let { put("mimeType", it) }
     }
+}
+
+private fun replayDataUriImageBlock(text: String): JsonObject? {
+    val trimmed = text.trim()
+    val markdown = trimmed.removePrefix("!")
+    if (!markdown.startsWith("[") || !markdown.endsWith(")")) return null
+
+    val targetStart = markdown.indexOf("](")
+    if (targetStart < 1) return null
+    val dataUri = markdown.substring(targetStart + 2, markdown.lastIndex)
+    if (!dataUri.startsWith("data:image/", ignoreCase = true)) return null
+
+    val base64Marker = ";base64,"
+    val base64MarkerIndex = dataUri.indexOf(base64Marker, ignoreCase = true)
+    if (base64MarkerIndex <= "data:".length) return null
+
+    val mimeType = dataUri.substring("data:".length, base64MarkerIndex)
+    if (!replayImageMimeTypeRegex.matches(mimeType)) return null
+    val data = dataUri.substring(base64MarkerIndex + base64Marker.length)
+    if (!isValidReplayBase64(data)) return null
+
+    return buildJsonObject {
+        put("type", "image")
+        put("data", data)
+        put("mimeType", mimeType.lowercase())
+    }
+}
+
+private fun isValidReplayBase64(data: String): Boolean {
+    if (data.isEmpty() || data.length % 4 != 0) return false
+    var padding = 0
+    data.forEachIndexed { index, char ->
+        val isBase64Character = char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' || char == '+' || char == '/'
+        when {
+            isBase64Character && padding == 0 -> Unit
+            char == '=' && index >= data.length - 2 && ++padding <= 2 -> Unit
+            else -> return false
+        }
+    }
+    return true
 }
 
 internal fun AcpBridge.sanitizeReplayUserText(text: String): String? {

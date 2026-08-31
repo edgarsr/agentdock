@@ -163,7 +163,7 @@ internal fun AcpBridge.recordUsageUpdate(
         val capture = historyReplayCaptures[chatId] ?: return
         if (sessionId.isBlank() || adapterName.isBlank()) return
         val session = getOrCreateReplaySession(capture, sessionId, adapterName)
-        val prompt = getOrCreateReplayPrompt(session, startNewIfNeeded = false)
+        val prompt = getOrCreateReplayPrompt(session)
         val current = prompt.assistantMeta ?: buildAssistantMetadata(
             adapterName = adapterName
         )

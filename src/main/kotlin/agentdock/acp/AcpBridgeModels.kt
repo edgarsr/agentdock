@@ -173,6 +173,7 @@ internal data class ReplaySessionCapture(
 )
 
 internal data class ReplayPromptCapture(
+    val sourceMessageId: String? = null,
     val blocks: MutableList<JsonObject> = mutableListOf(),
     val events: MutableList<JsonObject> = mutableListOf(),
     var assistantMeta: ConversationAssistantMetadata? = null
