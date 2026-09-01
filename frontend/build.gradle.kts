@@ -2,6 +2,7 @@ dependencies {
     intellijPlatform {
         bundledModule("intellij.platform.frontend")
         bundledModule("intellij.libraries.jcef")
+        bundledModule("intellij.platform.ui.jcef")
     }
     implementation(project(":shared"))
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1")
@@ -9,8 +10,8 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
-    compilerOptions.freeCompilerArgs.add("-Xjvm-default=all")
+    jvmToolchain(25)
+    compilerOptions.freeCompilerArgs.add("-jvm-default=no-compatibility")
     sourceSets["main"].kotlin.apply {
         srcDir(rootProject.layout.projectDirectory.dir("src/main/kotlin"))
         // The client half: JCEF, AWT, the microphone, sounds and the status bar. It must not

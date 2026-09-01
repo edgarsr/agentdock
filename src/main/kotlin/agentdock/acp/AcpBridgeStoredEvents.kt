@@ -206,7 +206,7 @@ private fun mergeStoredToolContent(
                     add(item)
                 } else if (!insertedText) {
                     if (incomingTextBlocks.isEmpty()) {
-                        mergedOutput?.let { add(storedToolTextContent(it)) }
+                        add(storedToolTextContent(mergedOutput))
                     } else {
                         incomingTextBlocks.forEach { add(it) }
                     }
@@ -215,7 +215,7 @@ private fun mergeStoredToolContent(
             }
             if (!insertedText) {
                 if (incomingTextBlocks.isEmpty()) {
-                    mergedOutput?.let { add(storedToolTextContent(it)) }
+                    add(storedToolTextContent(mergedOutput))
                 } else {
                     incomingTextBlocks.forEach { add(it) }
                 }

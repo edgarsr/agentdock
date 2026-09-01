@@ -39,7 +39,7 @@ dependencies {
     implementation("io.github.java-diff-utils:java-diff-utils:4.15")
 
     intellijPlatform {
-        intellijIdea("2026.1")
+        intellijIdea("2026.2")
         jetbrainsRuntime()
         pluginModule(implementation(project(":shared")))
         pluginModule(implementation(project(":frontend")))
@@ -51,7 +51,7 @@ dependencies {
 
 // The root project only assembles the plugin; every source file belongs to a content module.
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
     sourceSets["main"].kotlin.setSrcDirs(emptyList<String>())
     sourceSets["test"].kotlin.setSrcDirs(emptyList<String>())
 }
@@ -74,7 +74,8 @@ intellijPlatform {
 
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "261"
+            sinceBuild = "262"
+            untilBuild = provider { null }
         }
     }
     signing {

@@ -219,7 +219,7 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
             "ACP initialize timed out after ${ACP_INITIALIZE_ATTEMPT_TIMEOUT_MS / 1000}s"
         )
         sharedProcess.authMethods = result.authMethods
-        sharedProcess.logoutAvailable = result.capabilities.auth?.logout != null
+        sharedProcess.logoutAvailable = result.capabilities.auth.logout != null
     } catch (error: Exception) {
         if (error is CancellationException) {
             sharedProcess.stop()

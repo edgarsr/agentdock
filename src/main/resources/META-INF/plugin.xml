@@ -42,7 +42,7 @@
         </ul>
         <h4>Requirements:</h4>
         <ul>
-            <li>JetBrains IDE 2026.1+ with Web Browser (JCEF) support.</li>
+            <li>JetBrains IDE 2026.2+ with Web Browser (JCEF) support.</li>
             <li>Some agents use JetBrains IDE terminal for authentication.</li>
             <li>On macOS and Linux, installing some agents requires curl and tar.</li>
         </ul>
@@ -50,10 +50,9 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added JetBrains Remote Development split-mode support.</li>
-            <li>Added Google Antigravity support.</li>
-            <li>Raised the minimum IDE version to 2026.1 to work around a JetBrains plugin verification bug.</li>
-            <li>Fixed minor bugs.</li>
+            <li>Raised the minimum IDE version to 2026.2 due to JetBrains platform JCEF module changes.</li>
+            <li>Fixed command output rendering for Codex and OpenCode.</li>
+            <li>Fixed replay rendering for multi-block user messages and images.</li>
         </ul>
     ]]></change-notes>
 

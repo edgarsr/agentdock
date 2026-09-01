@@ -25,8 +25,8 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
-    compilerOptions.freeCompilerArgs.add("-Xjvm-default=all")
+    jvmToolchain(25)
+    compilerOptions.freeCompilerArgs.add("-jvm-default=no-compatibility")
     sourceSets["main"].kotlin.apply {
         srcDir(rootProject.layout.projectDirectory.dir("src/main/kotlin"))
         // Everything that touches JCEF, AWT, the microphone or the status bar belongs to the

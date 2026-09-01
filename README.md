@@ -42,7 +42,7 @@ Currently supported AI agents:
 
 ## Requirements
 
-- JetBrains IDE 2026.1+ with Web Browser (JCEF) support.
+- JetBrains IDE 2026.2+ with Web Browser (JCEF) support.
 - Some agents use JetBrains IDE terminal for authentication.
 - On macOS and Linux, installing some agents requires `curl` and `tar`.
 

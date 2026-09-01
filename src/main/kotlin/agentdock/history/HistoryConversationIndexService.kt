@@ -61,7 +61,7 @@ internal object HistoryConversationIndexService {
 
         val updatedSessions = when {
             existingSession != null -> {
-                val conversation = mergedConversation ?: return false
+                val conversation = mergedConversation
                 conversation.sessions.map { session ->
                     if (session.sessionId != cleanSessionId || session.adapterName != cleanAdapterName) {
                         return@map session

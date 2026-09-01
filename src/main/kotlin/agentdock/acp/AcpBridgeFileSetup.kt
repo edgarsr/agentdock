@@ -228,12 +228,12 @@ internal fun AcpBridge.installMiscQueries() {
 
             readAction {
                 // Priority 1: Open files
-                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles?.forEach {
+                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFiles.forEach {
                     if (results.size < 50) addCandidate(it)
                 }
 
                 // Priority 2: Recent files
-                com.intellij.openapi.fileEditor.impl.EditorHistoryManager.getInstance(project).fileList?.reversed()?.forEach {
+                com.intellij.openapi.fileEditor.impl.EditorHistoryManager.getInstance(project).fileList.reversed().forEach {
                     if (results.size < 50) addCandidate(it)
                 }
 

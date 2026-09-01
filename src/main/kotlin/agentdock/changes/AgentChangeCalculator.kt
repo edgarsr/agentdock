@@ -98,7 +98,7 @@ object AgentChangeCalculator {
             val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
             if (vf != null && vf.exists()) {
                 try {
-                    String(vf.contentsToByteArray(), vf.charset ?: StandardCharsets.UTF_8)
+                    String(vf.contentsToByteArray(), vf.charset)
                 } catch (_: Exception) {
                     ""
                 }

@@ -7,8 +7,8 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
-    compilerOptions.freeCompilerArgs.add("-Xjvm-default=all")
+    jvmToolchain(25)
+    compilerOptions.freeCompilerArgs.add("-jvm-default=no-compatibility")
     sourceSets["main"].kotlin.apply {
         srcDir(rootProject.layout.projectDirectory.dir("src/main/kotlin"))
         include("agentdock/acp/IdeTerminalBridgeImpl.kt")

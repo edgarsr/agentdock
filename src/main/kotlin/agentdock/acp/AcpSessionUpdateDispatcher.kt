@@ -6,6 +6,7 @@ import com.agentclientprotocol.rpc.JsonRpcNotification
 import com.agentclientprotocol.rpc.MethodName
 import kotlinx.atomicfu.AtomicRef
 import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.mutate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +61,7 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProcess: AcpClient
                     completed.await()
                 }
             }
-            handlers.value = handlers.value.put(methodName, wrapped)
+            handlers.value = handlers.value.mutate { it[methodName] = wrapped }
             sharedProcess.sessionUpdateWrapped = true
         } catch (_: Exception) {
             sharedProcess.clearSessionUpdateDispatcher()

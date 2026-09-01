@@ -178,7 +178,7 @@ private fun AcpBridge.buildAdapterPayload(
     val preferredValues = savedPreference?.configOptions.orEmpty()
     val modelOption = rawRuntimeMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
     val selectedModelId = modelOption?.id?.let { preferredValues[it] }
-        ?.takeIf { preferred -> modelOption?.accepts(preferred) == true }
+        ?.takeIf { preferred -> modelOption.accepts(preferred) }
         ?: rawRuntimeMetadata.currentModelId
     val modelConfigOptions = rawRuntimeMetadata.configOptionsForModel(selectedModelId)
     val runtimeMetadata = rawRuntimeMetadata.copy(
