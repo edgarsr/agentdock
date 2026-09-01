@@ -271,7 +271,7 @@ export function ChatInputControls({
               <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
             </button>
           ) : (
-            <button type="button" onClick={handleVoiceInput} disabled={isSending}
+            <button type="button" onClick={handleVoiceInput}
               className={`flex items-center h-full px-1.5 rounded appearance-none border-0 outline-none text-ide-small 
                 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] 
                 ${isRecording ? 'bg-[#db5c5c] text-foreground' : 'bg-editor-bg text-foreground hover:text-foreground ' +
