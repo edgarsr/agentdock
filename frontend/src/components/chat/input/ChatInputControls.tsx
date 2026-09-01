@@ -42,7 +42,6 @@ interface ChatInputControlsProps {
   contextTokensUsed?: number;
   contextWindowSize?: number;
   inputValue: string;
-  collapsedAgentDropdown: boolean;
   showAuxIndicators: boolean;
   showVoiceButton: boolean;
   isTranscribing: boolean;
@@ -85,7 +84,6 @@ export function ChatInputControls({
   contextTokensUsed,
   contextWindowSize,
   inputValue,
-  collapsedAgentDropdown,
   showAuxIndicators,
   showVoiceButton,
   isTranscribing,
@@ -122,6 +120,7 @@ export function ChatInputControls({
               <span className="invisible w-0" aria-hidden="true">&nbsp;</span>
             </div>
           }
+          className="shrink-0"
           onChange={(id) => {
             if (id === 'add-files' && typeof window.__attachFile === 'function') {
               window.__attachFile(conversationId);
@@ -145,11 +144,10 @@ export function ChatInputControls({
           options={isSending ? agentOptions.filter((option) => option.id === selectedAgentId) : agentOptions}
           placeholder="Select Agent"
           disabled={false}
-          collapsed={collapsedAgentDropdown}
           showSubValueInTrigger={true}
           onChange={onAgentChange}
           onSubChange={(_agentId, modelId) => onModelChange(modelId, _agentId)}
-          className="ml-0.5"
+          className="ml-0.5 flex-1 max-w-max"
         />
 
         {modeOptions.length > 0 && (
@@ -159,7 +157,7 @@ export function ChatInputControls({
             placeholder="Mode"
             disabled={!hasSelectedAgent}
             onChange={onModeChange}
-            className="ml-0.5"
+            className="ml-0.5 flex-1 max-w-max"
           />
         )}
 
@@ -170,7 +168,7 @@ export function ChatInputControls({
             placeholder="Reasoning"
             disabled={!hasSelectedAgent}
             onChange={onReasoningEffortChange}
-            className="ml-0.5"
+            className="ml-0.5 flex-1 max-w-max"
           />
         )}
 
@@ -249,7 +247,7 @@ export function ChatInputControls({
               onConfigOptionChange(parentId, subId);
             }
           }}
-          className="ml-0.5 mr-1"
+          className="ml-0.5 mr-1 shrink-0"
         />
 
         {showAuxIndicators && selectedAgentId && (

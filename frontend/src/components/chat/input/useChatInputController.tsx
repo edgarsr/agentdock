@@ -314,7 +314,6 @@ export function useChatInputController({
   }, [conversationId, insertTranscript, isRecording, isTranscribing]);
 
   const showVoiceButton = transcriptionFeature.installed;
-  const collapsedAgentDropdown = containerWidth > 0 && containerWidth < 400;
   const showAuxIndicators = containerWidth === 0 || containerWidth >= 320;
 
   return {
@@ -342,7 +341,6 @@ export function useChatInputController({
     setFileHighlightedIndex,
     applyFile,
     customHeight,
-    collapsedAgentDropdown,
     showAuxIndicators,
     showVoiceButton,
     isTranscribing,

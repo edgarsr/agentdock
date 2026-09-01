@@ -69,7 +69,6 @@ export default function ChatInput(props: ChatInputProps) {
     setFileHighlightedIndex,
     applyFile,
     customHeight,
-    collapsedAgentDropdown,
     showAuxIndicators,
     showVoiceButton,
     isTranscribing,
@@ -143,7 +142,6 @@ export default function ChatInput(props: ChatInputProps) {
             contextTokensUsed={contextTokensUsed}
             contextWindowSize={contextWindowSize}
             inputValue={inputValue}
-            collapsedAgentDropdown={collapsedAgentDropdown}
             showAuxIndicators={showAuxIndicators}
             showVoiceButton={showVoiceButton}
             isTranscribing={isTranscribing}

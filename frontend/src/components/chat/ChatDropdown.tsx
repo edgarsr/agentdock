@@ -2,13 +2,6 @@ import { KeyboardEvent, useState, useRef, useEffect } from 'react';
 import { DropdownOption } from '../../types/chat';
 import { Tooltip } from './shared/Tooltip';
 
-function compactModelName(label: string) {
-  if (label.length <= 16) return label;
-  const slashIndex = label.indexOf('/');
-  if (slashIndex < 0) return label;
-  return label.slice(slashIndex + 1);
-}
-
 export default function ChatDropdown({
   value,
   subValue,
@@ -16,10 +9,8 @@ export default function ChatDropdown({
   options,
   placeholder,
   disabled,
-  minWidthClass,
   direction = 'up',
   customTrigger,
-  collapsed = false,
   showSubValueInTrigger = false,
   onChange,
   onSubChange,
@@ -31,10 +22,8 @@ export default function ChatDropdown({
   options: DropdownOption[];
   placeholder: string;
   disabled: boolean;
-  minWidthClass?: string;
   direction?: 'up' | 'down';
   customTrigger?: React.ReactNode;
-  collapsed?: boolean;
   showSubValueInTrigger?: boolean;
   onChange: (value: string) => void;
   onSubChange?: (parentId: string, subId: string) => void;
@@ -115,10 +104,9 @@ export default function ChatDropdown({
     return <span className="flex-1 truncate">{option.label}</span>;
   };
   
-  const rawSelectedText = showSubValueInTrigger
+  const selectedText = showSubValueInTrigger
     ? (selectedSub?.label || selectedSubValue || '')
     : (selectedOption?.label || placeholder);
-  const selectedText = showSubValueInTrigger ? compactModelName(rawSelectedText) : rawSelectedText;
 
   useEffect(() => {
     const updateSize = () => {
@@ -242,12 +230,10 @@ export default function ChatDropdown({
   };
 
   return (
-    <div ref={rootRef} className={`text-ide-small relative inline-flex min-w-0 items-stretch h-full overflow-visible 
-      ${minWidthClass} ${className}`}>
+    <div ref={rootRef} className={`text-ide-small relative inline-flex min-w-0 items-stretch h-full overflow-visible ${className}`}>
       <button ref={triggerRef} type="button" disabled={disabled} onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
-        className={`inline-flex max-w-full appearance-none border-0 items-center 
-          ${collapsed ? 'justify-center gap-0.5' : 'justify-start gap-1 min-w-0'} 
+        className={`inline-flex max-w-full min-w-0 appearance-none border-0 items-center justify-start gap-1
           h-full py-1 px-1.5 rounded bg-editor-bg text-foreground transition-colors 
           disabled:text-foreground-secondary disabled:cursor-not-allowed group disabled:pointer-events-none
           whitespace-nowrap outline-none focus-visible:bg-hover 
@@ -257,7 +243,7 @@ export default function ChatDropdown({
         {customTrigger ? (customTrigger) : (
           <>
             {renderIcon(selectedOption, "w-4 h-4 shrink-0 mr-0.5 opacity-80")}
-            {!collapsed && (<span className="min-w-0 max-w-[120px] truncate">{selectedText}</span>)}
+            <span className="min-w-0 truncate">{selectedText}</span>
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
               className="flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
