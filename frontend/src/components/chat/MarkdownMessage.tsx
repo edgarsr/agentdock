@@ -194,12 +194,12 @@ function parseLocalFileTarget(href: string): { path: string; line?: number } | n
   }
 
   const normalized = normalizedHref.replace(/\\/g, '/');
-  const hashLineMatch = normalized.match(/^(.*?)#L(\d+)$/i);
+  const hashLineMatch = normalized.match(/^(.*?)#L(\d+)(?:-L\d+)?$/i);
   const pathWithOptionalLine = hashLineMatch
     ? { path: hashLineMatch[1], line: Number(hashLineMatch[2]) - 1 }
     : { path: normalized, line: undefined };
 
-  const colonLineMatch = pathWithOptionalLine.path.match(/^(.*\.[^./\\:]+):(\d+)$/);
+  const colonLineMatch = pathWithOptionalLine.path.match(/^(.*?):(\d+)(?::\d+|-\d+)?$/);
   const rawPath = colonLineMatch ? colonLineMatch[1] : pathWithOptionalLine.path;
   const line = colonLineMatch
     ? Number(colonLineMatch[2]) - 1
@@ -231,7 +231,9 @@ function normalizeLocalFileHref(href: string): string | null {
       if (url.protocol !== 'file:') {
         return null;
       }
-      return decodeURIComponent(url.pathname.replace(/^\/([A-Za-z]:\/)/, '$1'));
+      const path = decodeURIComponent(url.pathname.replace(/^\/([A-Za-z]:\/)/, '$1'));
+      const lineFragment = /^#L\d+(?:-L\d+)?$/i.test(url.hash) ? url.hash : '';
+      return path + lineFragment;
     } catch {
       return null;
     }
