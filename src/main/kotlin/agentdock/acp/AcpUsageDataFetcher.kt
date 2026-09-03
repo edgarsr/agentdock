@@ -1,5 +1,6 @@
 package agentdock.acp
 
+import com.intellij.util.text.VersionComparatorUtil
 import kotlinx.serialization.json.*
 import java.io.BufferedInputStream
 import java.io.File
@@ -14,6 +15,17 @@ import java.util.concurrent.TimeUnit
  */
 internal object AcpUsageDataFetcher {
     private const val LOCAL_USAGE_TIMEOUT_SECONDS = 30L
+    private const val ANTIGRAVITY_USAGE_CACHE_MS = 60_000L
+    private val antigravityUsageLock = Any()
+    private var antigravityCliVerified = false
+    private var antigravityUsageLastAttempt = 0L
+    private var antigravityUsageCache = ""
+
+    fun invalidateAntigravityCache() {
+        synchronized(antigravityUsageLock) {
+            antigravityUsageLastAttempt = 0L
+        }
+    }
 
     fun fetchClaudeUsageData(): String {
         val accessToken = try {
@@ -68,6 +80,80 @@ internal object AcpUsageDataFetcher {
                 JsonObject(obj + ("authType" to JsonPrimitive("subscription"))).toString()
             } else """{"authType":"subscription"}"""
         } catch (_: Exception) { """{"authType":"subscription"}""" }
+    }
+
+    fun fetchAntigravityUsageData(forceRefresh: Boolean = false): String = synchronized(antigravityUsageLock) {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && now - antigravityUsageLastAttempt < ANTIGRAVITY_USAGE_CACHE_MS) {
+            return@synchronized antigravityUsageCache
+        }
+        antigravityUsageLastAttempt = now
+
+        if (!antigravityCliVerified && !verifyAntigravityCli()) {
+            antigravityUsageCache = ""
+            return@synchronized ""
+        }
+
+        val (_, command) = buildAdapterCliCommandParts(
+            adapterId = "antigravity",
+            extraArgs = listOf("--output-format", "json", "--print", "/usage")
+        ) ?: run {
+            antigravityUsageCache = ""
+            return@synchronized ""
+        }
+        val result = AcpExecutionMode.runCommand(command, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
+        antigravityUsageCache = if (result?.exitCode == 0) {
+            normalizeAntigravityUsage(result.stdout)
+        } else {
+            ""
+        }
+        antigravityUsageCache
+    }
+
+    private fun verifyAntigravityCli(): Boolean {
+        val (adapter, command) = buildAdapterCliCommandParts(
+            adapterId = "antigravity",
+            extraArgs = listOf("--version")
+        ) ?: return false
+        val minimumVersion = adapter.cli?.minimumVersion?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+        val result = AcpExecutionMode.runCommand(command, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
+            ?.takeIf { it.exitCode == 0 }
+            ?: return false
+        val version = Regex("""\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b""")
+            .find(result.stdout + "\n" + result.stderr)
+            ?.value
+            ?: return false
+        return (VersionComparatorUtil.compare(version, minimumVersion) >= 0).also {
+            antigravityCliVerified = it
+        }
+    }
+
+    private fun normalizeAntigravityUsage(rawJson: String): String {
+        return runCatching {
+            val root = Json.parseToJsonElement(rawJson.trim()).jsonObject
+            if (root["status"]?.jsonPrimitive?.contentOrNull != "SUCCESS") return ""
+            if (!root["conversation_id"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty()) return ""
+            if (root["num_turns"]?.jsonPrimitive?.intOrNull != 0) return ""
+            val usage = root["usage"] as? JsonObject ?: return ""
+            if (usage["total_tokens"]?.jsonPrimitive?.longOrNull != 0L) return ""
+            val command = root["command"] as? JsonObject ?: return ""
+            if (command["name"]?.jsonPrimitive?.contentOrNull != "usage") return ""
+            val data = command["data"] as? JsonObject ?: return ""
+            val groups = data["groups"] as? JsonArray ?: return ""
+            val hasQuota = groups.any { groupElement ->
+                val group = groupElement as? JsonObject ?: return@any false
+                val buckets = group["buckets"] as? JsonArray ?: return@any false
+                buckets.any { bucketElement ->
+                    val remaining = (bucketElement as? JsonObject)
+                        ?.get("remaining_fraction")
+                        ?.jsonPrimitive
+                        ?.doubleOrNull
+                    remaining != null && remaining.isFinite() && remaining in 0.0..1.0
+                }
+            }
+            if (!hasQuota) return ""
+            buildJsonObject { put("quota", data) }.toString()
+        }.getOrDefault("")
     }
 
     fun fetchCopilotUsageData(adapterId: String): String {

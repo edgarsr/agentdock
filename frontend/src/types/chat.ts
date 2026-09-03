@@ -538,7 +538,7 @@ declare global {
     __loginAgent?: (adapterId: string, methodId: string) => void;
     __logoutAgent?: (adapterId: string) => void;
     __cancelAgentAuth?: (adapterId: string) => void;
-    __fetchAdapterUsage?: (adapterId: string) => void;
+    __fetchAdapterUsage?: (adapterId: string, force?: boolean) => void;
     __openAgentCli?: (adapterId: string) => void;
     __openHistoryConversationCli?: (payload: { projectPath: string; conversationId: string }) => void;
     __undoFile?: (payload: string) => void;

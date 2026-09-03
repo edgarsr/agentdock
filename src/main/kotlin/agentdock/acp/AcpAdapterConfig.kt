@@ -45,7 +45,8 @@ object AcpAdapterConfig {
         val executable: PlatformBinary,
         val entryPath: String? = null,
         val args: List<String> = emptyList(),
-        val resumeArgs: List<String> = emptyList()
+        val resumeArgs: List<String> = emptyList(),
+        val minimumVersion: String? = null
     )
 
     @Serializable

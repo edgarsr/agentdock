@@ -75,7 +75,7 @@ internal object BridgeScripts {
             };
             window.__logoutAgent = function(adapterId) { invoke('logoutAgent', adapterId); };
             window.__cancelAgentAuth = function(adapterId) { invoke('cancelAgentAuth', adapterId); };
-            window.__fetchAdapterUsage = function(adapterId) { invoke('fetchUsage', adapterId); };
+            window.__fetchAdapterUsage = function(adapterId, force) { invoke('fetchUsage', JSON.stringify({ adapterId: adapterId, force: force === true })); };
             window.__openAgentCli = function(adapterId) { invoke('openAgentCli', adapterId); };
             window.__openHistoryConversationCli = function(payload) {
                 invoke('openHistoryConversationCli', JSON.stringify(payload));

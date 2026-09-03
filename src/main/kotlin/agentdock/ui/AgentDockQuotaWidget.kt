@@ -140,6 +140,7 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
         val path = when (adapterId) {
             "claude-code" -> "/icons/claude.svg"
             "codex" -> if (isDark) "/icons/codex-dark.svg" else "/icons/codex-light.svg"
+            "antigravity" -> "/icons/antigravity.svg"
             "github-copilot-cli" -> if (isDark) "/icons/copilot-dark.svg" else "/icons/copilot-light.svg"
             else -> "/icons/agent_dock_toolwindow.svg"
         }

@@ -42,9 +42,10 @@ internal object AcpExecutionMode {
         timeoutSeconds: Long = 30
     ): CommandResult? {
         return runCatching {
-            val process = ProcessBuilder(command)
+            val builder = ProcessBuilder(command)
                 .redirectErrorStream(false)
-                .start()
+            AcpProcessEnvironment.applyTo(builder)
+            val process = builder.start()
 
             if (stdin != null) {
                 process.outputStream.bufferedWriter().use { writer -> writer.write(stdin) }

@@ -156,7 +156,7 @@ export function useAdapterUsage(adapterId: string) {
     prevIsSendingRef.current = isSending;
 
     if (wasSending && !isSending) {
-      ACPBridge.fetchAdapterUsage(adapterId);
+      ACPBridge.fetchAdapterUsage(adapterId, true);
     }
   }, [adapterId, enabled, isChatMode, isSending]);
 

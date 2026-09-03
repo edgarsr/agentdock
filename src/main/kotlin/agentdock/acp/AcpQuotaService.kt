@@ -62,6 +62,7 @@ class AcpQuotaService : Disposable {
                         val rawJson = when (adapter.id) {
                             "claude-code" -> AcpUsageDataFetcher.fetchClaudeUsageData()
                             "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
+                            "antigravity" -> AcpUsageDataFetcher.fetchAntigravityUsageData()
                             "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapter.id)
                             else -> null
                         }
@@ -190,6 +191,30 @@ class AcpQuotaService : Disposable {
                         secondaryPct != null && secondaryPct > 89 && (primaryPct == null || primaryPct < 89) -> secondaryPct
                         primaryPct != null -> primaryPct
                         else -> secondaryPct ?: 0
+                    }
+                }
+                "antigravity" -> {
+                    val quota = root["quota"] as? JsonObject
+                    val groups = quota?.get("groups") as? JsonArray
+                    groups?.forEach groupLoop@{ groupElement ->
+                        val group = groupElement as? JsonObject ?: return@groupLoop
+                        val groupName = group["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                            ?: return@groupLoop
+                        val buckets = group["buckets"] as? JsonArray ?: return@groupLoop
+                        buckets.forEach bucketLoop@{ bucketElement ->
+                            val bucket = bucketElement as? JsonObject ?: return@bucketLoop
+                            val resetAt = bucket["reset_time"]?.jsonPrimitive?.contentOrNull
+                            if (!resetAt.isNullOrBlank() && !hasDisplayableQuotaReset(resetAt)) return@bucketLoop
+                            val remaining = bucket["remaining_fraction"]?.jsonPrimitive?.doubleOrNull
+                                ?.takeIf { it.isFinite() && it in 0.0..1.0 }
+                                ?: return@bucketLoop
+                            val usedPct = roundPercent((1.0 - remaining) * 100.0) ?: return@bucketLoop
+                            val bucketName = bucket["name"]?.jsonPrimitive?.contentOrNull
+                                ?.replace(Regex("""\s+Remaining$""", RegexOption.IGNORE_CASE), "")
+                                ?.takeIf { it.isNotBlank() }
+                            details.add(if (bucketName == null) "$groupName: $usedPct%" else "$groupName · $bucketName: $usedPct%")
+                            mainPercent = maxOf(mainPercent, usedPct)
+                        }
                     }
                 }
                 "github-copilot-cli" -> {

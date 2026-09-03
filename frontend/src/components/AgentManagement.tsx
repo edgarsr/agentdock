@@ -6,6 +6,7 @@ import { RefreshCw } from 'lucide-react';
 import { ClaudeUsage } from './usage/ClaudeUsage';
 import { CopilotUsage } from './usage/CopilotUsage';
 import { CodexUsage } from './usage/CodexUsage';
+import { AntigravityUsage } from './usage/AntigravityUsage';
 import { CursorUsage } from './usage/CursorUsage';
 import { QoderUsage } from './usage/QoderUsage';
 import { Button } from './ui/Button';
@@ -361,6 +362,11 @@ export function AgentManagementView({
                       {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'codex' && (
                         <UsageSection>
                           <CodexUsage />
+                        </UsageSection>
+                      )}
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'antigravity' && (
+                        <UsageSection>
+                          <AntigravityUsage />
                         </UsageSection>
                       )}
                       {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection />}

@@ -433,8 +433,8 @@ export const ACPBridge = {
     });
   },
 
-  fetchAdapterUsage: (adapterId: string) => {
-    window.__fetchAdapterUsage?.(adapterId);
+  fetchAdapterUsage: (adapterId: string, force?: boolean) => {
+    window.__fetchAdapterUsage?.(adapterId, force);
   },
 
   cancelAgentInstall: (adapterId: string) => {

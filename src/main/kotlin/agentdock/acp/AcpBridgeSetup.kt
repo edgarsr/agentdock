@@ -543,11 +543,22 @@ internal fun AcpBridge.installAdapterQueries() {
     }
 
     host.register("fetchUsage") { payload ->
-        val adapterId = parseIdOnlyPayload(payload) ?: payload.trim()
+        val raw = payload.trim()
+        var force = false
+        val adapterId = if (raw.startsWith("{")) {
+            runCatching {
+                val obj = Json.parseToJsonElement(raw).jsonObject
+                force = obj["force"]?.jsonPrimitive?.booleanOrNull ?: false
+                obj["adapterId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+            }.getOrNull() ?: parseIdOnlyPayload(raw) ?: raw
+        } else {
+            parseIdOnlyPayload(raw) ?: raw
+        }
         scope.launch(Dispatchers.IO) {
             val result = when (adapterId) {
                 "claude-code" -> AcpUsageDataFetcher.fetchClaudeUsageData()
                 "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
+                "antigravity" -> AcpUsageDataFetcher.fetchAntigravityUsageData(forceRefresh = force)
                 "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapterId)
                 else -> ""
             }

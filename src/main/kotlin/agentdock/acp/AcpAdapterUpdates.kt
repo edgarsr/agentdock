@@ -1,6 +1,8 @@
 package agentdock.acp
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
@@ -17,7 +19,7 @@ internal object AcpAdapterUpdates {
         .build()
 
     fun isUpdateCheckSupported(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean {
-        if (adapterInfo.id == "cursor-cli") return true
+        if (adapterInfo.id == "cursor-cli" || adapterInfo.id == "antigravity") return true
         if (adapterInfo.distribution.version.firstOrNull()?.isDigit() == true) return false
         return when (adapterInfo.distribution.type) {
             AcpAdapterConfig.DistributionType.NPM -> !adapterInfo.distribution.packageName.isNullOrBlank()
@@ -29,6 +31,9 @@ internal object AcpAdapterUpdates {
         if (adapterInfo.id == "cursor-cli") {
             return latestCursorVersion()
         }
+        if (adapterInfo.id == "antigravity") {
+            return latestAntigravityVersion()
+        }
         return when (adapterInfo.distribution.type) {
             AcpAdapterConfig.DistributionType.NPM -> latestNpmVersion(adapterInfo.distribution.packageName)
             AcpAdapterConfig.DistributionType.ARCHIVE -> latestArchiveVersion(adapterInfo.distribution.updateSource)
@@ -39,6 +44,27 @@ internal object AcpAdapterUpdates {
         val body = httpGet("https://cursor.com/install") ?: return null
         val match = Regex("""/lab/([^/]+)/""").find(body)
         return match?.groupValues?.get(1)?.trim()
+    }
+
+    private fun latestAntigravityVersion(): String? {
+        val body = httpGet("https://raw.githubusercontent.com/agentclientprotocol/registry/main/antigravity-acp/agent.json")
+            ?: return null
+        return runCatching {
+            val root = json.parseToJsonElement(body).jsonObject
+            val binary = root["distribution"]?.jsonObject?.get("binary")?.jsonObject
+            val archiveUrl = binary?.values?.firstNotNullOfOrNull {
+                (it as? JsonObject)?.get("archive")?.jsonPrimitive?.contentOrNull
+            }
+            if (archiveUrl != null) {
+                val match = Regex("""/agy-acp-server-(.+?)-(?:windows|darwin|linux)-""").find(archiveUrl)
+                match?.groupValues?.get(1)?.trim()
+            } else {
+                val version = root["version"]?.jsonPrimitive?.contentOrNull?.trim()
+                if (version != null) {
+                    if (version.startsWith("agy_acp_server_")) version else "agy_acp_server_$version"
+                } else null
+            }
+        }.getOrNull()
     }
 
     private fun latestNpmVersion(packageName: String?): String? {

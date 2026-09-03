@@ -1,6 +1,7 @@
 import { ClaudeChatUsage } from './ClaudeChatUsage';
 import { CopilotChatUsage } from './CopilotChatUsage';
 import { CodexChatUsage } from './CodexChatUsage';
+import { AntigravityChatUsage } from './AntigravityChatUsage';
 
 interface ChatUsageIndicatorProps {
   agentId: string;
@@ -21,6 +22,8 @@ export function ChatUsageIndicator({ agentId, modelId }: ChatUsageIndicatorProps
       return <ClaudeChatUsage />;
     case 'codex':
       return <CodexChatUsage />;
+    case 'antigravity':
+      return <AntigravityChatUsage />;
     case 'github-copilot-cli':
       return <CopilotChatUsage />;
     default:

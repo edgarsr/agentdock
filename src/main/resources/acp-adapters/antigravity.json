@@ -9,7 +9,7 @@
   "loginStatusMethod": "antigravityAuthFile",
   "distribution": {
     "type": "archive",
-    "version": "agy_acp_server_20260818_01_RC01",
+    "version": "latest",
     "downloadUrl": "https://dl.google.com/agy-extensions/releases/{osDir}/agy-acp-server-{version}-{platform}-{archToken}.zip",
     "binaryName": {
       "win": "agy_acp_server.exe",
@@ -23,6 +23,7 @@
     "executable": {
       "win": "agy",
       "unix": "agy"
-    }
+    },
+    "minimumVersion": "1.1.11"
   }
 }

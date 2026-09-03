@@ -403,6 +403,9 @@ internal fun AcpBridge.pushPromptDoneChunk(
     metadata: ConversationAssistantMetadata,
     outcome: String
 ) {
+    if (metadata.agentId == "antigravity" || metadata.agentId.isNullOrBlank()) {
+        AcpUsageDataFetcher.invalidateAntigravityCache()
+    }
     val json = buildJsonObject {
         put("chatId", chatId)
         put("role", "assistant")
