@@ -13,7 +13,6 @@ interface TabItemProps {
   hasUnread: boolean;
   hasProcessing: boolean;
   isIslandsTheme: boolean;
-  titleClassName: string;
   onSelectTab: (id: string) => void;
   onPointerDown: (id: string, event: React.PointerEvent<HTMLDivElement>) => void;
   shouldSuppressClick: (id: string) => boolean;
@@ -37,7 +36,6 @@ export function TabItem({
   hasUnread,
   hasProcessing,
   isIslandsTheme,
-  titleClassName,
   onSelectTab,
   onPointerDown,
   shouldSuppressClick,
@@ -77,7 +75,7 @@ export function TabItem({
     <div
       data-tab-id={tab.id}
       onPointerDown={(event) => onPointerDown(tab.id, event)}
-      className={`text-foreground group relative pl-1 pr-2 flex ${tabHeightClassName} max-w-[180px] shrink items-center ${tabRadiusClassName}
+      className={`text-foreground group relative pl-1 pr-2 flex w-full min-w-0 max-w-[210px] ${tabHeightClassName} items-center ${tabRadiusClassName}
         bg-background cursor-grab active:cursor-grabbing ${activeClassName}`}
     >
       {dropIndicator === 'before' ? (
@@ -93,10 +91,7 @@ export function TabItem({
       {isRenaming ? (
         <div className={contentClassName}>
           {tabIcon}
-          {/* Same width cap as the label, so switching to the editor never resizes the tab. */}
-          <div className={`relative top-[1px] flex min-w-0 flex-1 overflow-hidden
-            ${titleClassName === 'hidden' ? '' : titleClassName}`}
-          >
+          <div className="relative top-[1px] flex min-w-0 flex-1 overflow-hidden">
             <TabTitleInput
               initialTitle={tab.title}
               onCommit={(title) => onRename(tab.id, title)}
@@ -131,7 +126,7 @@ export function TabItem({
           className={`${contentClassName} cursor-default focus:outline-none`}
         >
           {tabIcon}
-          <div className={`min-w-0 flex-1 overflow-hidden ${titleClassName}`}>
+          <div className="min-w-0 flex-1 overflow-hidden">
             <Tooltip variant="minimal" placement="bottom" content={tab.title}>
               <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
             </Tooltip>

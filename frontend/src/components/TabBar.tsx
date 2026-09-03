@@ -60,7 +60,6 @@ export default function TabBar({
   const [tabFocusedControl, setTabFocusedControl] = useState<'new' | 'menu' | 'hamburger' | null>(null);
   const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
   const [isIslandsTheme, setIsIslandsTheme] = useState(readIslandsTheme);
-  const [tabsViewportWidth, setTabsViewportWidth] = useState(0);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
@@ -121,26 +120,6 @@ export default function TabBar({
 }, []);
 
   useEffect(() => {
-    const element = tabsListRef.current;
-    if (!element) {
-      return;
-    }
-
-    const updateWidth = () => {
-      setTabsViewportWidth(element.clientWidth);
-    };
-
-    updateWidth();
-
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [tabs.length]);
-
-  useEffect(() => {
     if (!menuOpen) {
       return;
     }
@@ -161,15 +140,6 @@ export default function TabBar({
     focusFirstHamburgerItemOnOpenRef.current = false;
     focusMenuItem(hamburgerMenuListRef.current, 0);
   }, [hamburgerMenuOpen]);
-
-  const averageTabWidth = tabs.length > 0 ? tabsViewportWidth / tabs.length : Number.POSITIVE_INFINITY;
-  const titleClassName =
-    averageTabWidth < 76 ? 'hidden' :
-    averageTabWidth < 92 ? 'max-w-[20px]' :
-    averageTabWidth < 125 ? 'max-w-[35px]' :
-    averageTabWidth < 140 ? 'max-w-[68px]' :
-    averageTabWidth < 170 ? 'max-w-[80px]' :
-    'max-w-[120px]';
 
   const findDropTarget = (sourceId: string, clientX: number, clientY: number) => {
     const tabElements = Array.from(tabsListRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? []);
@@ -252,36 +222,36 @@ export default function TabBar({
           const hasUnread = flags?.unread;
           const hasProcessing = flags?.processing;
           return (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              agents={agents}
-              isActive={isActive}
-              isKeyboardFocused={focusedTabId === tab.id}
-              hasWarning={hasWarning}
-              hasUnread={hasUnread}
-              hasProcessing={hasProcessing}
-              isIslandsTheme={isIslandsTheme}
-              titleClassName={titleClassName}
-              onSelectTab={onSelectTab}
-              onPointerDown={handleTabPointerDown}
-              shouldSuppressClick={(id) => suppressClickTabIdRef.current === id}
-              onCloseTab={onCloseTab}
-              onFocusTab={(id) => setFocusedTabId(lastInteractionWasTabRef.current ? id : null)}
-              onBlurTab={(id) => setFocusedTabId((current) => current === id ? null : current)}
-              canRename={renamableTabIds.has(tab.id)}
-              isRenaming={renamingTabId === tab.id}
-              onStartRename={setRenamingTabId}
-              onRename={onRenameTab}
-              onStopRename={() => setRenamingTabId(null)}
-              dropIndicator={dropTarget?.id === tab.id ? dropTarget.position : null}
-            />
+            <div key={tab.id} className="flex min-w-[70px] flex-1 max-w-max">
+              <TabItem
+                tab={tab}
+                agents={agents}
+                isActive={isActive}
+                isKeyboardFocused={focusedTabId === tab.id}
+                hasWarning={hasWarning}
+                hasUnread={hasUnread}
+                hasProcessing={hasProcessing}
+                isIslandsTheme={isIslandsTheme}
+                onSelectTab={onSelectTab}
+                onPointerDown={handleTabPointerDown}
+                shouldSuppressClick={(id) => suppressClickTabIdRef.current === id}
+                onCloseTab={onCloseTab}
+                onFocusTab={(id) => setFocusedTabId(lastInteractionWasTabRef.current ? id : null)}
+                onBlurTab={(id) => setFocusedTabId((current) => current === id ? null : current)}
+                canRename={renamableTabIds.has(tab.id)}
+                isRenaming={renamingTabId === tab.id}
+                onStartRename={setRenamingTabId}
+                onRename={onRenameTab}
+                onStopRename={() => setRenamingTabId(null)}
+                dropIndicator={dropTarget?.id === tab.id ? dropTarget.position : null}
+              />
+            </div>
           );
         })}
       </div>
 
       {/* Controls: +, More (chevron), Hamburger */}
-      <div className="flex items-center bg-background pl-1 pr-2 gap-0.5 z-10 shadow-[-10px_0_10px_-5px_var(--background)]">
+      <div className="flex shrink-0 items-center bg-background pl-1 pr-2 gap-0.5 z-10 shadow-[-10px_0_10px_-5px_var(--background)]">
         {/* New Tab (+ matches default agent) */}
         <button
           onClick={onNewTab}
