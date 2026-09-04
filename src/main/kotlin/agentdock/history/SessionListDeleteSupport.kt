@@ -27,6 +27,7 @@ internal object SessionListDeleteSupport {
 
     fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
         when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
+            "acp" -> return deleteAcpSession(adapterName, sessionId)
             "antigravitySessionDelete" -> return deleteAntigravitySession(sessionId)
             "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
             "kimiCodeSessionDelete" -> return KimiSessionHistory.kimiCodeSessionDelete(projectPath, sessionId)
@@ -45,7 +46,6 @@ internal object SessionListDeleteSupport {
             "opencode" -> runCatching {
                 runAgentHistoryCliCommand("opencode", projectPath, listOf("session", "delete", sessionId))
             }.isSuccess
-            "qoder" -> deleteQoderSession(sessionId)
             else -> false
         }
     }
@@ -67,13 +67,13 @@ internal object SessionListDeleteSupport {
         }
     }
 
-    private fun deleteQoderSession(sessionId: String): Boolean {
+    private fun deleteAcpSession(adapterName: String, sessionId: String): Boolean {
         val service = ProjectManager.getInstance().openProjects
             .asSequence()
             .map(AcpClientService::getInstance)
-            .firstOrNull { it.isAdapterReady("qoder") }
+            .firstOrNull { it.isAdapterReady(adapterName) }
             ?: return false
-        return runBlocking { service.deleteHistorySession("qoder", sessionId) }
+        return runBlocking { service.deleteHistorySession(adapterName, sessionId) }
     }
 
     private fun resolveClaudeSourceFilePath(projectPath: String, sessionId: String): String {

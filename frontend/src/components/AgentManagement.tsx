@@ -13,6 +13,7 @@ import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 import { MenuButton } from './ui/MenuButton';
 import { SplitButton } from './ui/SplitButton';
+import { Tooltip } from './chat/shared/Tooltip';
 import { AdapterUsageLifecycleProvider } from '../hooks/useAdapterUsage';
 
 function mergeAgentSnapshot(previous: AgentOption | undefined, next: AgentOption): AgentOption {
@@ -73,6 +74,7 @@ function mergeAgentSnapshots(
 let serviceProviderAgentSnapshots: Record<string, AgentOption> = {};
 
 const formatVersion = (version: string) => /^\d/.test(version) ? `v${version}` : version;
+const CLI_AUTH_TOOLTIP = 'You may need to restart the IDE after changing authentication via CLI.';
 
 const linkButtonFocusClassName = [
   'focus:outline-none',
@@ -301,6 +303,9 @@ export function AgentManagementView({
               : statusLabel === 'Not logged in'
                 ? 'text-warning'
                 : 'text-error';
+            const cliAuthTooltip = agent.cliAvailable
+              ? CLI_AUTH_TOOLTIP
+              : 'IDE terminal is required';
 
             return (
               <div key={agent.id} className={`flex group ${!isLast ? 'border-b border-border' : ''}`}>
@@ -463,8 +468,11 @@ export function AgentManagementView({
                                       onClick: () => handleLogin(agent, 'cli'),
                                     }]),
                                 {
-                                  label: 'CLI',
-                                  title: agent.cliAvailable ? undefined : 'IDE terminal is required',
+                                  label: (
+                                    <Tooltip variant="minimal" content={cliAuthTooltip} className="inline-flex">
+                                      <span>CLI</span>
+                                    </Tooltip>
+                                  ),
                                   disabled: !agent.cliAvailable,
                                   onClick: () => handleCliAuth(agent),
                                 },
@@ -473,14 +481,15 @@ export function AgentManagementView({
                           )
                         )}
                         {((showLogin && !hasLoginMenu) || showCliAuthFallback) && (
-                          <Button
-                            onClick={() => handleCliAuth(agent)}
-                            disabled={!agent.cliAvailable || isProcessing}
-                            title={!agent.cliAvailable ? 'IDE terminal is required' : undefined}
-                            variant="outline"
-                          >
-                            CLI auth
-                          </Button>
+                          <Tooltip variant="minimal" content={cliAuthTooltip} className="inline-flex">
+                            <Button
+                              onClick={() => handleCliAuth(agent)}
+                              disabled={!agent.cliAvailable || isProcessing}
+                              variant="outline"
+                            >
+                              CLI auth
+                            </Button>
+                          </Tooltip>
                         )}
                         {showLogout && (
                           <Button

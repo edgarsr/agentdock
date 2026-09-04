@@ -37,7 +37,9 @@ object AcpAdapterConfig {
     @Serializable
     data class PlatformBinary(
         val win: String? = null,
-        val unix: String? = null
+        val unix: String? = null,
+        val macos: String? = null,
+        val linux: String? = null
     )
 
     @Serializable
@@ -102,6 +104,7 @@ object AcpAdapterConfig {
         val launchBinary: PlatformBinary? = null,
         val disabledModels: List<String> = emptyList(),
         val disabledModes: List<String> = emptyList(),
+        val skipUnavailablePreferredModel: Boolean = false,
         val configOptions: JsonArray = JsonArray(emptyList()),
         val args: List<String> = emptyList(),
         val platformArgs: Map<String, List<String>> = emptyMap(),

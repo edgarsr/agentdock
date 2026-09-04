@@ -5,6 +5,7 @@
   "iconPathLight": "/icons/qoder-light.svg",
   "iconPathDark": "/icons/qoder-dark.svg",
   "supportsSessionList": true,
+  "sessionDeleteMethod": "acp",
   "loginMethod": "cli",
   "loginStatusMethod": "qoderCliStatus",
   "distribution": {

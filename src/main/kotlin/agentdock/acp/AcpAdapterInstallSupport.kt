@@ -28,7 +28,8 @@ private data class RuntimePlatform(
     val target: String,
     val libc: String,
     val libcSuffix: String,
-    val archToken: String
+    val archToken: String,
+    val artifactArch: String
 )
 
 internal fun resolveInstallAdapterInfo(
@@ -135,15 +136,15 @@ internal fun downloadArchiveDistributionLocal(
             statusCallback?.invoke("Ensuring executables...")
             ensureExtractedFilesExecutable(targetDir)
         }
-        tempFile.delete()
         statusCallback?.invoke("${adapterInfo.name} installed successfully.")
         true
     } catch (e: CancellationException) {
-        tempFile.delete()
         throw e
     } catch (e: Exception) {
         statusCallback?.invoke("Error: ${e.message}")
         false
+    } finally {
+        tempFile.delete()
     }
 }
 
@@ -202,11 +203,12 @@ private fun detectRuntimePlatform(target: AcpExecutionTarget): RuntimePlatform {
     val archiveArch = if (isArm64) "arm64" else "x64"
     val targetArch = if (isArm64) "aarch64" else "x86_64"
     val archToken = if (isArm64) "arm64" else "x86_64"
+    val artifactArch = if (isArm64) "aarch64" else "amd64"
 
     return when {
-        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "", archToken)
-        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "", archToken)
-        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "", archToken)
+        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "", archToken, artifactArch)
+        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "", archToken, artifactArch)
+        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "", archToken, artifactArch)
     }
 }
 
@@ -219,6 +221,7 @@ private fun resolveArchiveDownloadUrl(
         .replace("{platform}", runtime.platform)
         .replace("{arch}", runtime.archiveArch)
         .replace("{archToken}", runtime.archToken)
+        .replace("{artifactArch}", runtime.artifactArch)
         .replace("{osDir}", AcpExecutionMode.hostPlatform())
         .replace("{ext}", runtime.archiveExt)
         .replace("{target}", runtime.target)
@@ -255,11 +258,12 @@ private fun extractZipArchive(
         while (true) {
             cancellation?.throwIfCancelled()
             val entry = zip.nextEntry ?: break
-            val outFile = File(targetDir, entry.name)
+            val normalizedName = entry.name.replace('\\', '/')
+            val outFile = File(targetDir, normalizedName)
             if (!outFile.canonicalFile.toPath().startsWith(canonicalTarget.toPath())) {
                 throw SecurityException("Blocked archive entry outside target directory: ${entry.name}")
             }
-            if (entry.isDirectory) {
+            if (entry.isDirectory || normalizedName.endsWith('/')) {
                 outFile.mkdirs()
             } else {
                 outFile.parentFile?.mkdirs()

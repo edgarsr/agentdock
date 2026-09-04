@@ -11,7 +11,12 @@ internal fun platformBinaryForTarget(
     binary: AcpAdapterConfig.PlatformBinary?,
     target: AcpExecutionTarget
 ): String? {
-    return if (isWindowsLocalTarget(target)) binary?.win else binary?.unix
+    if (isWindowsLocalTarget(target)) return binary?.win
+    return when (AcpExecutionMode.hostPlatform()) {
+        "macos" -> binary?.macos ?: binary?.unix
+        "linux" -> binary?.linux ?: binary?.unix
+        else -> binary?.unix
+    }
 }
 
 internal fun resolveDownloadPath(

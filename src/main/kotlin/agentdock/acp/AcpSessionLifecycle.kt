@@ -146,6 +146,7 @@ private suspend fun AcpClientService.applySessionConfigOptions(
         } else {
             val protocol = context.sharedProcess?.protocol ?: return false
             val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
+            val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
             val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
             val orderedConfigIds = buildList {
                 modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
@@ -159,7 +160,10 @@ private suspend fun AcpClientService.applySessionConfigOptions(
                 // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
                 val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
                 if (option.type == "select" && option.options.isEmpty()) continue
-                if (!option.accepts(requestedValue)) return false
+                if (!option.accepts(requestedValue)) {
+                    if (adapterInfo.skipUnavailablePreferredModel && configId == modelOption?.id) continue
+                    return false
+                }
                 if (context.activeConfigValues[configId] == requestedValue) continue
                 val response = runCatching {
                     protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)

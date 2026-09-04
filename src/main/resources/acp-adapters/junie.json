@@ -1,0 +1,38 @@
+{
+  "id": "junie",
+  "name": "Junie",
+  "iconPath": "/icons/junie.svg",
+  "iconPathLight": "/icons/junie-light.svg",
+  "iconPathDark": "/icons/junie-dark.svg",
+  "supportsSessionList": true,
+  "sessionDeleteMethod": "acp",
+  "skipUnavailablePreferredModel": true,
+  "distribution": {
+    "type": "archive",
+    "version": "latest",
+    "downloadUrl": "https://github.com/JetBrains/junie-acp-release/releases/download/{version}/junie-release-{version}-{osDir}-{artifactArch}.zip",
+    "binaryName": {
+      "win": "junie/junie.exe",
+      "macos": "Applications/junie.app/Contents/MacOS/junie",
+      "linux": "junie-app/bin/junie"
+    },
+    "updateSource": {
+      "type": "github_release",
+      "owner": "JetBrains",
+      "repo": "junie-acp-release",
+      "tagPrefix": ""
+    }
+  },
+  "args": ["--acp=true"],
+  "cli": {
+    "executable": {
+      "win": "junie/junie.exe",
+      "macos": "Applications/junie.app/Contents/MacOS/junie",
+      "linux": "junie-app/bin/junie"
+    },
+    "resumeArgs": [
+      "--resume",
+      "--session-id={sessionId}"
+    ]
+  }
+}

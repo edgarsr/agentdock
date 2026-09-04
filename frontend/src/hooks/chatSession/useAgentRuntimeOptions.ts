@@ -16,6 +16,10 @@ type UseAgentRuntimeOptionsArgs = {
 const matches = (option: ConfigOption, category: string) =>
   option.id === category || option.category === category;
 
+const findOption = (options: ConfigOption[], category: string) =>
+  options.find((option) => option.id === category)
+  ?? options.find((option) => option.category === category);
+
 const isReasoning = (option: ConfigOption) =>
   matches(option, 'thought_level') || matches(option, 'reasoning_effort');
 
@@ -52,7 +56,7 @@ export function useAgentRuntimeOptions({
   const selected = effectiveSelectedAgent
     ? selectedByAgent[effectiveSelectedAgent.id] ?? EMPTY_SELECTION
     : EMPTY_SELECTION;
-  const modelOption = options.find((option) => matches(option, 'model'));
+  const modelOption = findOption(options, 'model');
   const modelValue = selected[modelOption?.id ?? ''];
   const initialModelValue = initialValues[modelOption?.id ?? ''];
   const selectedModelId = modelOption
@@ -100,8 +104,10 @@ export function useAgentRuntimeOptions({
       };
     });
 
-  const modeOption = effectiveOptions.find((option) => matches(option, 'mode'));
-  const reasoningOption = effectiveOptions.find(isReasoning);
+  const modeOption = findOption(effectiveOptions, 'mode');
+  const reasoningOption = effectiveOptions.find((option) =>
+    option.id === 'thought_level' || option.id === 'reasoning_effort'
+  ) ?? effectiveOptions.find(isReasoning);
   const selectedModeId = modeOption ? configValues[modeOption.id] ?? '' : '';
   const selectedReasoningEffortId = reasoningOption ? configValues[reasoningOption.id] ?? '' : '';
   const availableModes = modeOption?.options.map((option) => ({
@@ -115,7 +121,11 @@ export function useAgentRuntimeOptions({
     description: option.description,
   })) ?? [];
   const additionalConfigOptions = effectiveOptions
-    .filter((option) => !matches(option, 'model') && !matches(option, 'mode') && !isReasoning(option))
+    .filter((option) =>
+      option.id !== modelOption?.id
+      && option.id !== modeOption?.id
+      && option.id !== reasoningOption?.id
+    )
     .map((option) => ({ ...option, currentValue: configValues[option.id] ?? option.currentValue ?? '' }));
 
   const handleSessionConfigOptions = useCallback((payload: SessionConfigOptionsPayload) => {
