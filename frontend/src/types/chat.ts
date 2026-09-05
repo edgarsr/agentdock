@@ -437,6 +437,7 @@ export interface PendingHandoffContext {
   sourceSessionId: string;
   sourceAgentId: string;
   targetAgentId: string;
+  sourceConversationTitle: string;
   text: string;
 }
 

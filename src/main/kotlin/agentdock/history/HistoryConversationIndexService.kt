@@ -4,11 +4,6 @@ import agentdock.utils.atomicWriteText
 import java.time.Instant
 
 internal object HistoryConversationIndexService {
-    fun isAutomaticTagTitleCandidate(title: String?): Boolean {
-        val normalized = title?.trim().orEmpty()
-        return Regex("^\\[[^\\]\\r\\n]+]").containsMatchIn(normalized)
-    }
-
     @Synchronized
     fun upsertRuntimeSessionMetadata(
         projectPath: String?,
@@ -87,10 +82,8 @@ internal object HistoryConversationIndexService {
         }
 
         val existingTitle = mergedConversation?.title?.takeIf { it.isNotBlank() }
-        val shouldBlockTagTitle = existingTitle != null && isAutomaticTagTitleCandidate(normalizedTitle)
         val shouldForceTitle = forceTitle &&
             normalizedTitle.isNotBlank() &&
-            !shouldBlockTagTitle &&
             mergedConversation?.titleUserSet != true
         val updatedConversation = HistoryConversationIndexEntry(
             id = cleanConversationId,

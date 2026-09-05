@@ -153,12 +153,8 @@ internal object HistorySyncService {
                     val key = "${session.adapterName}:${session.sessionId}"
                     availableByKey[key]?.title?.takeIf { it.isNotBlank() }
                 }
-                val existingTitle = conversation.title.trim()
-                val blocksExistingTitle = existingTitle.isNotBlank() &&
-                    HistoryConversationIndexService.isAutomaticTagTitleCandidate(syncedTitle)
                 val needsTitleUpdate = syncedTitle != null
                     && !conversation.titleUserSet
-                    && !blocksExistingTitle
                     && syncedTitle != conversation.title
                 val normalizedUsedAdapterNames = HistoryConversationIndexService.adapterNamesForConversation(conversation)
                 if (normalizedUsedAdapterNames != conversation.usedAdapterNames) {

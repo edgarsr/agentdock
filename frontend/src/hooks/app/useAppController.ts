@@ -28,6 +28,7 @@ interface PendingAgentSwitch {
   tabId: string;
   targetAgentId: string;
   handoffText: string;
+  sourceConversationTitle: string;
 }
 
 interface PendingConversationContinuation {
@@ -271,6 +272,7 @@ export function useAppController() {
       tabId,
       targetAgentId: payload.agentId,
       handoffText: payload.handoffText,
+      sourceConversationTitle: tab.title,
     });
   }, [tabSessionState]);
 
@@ -312,6 +314,7 @@ export function useAppController() {
         sourceSessionId: currentSession.acpSessionId,
         sourceAgentId: currentSession.adapterName,
         targetAgentId: pendingAgentSwitch.targetAgentId,
+        sourceConversationTitle: pendingAgentSwitch.sourceConversationTitle,
         text: pendingAgentSwitch.handoffText,
       };
 
@@ -368,6 +371,7 @@ export function useAppController() {
       sourceSessionId: sourceSessionState?.acpSessionId || '',
       sourceAgentId: sourceSessionState?.adapterName || sourceTab.agentId || '',
       targetAgentId: resolvedAgentId,
+      sourceConversationTitle: sourceTab.title,
       text: payload.handoffText,
     };
 

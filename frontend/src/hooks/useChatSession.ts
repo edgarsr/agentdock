@@ -777,7 +777,11 @@ export function useChatSession({
     const normalizedBlocks = normalizeOutgoingBlocks(buildPromptBlocks(inputValue, attachments));
     if (normalizedBlocks.length === 0) return;
     const outgoingBlocks = pendingHandoffRef.current
-      ? prependHandoffContext(normalizedBlocks, pendingHandoffRef.current.text)
+      ? prependHandoffContext(
+        normalizedBlocks,
+        pendingHandoffRef.current.text,
+        pendingHandoffRef.current.sourceConversationTitle,
+      )
       : normalizedBlocks;
 
     sendPreparedPrompt(normalizedBlocks, outgoingBlocks, plainTextFromBlocks(normalizedBlocks));
