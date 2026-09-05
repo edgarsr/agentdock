@@ -1,7 +1,8 @@
 import DOMPurify from 'dompurify';
 import type { Config, UponSanitizeAttributeHook, UponSanitizeAttributeHookEvent } from 'dompurify';
 
-const SAFE_URI_PATTERN = /^(?:(?:https?|file):|[A-Za-z]:[\\/]|[^:]*$)/i;
+// A slash before any colon identifies a path, allowing local file links with line suffixes.
+const SAFE_URI_PATTERN = /^(?:(?:https?|file):|[A-Za-z]:[\\/]|[^:]*\/|[^:]*$)/i;
 
 function sanitizeWithCodeClasses(html: string, config: Config): string {
   const hook: UponSanitizeAttributeHook = (_node: Element, data: UponSanitizeAttributeHookEvent) => {
