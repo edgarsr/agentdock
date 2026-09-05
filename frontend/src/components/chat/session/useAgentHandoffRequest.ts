@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { FileChangeSummary, Message } from '../../../types/chat';
+import type { Message } from '../../../types/chat';
 import { ACPBridge } from '../../../utils/bridge';
 import {
   buildConversationHandoffFromTranscriptFile,
@@ -11,7 +11,6 @@ interface UseAgentHandoffRequestOptions {
   conversationId: string;
   selectedAgentId: string;
   messages: Message[];
-  fileChanges: FileChangeSummary[];
   onAgentChangeRequest?: (payload: { agentId: string; handoffText: string }) => void;
 }
 
@@ -19,13 +18,12 @@ export function useAgentHandoffRequest({
   conversationId,
   selectedAgentId,
   messages,
-  fileChanges,
   onAgentChangeRequest,
 }: UseAgentHandoffRequestOptions) {
   return useCallback(async (id: string) => {
     if (!onAgentChangeRequest || id === selectedAgentId) return;
 
-    const prepared = prepareConversationHandoff(messages, fileChanges);
+    const prepared = prepareConversationHandoff(messages);
     let handoffText = prepared.handoffText;
 
     if (prepared.exceedsInlineLimit) {
@@ -43,5 +41,5 @@ export function useAgentHandoffRequest({
       agentId: id,
       handoffText,
     });
-  }, [conversationId, fileChanges, messages, onAgentChangeRequest, selectedAgentId]);
+  }, [conversationId, messages, onAgentChangeRequest, selectedAgentId]);
 }

@@ -384,6 +384,7 @@ export function useAppController() {
         conversationId: newConversationId,
         agentId: resolvedAgentId,
         initialMessages: payload.messages,
+        inheritedHandoffText: payload.handoffText,
         metadataTitleOverride: title,
         inheritedAdapterNames,
         forkBase: {

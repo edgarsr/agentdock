@@ -8,6 +8,7 @@ import {
   buildConversationHandoffFromTranscriptFile,
   buildConversationHandoffSaveFailureContext,
   prepareConversationHandoff,
+  prepareConversationHandoffWithInheritedContext,
 } from '../../utils/conversationHandoff';
 import { ACPBridge } from '../../utils/bridge';
 import MessageList from './MessageList';
@@ -29,6 +30,7 @@ interface ChatSessionProps extends UseChatSessionOptions {
   onCanMarkReadChange?: (canMarkRead: boolean) => void;
   onPermissionRequestChange?: (hasPendingPermission: boolean) => void;
   onProcessingChange?: (isProcessing: boolean) => void;
+  inheritedHandoffText?: string;
   onAgentChangeRequest?: (payload: { agentId: string; handoffText: string }) => void;
   onForkRequest?: (payload: { agentId: string; messages: Message[]; handoffText: string }) => void;
   onSessionStateChange?: (state: { acpSessionId: string; adapterName: string }) => void;
@@ -41,6 +43,7 @@ export default function ChatSessionView({
   historySession,
   pendingHandoff,
   initialMessages,
+  inheritedHandoffText,
   metadataTitleOverride,
   inheritedAdapterNames,
   forkBase,
@@ -197,7 +200,6 @@ export default function ChatSessionView({
     conversationId,
     selectedAgentId,
     messages,
-    fileChanges,
     onAgentChangeRequest,
   });
 
@@ -213,7 +215,14 @@ export default function ChatSessionView({
     }
 
     const forkMessages = messages.slice(0, endExclusive);
-    const prepared = prepareConversationHandoff(forkMessages, []);
+    const initialMessageCount = initialMessages?.length ?? 0;
+    const continuesForkedSession = Boolean(inheritedHandoffText) && endExclusive > initialMessageCount;
+    const prepared = continuesForkedSession
+      ? prepareConversationHandoffWithInheritedContext(
+        forkMessages.slice(initialMessageCount),
+        inheritedHandoffText || '',
+      )
+      : prepareConversationHandoff(forkMessages);
 
     const finish = (handoffText: string) => {
       onForkRequest({
@@ -236,7 +245,7 @@ export default function ChatSessionView({
         const message = error instanceof Error ? error.message : String(error);
         finish(buildConversationHandoffSaveFailureContext(prepared, message));
       });
-  }, [conversationId, messages, onForkRequest, selectedAgentId]);
+  }, [conversationId, inheritedHandoffText, initialMessages?.length, messages, onForkRequest, selectedAgentId]);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">

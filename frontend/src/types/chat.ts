@@ -223,6 +223,7 @@ export interface ChatTab {
   agentId?: string; // If pre-selected
   historySession?: HistorySessionMeta;
   initialMessages?: Message[];
+  inheritedHandoffText?: string;
   metadataTitleOverride?: string;
   /** Title given before the first prompt, written to the history index once the conversation is registered. */
   pendingTitle?: string;

@@ -47,6 +47,7 @@ export function useFileChanges(
   sessionId: string,
   adapterName: string
 ) {
+  const sessionEventPrefix = stableToolCallEventId(adapterName, sessionId, '');
   const [undoErrorMessage, setUndoErrorMessage] = useState<string | null>(null);
   const [computedStats, setComputedStats] = useState<{
     source: FileChangeSummary[];
@@ -124,6 +125,7 @@ export function useFileChanges(
       if (e.detail.chatId !== conversationId) return;
       
       const state = e.detail.state;
+      if (state.sessionId !== sessionId || state.adapterName !== adapterName) return;
       const hasEdits = Boolean(state.hasPluginEdits);
       
       if (initialHasPluginEditsRef.current === null) {
@@ -136,7 +138,9 @@ export function useFileChanges(
       // it means the first live tool call just triggered state creation.
       // Mark the pre-existing replay events as handled before tracking this session's live edits.
       if (!initialHasPluginEditsRef.current && hasEdits && state.keptToolCallIds.length === 0) {
-         const replayIds = replayToolCallEventsRef.current.flatMap((event) => event.eventId ? [event.eventId] : []);
+         const replayIds = replayToolCallEventsRef.current.flatMap((event) => (
+           event.eventId?.startsWith(sessionEventPrefix) ? [event.eventId] : []
+         ));
          if (replayIds.length > 0) {
             setKeptToolCallIds(replayIds);
             if (window.__keepAll && sessionId && adapterName) {
@@ -188,7 +192,7 @@ export function useFileChanges(
       unsubToolCallUpdate();
       unsubConversationReplayLoaded();
     };
-  }, [conversationId, sessionId, adapterName]);
+  }, [conversationId, sessionId, adapterName, sessionEventPrefix]);
 
   // Build per-file operation chains from accumulated tool call events.
   const baseFileChanges = useMemo<FileChangeSummary[]>(() => {
@@ -201,6 +205,8 @@ export function useFileChanges(
     );
 
     for (const event of eventsToProcess) {
+      // Earlier sessions remain in the transcript, but never become undoable here.
+      if (!event.eventId?.startsWith(sessionEventPrefix)) continue;
       // Only show tool calls that have been explicitly confirmed as applied.
       // Events with no status yet (awaiting permission) or failed/denied events are excluded.
       if (!event.status || !APPLIED_STATUSES.has(event.status)) continue;
@@ -243,6 +249,7 @@ export function useFileChanges(
     liveToolCallEvents,
     keptToolCallIds,
     processedFileStates,
+    sessionEventPrefix,
   ]);
 
   useEffect(() => {
@@ -287,7 +294,7 @@ export function useFileChanges(
   const statsByFilePath = computedStats?.source === baseFileChanges ? computedStats.byFilePath : {};
 
   const fileChanges = useMemo<FileChangeSummary[]>(() => {
-    if (statsPending) return [];
+    if (statsPending || !sessionId || loadedSessionKey !== `${sessionId}:${adapterName}`) return [];
 
     return baseFileChanges.flatMap((fc) => {
       const stats = statsByFilePath[fc.filePath];
@@ -299,7 +306,7 @@ export function useFileChanges(
         deletions: stats.deletions,
       }];
     });
-  }, [baseFileChanges, statsByFilePath, statsPending]);
+  }, [baseFileChanges, statsByFilePath, statsPending, sessionId, adapterName, loadedSessionKey]);
   fileChangesRef.current = fileChanges;
 
   const totalAdditions = useMemo(() => fileChanges.reduce((sum, fc) => sum + fc.additions, 0), [fileChanges]);
@@ -381,7 +388,7 @@ export function useFileChanges(
       ...keptToolCallIds,
       ...processedFileStates.flatMap((processed) => processed.toolCallIds),
       ...[...replayToolCallEvents, ...liveToolCallEvents]
-        .flatMap((event) => event.eventId ? [event.eventId] : []),
+        .flatMap((event) => event.eventId?.startsWith(sessionEventPrefix) ? [event.eventId] : []),
     ]));
     if (window.__keepAll && sessionId && adapterName) {
       window.__keepAll(JSON.stringify({
@@ -399,6 +406,7 @@ export function useFileChanges(
     processedFileStates,
     replayToolCallEvents,
     liveToolCallEvents,
+    sessionEventPrefix,
   ]);
 
   useEffect(() => {

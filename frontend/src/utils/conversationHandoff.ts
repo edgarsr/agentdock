@@ -1,8 +1,8 @@
 import type {
-  FileChangeSummary,
   Message,
   PlanBlock,
   RichContentBlock,
+  ToolCallBlock,
 } from '../types/chat';
 
 export interface ConversationHandoffOptions {
@@ -34,8 +34,6 @@ const RESERVED_TRANSFER_MARKERS = [
   '[USER REQUEST]',
   '[MESSAGES]',
   '[/MESSAGES]',
-  '[FILE CHANGES]',
-  '[/FILE CHANGES]',
   '[TRANSCRIPT FILE]',
   '[/TRANSCRIPT FILE]',
   '[TRANSCRIPT STATUS]',
@@ -55,12 +53,11 @@ interface NormalizedMessage {
 
 export function prepareConversationHandoff(
   messages: Message[],
-  fileChanges: FileChangeSummary[] = [],
   options: ConversationHandoffOptions = {},
 ): PreparedConversationHandoff {
   const cfg = resolveOptions(options);
   const normalizedMessages = normalizeMessages(messages);
-  const normalizedTranscript = renderNormalizedTranscript(normalizedMessages, fileChanges);
+  const normalizedTranscript = renderNormalizedTranscript(normalizedMessages);
   const estimatedTokens = estimateTokenCount(normalizedTranscript, cfg.estimatedCharsPerToken);
   const exceedsInlineLimit = normalizedTranscript.length > cfg.maxInlineChars || estimatedTokens > cfg.maxEstimatedTokens;
 
@@ -75,13 +72,36 @@ export function prepareConversationHandoff(
 
   return {
     normalizedTranscript,
-    handoffText: exceedsInlineLimit
-      ? ''
-      : buildInlineConversationHandoff(normalizedTranscript, estimatedTokens),
+    handoffText: exceedsInlineLimit ? '' : normalizedTranscript,
     estimatedTokens,
     exceedsInlineLimit,
     lastUserPrompt,
     lastAssistantResponse,
+  };
+}
+
+export function prepareConversationHandoffWithInheritedContext(
+  messages: Message[],
+  inheritedHandoffText: string,
+  options: ConversationHandoffOptions = {},
+): PreparedConversationHandoff {
+  const current = prepareConversationHandoff(messages, options);
+  const inherited = normalizeText(inheritedHandoffText);
+  if (!inherited) return current;
+
+  const normalizedTranscript = messages.length === 0
+    ? inherited
+    : `${inherited}\n\n${current.normalizedTranscript}`;
+  const cfg = resolveOptions(options);
+  const estimatedTokens = estimateTokenCount(normalizedTranscript, cfg.estimatedCharsPerToken);
+  const exceedsInlineLimit = normalizedTranscript.length > cfg.maxInlineChars || estimatedTokens > cfg.maxEstimatedTokens;
+
+  return {
+    ...current,
+    normalizedTranscript,
+    handoffText: exceedsInlineLimit ? '' : normalizedTranscript,
+    estimatedTokens,
+    exceedsInlineLimit,
   };
 }
 
@@ -219,9 +239,30 @@ function normalizeAssistantBlock(block: RichContentBlock): string[] {
       return [attachmentLabel('Generated file', block.path || block.name)];
     case 'code_ref':
       return [codeReferenceText(block.path, block.startLine, block.endLine)];
+    case 'tool_call':
+      return block.entry.kind?.toLowerCase() === 'edit'
+        ? formatEditToolCall(block)
+        : [];
     default:
       return [];
   }
+}
+
+function formatEditToolCall(block: ToolCallBlock): string[] {
+  const paths = new Set<string>();
+  block.entry.locations?.forEach((location) => {
+    if (location.path) paths.add(location.path);
+  });
+  block.entry.content?.forEach((diff) => {
+    if (diff.path) paths.add(diff.path);
+  });
+
+  if (paths.size === 0) return ['[EDIT TOOL CALL] Edited file [/EDIT TOOL CALL]'];
+
+  return Array.from(paths).map((path) => {
+    const fileName = normalizeSingleLineText(path.split(/[\\/]/).pop() || path);
+    return `[EDIT TOOL CALL] Edited file: "${sanitizeTranscriptContent(fileName)}" [/EDIT TOOL CALL]`;
+  });
 }
 
 function formatPlanBlock(block: PlanBlock): string[] {
@@ -244,13 +285,6 @@ function codeReferenceText(path: string, startLine?: number, endLine?: number): 
     : `@${path}#L${startLine}-${endLine}`;
 }
 
-function renderNormalizedTranscript(messages: NormalizedMessage[], fileChanges: FileChangeSummary[]): string {
-  return [
-    section('MESSAGES', renderTranscript(messages)),
-    section('FILE CHANGES', formatFileChanges(fileChanges)),
-  ].filter(Boolean).join('\n\n');
-}
-
 function renderTranscript(messages: NormalizedMessage[]): string {
   if (messages.length === 0) return 'No transcript content was available.';
   return messages
@@ -258,20 +292,8 @@ function renderTranscript(messages: NormalizedMessage[]): string {
     .join('\n\n');
 }
 
-function formatFileChanges(fileChanges: FileChangeSummary[]): string {
-  if (fileChanges.length === 0) return 'No plugin-managed file edits were recorded.';
-  return fileChanges
-    .map((file) => {
-      const changeType = file.status === 'A' ? 'added' : file.status === 'D' ? 'deleted' : 'modified';
-      const operationLabel = file.operations.length === 1 ? '1 edit operation' : `${file.operations.length} edit operations`;
-      return sanitizeTranscriptContent(`- ${file.filePath} (${changeType}, ${operationLabel}, +${file.additions}/-${file.deletions})`);
-    })
-    .join('\n');
-}
-
-function buildInlineConversationHandoff(transcript: string, estimatedTokens: number): string {
-  void estimatedTokens;
-  return transcript;
+function renderNormalizedTranscript(messages: NormalizedMessage[]): string {
+  return section('MESSAGES', renderTranscript(messages));
 }
 
 function estimateTokenCount(text: string, charsPerToken: number): number {

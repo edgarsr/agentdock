@@ -66,6 +66,7 @@ export function AppTabContent({
           historySession={tab.historySession}
           pendingHandoff={pendingHandoff}
           initialMessages={tab.initialMessages}
+          inheritedHandoffText={tab.inheritedHandoffText}
           metadataTitleOverride={tab.metadataTitleOverride}
           inheritedAdapterNames={tab.inheritedAdapterNames}
           forkBase={tab.forkBase}
