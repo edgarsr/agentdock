@@ -2,7 +2,6 @@
   "id": "antigravity",
   "name": "Google Antigravity",
   "iconPath": "/icons/antigravity.svg",
-  "sessionListPosixCwd": true,
   "sessionDeleteMethod": "antigravitySessionDelete",
   "loginMethod": "acp",
   "logoutMethod": "acp",

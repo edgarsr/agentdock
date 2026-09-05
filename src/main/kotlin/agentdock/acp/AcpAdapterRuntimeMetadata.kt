@@ -2,7 +2,6 @@ package agentdock.acp
 
 import agentdock.history.AgentDockHistoryService
 import agentdock.history.GrokSessionHistory
-import com.intellij.openapi.diagnostic.Logger
 import com.agentclientprotocol.protocol.Protocol
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -11,8 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-private const val PROBE_SESSION_CLEANUP_TIMEOUT_MS = 3_000L
-private val LOG = Logger.getInstance("agentdock.acp.AcpAdapterRuntimeMetadata")
+private const val PROBE_SESSION_OPERATION_TIMEOUT_MS = 3_000L
 
 @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
@@ -42,12 +40,7 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     } finally {
         try {
             withContext(NonCancellable) {
-                val cleaned = withTimeoutOrNull(PROBE_SESSION_CLEANUP_TIMEOUT_MS) {
-                    cleanupProbeSession(adapterInfo, sessionId)
-                } ?: false
-                if (!cleaned) {
-                    LOG.debug("Unable to clean up ACP config-options probe session '$sessionId'")
-                }
+                cleanupProbeSessions(adapterInfo, sessionId)
             }
         } finally {
             configProbeSessionKeys.remove(probeSessionKey)
@@ -55,28 +48,49 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     }
 }
 
-private suspend fun AcpClientService.cleanupProbeSession(
+private suspend fun AcpClientService.cleanupProbeSessions(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
-    sessionId: String
-): Boolean {
+    currentSessionId: String
+) {
     val probeProjectPath = AcpAdapterPaths.getProbeSessionDir().absolutePath
-    return try {
-        if (adapterInfo.sessionDeleteMethod == "grokCliSessionDelete") {
-            GrokSessionHistory.grokCliSessionDelete(adapterInfo.id, probeProjectPath, sessionId)
-        } else {
-            AgentDockHistoryService.deleteSessionImmediately(
-                projectPath = resolveSessionCwd(probeProjectPath),
-                sessionId = sessionId,
-                adapterName = adapterInfo.id,
-                waitTimeoutMillis = 1_000L,
-                pollIntervalMillis = 100L
+    val sessionIds = linkedSetOf<String>()
+    try {
+        withTimeoutOrNull(PROBE_SESSION_OPERATION_TIMEOUT_MS) {
+            listHistorySessions(
+                adapterInfo = adapterInfo,
+                projectPath = probeProjectPath,
+                allowInitializingProcess = true
             )
-        }
+        }.orEmpty()
+            .mapTo(sessionIds) { it.sessionId }
     } catch (error: CancellationException) {
         throw error
-    } catch (error: Exception) {
-        LOG.debug("Failed to clean up ACP config-options probe session '$sessionId'", error)
-        false
+    } catch (_: Exception) {
+        // The current session can still be deleted when session/list is unavailable.
+    }
+    sessionIds.remove(currentSessionId)
+    sessionIds.add(currentSessionId)
+
+    sessionIds.forEach { sessionId ->
+        try {
+            withTimeoutOrNull(PROBE_SESSION_OPERATION_TIMEOUT_MS) {
+                if (adapterInfo.sessionDeleteMethod == "grokCliSessionDelete") {
+                    GrokSessionHistory.grokCliSessionDelete(adapterInfo.id, probeProjectPath, sessionId)
+                } else {
+                    AgentDockHistoryService.deleteSessionImmediately(
+                        projectPath = resolveSessionCwd(probeProjectPath),
+                        sessionId = sessionId,
+                        adapterName = adapterInfo.id,
+                        waitTimeoutMillis = if (sessionId == currentSessionId) 1_000L else 0L,
+                        pollIntervalMillis = 100L
+                    )
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Continue so one failed deletion does not prevent the remaining probes from being removed.
+        }
     }
 }
 

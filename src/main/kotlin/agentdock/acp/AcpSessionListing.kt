@@ -14,7 +14,8 @@ import kotlinx.serialization.json.put
 @OptIn(UnstableApi::class)
 internal suspend fun AcpClientService.listHistorySessions(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
-    projectPath: String
+    projectPath: String,
+    allowInitializingProcess: Boolean = false
 ): List<SessionMeta> {
     ensureExecutionTargetCurrent()
     check(AcpAdapterPaths.isDownloaded(adapterInfo.id)) {
@@ -22,7 +23,7 @@ internal suspend fun AcpClientService.listHistorySessions(
     }
 
     return when (adapterInfo.sessionListMethod) {
-        "acpSessionList" -> acpSessionList(adapterInfo, projectPath)
+        "acpSessionList" -> acpSessionList(adapterInfo, projectPath, allowInitializingProcess)
         "grokCliSessions" -> GrokSessionHistory.grokCliSessions(adapterInfo.id, projectPath)
         else -> throw IllegalStateException(
             "Unknown session list method '${adapterInfo.sessionListMethod}' for adapter '${adapterInfo.id}'"
@@ -33,9 +34,12 @@ internal suspend fun AcpClientService.listHistorySessions(
 @OptIn(UnstableApi::class)
 private suspend fun AcpClientService.acpSessionList(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
-    projectPath: String
+    projectPath: String,
+    allowInitializingProcess: Boolean
 ): List<SessionMeta> {
-    val sharedProc = activeProcesses[processKey(adapterInfo.id)]?.takeIf { it.isHealthy() }
+    val sharedProc = activeProcesses[processKey(adapterInfo.id)]?.takeIf {
+        it.isHealthy() || (allowInitializingProcess && it.client != null)
+    }
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' is not ready for session/list")
     val client = sharedProc.client
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' does not have an initialized ACP client")
