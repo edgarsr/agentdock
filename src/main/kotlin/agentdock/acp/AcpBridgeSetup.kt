@@ -94,22 +94,19 @@ internal fun AcpBridge.installServiceCallbacks() {
                 if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
                 var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                 json = convertBrokenOtherPatchToolCallJson(json)
-                val isPermissionRequest = update.toolCallId.value.endsWith("-permission")
                 val todoToolCallKey = todoToolCallKey(chatId, sessionId, update.toolCallId.value)
-                val todoPlanEntries = if (!isPermissionRequest) extractTodoPlanEntriesFromToolRawJson(json) else null
-                val isTodoWrite = !isPermissionRequest && (todoPlanEntries != null || isTodoWriteToolCallJson(json))
+                val todoPlanEntries = extractTodoPlanEntriesFromToolRawJson(json)
+                val isTodoWrite = todoPlanEntries != null || isTodoWriteToolCallJson(json)
                 if (isTodoWrite) {
                     todoToolCallKeys.add(todoToolCallKey)
                 }
                 val shouldEmitTodoPlan = todoPlanEntries != null && emittedTodoPlanKeys.add(todoToolCallKey)
-                if (!isPermissionRequest) {
-                    if (shouldEmitTodoPlan) {
-                        recordStoredEvent(chatId, sessionId, adapterName, buildStoredPlanChunk(todoPlanEntries), isReplay)
-                    } else if (!isTodoWrite) {
-                        recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallChunk(json), isReplay)
-                    }
+                if (shouldEmitTodoPlan) {
+                    recordStoredEvent(chatId, sessionId, adapterName, buildStoredPlanChunk(todoPlanEntries), isReplay)
+                } else if (!isTodoWrite) {
+                    recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallChunk(json), isReplay)
                 }
-                if (!isPermissionRequest && !isReplay) {
+                if (!isReplay) {
                     if (!isTodoWrite || shouldEmitTodoPlan) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
@@ -124,22 +121,19 @@ internal fun AcpBridge.installServiceCallbacks() {
                 if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
                 var json = try { Json.encodeToString(update) } catch (_: Exception) { update.toString() }
                 json = convertBrokenOtherPatchToolCallJson(json)
-                val isPermissionRequest = update.toolCallId.value.endsWith("-permission")
                 val todoToolCallKey = todoToolCallKey(chatId, sessionId, update.toolCallId.value)
-                val todoPlanEntries = if (!isPermissionRequest) extractTodoPlanEntriesFromToolRawJson(json) else null
-                val isTodoWrite = !isPermissionRequest && (todoPlanEntries != null || todoToolCallKeys.contains(todoToolCallKey) || isTodoWriteToolCallJson(json))
+                val todoPlanEntries = extractTodoPlanEntriesFromToolRawJson(json)
+                val isTodoWrite = todoPlanEntries != null || todoToolCallKeys.contains(todoToolCallKey) || isTodoWriteToolCallJson(json)
                 if (isTodoWrite) {
                     todoToolCallKeys.add(todoToolCallKey)
                 }
                 val shouldEmitTodoPlan = todoPlanEntries != null && emittedTodoPlanKeys.add(todoToolCallKey)
-                if (!isPermissionRequest) {
-                    if (shouldEmitTodoPlan) {
-                        recordStoredEvent(chatId, sessionId, adapterName, buildStoredPlanChunk(todoPlanEntries), isReplay)
-                    } else if (!isTodoWrite) {
-                        recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallUpdateChunk(update.toolCallId.value, json), isReplay)
-                    }
+                if (shouldEmitTodoPlan) {
+                    recordStoredEvent(chatId, sessionId, adapterName, buildStoredPlanChunk(todoPlanEntries), isReplay)
+                } else if (!isTodoWrite) {
+                    recordStoredEvent(chatId, sessionId, adapterName, buildStoredToolCallUpdateChunk(update.toolCallId.value, json), isReplay)
                 }
-                if (!isPermissionRequest && !isReplay) {
+                if (!isReplay) {
                     if (!isTodoWrite || shouldEmitTodoPlan) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }

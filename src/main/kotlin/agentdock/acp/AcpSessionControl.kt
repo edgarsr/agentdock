@@ -43,6 +43,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     }
 
     context.statusRef.set(AcpClientService.Status.Prompting)
+    synchronized(context.observedToolCallIds) { context.observedToolCallIds.clear() }
     val promptGeneration = context.promptGeneration.incrementAndGet()
     context.ignoreUpdatesUntilPrompt = false
     var stopReason: String? = null
@@ -70,7 +71,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
             when (event) {
                 is Event.SessionUpdateEvent -> {
                     if (context.promptGeneration.get() == promptGeneration && !context.ignoreUpdatesUntilPrompt) {
-                        sessionUpdateHandler?.invoke(chatId, event.update, false, null)
+                        context.deliverSessionUpdate(event.update, false, null)
                     }
                 }
                 is Event.PromptResponseEvent -> stopReason = event.response.stopReason.toString()

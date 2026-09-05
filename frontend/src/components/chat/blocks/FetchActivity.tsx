@@ -3,9 +3,11 @@ import { ToolCallEntry } from '../../../types/chat';
 import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
 import { chatFocusClassName } from '../shared/focusStyles';
+import { ToolActivityStatus } from './ToolActivityStatus';
 
 interface Props {
   entry: ToolCallEntry;
+  isActivePrompt: boolean;
   onOpenUrl: (url: string) => void;
 }
 
@@ -37,15 +39,12 @@ function extractUrl(title: string | undefined, rawInput: Record<string, any> | u
   return url;
 }
 
-export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
+export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl, isActivePrompt }) => {
   const parsed = safeParseJson(entry.rawJson);
   const rawInput = parsed?.rawInput;
   const cleanTitle = rawInput?.url || entry.title?.replace(/^"(.*)"$/, '$1') || entry.title;
   const url = extractUrl(entry.title, rawInput);
   const isSearch = !!rawInput?.query;
-
-  const status = (entry.status || '').toLowerCase();
-  const hasError = status === 'error' || status === 'failed';
 
   const icon = (
     <span className=" flex-shrink-0">
@@ -75,9 +74,7 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
             <span className="truncate min-w-0 flex-1 block">
               {cleanTitle || entry.kind}
             </span>
-            {hasError && (
-              <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
-            )}
+            <ToolActivityStatus status={entry.status} isActivePrompt={isActivePrompt} />
           </div>
         </Tooltip>
       );
@@ -86,7 +83,7 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
       <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
         {icon}
         <span className="truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
-        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />)}
+        <ToolActivityStatus status={entry.status} isActivePrompt={isActivePrompt} />
       </div>
     );
   }
@@ -104,7 +101,7 @@ export const FetchActivity: React.FC<Props> = ({ entry, onOpenUrl }) => {
         >
           {displayUrl}
         </button>
-        {hasError && (<div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />)}
+        <ToolActivityStatus status={entry.status} isActivePrompt={isActivePrompt} />
       </div>
     </Tooltip>
   );

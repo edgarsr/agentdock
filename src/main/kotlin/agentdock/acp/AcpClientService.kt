@@ -379,11 +379,29 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var ignoreUpdatesUntilPrompt: Boolean = false
 
         val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<RequestPermissionResponse>>()
+        val observedToolCallIds = mutableSetOf<String>()
+
+        fun deliverSessionUpdate(update: SessionUpdate, isReplay: Boolean, meta: JsonElement?, isPermission: Boolean = false) {
+            synchronized(observedToolCallIds) {
+                val toolCallId = when (update) {
+                    is SessionUpdate.ToolCall -> update.toolCallId.value
+                    is SessionUpdate.ToolCallUpdate -> update.toolCallId.value
+                    else -> null
+                }
+                if (!isReplay && toolCallId != null) {
+                    val isNew = observedToolCallIds.add(toolCallId)
+                    // Permission metadata describes the grant, not the already reported operation.
+                    if (isPermission && !isNew) return
+                }
+                sessionUpdateHandler?.invoke(chatId, update, isReplay, meta)
+            }
+        }
 
         @Volatile var sharedProcess: SharedProcess? = null
         @Volatile var session: ClientSession? = null
 
         fun stop() {
+            synchronized(observedToolCallIds) { observedToolCallIds.clear() }
             session = null
             sharedProcess = null
             statusRef.set(Status.NotStarted)
@@ -409,6 +427,7 @@ class AcpClientService private constructor(val project: Project) {
         }
 
         fun markBroken() {
+            synchronized(observedToolCallIds) { observedToolCallIds.clear() }
             session = null
             sharedProcess = null
             promptGeneration.incrementAndGet()
@@ -447,11 +466,8 @@ class AcpClientService private constructor(val project: Project) {
                     ?.takeIf { it.sessionIdRef.get() == sessionId }
             } ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
 
-            // Push the tool call as a SessionUpdate so the frontend creates
-            // the tool-call block before the permission dialog appears.
-            // During live prompting the SDK may not emit a separate
-            // SessionUpdate.ToolCall before calling requestPermissions.
-            sessionUpdateHandler?.invoke(primaryCtx.chatId, toolCall, false, _meta)
+            // Create a missing operation before showing the dialog, but preserve an existing one.
+            primaryCtx.deliverSessionUpdate(toolCall, false, _meta, isPermission = true)
 
             val requestId = java.util.UUID.randomUUID().toString()
             val title = toolCall.title ?: "Action"
@@ -497,7 +513,7 @@ class AcpClientService private constructor(val project: Project) {
             val isReplayDelivery =
                 replayOwnerChatId != null &&
                 replayOwnerChatId == targetContext.chatId
-            handler.invoke(targetContext.chatId, notification, isReplayDelivery, _meta)
+            targetContext.deliverSessionUpdate(notification, isReplayDelivery, _meta)
         }
     }
 

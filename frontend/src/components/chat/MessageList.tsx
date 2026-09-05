@@ -362,7 +362,7 @@ function MessageList({
                 onImageClick={onImageClick} 
                 showBorder={!isLast}
                 agentIconPath={resolvedAgentIconPath}
-                isActivePrompt={Boolean(isSending) && isLast}
+                isActivePrompt={Boolean(isSending) && isLast && !message.metaComplete && status === 'prompting'}
                 onFork={!isSending && onForkFromMessage ? () => onForkFromMessage(message.id) : undefined}
               />
             );

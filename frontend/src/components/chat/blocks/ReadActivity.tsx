@@ -3,9 +3,11 @@ import { ToolCallEntry } from '../../../types/chat';
 import { Tooltip } from '../shared/Tooltip';
 import { safeParseJson } from '../../../utils/toolCallUtils';
 import { chatFocusClassName } from '../shared/focusStyles';
+import { ToolActivityStatus } from './ToolActivityStatus';
 
 interface Props {
   entry: ToolCallEntry;
+  isActivePrompt: boolean;
   onOpenFile: (path: string, line?: number) => void;
 }
 
@@ -21,7 +23,7 @@ function getFileName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
-export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
+export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile, isActivePrompt }) => {
   const parsed = safeParseJson(entry.rawJson);
 
   const location = (entry.locations?.[0] ?? parsed?.locations?.[0]) as { path?: string; line?: number } | undefined;
@@ -29,18 +31,13 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
   const filePath = location?.path ?? rawInput?.filePath ?? rawInput?.path;
   const fileName = getFileName(filePath);
 
-  const status = (entry.status || '').toLowerCase();
-  const hasError = status === 'error' || status === 'failed';
-
   const cleanTitle = entry.title?.replace(/^"(.*)"$/, '$1') || entry.title;
   if (!filePath || !fileName) {
     return (
       <div className="flex items-center gap-1.5 py-0.5 min-w-0 w-full">
         <span className=" flex-shrink-0"><FileIcon size={13} /></span>
         <span className="text-foreground truncate min-w-0 flex-1 block">{cleanTitle || entry.kind}</span>
-        {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
-        )}
+        <ToolActivityStatus status={entry.status} isActivePrompt={isActivePrompt} />
       </div>
     );
   }
@@ -82,9 +79,7 @@ export const ReadActivity: React.FC<Props> = ({ entry, onOpenFile }) => {
         >
           Read {fileName}{lineRange}{pattern ? ` | Pattern: ${pattern}` : ''}
         </button>
-        {hasError && (
-          <div className="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0" />
-        )}
+        <ToolActivityStatus status={entry.status} isActivePrompt={isActivePrompt} />
       </div>
     </Tooltip>
   );
