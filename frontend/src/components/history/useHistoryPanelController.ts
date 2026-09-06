@@ -47,6 +47,7 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [deleteProjectPath, setDeleteProjectPath] = useState<string>('');
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -111,11 +112,13 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
   }, [historyList]);
 
   const filteredHistoryList = useMemo(() => {
-    if (selectedAgents.length === 0) return historyList;
-    return historyList.filter((item) => {
-      return getItemAgents(item).some((a) => selectedAgents.includes(a));
-    });
-  }, [historyList, selectedAgents]);
+    const query = searchQuery.trim().toLowerCase();
+    if (selectedAgents.length === 0 && !query) return historyList;
+    return historyList.filter((item) =>
+      (selectedAgents.length === 0 || getItemAgents(item).some((a) => selectedAgents.includes(a))) &&
+      item.title.toLowerCase().includes(query)
+    );
+  }, [historyList, selectedAgents, searchQuery]);
 
   const selectedAgentLabel = useMemo(() => {
     if (selectedAgents.length !== 1) return '';
@@ -285,6 +288,7 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
     selectedConversationIds,
     pendingDeleteIds,
     selectedAgents,
+    searchQuery,
     isFilterOpen,
     editingId,
     editTitle,
@@ -302,6 +306,7 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
     formatDate,
     formatConversationLength,
     setSelectedAgents,
+    setSearchQuery,
     setIsFilterOpen,
     setEditTitle,
     setEditingId,

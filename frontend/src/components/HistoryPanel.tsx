@@ -19,6 +19,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     selectedConversationIds,
     pendingDeleteIds,
     selectedAgents,
+    searchQuery,
     isFilterOpen,
     editingId,
     editTitle,
@@ -36,6 +37,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     formatDate,
     formatConversationLength,
     setSelectedAgents,
+    setSearchQuery,
     setIsFilterOpen,
     setEditTitle,
     setEditingId,
@@ -56,7 +58,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
   return (
     <div className="flex flex-col h-full bg-background text-foreground z-10 w-full overflow-hidden relative pb-4">
       <div className="flex items-center justify-between min-h-12 px-3 py-1 border-b border-border shrink-0 relative z-20">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Tooltip variant="minimal" content="Synchronize history">
             <button
               onClick={refreshHistory}
@@ -141,7 +143,16 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             )}
           </div>
           
-          <span className="pl-1 text-foreground-secondary text-ide-small max-[399px]:hidden">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search…"
+            aria-label="Search chats by title"
+            className="w-32 min-w-0 rounded-[4px] border border-border bg-input px-2 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none focus:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+          />
+
+          <span className="shrink-0 pl-1 text-foreground-secondary text-ide-small max-[399px]:hidden">
             {filteredHistoryList.length} chat{filteredHistoryList.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -175,7 +186,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
           <div className="flex justify-center p-8 text-foreground">Loading history...</div>
         ) : filteredHistoryList.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-foreground">
-            No history available yet.
+            {searchQuery.trim() || selectedAgents.length > 0 ? 'No matching chats.' : 'No history available yet.'}
           </div>
         ) : (
           filteredHistoryList.map((item) => {
