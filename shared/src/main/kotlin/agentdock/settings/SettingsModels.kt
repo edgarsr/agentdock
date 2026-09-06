@@ -16,6 +16,7 @@ data class AudioTranscriptionFeatureState(
 object AudioTranscriptionProviders {
     const val NONE = "none"
     const val GPT_TRANSCRIBER = "gpt-transcriber"
+    const val GEMINI_TRANSCRIBER = "gemini-transcriber"
     const val WHISPER = "whisper-transcription"
 }
 

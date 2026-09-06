@@ -2,6 +2,7 @@ import type { DropdownOption } from '../ui/DropdownSelect';
 
 export const AUDIO_TRANSCRIPTION_NONE = 'none';
 export const GPT_TRANSCRIBER = 'gpt-transcriber';
+export const GEMINI_TRANSCRIBER = 'gemini-transcriber';
 export const WHISPER = 'whisper-transcription';
 
 export interface TranscriptionProviderDefinition {
@@ -10,7 +11,12 @@ export interface TranscriptionProviderDefinition {
   chatLabel?: string;
   apiKeyLabel?: string;
   apiKeyPlaceholder?: string;
+  apiKeyUrl?: string;
+  pricingDescription?: string;
 }
+
+const isWindowsClient = typeof navigator !== 'undefined'
+  && /windows|win32|win64/i.test(`${navigator.platform} ${navigator.userAgent}`);
 
 export const transcriptionProviders: TranscriptionProviderDefinition[] = [
   { value: AUDIO_TRANSCRIPTION_NONE, label: 'None' },
@@ -20,8 +26,21 @@ export const transcriptionProviders: TranscriptionProviderDefinition[] = [
     chatLabel: 'Transcribe voice input in chat with OpenAI GPT Transcriber',
     apiKeyLabel: 'OpenAI API key',
     apiKeyPlaceholder: 'sk-...',
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    pricingDescription: 'GPT Transcribe costs $0.0045 per audio minute.',
   },
-  { value: WHISPER, label: 'Whisper', chatLabel: 'Transcribe voice input in chat with Whisper' },
+  {
+    value: GEMINI_TRANSCRIBER,
+    label: 'Gemini 3.5 Transcribe',
+    chatLabel: 'Transcribe voice input in chat with Google Gemini 3.5 Transcribe',
+    apiKeyLabel: 'Google Gemini API key',
+    apiKeyPlaceholder: 'AIza...',
+    apiKeyUrl: 'https://aistudio.google.com/app/apikey',
+    pricingDescription: 'Free tier available with limited quotas. Paid: ~$0.005/audio minute',
+  },
+  ...(isWindowsClient
+    ? [{ value: WHISPER, label: 'Whisper', chatLabel: 'Transcribe voice input in chat with Whisper' }]
+    : []),
 ];
 
 const transcriptionProviderIds = new Set(transcriptionProviders.map(({ value }) => value));

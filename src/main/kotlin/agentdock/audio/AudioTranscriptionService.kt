@@ -30,6 +30,7 @@ interface AudioTranscriptionService {
 object AudioTranscriptionServices {
     private val services = mapOf<String, () -> AudioTranscriptionService>(
         AudioTranscriptionProviders.GPT_TRANSCRIBER to { GptTranscriber },
+        AudioTranscriptionProviders.GEMINI_TRANSCRIBER to { GeminiTranscriber },
         AudioTranscriptionProviders.WHISPER to { WhisperFeatureManager },
     )
 

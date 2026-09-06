@@ -7,7 +7,6 @@ import { SettingsField, SettingsSection } from '../settings/SettingsLayout';
 import ConfirmationModal from '../ConfirmationModal';
 import {
   AUDIO_TRANSCRIPTION_NONE,
-  GPT_TRANSCRIBER,
   normalizeAudioTranscriptionProvider,
   transcriptionLanguageOptions,
   transcriptionProviders,
@@ -124,16 +123,16 @@ export function AudioTranscriptionSettingsView({
                 <SettingsField
                   label={apiKeyLabel}
                   colon
-                  description={settings.provider === GPT_TRANSCRIBER ? (
+                  description={activeProvider?.apiKeyUrl ? (
                     <span className='inline-block pt-1'>
                       <button
                         type='button'
-                        onClick={() => window.__openUrl?.('https://platform.openai.com/api-keys')}
+                        onClick={() => window.__openUrl?.(activeProvider.apiKeyUrl!)}
                         className='text-link hover:underline'
                       >
                         Create an API key
                       </button>
-                      {' · GPT Transcribe costs $0.0045 per audio minute.'}
+                      {activeProvider.pricingDescription && ` · ${activeProvider.pricingDescription}`}
                     </span>
                   ) : undefined}
                 >
