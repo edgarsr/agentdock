@@ -161,6 +161,7 @@ internal fun AcpBridge.installConversationQueries() {
         val chatId = parsed.chatId
         val blocks = parsed.blocks
         if (chatId != null && blocks.isNotEmpty()) {
+            awaitingBackgroundOutput.remove(chatId)
             val dispatchFailure = service.promptDispatchFailure(chatId)
             if (dispatchFailure != null) {
                 pushBridgeOperationResult(parsed.requestId, chatId, "send_prompt", ok = false, error = dispatchFailure)
@@ -217,6 +218,9 @@ internal fun AcpBridge.installConversationQueries() {
                     service.prompt(chatId, blocks).collect { event ->
                         when (event) {
                             is AcpEvent.PromptDone -> {
+                                if (captureId != null && livePromptCaptures[chatId]?.captureId == captureId) {
+                                    service.sessionId(chatId)?.let { awaitingBackgroundOutput[chatId] = it }
+                                }
                                 val fallbackText = "[The AI agent ended the turn without providing a response.]"
                                 if (ensureLivePromptNoResponseFallback(chatId, fallbackText, captureId)) {
                                     pushContentChunk(chatId, "assistant", "text", text = fallbackText)
@@ -331,7 +335,9 @@ internal fun AcpBridge.installConversationQueries() {
         if (chatId.isNotEmpty()) {
             scope.launch(Dispatchers.Default) {
                 service.stopAgent(chatId)
+                awaitingBackgroundOutput.remove(chatId)
                 livePromptCaptures.remove(chatId)
+                lateHistoryEventQueues.remove(chatId)?.close()
                 historyReplayCaptures.remove(chatId)
             }
         }

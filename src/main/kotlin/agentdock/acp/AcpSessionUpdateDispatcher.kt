@@ -128,7 +128,11 @@ private fun AcpClientService.updateRuntimeMetadataFromConfigOptionsNotification(
     }
     val metadata = runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
     if (targetContext != null) {
-        updateSessionRuntimeMetadata(adapterInfo, metadata, targetContext)
+        updateSessionRuntimeMetadata(
+            adapterInfo, metadata, targetContext,
+            applyCurrentValues = !targetContext.ignoreUpdatesUntilPrompt &&
+                targetContext.statusRef.get() != AcpClientService.Status.Initializing
+        )
     } else {
         AcpConfigOptionsCache.updateFromSnapshot(adapterInfo, metadata)
     }

@@ -22,6 +22,10 @@ internal class AcpAudioPlayer(private val scope: CoroutineScope) {
         playSound("/sounds/request.wav")
     }
 
+    fun playBackgroundResumedSound() {
+        playSound("/sounds/typing.wav")
+    }
+
     private fun playSound(resourcePath: String) {
         scope.launch(Dispatchers.IO) {
             if (!FrontendSettings.current.audioNotificationsEnabled) {

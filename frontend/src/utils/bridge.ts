@@ -21,6 +21,7 @@ import {
   AdapterDeletedEvent,
   AdapterRefreshStateEvent,
   AdaptersEvent,
+  AssistantActivityEvent,
   AudioRecordingStateEvent,
   AudioTranscriptionFeatureEvent,
   AudioTranscriptionResultEvent,
@@ -176,6 +177,10 @@ export const ACPBridge = {
 
     window.__onStatus = (chatId, status) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.STATUS, { detail: { chatId, status } }));
+    };
+
+    window.__onAssistantActivity = (chatId) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.ASSISTANT_ACTIVITY, { detail: { chatId } }));
     };
 
     window.__onBridgeOperationResult = (payload) => {
@@ -353,6 +358,9 @@ export const ACPBridge = {
   onContentChunk: (callback: (e: CustomEvent<ContentChunkEvent>) => void) => onBridgeEvent(EVENT_NAMES.CONTENT_CHUNK, callback),
 
   onStatus: (callback: (e: CustomEvent<StatusEvent>) => void) => onBridgeEvent(EVENT_NAMES.STATUS, callback),
+
+  onAssistantActivity: (callback: (e: CustomEvent<AssistantActivityEvent>) => void) =>
+    onBridgeEvent(EVENT_NAMES.ASSISTANT_ACTIVITY, callback),
 
   onBridgeOperationResult: (callback: (e: CustomEvent<BridgeOperationResultEvent>) => void) => onBridgeEvent(EVENT_NAMES.BRIDGE_OPERATION_RESULT, callback),
 

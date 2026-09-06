@@ -127,6 +127,7 @@ internal class FrontendBridge(
             when (sound) {
                 "responseComplete" -> audio.playResponseCompleteSound()
                 "permissionRequest" -> audio.playPermissionRequestSound()
+                "backgroundResumed" -> audio.playBackgroundResumedSound()
             }
         }
 

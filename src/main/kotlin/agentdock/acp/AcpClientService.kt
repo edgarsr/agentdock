@@ -161,9 +161,9 @@ class AcpClientService private constructor(val project: Project) {
     }
 
     @Volatile
-    internal var sessionConfigOptionsHandler: ((String, AdapterRuntimeMetadata) -> Unit)? = null
+    internal var sessionConfigOptionsHandler: ((String, AdapterRuntimeMetadata, Boolean) -> Unit)? = null
 
-    internal fun setOnSessionConfigOptionsChanged(handler: (String, AdapterRuntimeMetadata) -> Unit) {
+    internal fun setOnSessionConfigOptionsChanged(handler: (String, AdapterRuntimeMetadata, Boolean) -> Unit) {
         sessionConfigOptionsHandler = handler
     }
 

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Message, PermissionRequest } from '../../../types/chat';
+import { ACPBridge } from '../../../utils/bridge';
 
 interface UseChatSessionNotificationsOptions {
   messages: Message[];
   isSending: boolean;
   isHistoryReplaying: boolean;
   permissionRequest: PermissionRequest | null;
+  conversationId: string;
   acpSessionId: string;
   adapterName: string;
   onAssistantActivity?: () => void;
@@ -21,6 +23,7 @@ export function useChatSessionNotifications({
   isSending,
   isHistoryReplaying,
   permissionRequest,
+  conversationId,
   acpSessionId,
   adapterName,
   onAssistantActivity,
@@ -86,6 +89,14 @@ export function useChatSessionNotifications({
     pendingAssistantActivityRef.current = false;
     onAssistantActivity?.();
   }, [permissionRequest, isSending, isHistoryReplaying, messages, onAssistantActivity]);
+
+  useEffect(() => {
+    return ACPBridge.onAssistantActivity((event) => {
+      if (event.detail.chatId === conversationId) {
+        onAssistantActivity?.();
+      }
+    });
+  }, [conversationId, onAssistantActivity]);
 
   useEffect(() => {
     onProcessingChange?.(isSending);

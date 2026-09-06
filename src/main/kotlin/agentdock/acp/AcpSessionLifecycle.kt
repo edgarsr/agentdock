@@ -108,12 +108,12 @@ internal suspend fun AcpClientService.startAgent(
                 }
 
                 val runtimeMetadata = createdSessionMetadata ?: adapterRuntimeMetadataMap[requestedAdapterName]
+                context.activeAdapterNameRef.set(requestedAdapterName)
                 if (createdSessionMetadata != null) {
-                    updateSessionRuntimeMetadata(adapterInfo, createdSessionMetadata!!, context)
+                    updateSessionRuntimeMetadata(adapterInfo, createdSessionMetadata!!, context, applyCurrentValues = false)
                 } else {
                     context.runtimeMetadataRef.set(runtimeMetadata)
                 }
-                context.activeAdapterNameRef.set(requestedAdapterName)
                 val applied = applySessionConfigOptions(
                     context = context,
                     adapterName = requestedAdapterName,
@@ -140,8 +140,9 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     val initialMetadata = context.runtimeMetadataRef.get() ?: return false
     if (preferredValues.isEmpty()) return true
     context.configOptionsUpdateInProgress = true
+    var applied = false
     return try {
-        if (initialMetadata.usesAdapterConfigOptions) {
+        val result = if (initialMetadata.usesAdapterConfigOptions) {
             applyAdapterConfigOptions(context, adapterName, preferredValues)
         } else {
             val protocol = context.sharedProcess?.protocol ?: return false
@@ -154,16 +155,17 @@ private suspend fun AcpClientService.applySessionConfigOptions(
             }
 
             for (configId in orderedConfigIds) {
-                val requestedValue = preferredValues.getValue(configId).trim()
                 val metadata = context.runtimeMetadataRef.get() ?: return false
                 // Applying one option can narrow the rest: agents drop options that the newly selected model
                 // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
                 val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
                 if (option.type == "select" && option.options.isEmpty()) continue
-                if (!option.accepts(requestedValue)) {
-                    if (adapterInfo.skipUnavailablePreferredModel && configId == modelOption?.id) continue
-                    return false
-                }
+                val preferredValue = preferredValues.getValue(configId).trim()
+                if (!option.accepts(preferredValue) &&
+                    adapterInfo.skipUnavailablePreferredModel && configId == modelOption?.id
+                ) continue
+                val requestedValue = option.resolvePreferredValue(preferredValue)
+                    ?: continue
                 if (context.activeConfigValues[configId] == requestedValue) continue
                 val response = runCatching {
                     protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
@@ -172,11 +174,11 @@ private suspend fun AcpClientService.applySessionConfigOptions(
             }
             true
         }
+        applied = result
+        result
     } finally {
         context.configOptionsUpdateInProgress = false
-        if (context.runtimeMetadataRef.get() != initialMetadata) {
-            publishSessionConfigOptions(context)
-        }
+        publishSessionConfigOptions(context, applyCurrentValues = applied)
     }
 }
 
@@ -192,12 +194,7 @@ private suspend fun AcpClientService.applyAdapterConfigOptions(
     val modelOption = options.firstOrNull { it.matchesCategory("model") } ?: return false
     val resolvedValues = options.associate { option ->
         val requested = preferredValues[option.id]?.trim()
-        if (requested != null && !option.accepts(requested)) return false
-        val value = requested
-            ?: context.activeConfigValues[option.id]?.takeIf(option::accepts)
-            ?: option.currentValue.takeIf(option::accepts)
-            ?: option.options.firstOrNull()?.value
-            ?: return false
+        val value = option.resolvePreferredValue(requested) ?: return false
         option.id to value
     }
     if (resolvedValues.all { (id, value) -> context.activeConfigValues[id] == value }) return true
@@ -344,14 +341,14 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
 
     if (keepLoadedSessionActive) {
         context.session = session
+        context.activeAdapterNameRef.set(requestedAdapterName)
 
         val runtimeMetadata = loadedSessionMetadata ?: adapterRuntimeMetadataMap[requestedAdapterName]
         if (loadedSessionMetadata != null) {
-            updateSessionRuntimeMetadata(adapterInfo, loadedSessionMetadata!!, context)
+            updateSessionRuntimeMetadata(adapterInfo, loadedSessionMetadata!!, context, applyCurrentValues = false)
         } else {
             context.runtimeMetadataRef.set(runtimeMetadata)
         }
-        context.activeAdapterNameRef.set(requestedAdapterName)
         if (loadedSessionMetadata == null) {
             preferredModelId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModelIdRef::set)
             preferredModeId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModeIdRef::set)

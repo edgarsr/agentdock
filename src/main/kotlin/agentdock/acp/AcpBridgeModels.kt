@@ -31,7 +31,8 @@ internal data class AdapterReasoningEffortPayload(
 internal data class SessionConfigOptionsPayload(
     val chatId: String,
     val configOptions: List<AcpConfigOption>,
-    val configOptionsByModel: Map<String, List<AcpConfigOption>>
+    val configOptionsByModel: Map<String, List<AcpConfigOption>>,
+    val applyCurrentValues: Boolean
 )
 
 @Serializable
@@ -161,9 +162,17 @@ internal data class LivePromptCapture(
     val assistantMeta: ConversationAssistantMetadata?,
     @Volatile var closed: Boolean = false,
     var hasVisibleAssistantOutput: Boolean = false,
+    var historyPersisted: Boolean = false,
     var contextTokensUsed: Long? = null,
     var contextWindowSize: Long? = null,
-    val events: MutableList<JsonObject> = mutableListOf()
+    val events: MutableList<JsonObject> = mutableListOf(),
+    val lateEvents: MutableList<JsonObject> = mutableListOf()
+)
+
+internal data class LateHistoryEvent(
+    val sessionId: String,
+    val adapterName: String,
+    val event: JsonObject
 )
 
 internal data class ReplaySessionCapture(

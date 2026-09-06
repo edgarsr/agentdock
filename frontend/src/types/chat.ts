@@ -125,6 +125,7 @@ export interface ConfigOption {
 
 export interface SessionConfigOptionsPayload {
   chatId: string;
+  applyCurrentValues: boolean;
   configOptions: ConfigOption[];
   configOptionsByModel: Record<string, ConfigOption[]>;
 }
@@ -562,6 +563,7 @@ declare global {
     __onAcpLog?: (payload: AcpLogEntryPayload) => void;
     __onContentChunk?: (chunk: ContentChunk) => void;
     __onStatus?: (chatId: string, status: string) => void;
+    __onAssistantActivity?: (chatId: string) => void;
     __onSessionId?: (chatId: string, id: string) => void;
     __onAdapters?: (adapters: AgentOption[]) => void;
     __onAdapterRefreshState?: (refreshing: boolean) => void;

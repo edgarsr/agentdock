@@ -2,10 +2,14 @@ package agentdock.acp
 
 import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import agentdock.history.ConversationAssistantMetadata
 import agentdock.history.ConversationConfigOptionMetadata
 import agentdock.history.HistoryDiffCompactor
+import agentdock.history.AgentDockHistoryService
 
 private val replayIgnoredUserCommandTags = listOf(
     "command-name",
@@ -60,14 +64,56 @@ internal fun AcpBridge.recordStoredEvent(
         return
     }
 
-    val capture = livePromptCaptures[chatId] ?: return
-    synchronized(capture) {
-        if (capture.closed) return
-        upsertStoredToolEvent(capture.events, event)
+    val capture = livePromptCaptures[chatId]
+    if (capture != null) {
+        val persistAfterCapture = synchronized(capture) {
+            when {
+                !capture.closed -> {
+                    upsertStoredToolEvent(capture.events, event)
+                    false
+                }
+                !capture.historyPersisted -> {
+                    upsertStoredToolEvent(capture.lateEvents, event)
+                    false
+                }
+                else -> true
+            }
+        }
+        if (persistAfterCapture) {
+            enqueueLateHistoryEvent(chatId, sessionId, adapterName, event)
+        }
+        return
     }
+
+    enqueueLateHistoryEvent(chatId, sessionId, adapterName, event)
 }
 
-private fun AcpBridge.upsertStoredToolEvent(events: MutableList<JsonObject>, event: JsonObject) {
+private fun AcpBridge.enqueueLateHistoryEvent(
+    chatId: String,
+    sessionId: String,
+    adapterName: String,
+    event: JsonObject
+) {
+    val queue = lateHistoryEventQueues.computeIfAbsent(chatId) {
+        Channel<LateHistoryEvent>(Channel.UNLIMITED).also { created ->
+            scope.launch(Dispatchers.IO) {
+                for (lateEvent in created) {
+                    runCatching {
+                        AgentDockHistoryService.updateLastConversationPromptEvents(
+                            service.project.basePath,
+                            chatId,
+                            lateEvent.sessionId,
+                            lateEvent.adapterName
+                        ) { events -> upsertStoredToolEvent(events, lateEvent.event) }
+                    }
+                }
+            }
+        }
+    }
+    queue.trySend(LateHistoryEvent(sessionId, adapterName, event))
+}
+
+internal fun AcpBridge.upsertStoredToolEvent(events: MutableList<JsonObject>, event: JsonObject) {
     val merged = mergeStoredToolEvent(events, event)
     if (merged == null) {
         events.add(event)

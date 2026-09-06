@@ -25,11 +25,13 @@ internal fun AcpBridge.installServiceCallbacks() {
     service.setOnAdapterInitializationStateChanged { _, _, _ ->
         scope.launch(Dispatchers.IO) { pushAdapters() }
     }
-    service.setOnSessionConfigOptionsChanged { chatId, metadata ->
+    service.setOnSessionConfigOptionsChanged { chatId, metadata, applyCurrentValues ->
         val adapterId = service.activeAdapterName(chatId) ?: return@setOnSessionConfigOptionsChanged
-        AcpAgentPreferencesStore.rememberConfigOptions(adapterId, metadata.configOptions.associate { it.id to it.currentValue })
+        if (applyCurrentValues) {
+            AcpAgentPreferencesStore.rememberConfigOptions(adapterId, metadata.configOptions.associate { it.id to it.currentValue })
+        }
         pushAdapters()
-        pushSessionConfigOptions(chatId, metadata)
+        pushSessionConfigOptions(chatId, metadata, applyCurrentValues)
     }
     service.setOnSessionUpdate { chatId: String, update: SessionUpdate, isReplay: Boolean, _meta: JsonElement? ->
         if (isReplay && suppressReplayForChatIds.contains(chatId)) {
@@ -54,6 +56,16 @@ internal fun AcpBridge.installServiceCallbacks() {
             historyReplayCaptures[chatId]?.currentAdapterName.orEmpty()
         } else {
             service.activeAdapterName(chatId).orEmpty()
+        }
+        val hasAssistantOutput = when (update) {
+            is SessionUpdate.AgentMessageChunk -> contentBlockHasVisibleOutput(update.content)
+            is SessionUpdate.AgentThoughtChunk -> contentBlockHasVisibleOutput(update.content, textType = "thinking")
+            else -> false
+        }
+        if (!isReplay && hasAssistantOutput && awaitingBackgroundOutput.remove(chatId, sessionId)) {
+            val escapedChatId = chatId.jsStringLiteral()
+            host.eval("if(window.__onAssistantActivity) window.__onAssistantActivity($escapedChatId);")
+            host.eval("if(window.__agentDockPlaySound) window.__agentDockPlaySound('backgroundResumed');")
         }
         when (update) {
             is SessionUpdate.UserMessageChunk -> {

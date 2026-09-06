@@ -18,7 +18,8 @@ internal fun AcpClientService.updateMetadataFromConfigOptionResponse(
 internal fun AcpClientService.updateSessionRuntimeMetadata(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     freshMetadata: AcpClientService.AdapterRuntimeMetadata,
-    context: AcpClientService.AgentContext
+    context: AcpClientService.AgentContext,
+    applyCurrentValues: Boolean = true
 ): AcpClientService.AdapterRuntimeMetadata {
     val cachedCatalog = AcpConfigOptionsCache.updateFromSnapshot(adapterInfo, freshMetadata)
         .toRuntimeMetadata(adapterInfo)
@@ -34,13 +35,16 @@ internal fun AcpClientService.updateSessionRuntimeMetadata(
     context.activeConfigValues.clear()
     context.activeConfigValues.putAll(metadata.configOptions.associate { it.id to it.currentValue })
     if (!context.configOptionsUpdateInProgress) {
-        publishSessionConfigOptions(context)
+        publishSessionConfigOptions(context, applyCurrentValues)
     }
     return metadata
 }
 
-internal fun AcpClientService.publishSessionConfigOptions(context: AcpClientService.AgentContext) {
+internal fun AcpClientService.publishSessionConfigOptions(
+    context: AcpClientService.AgentContext,
+    applyCurrentValues: Boolean = true
+) {
     context.runtimeMetadataRef.get()?.let { metadata ->
-        runCatching { sessionConfigOptionsHandler?.invoke(context.chatId, metadata) }
+        runCatching { sessionConfigOptionsHandler?.invoke(context.chatId, metadata, applyCurrentValues) }
     }
 }

@@ -28,6 +28,15 @@ const accepts = (option: ConfigOption, value?: string) =>
     ? value === 'true' || value === 'false'
     : option.options.some((item) => item.value === value));
 
+const resolveValue = (option: ConfigOption, value?: string) =>
+  accepts(option, value) ? value! : option.options[0]?.value ?? (option.type === 'boolean' ? 'false' : '');
+
+const optionsForModel = (options: ConfigOption[], byModel: Record<string, ConfigOption[]> | undefined, modelId: string) => {
+  const model = findOption(options, 'model');
+  // A cached model catalog must not replace the session's current model list.
+  return (byModel?.[modelId] ?? options).map((option) => model && option.id === model.id ? model : option);
+};
+
 const EMPTY_SELECTION: Record<string, string> = {};
 
 export function useAgentRuntimeOptions({
@@ -60,18 +69,14 @@ export function useAgentRuntimeOptions({
   const modelValue = selected[modelOption?.id ?? ''];
   const initialModelValue = initialValues[modelOption?.id ?? ''];
   const selectedModelId = modelOption
-    ? (accepts(modelOption, modelValue)
-      ? modelValue!
-      : accepts(modelOption, initialModelValue)
-        ? initialModelValue
-        : modelOption.options[0]?.value || '')
+    ? resolveValue(modelOption, modelValue ?? initialModelValue)
     : '';
 
-  const effectiveOptions = useMemo(() => selectedModelId
-    ? sessionConfigOptions?.configOptionsByModel[selectedModelId]
-      ?? effectiveSelectedAgent?.configOptionsByModel?.[selectedModelId]
-      ?? options
-    : options, [
+  const effectiveOptions = useMemo(() => optionsForModel(
+    options,
+    sessionConfigOptions?.configOptionsByModel ?? effectiveSelectedAgent?.configOptionsByModel,
+    selectedModelId,
+  ), [
     effectiveSelectedAgent?.configOptionsByModel,
     options,
     selectedModelId,
@@ -82,11 +87,7 @@ export function useAgentRuntimeOptions({
     .map((option) => {
       const selectedValue = selected[option.id];
       const initialValue = initialValues[option.id];
-      const value = accepts(option, selectedValue)
-        ? selectedValue!
-        : accepts(option, initialValue)
-          ? initialValue!
-          : option.options[0]?.value ?? option.currentValue ?? '';
+      const value = resolveValue(option, selectedValue ?? initialValue);
       return [option.id, value];
     })
     .filter(([, value]) => value !== '')),
@@ -131,15 +132,22 @@ export function useAgentRuntimeOptions({
   const handleSessionConfigOptions = useCallback((payload: SessionConfigOptionsPayload) => {
     if (!sessionAgentId) return;
     setSessionConfigOptions(payload);
-    const reportedValues: Record<string, string> = {};
-    payload.configOptions.forEach((option) => {
-      if (option.currentValue) reportedValues[option.id] = option.currentValue;
+    setSelectedByAgent((current) => {
+      const values = { ...initialValues, ...current[sessionAgentId] };
+      if (payload.applyCurrentValues) {
+        payload.configOptions.forEach((option) => {
+          if (option.currentValue) values[option.id] = option.currentValue;
+        });
+      } else {
+        const model = findOption(payload.configOptions, 'model');
+        const modelId = model ? resolveValue(model, values[model.id]) : '';
+        optionsForModel(payload.configOptions, payload.configOptionsByModel, modelId).forEach((option) => {
+          values[option.id] = resolveValue(option, values[option.id]);
+        });
+      }
+      return { ...current, [sessionAgentId]: values };
     });
-    setSelectedByAgent((current) => ({
-      ...current,
-      [sessionAgentId]: { ...current[sessionAgentId], ...reportedValues },
-    }));
-  }, [sessionAgentId]);
+  }, [initialValues, sessionAgentId]);
 
   useEffect(() => setSessionConfigOptions(undefined), [selectedAgentId]);
 

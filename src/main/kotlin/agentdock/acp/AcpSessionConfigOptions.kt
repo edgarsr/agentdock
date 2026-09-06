@@ -31,6 +31,13 @@ internal data class AcpConfigOption(
         "boolean" -> value == "true" || value == "false"
         else -> false
     }
+
+    fun resolvePreferredValue(preferred: String?): String? {
+        val candidate = preferred ?: currentValue
+        return candidate.takeIf(::accepts)
+            ?: options.firstOrNull()?.value
+            ?: "false".takeIf { type == "boolean" }
+    }
 }
 
 @kotlinx.serialization.Serializable

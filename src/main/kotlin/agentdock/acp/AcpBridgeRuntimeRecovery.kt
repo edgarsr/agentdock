@@ -18,7 +18,10 @@ private fun parseRecoverRuntimePayload(payload: String): Pair<String?, String?> 
 internal fun AcpBridge.recoverRuntimeAfterFailure(reason: String) {
     promptJobs.values.forEach { it.cancel() }
     promptJobs.clear()
+    awaitingBackgroundOutput.clear()
     livePromptCaptures.clear()
+    lateHistoryEventQueues.values.forEach { it.close() }
+    lateHistoryEventQueues.clear()
     historyReplayCaptures.clear()
     replayFreshnessProbes.clear()
     suppressReplayForChatIds.clear()

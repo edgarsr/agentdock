@@ -82,6 +82,11 @@ internal fun AcpBridge.flushLivePromptCapture(
     val snapshot = synchronized(capture) {
         if (capture.closed) return null
         capture.closed = true
+        if (capture.blocks.isEmpty() && capture.events.isEmpty()) {
+            capture.historyPersisted = true
+            livePromptCaptures.remove(chatId, capture)
+            return null
+        }
         LivePromptCaptureSnapshot(
             projectPath = capture.projectPath,
             conversationId = capture.conversationId,
@@ -96,8 +101,6 @@ internal fun AcpBridge.flushLivePromptCapture(
             contextWindowSize = capture.contextWindowSize
         )
     }
-    livePromptCaptures.remove(chatId, capture)
-    if (snapshot.blocks.isEmpty() && snapshot.events.isEmpty()) return null
 
     val durationSeconds = ((System.currentTimeMillis() - snapshot.startedAtMillis).coerceAtLeast(0L)) / 1000.0
     val assistantMeta = snapshot.assistantMeta?.copy(
@@ -123,6 +126,28 @@ internal fun AcpBridge.flushLivePromptCapture(
         assistantMeta = assistantMeta,
         forkBase = snapshot.forkBase
     )
+
+    while (true) {
+        val lateEvents = synchronized(capture) {
+            if (capture.lateEvents.isEmpty()) {
+                capture.historyPersisted = true
+                livePromptCaptures.remove(chatId, capture)
+                null
+            } else {
+                capture.lateEvents.toList().also { capture.lateEvents.clear() }
+            }
+        } ?: break
+
+        lateEvents.forEach { event ->
+            AgentDockHistoryService.updateLastConversationPromptEvents(
+                projectPath = snapshot.projectPath,
+                conversationId = snapshot.conversationId,
+                sessionId = snapshot.sessionId,
+                adapterName = snapshot.adapterName
+            ) { events -> upsertStoredToolEvent(events, event) }
+        }
+    }
+
     return assistantMeta
 }
 

@@ -4,6 +4,7 @@ import agentdock.bridge.BridgeHost
 import com.intellij.openapi.application.ApplicationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -27,6 +28,7 @@ class AcpBridge(
 
     internal val promptJobs = ConcurrentHashMap<String, Job>()
     internal val lastStatusByChatId = ConcurrentHashMap<String, String>()
+    internal val awaitingBackgroundOutput = ConcurrentHashMap<String, String>()
     internal val downloadStatuses = ConcurrentHashMap<String, String>()
     internal val adapterInstallJobs = ConcurrentHashMap<String, Job>()
     internal val adapterInstallCancellations = ConcurrentHashMap<String, AcpAdapterInstallCancellation>()
@@ -46,6 +48,7 @@ class AcpBridge(
     internal val fullAdapterRefreshInProgress = AtomicBoolean(false)
     internal val fullAdapterRefreshDispatching = AtomicBoolean(false)
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
+    internal val lateHistoryEventQueues = ConcurrentHashMap<String, Channel<LateHistoryEvent>>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
     internal val historyLoadMutexes = ConcurrentHashMap<String, HistoryLoadMutexEntry>()
     internal val replayFreshnessProbes = ConcurrentHashMap<String, ReplayFreshnessProbe>()

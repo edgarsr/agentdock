@@ -31,6 +31,7 @@ internal object BridgeScripts {
                 '__onChangesState', '__onFileChangeStats', '__onConversationTranscriptSaved',
                 '__onConversationReplayLoaded', '__onAdapterDeleted', '__onFilesResult',
                 '__onFileIconResult', '__onThemeChanged', '__onHistoryList', '__onHistoryDeleteResult',
+                '__onAssistantActivity',
                 '__onMcpServers', '__onMcpStatus', '__onPromptLibrary', '__onSystemInstructions',
                 '__onAudioTranscriptionFeature', '__onAudioTranscriptionResult',
                 '__onAudioRecordingState', '__onAudioTranscriptionSettings', '__onGlobalSettings'

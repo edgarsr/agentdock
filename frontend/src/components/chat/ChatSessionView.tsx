@@ -181,6 +181,7 @@ export default function ChatSessionView({
     isSending,
     isHistoryReplaying,
     permissionRequest,
+    conversationId,
     acpSessionId,
     adapterName: selectedAgentId,
     onAssistantActivity,
