@@ -159,6 +159,7 @@ object AgentDockHistoryService {
             }
 
             val updatedData = current.copy(sessions = updatedSessions)
+            HistoryReplayStore.writeConversationData(cleanProjectPath, cleanConversationId, updatedData)
             upsertRuntimeSessionMetadata(
                 projectPath = cleanProjectPath,
                 conversationId = cleanConversationId,
@@ -169,7 +170,6 @@ object AgentDockHistoryService {
                 titleCandidate = HistoryReplayStore.titleCandidateFromReplayData(updatedData),
                 touchUpdatedAt = true
             )
-            HistoryReplayStore.writeConversationData(cleanProjectPath, cleanConversationId, updatedData)
             return true
         }
     }
