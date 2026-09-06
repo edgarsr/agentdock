@@ -84,7 +84,7 @@ export function DropdownSelect({
           setOpen((current) => !current);
         }}
         className={cx(
-          'bg-[var(--ide-List-hoverBackground)] inline-flex w-full items-center justify-between gap-3',
+          'bg-[var(--ide-List-hoverBackground)] inline-flex w-full items-center justify-between gap-2',
           'rounded-[3px] border border-[var(--ide-Button-startBorderColor)]',
           'px-2 py-0.5 text-left leading-none text-[var(--ide-Button-foreground)]',
           'focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]',

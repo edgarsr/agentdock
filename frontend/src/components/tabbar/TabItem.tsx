@@ -127,16 +127,16 @@ export function TabItem({
         >
           {tabIcon}
           <div className="min-w-0 flex-1 overflow-hidden">
-            <Tooltip variant="minimal" placement="bottom" content={tab.title}>
-              <div className={`truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
+            <Tooltip variant="minimal" placement="bottom" content={tab.title} className="!w-full min-w-0">
+              <div className={`w-full truncate text-ide-small relative top-[1px] ${hasProcessing ? 'tab-shimmer-text' : ''}`}>{tab.title}</div>
             </Tooltip>
           </div>
         </button>
       )}
       {hasWarning ? (
-        <span className="relative z-10 ml-1 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning" />
+        <span className="relative z-10 mx-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-warning" />
       ) : hasUnread ? (
-        <span className="relative z-10 ml-1 -mt-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />
+        <span className="relative z-10 mx-0.5 h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />
       ) : null}
 
       <button
