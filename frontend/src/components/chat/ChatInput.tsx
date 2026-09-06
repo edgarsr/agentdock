@@ -5,6 +5,7 @@ import { ChatInputControls } from './input/ChatInputControls';
 import { ChatInputEditor } from './input/ChatInputEditor';
 import { ChatInputProps } from './input/chatInputState';
 import { useChatInputController } from './input/useChatInputController';
+import { VoiceInputButton } from '../audio/VoiceInputButton';
 
 export default function ChatInput(props: ChatInputProps) {
   const {
@@ -70,16 +71,13 @@ export default function ChatInput(props: ChatInputProps) {
     applyFile,
     customHeight,
     showAuxIndicators,
-    showVoiceButton,
-    isTranscribing,
-    isRecording,
+    insertText,
     agentSlashItems,
     promptLibrarySlashItems,
     handleOpenFile,
     handleImagePaste,
     combinedHandleKeyDownCapture,
     handleInsertSlashItem,
-    handleVoiceInput,
     setLexicalEditor,
   } = useChatInputController(props);
 
@@ -143,13 +141,15 @@ export default function ChatInput(props: ChatInputProps) {
             contextWindowSize={contextWindowSize}
             inputValue={inputValue}
             showAuxIndicators={showAuxIndicators}
-            showVoiceButton={showVoiceButton}
-            isTranscribing={isTranscribing}
-            isRecording={isRecording}
+            voiceInputButton={
+              <VoiceInputButton
+                conversationId={conversationId}
+                insertText={insertText}
+              />
+            }
             agentSlashItems={agentSlashItems}
             promptLibrarySlashItems={promptLibrarySlashItems}
             handleInsertSlashItem={handleInsertSlashItem}
-            handleVoiceInput={handleVoiceInput}
             onAgentChange={onAgentChange}
             onModelChange={onModelChange}
             onModeChange={onModeChange}

@@ -1,6 +1,7 @@
-package agentdock.settings
+package agentdock.audio
 
-import agentdock.bridge.frontend.FrontendSettings
+import agentdock.settings.AudioTranscriptionFeatureState
+import agentdock.settings.AudioTranscriptionSettings
 import agentdock.utils.AgentDockPaths
 import java.io.BufferedInputStream
 import java.io.File
@@ -12,29 +13,34 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Duration
-import java.util.Base64
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.zip.ZipInputStream
 
-object WhisperFeatureManager {
+object WhisperFeatureManager : AudioTranscriptionService {
     private const val FEATURE_ID = "whisper-transcription"
     private const val FEATURE_TITLE = "Whisper"
     private const val WINDOWS_ARCHIVE_URL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.4/whisper-bin-x64.zip"
     private const val MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin?download=true"
     private const val MODEL_FILE_NAME = "ggml-base.bin"
-    private val httpClient: HttpClient = HttpClient.newBuilder()
-        .followRedirects(HttpClient.Redirect.ALWAYS)
-        .connectTimeout(Duration.ofSeconds(30))
-        .build()
+    private val httpClient by lazy {
+        HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.ALWAYS)
+            .connectTimeout(Duration.ofSeconds(30))
+            .build()
+    }
+    private val runtimeLock = ReentrantReadWriteLock()
 
     private fun featureRoot(): File = File(AgentDockPaths.baseRuntimeDir(), "features/whisper")
     private fun runtimeRoot(): File = File(featureRoot(), "runtime")
     private fun modelRoot(): File = File(featureRoot(), "models")
     private fun modelFile(): File = File(modelRoot(), MODEL_FILE_NAME)
-    fun featureStorageRoot(): File = featureRoot()
-
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
     private fun isSupportedPlatform(): Boolean = isWindows() && System.getProperty("os.arch").lowercase().contains("64")
+
+    init {
+        cleanupTemporaryArtifacts()
+    }
 
     private fun commandPath(): String? = findCommandUnder(runtimeRoot())
 
@@ -59,71 +65,58 @@ object WhisperFeatureManager {
 
     fun isAvailable(): Boolean = isInstalled()
 
-    fun currentState(statusOverride: String? = null, installing: Boolean = false): AudioTranscriptionFeatureState {
+    override val id: String = FEATURE_ID
+    override val installable: Boolean = true
+
+    override fun currentState(
+        settings: AudioTranscriptionSettings,
+        installing: Boolean,
+    ): AudioTranscriptionFeatureState {
         val supported = isSupportedPlatform()
         val installed = isInstalled()
-        val status = statusOverride ?: when {
-            installed -> "Installed"
-            supported -> "Not Installed"
-            else -> "Not Supported"
-        }
-        val detail = when {
-            installed -> commandPath().orEmpty()
-            supported -> "Installs whisper.cpp runtime and the base model into the plugin runtime directory."
-            else -> "Audio Input installer is available only on 64-bit Windows."
-        }
         return AudioTranscriptionFeatureState(
             id = FEATURE_ID,
             title = FEATURE_TITLE,
             installed = installed,
             installing = installing,
             supported = supported,
-            status = status,
-            detail = detail,
+            installable = installable,
             installPath = installLocation()
         )
     }
 
-    fun install(statusCallback: (String) -> Unit): AudioTranscriptionFeatureState {
+    override fun install(
+        settings: AudioTranscriptionSettings,
+    ): AudioTranscriptionFeatureState = withWriteLock {
         if (!isSupportedPlatform()) {
             throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
         }
-        statusCallback("Preparing install...")
+        cleanupTemporaryArtifacts()
         featureRoot().mkdirs()
         modelRoot().mkdirs()
-        installWindowsRuntime(statusCallback)
-        downloadModel(statusCallback)
-        return currentState("Installed")
+        installWindowsRuntime()
+        downloadModel()
+        currentState(settings, installing = false)
     }
 
-    fun uninstall(statusCallback: (String) -> Unit): AudioTranscriptionFeatureState {
+    override fun uninstall(
+        settings: AudioTranscriptionSettings,
+    ): AudioTranscriptionFeatureState = withWriteLock {
         if (!isSupportedPlatform()) {
             throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
         }
-        statusCallback("Removing Whisper...")
         runtimeRoot().deleteRecursively()
         featureRoot().deleteRecursively()
-        return currentState("Not Installed")
+        currentState(settings, installing = false)
     }
 
-    fun transcribeAudioBase64(audioBase64: String): String {
-        if (!isAvailable()) {
-            throw IllegalStateException("Whisper is not installed.")
-        }
-
-        val tempDir = File(featureRoot(), "transcription-temp").apply { mkdirs() }
-        val requestId = "audio-${System.currentTimeMillis()}"
-        val inputFile = File(tempDir, "$requestId.wav")
-
-        try {
-            Files.write(inputFile.toPath(), Base64.getDecoder().decode(audioBase64))
-            return transcribeAudioFile(inputFile)
-        } finally {
-            inputFile.delete()
+    override fun transcribeAudioFile(inputFile: File, settings: AudioTranscriptionSettings): String {
+        return withReadLock {
+            transcribeAudioFileLocked(inputFile, settings)
         }
     }
 
-    fun transcribeAudioFile(inputFile: File): String {
+    private fun transcribeAudioFileLocked(inputFile: File, settings: AudioTranscriptionSettings): String {
         if (!isAvailable()) {
             throw IllegalStateException("Whisper is not installed.")
         }
@@ -137,7 +130,7 @@ object WhisperFeatureManager {
         val outputBase = File(inputFile.parentFile, inputFile.nameWithoutExtension)
         val outputFile = File(inputFile.parentFile, "${inputFile.nameWithoutExtension}.txt")
         try {
-            val language = FrontendSettings.current.audioTranscription.language
+            val language = settings.language
             val args = mutableListOf(
                 command,
                 "-m", model.absolutePath,
@@ -163,7 +156,25 @@ object WhisperFeatureManager {
         }
     }
 
-    private fun installWindowsRuntime(statusCallback: (String) -> Unit) {
+    private fun <T> withReadLock(block: () -> T): T {
+        runtimeLock.readLock().lockInterruptibly()
+        return try {
+            block()
+        } finally {
+            runtimeLock.readLock().unlock()
+        }
+    }
+
+    private fun <T> withWriteLock(block: () -> T): T {
+        runtimeLock.writeLock().lock()
+        return try {
+            block()
+        } finally {
+            runtimeLock.writeLock().unlock()
+        }
+    }
+
+    private fun installWindowsRuntime() {
         if (!isSupportedPlatform()) {
             throw IllegalStateException("Whisper runtime is currently supported only on 64-bit Windows.")
         }
@@ -171,11 +182,12 @@ object WhisperFeatureManager {
         runtimeRoot().deleteRecursively()
         runtimeRoot().mkdirs()
         val archiveFile = File(featureRoot(), "whisper-windows.zip")
-        statusCallback("Downloading whisper.cpp...")
-        downloadFile(WINDOWS_ARCHIVE_URL, archiveFile)
-        statusCallback("Extracting whisper.cpp...")
-        unzip(archiveFile, runtimeRoot())
-        archiveFile.delete()
+        try {
+            downloadFile(WINDOWS_ARCHIVE_URL, archiveFile)
+            unzip(archiveFile, runtimeRoot())
+        } finally {
+            archiveFile.delete()
+        }
 
         val command = commandPath()
         if (command.isNullOrBlank()) {
@@ -183,15 +195,20 @@ object WhisperFeatureManager {
         }
     }
 
-    private fun downloadModel(statusCallback: (String) -> Unit) {
+    private fun downloadModel() {
         modelRoot().mkdirs()
         val target = modelFile()
         if (target.isFile && target.length() > 0) {
-            statusCallback("Model already present.")
             return
         }
-        statusCallback("Downloading model...")
         downloadFile(MODEL_URL, target)
+    }
+
+    private fun cleanupTemporaryArtifacts() {
+        if (!featureRoot().isDirectory) return
+        featureRoot().walkTopDown()
+            .filter { it.isFile && (it.name == "whisper-windows.zip" || it.name.endsWith(".part")) }
+            .forEach { it.delete() }
     }
 
     private fun installLocation(): String = runtimeRoot().absolutePath
@@ -199,15 +216,19 @@ object WhisperFeatureManager {
     private fun downloadFile(url: String, target: File) {
         target.parentFile?.mkdirs()
         val tempFile = File(target.parentFile, "${target.name}.part")
-        val request = HttpRequest.newBuilder(URI.create(url)).GET().build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
-        if (response.statusCode() !in 200..299) {
-            throw IllegalStateException("Download failed with HTTP ${response.statusCode()}")
+        try {
+            val request = HttpRequest.newBuilder(URI.create(url)).GET().build()
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream())
+            response.body().use { input ->
+                if (response.statusCode() !in 200..299) {
+                    throw IllegalStateException("Download failed with HTTP ${response.statusCode()}")
+                }
+                Files.copy(input, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            tempFile.delete()
         }
-        response.body().use { input ->
-            Files.copy(input, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        }
-        Files.move(tempFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
 
     private fun unzip(archiveFile: File, targetDir: File) {
@@ -248,7 +269,14 @@ object WhisperFeatureManager {
         readerThread.isDaemon = true
         readerThread.start()
 
-        val finished = process.waitFor(timeoutMinutes, TimeUnit.MINUTES)
+        val finished = try {
+            process.waitFor(timeoutMinutes, TimeUnit.MINUTES)
+        } catch (interrupted: InterruptedException) {
+            process.destroyForcibly()
+            runCatching { readerThread.join(1000) }
+            Thread.currentThread().interrupt()
+            throw interrupted
+        }
         if (!finished) {
             process.destroyForcibly()
             readerThread.join(1000)

@@ -155,7 +155,6 @@ function App() {
         title={`Switch to ${pendingAgentName}`}
         message={`Click "Continue" to pass the current chat context to ${pendingAgentName}.` + "\n" + `Click "Start New" to begin a new separate chat.`}
         confirmLabel="Continue"
-        
         secondaryActionLabel="Start New"
         onSecondaryAction={handleContinueInNewTab}
         showCancelButton={false}

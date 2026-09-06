@@ -42,8 +42,7 @@ kotlin {
         exclude("agentdock/acp/IdeTerminalBridge.kt")
         exclude("agentdock/acp/IdeTerminalBridgeImpl.kt")
         exclude("agentdock/bridge/frontend/**")
-        exclude("agentdock/settings/AudioCaptureManager.kt")
-        exclude("agentdock/settings/WhisperFeatureManager.kt")
+        exclude("agentdock/audio/**")
         exclude("agentdock/ui/**")
     }
     sourceSets["test"].kotlin.srcDir(rootProject.layout.projectDirectory.dir("src/test/kotlin"))

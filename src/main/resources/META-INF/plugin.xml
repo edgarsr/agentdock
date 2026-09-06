@@ -29,7 +29,7 @@
             <li>Code selections and file references can be added to chat from the editor and project view.</li>
             <li>Images can be pasted into chat and previewed inline.</li>
             <li>Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it. For Claude Code and Codex, quota data is fetched using the OAuth credentials.</li>
-            <li>Voice input for prompts (Windows only).</li>
+            <li>Voice input for prompts with a GPT Transcriber or local Whisper engine.</li>
             <li>Chats can be continued in the IDE terminal when CLI mode is a better fit.</li>
             <li>Chat history supports opening, renaming, deleting, and bulk deletion.</li>
             <li>Chats can be forked from any point.</li>

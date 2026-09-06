@@ -1,32 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   AgentOption,
-  AudioTranscriptionFeatureState,
   AudioTranscriptionSettings,
   GitCommitGenerationSettings as GitCommitGenerationSettingsValue,
   GlobalSettingsPayload
 } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
-import ConfirmationModal from './ConfirmationModal';
+import { AudioTranscriptionSettingsView } from './audio/AudioTranscriptionSettingsView';
+import { normalizeAudioTranscriptionProvider } from './audio/audioTranscription';
 import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSettings';
 import { SettingsCheckbox, SettingsField, SettingsSection } from './settings/SettingsLayout';
-import { Button } from './ui/Button';
 import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
-
-const defaultGlobalSettings: GlobalSettingsPayload = {
-  settings: {
-    audioNotificationsEnabled: true,
-    uiFontSizeOffsetPx: 0,
-    userMessageBackgroundStyle: 'default',
-    audioTranscription: { language: 'auto' },
-    gitCommitGeneration: { enabled: false, adapterId: '', modelId: '', reasoningEffortId: '', instructions: '' },
-    quotaWidgetEnabled: false
-  }
-};
-
-function SettingsLoadingSpinner() {
-  return <div className='h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent' />;
-}
 
 function normalizeGitCommitGenerationSettings(
   payload: Partial<GitCommitGenerationSettingsValue> | undefined
@@ -53,7 +37,11 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       )
         ? payload!.settings!.userMessageBackgroundStyle
         : 'default',
-      audioTranscription: payload?.settings?.audioTranscription ?? { language: 'auto' },
+      audioTranscription: {
+        provider: normalizeAudioTranscriptionProvider(payload?.settings?.audioTranscription?.provider),
+        language: payload?.settings?.audioTranscription?.language ?? 'auto',
+        providers: payload?.settings?.audioTranscription?.providers ?? {}
+      },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
       quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false
     }
@@ -100,24 +88,6 @@ const userMessageBackgroundOptions: Array<{
   }
 ];
 
-const emptyState: AudioTranscriptionFeatureState = {
-  id: 'whisper-transcription',
-  installed: false,
-  installing: false,
-  supported: false,
-  status: 'Loading',
-  installPath: ''
-};
-
-const whisperLanguageOptions: DropdownOption[] = [
-  { value: 'auto', label: 'auto' },
-  { value: 'en', label: 'English (en)' },
-  { value: 'de', label: 'German (de)' },
-  { value: 'lv', label: 'Latvian (lv)' },
-  { value: 'fr', label: 'French (fr)' },
-  { value: 'es', label: 'Spanish (es)' }
-];
-
 function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userMessageBackgroundStyle']) {
   const selected =
     userMessageBackgroundOptions.find((option) => option.id === styleId) ?? userMessageBackgroundOptions[0];
@@ -125,11 +95,10 @@ function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userM
 }
 
 export function SettingsView() {
-  const [feature, setFeature] = useState<AudioTranscriptionFeatureState>(emptyState);
-  const [settings, setSettings] = useState<AudioTranscriptionSettings>({ language: 'auto' });
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettingsPayload>(defaultGlobalSettings);
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettingsPayload>(() =>
+    normalizeGlobalSettings(ACPBridge.getGlobalSettingsSnapshot())
+  );
   const [installedAgents, setInstalledAgents] = useState<AgentOption[]>([]);
-  const [pendingAudioInputUninstall, setPendingAudioInputUninstall] = useState(false);
   const [uiFontSizeBasePx, setUiFontSizeBasePx] = useState(() => readIdeFontSizePx());
   const uiFontSizeSelectOptions: DropdownOption[] = Array.from({ length: 7 }, (_, index) => {
     const offset = index - 3;
@@ -154,20 +123,12 @@ export function SettingsView() {
 
   useEffect(() => {
     const requestSettings = () => {
-      ACPBridge.loadAudioTranscriptionFeature();
-      ACPBridge.loadAudioTranscriptionSettings();
-      ACPBridge.loadGlobalSettings();
       ACPBridge.requestAdapters();
     };
 
-    const cleanupFeature = ACPBridge.onAudioTranscriptionFeature((e) => {
-      setFeature(e.detail.state);
-    });
-    const cleanupSettings = ACPBridge.onAudioTranscriptionSettings((e) => {
-      setSettings(e.detail.settings);
-    });
     const cleanupGlobalSettings = ACPBridge.onGlobalSettings((e) => {
-      setGlobalSettings(normalizeGlobalSettings(e.detail?.payload));
+      const normalized = normalizeGlobalSettings(e.detail?.payload);
+      setGlobalSettings(normalized);
     });
     const cleanupAdapters = ACPBridge.onAdapters((e) => {
       const nextInstalledAgents = Array.isArray(e.detail.adapters)
@@ -187,38 +148,27 @@ export function SettingsView() {
     }
 
     return () => {
-      cleanupFeature();
-      cleanupSettings();
       cleanupGlobalSettings();
       cleanupAdapters();
       window.removeEventListener('settings-bridge-ready', handleBridgeReady);
     };
   }, []);
 
-  const actionLabel = feature.installed ? 'Uninstall' : 'Install';
-  const showAudioInputDetails = feature.installed || feature.installing;
-
-  const handleAudioInputAction = () => {
-    if (feature.installed) {
-      setPendingAudioInputUninstall(true);
-      return;
-    }
-    ACPBridge.installAudioTranscriptionFeature();
-  };
-
-  const confirmAudioInputUninstall = () => {
-    ACPBridge.uninstallAudioTranscriptionFeature();
-    setPendingAudioInputUninstall(false);
-  };
-
-  const handleLanguageChange = (language: string) => {
-    const next = { language };
-    setSettings(next);
-    ACPBridge.saveAudioTranscriptionSettings(next);
-  };
-
   const updateGlobalSettings = (patch: Partial<GlobalSettingsPayload['settings']>) => {
     const next = { ...globalSettings.settings, ...patch };
+    setGlobalSettings((prev) => ({ ...prev, settings: next }));
+    ACPBridge.saveGlobalSettings(next);
+  };
+
+  const updateAudioSettings = (audioTranscription: AudioTranscriptionSettings) => {
+    setGlobalSettings((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, audioTranscription }
+    }));
+  };
+
+  const saveAudioSettings = (audioTranscription: AudioTranscriptionSettings) => {
+    const next = { ...globalSettings.settings, audioTranscription };
     setGlobalSettings((prev) => ({ ...prev, settings: next }));
     ACPBridge.saveGlobalSettings(next);
   };
@@ -287,60 +237,13 @@ export function SettingsView() {
             />
           </SettingsSection>
 
-          {feature.supported && (
-            <SettingsSection title='Audio Input'>
-              <SettingsField label='Transcribe microphone input locally using Whisper' stacked>
-                <div className='flex flex-col gap-2'>
-                  {showAudioInputDetails && (
-                    <>
-                      <SettingsField label='Status'>
-                        <span className='text-foreground-secondary'>{feature.status}</span>
-                      </SettingsField>
-                      <SettingsField
-                        label='Language'
-                        colon
-                        description={
-                          feature.installed && feature.installPath ? (
-                            <span className='break-all'>
-                              Installed at <span className='font-mono'>{feature.installPath}</span>
-                            </span>
-                          ) : undefined
-                        }
-                      >
-                        <DropdownSelect
-                          value={settings.language}
-                          onChange={handleLanguageChange}
-                          options={whisperLanguageOptions}
-                          disabled={!feature.installed}
-                          className='max-w-full'
-                        />
-                      </SettingsField>
-                    </>
-                  )}
-                  <div className='mt-1'>
-                    <Button
-                      onClick={handleAudioInputAction}
-                      disabled={feature.installing}
-                      variant={feature.installed ? 'accentOutline' : 'install'}
-                      leftIcon={feature.installing ? <SettingsLoadingSpinner /> : undefined}
-                    >
-                      {actionLabel}
-                    </Button>
-                  </div>
-                </div>
-              </SettingsField>
-            </SettingsSection>
-          )}
+          <AudioTranscriptionSettingsView
+            settings={globalSettings.settings.audioTranscription}
+            onSettingsChange={updateAudioSettings}
+            onSettingsSave={saveAudioSettings}
+          />
         </div>
       </div>
-
-      <ConfirmationModal
-        isOpen={pendingAudioInputUninstall}
-        title='Uninstall Audio Input'
-        message='Do you want to uninstall Audio Input?'
-        onConfirm={confirmAudioInputUninstall}
-        onCancel={() => setPendingAudioInputUninstall(false)}
-      />
     </div>
   );
 }

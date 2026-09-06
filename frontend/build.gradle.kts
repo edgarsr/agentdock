@@ -26,8 +26,7 @@ kotlin {
         include("agentdock/acp/AcpAudioPlayer.kt")
         include("agentdock/acp/IdeTerminalBridge.kt")
         include("agentdock/bridge/frontend/**")
-        include("agentdock/settings/AudioCaptureManager.kt")
-        include("agentdock/settings/WhisperFeatureManager.kt")
+        include("agentdock/audio/**")
         include("agentdock/ui/**")
     }
 }

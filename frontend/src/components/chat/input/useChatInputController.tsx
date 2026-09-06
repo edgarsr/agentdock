@@ -3,7 +3,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {$getRoot, $getSelection, $isRangeSelection, LexicalEditor,} from 'lexical';
 import {Bookmark, Paperclip, SquareTerminal,} from 'lucide-react';
 
-import {AudioRecordingStatePayload, DropdownOption,} from '../../../types/chat';
+import {DropdownOption,} from '../../../types/chat';
 import {PromptLibraryItem} from '../../../types/promptLibrary';
 import {ACPBridge} from '../../../utils/bridge';
 import {openFile} from '../../../utils/openFile';
@@ -12,7 +12,7 @@ import {applySlashCommandToEditor, buildAgentSlashItems, buildPromptLibrarySlash
 import {useFileMentions} from '../../../hooks/useFileMentions';
 import {$createImageNode, ImageNode} from './ImageNode';
 import {CodeReferenceNode} from './CodeReferenceNode';
-import {ChatInputProps, emptyTranscriptionFeature} from './chatInputState';
+import {ChatInputProps} from './chatInputState';
 
 export function useChatInputController({
   conversationId,
@@ -37,12 +37,8 @@ export function useChatInputController({
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const lexicalEditorRef = useRef<LexicalEditor | null>(null);
-  const transcriptionRequestCounterRef = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [promptLibraryItems, setPromptLibraryItems] = useState<PromptLibraryItem[]>([]);
-  const [transcriptionFeature, setTranscriptionFeature] = useState(emptyTranscriptionFeature);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const [composerRevision, setComposerRevision] = useState(0);
   const registeredNodeClassesRef = useRef({
@@ -67,22 +63,6 @@ export function useChatInputController({
       setComposerRevision((value) => value + 1);
     }
   }, [ImageNode, CodeReferenceNode]);
-
-  useEffect(() => {
-    const cleanup = ACPBridge.onAudioTranscriptionFeature((e) => setTranscriptionFeature(e.detail.state));
-    ACPBridge.loadAudioTranscriptionFeature();
-    return cleanup;
-  }, []);
-
-  useEffect(() => {
-    return ACPBridge.onAudioRecordingState((e) => {
-      const payload: AudioRecordingStatePayload = e.detail.payload;
-      setIsRecording(payload.recording);
-      if (payload.error) {
-        console.error('[ChatInput] Audio recording error:', payload.error);
-      }
-    });
-  }, []);
 
   useEffect(() => {
     const handleDragHighlight = (e: Event) => {
@@ -248,7 +228,7 @@ export function useChatInputController({
      }
   }, [handleFileMentionsKeyDownCapture, handleKeyDownCapture, isFileMenuOpen, isSlashMenuOpen]);
 
-  const insertTranscript = useCallback((text: string) => {
+  const insertText = useCallback((text: string) => {
     const normalizedText = text.trim();
     if (!normalizedText) return;
 
@@ -285,35 +265,6 @@ export function useChatInputController({
     );
   }, [lexicalEditorRef, onInputChange]);
 
-  const handleVoiceInput = useCallback(async () => {
-    if (isTranscribing) return;
-
-    if (isRecording) {
-      setIsTranscribing(true);
-      try {
-        transcriptionRequestCounterRef.current += 1;
-        const requestId = `audio-recording-${conversationId}-${transcriptionRequestCounterRef.current}-${Date.now()}`;
-        const result = await ACPBridge.stopAudioRecording(requestId);
-        insertTranscript(result.text || '');
-      } catch (error) {
-        console.error('[ChatInput] Voice transcription failed:', error);
-      } finally {
-        setIsRecording(false);
-        setIsTranscribing(false);
-      }
-      return;
-    }
-
-    try {
-      ACPBridge.startAudioRecording();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('[ChatInput] Unable to start audio capture:', error);
-      setIsRecording(false);
-    }
-  }, [conversationId, insertTranscript, isRecording, isTranscribing]);
-
-  const showVoiceButton = transcriptionFeature.installed;
   const showAuxIndicators = containerWidth === 0 || containerWidth >= 320;
 
   return {
@@ -342,16 +293,13 @@ export function useChatInputController({
     applyFile,
     customHeight,
     showAuxIndicators,
-    showVoiceButton,
-    isTranscribing,
-    isRecording,
+    insertText,
     agentSlashItems,
     promptLibrarySlashItems,
     handleOpenFile,
     handleImagePaste,
     combinedHandleKeyDownCapture,
     handleInsertSlashItem,
-    handleVoiceInput,
     setLexicalEditor: (editor: LexicalEditor) => {
       lexicalEditorRef.current = editor;
     },

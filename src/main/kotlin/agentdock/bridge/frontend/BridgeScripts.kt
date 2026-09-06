@@ -34,7 +34,7 @@ internal object BridgeScripts {
                 '__onAssistantActivity',
                 '__onMcpServers', '__onMcpStatus', '__onPromptLibrary', '__onSystemInstructions',
                 '__onAudioTranscriptionFeature', '__onAudioTranscriptionResult',
-                '__onAudioRecordingState', '__onAudioTranscriptionSettings', '__onGlobalSettings'
+                '__onAudioRecordingState', '__onGlobalSettings'
             ];
             callbacks.forEach(function(name) {
                 window[name] = window[name] || function() {};
@@ -114,16 +114,14 @@ internal object BridgeScripts {
 
             window.__loadGlobalSettings = function() { invoke('loadGlobalSettings', ''); };
             window.__saveGlobalSettings = function(payload) { invoke('saveGlobalSettings', payload); };
-            window.__loadAudioTranscriptionSettings = function() { invoke('loadAudioTranscriptionSettings', ''); };
-            window.__saveAudioTranscriptionSettings = function(payload) { invoke('saveAudioTranscriptionSettings', payload); };
-
             // Answered by the client itself - see FrontendCommands.
-            window.__loadAudioTranscriptionFeature = function() { invoke('loadAudioTranscriptionFeature', ''); };
-            window.__installAudioTranscriptionFeature = function() { invoke('installAudioTranscriptionFeature', ''); };
-            window.__uninstallAudioTranscriptionFeature = function() { invoke('uninstallAudioTranscriptionFeature', ''); };
-            window.__transcribeAudioInput = function(payload) { invoke('transcribeAudioInput', payload); };
-            window.__startAudioRecording = function() { invoke('startAudioRecording', ''); };
+            window.__loadAudioTranscriptionFeature = function(payload) { invoke('loadAudioTranscriptionFeature', payload || ''); };
+            window.__installAudioTranscriptionFeature = function(payload) { invoke('installAudioTranscriptionFeature', payload || ''); };
+            window.__uninstallAudioTranscriptionFeature = function(payload) { invoke('uninstallAudioTranscriptionFeature', payload || ''); };
+            window.__startAudioRecording = function(ownerId) { invoke('startAudioRecording', ownerId || ''); };
             window.__stopAudioRecording = function(payload) { invoke('stopAudioRecording', payload); };
+            window.__cancelAudioTranscription = function(payload) { invoke('cancelAudioTranscription', payload); };
+            window.__cancelAudioRecording = function(ownerId) { invoke('cancelAudioRecording', ownerId || ''); };
             window.__agentDockPlaySound = function(sound) { invoke('playSound', sound); };
             window.__requestHostRepaint = function(reason) { invoke('repaint', reason || ''); };
 

@@ -6,8 +6,8 @@ import java.io.File
  * Where the plugin keeps its runtime files on the machine it is running on.
  *
  * Both processes resolve this independently, which is what Split Mode needs: agent runtimes are
- * downloaded on the host next to the project, while the speech model belongs on the client next to
- * the microphone.
+ * downloaded on the host next to the project, while audio capture and transcription requests run
+ * on the client next to the microphone.
  */
 object AgentDockPaths {
 

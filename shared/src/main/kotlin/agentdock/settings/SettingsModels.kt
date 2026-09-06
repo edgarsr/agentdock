@@ -9,15 +9,19 @@ data class AudioTranscriptionFeatureState(
     val installed: Boolean,
     val installing: Boolean,
     val supported: Boolean,
-    val status: String,
-    val detail: String = "",
+    val installable: Boolean = false,
     val installPath: String = ""
 )
 
+object AudioTranscriptionProviders {
+    const val NONE = "none"
+    const val GPT_TRANSCRIBER = "gpt-transcriber"
+    const val WHISPER = "whisper-transcription"
+}
+
 @Serializable
-data class AudioTranscriptionRequest(
-    val requestId: String,
-    val audioBase64: String
+data class AudioTranscriptionProviderSettings(
+    val apiKey: String = ""
 )
 
 @Serializable
@@ -25,23 +29,28 @@ data class AudioTranscriptionResultPayload(
     val requestId: String,
     val success: Boolean,
     val text: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val cancelled: Boolean = false
 )
 
 @Serializable
 data class StopRecordingRequest(
-    val requestId: String
+    val requestId: String,
+    val ownerId: String = ""
 )
 
 @Serializable
 data class AudioRecordingStatePayload(
     val recording: Boolean,
-    val error: String? = null
+    val error: String? = null,
+    val ownerId: String? = null
 )
 
 @Serializable
 data class AudioTranscriptionSettings(
-    val language: String = "auto"
+    val provider: String = AudioTranscriptionProviders.NONE,
+    val language: String = "auto",
+    val providers: Map<String, AudioTranscriptionProviderSettings> = emptyMap()
 )
 
 @Serializable

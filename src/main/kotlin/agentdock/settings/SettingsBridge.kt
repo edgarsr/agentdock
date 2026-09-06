@@ -11,10 +11,6 @@ import kotlinx.serialization.json.Json
 import agentdock.acp.AcpQuotaService
 import agentdock.utils.jsStringLiteral
 
-/**
- * Owns the settings file. The dictation half of the old bridge moved to the frontend module,
- * because the microphone and the speech model live on the user's machine, not next to the project.
- */
 class SettingsBridge(
     private val host: BridgeHost,
     private val scope: CoroutineScope
@@ -26,23 +22,6 @@ class SettingsBridge(
     }
 
     fun install() {
-        host.register("loadAudioTranscriptionSettings") {
-            scope.launch(Dispatchers.IO) {
-                pushTranscriptionSettings(GlobalSettingsStore.loadAudioTranscriptionSettings())
-            }
-        }
-
-        host.register("saveAudioTranscriptionSettings") { payload ->
-            if (payload.isNotBlank()) {
-                scope.launch(Dispatchers.IO) {
-                    val settings = runCatching {
-                        json.decodeFromString<AudioTranscriptionSettings>(payload)
-                    }.getOrDefault(AudioTranscriptionSettings())
-                    pushTranscriptionSettings(GlobalSettingsStore.saveAudioTranscriptionSettings(settings))
-                }
-            }
-        }
-
         host.register("loadGlobalSettings") {
             scope.launch(Dispatchers.IO) {
                 pushGlobalSettings(GlobalSettingsStore.load())
@@ -65,15 +44,10 @@ class SettingsBridge(
         }
     }
 
-    /** Sends the settings once for the React UI and once for the client-side native consumers. */
+    /** Sends the settings to React and refreshes the client-side native snapshot. */
     private fun pushGlobalSettings(settings: GlobalSettings) {
         val encoded = json.encodeToString(GlobalSettingsPayload(settings = settings))
         host.eval("if(window.__onGlobalSettings) window.__onGlobalSettings(JSON.parse(${encoded.jsStringLiteral()}));")
         host.updateSettings(settings)
-    }
-
-    private fun pushTranscriptionSettings(settings: AudioTranscriptionSettings) {
-        val payload = json.encodeToString(settings).jsStringLiteral()
-        host.eval("if(window.__onAudioTranscriptionSettings) window.__onAudioTranscriptionSettings(JSON.parse($payload));")
     }
 }

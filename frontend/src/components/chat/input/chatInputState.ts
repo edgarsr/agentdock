@@ -1,6 +1,5 @@
 import {
   ApprovalMode,
-  AudioTranscriptionFeatureState,
   AvailableCommand,
   ChatAttachment,
   ConfigOption,
@@ -46,12 +45,3 @@ export interface ChatInputProps {
   autoFocus?: boolean;
   isActive?: boolean;
 }
-
-export const emptyTranscriptionFeature: AudioTranscriptionFeatureState = {
-  id: 'whisper-transcription',
-  installed: false,
-  installing: false,
-  supported: false,
-  status: 'Loading',
-  installPath: '',
-};

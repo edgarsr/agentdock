@@ -2,6 +2,10 @@ package agentdock.settings
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import agentdock.acp.AcpAdapterPaths
 import agentdock.utils.atomicWriteText
 import java.io.File
@@ -27,9 +31,7 @@ object GlobalSettingsStore {
             return@withStoreLock saveLocked(GlobalSettings())
         }
 
-        val loaded = runCatching {
-            json.decodeFromString<GlobalSettings>(file.readText())
-        }.getOrDefault(GlobalSettings())
+        val loaded = decodeSettings(file)
         gitCommitGenerationEnabled = loaded.gitCommitGeneration.enabled
         loaded
     }
@@ -43,9 +45,7 @@ object GlobalSettingsStore {
             audioNotificationsEnabled = settings.audioNotificationsEnabled,
             uiFontSizeOffsetPx = normalizeUiFontSizeOffsetPx(settings.uiFontSizeOffsetPx),
             userMessageBackgroundStyle = normalizeUserMessageBackgroundStyle(settings.userMessageBackgroundStyle),
-            audioTranscription = settings.audioTranscription.copy(
-                language = normalizeLanguage(settings.audioTranscription.language)
-            ),
+            audioTranscription = normalizeAudioTranscriptionSettings(settings.audioTranscription),
             gitCommitGeneration = settings.gitCommitGeneration.copy(
                 adapterId = settings.gitCommitGeneration.adapterId.trim(),
                 modelId = settings.gitCommitGeneration.modelId.trim(),
@@ -68,37 +68,6 @@ object GlobalSettingsStore {
 
     fun userMessageBackgroundStyle(): String = normalizeUserMessageBackgroundStyle(load().userMessageBackgroundStyle)
 
-    fun loadAudioTranscriptionSettings(): AudioTranscriptionSettings {
-        val settings = load().audioTranscription
-        return settings.copy(language = normalizeLanguage(settings.language))
-    }
-
-    fun saveAudioTranscriptionSettings(settings: AudioTranscriptionSettings): AudioTranscriptionSettings {
-        return withStoreLock {
-            val current = loadLocked()
-            saveLocked(
-                current.copy(
-                    audioTranscription = current.audioTranscription.copy(
-                        language = normalizeLanguage(settings.language)
-                    )
-                )
-            ).audioTranscription
-        }
-    }
-
-    private fun loadLocked(): GlobalSettings {
-        val file = settingsFile()
-        if (!file.isFile) {
-            return saveLocked(GlobalSettings())
-        }
-
-        val loaded = runCatching {
-            json.decodeFromString<GlobalSettings>(file.readText())
-        }.getOrDefault(GlobalSettings())
-        gitCommitGenerationEnabled = loaded.gitCommitGeneration.enabled
-        return loaded
-    }
-
     private inline fun <T> withStoreLock(action: () -> T): T = synchronized(storeLock) {
         val lockFile = File(AcpAdapterPaths.getBaseRuntimeDir(), "settings.lock")
         lockFile.parentFile?.mkdirs()
@@ -113,6 +82,51 @@ object GlobalSettingsStore {
 
     private fun normalizeLanguage(language: String?): String {
         return language?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "auto"
+    }
+
+    private fun normalizeProvider(provider: String?): String {
+        return provider?.trim()?.lowercase()
+            ?.takeIf(String::isNotEmpty)
+            ?: AudioTranscriptionProviders.NONE
+    }
+
+    private fun normalizeApiKey(apiKey: String?): String = apiKey?.trim().orEmpty()
+
+    private fun normalizeAudioTranscriptionSettings(settings: AudioTranscriptionSettings): AudioTranscriptionSettings =
+        settings.copy(
+            provider = normalizeProvider(settings.provider),
+            language = normalizeLanguage(settings.language),
+            providers = settings.providers.mapValues { (_, provider) ->
+                provider.copy(apiKey = normalizeApiKey(provider.apiKey))
+            }
+        )
+
+    private fun decodeSettings(file: File): GlobalSettings {
+        return runCatching {
+            val root = json.parseToJsonElement(file.readText())
+            val loaded = json.decodeFromJsonElement<GlobalSettings>(root)
+            val legacyApiKey = root.jsonObject["audioTranscription"]
+                ?.jsonObject
+                ?.get("apiKey")
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                .orEmpty()
+            if (legacyApiKey.isNotEmpty() && loaded.audioTranscription.providers[AudioTranscriptionProviders.GPT_TRANSCRIBER]
+                    ?.apiKey.orEmpty().isBlank()
+            ) {
+                loaded.copy(
+                    audioTranscription = loaded.audioTranscription.copy(
+                        providers = loaded.audioTranscription.providers + (
+                            AudioTranscriptionProviders.GPT_TRANSCRIBER to
+                                AudioTranscriptionProviderSettings(apiKey = legacyApiKey)
+                            )
+                    )
+                )
+            } else {
+                loaded
+            }
+        }.getOrDefault(GlobalSettings())
     }
 
     private fun normalizeUiFontSizeOffsetPx(offset: Int?): Int {

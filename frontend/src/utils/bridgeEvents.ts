@@ -3,7 +3,6 @@ import {
   AudioRecordingStatePayload,
   AudioTranscriptionFeatureState,
   AudioTranscriptionResultPayload,
-  AudioTranscriptionSettings,
   AvailableCommand,
   ChangesState,
   ContentChunk,
@@ -48,7 +47,6 @@ export interface SystemInstructionsEvent { instructions: SystemInstruction[]; }
 export interface AudioTranscriptionFeatureEvent { state: AudioTranscriptionFeatureState; }
 export interface AudioTranscriptionResultEvent { payload: AudioTranscriptionResultPayload; }
 export interface AudioRecordingStateEvent { payload: AudioRecordingStatePayload; }
-export interface AudioTranscriptionSettingsEvent { settings: AudioTranscriptionSettings; }
 export interface GlobalSettingsEvent { payload: GlobalSettingsPayload; }
 export interface AdapterDeletedEvent { adapterId: string; }
 
@@ -84,7 +82,6 @@ export const EVENT_NAMES = {
   AUDIO_TRANSCRIPTION_FEATURE: 'audio-transcription-feature',
   AUDIO_TRANSCRIPTION_RESULT: 'audio-transcription-result',
   AUDIO_RECORDING_STATE: 'audio-recording-state',
-  AUDIO_TRANSCRIPTION_SETTINGS: 'audio-transcription-settings',
   GLOBAL_SETTINGS: 'global-settings',
 } as const;
 

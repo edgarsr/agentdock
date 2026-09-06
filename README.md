@@ -29,7 +29,7 @@ Currently supported AI agents:
 - Images can be pasted into chat and previewed inline.
 - Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it.
   For Claude Code and Codex, quota data is fetched using the OAuth credentials.
-- Voice input for prompts (Windows only).
+- Voice input for prompts with a GPT Transcriber or local Whisper engine.
 - Chats can be continued in the IDE terminal when CLI mode is a better fit.
 - Chat history supports opening, renaming, deleting, and bulk deletion.
 - Chats can be forked from any point.
