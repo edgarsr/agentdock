@@ -119,7 +119,7 @@ internal object AcpConfigOptionsCache {
             if (!parent.exists()) parent.mkdirs()
             val versioned = content.copy(
                 schemaVersion = CONFIG_OPTIONS_CACHE_SCHEMA_VERSION,
-                adapters = content.adapters.mapValues { (_, options) -> options.withoutCurrentValues() }
+                adapters = content.adapters.mapValues { (_, options) -> options.forPersistence() }
             )
             file.atomicWriteText(json.encodeToString(versioned))
             memoryCache = versioned
@@ -152,9 +152,11 @@ internal fun CachedAdapterConfigOptions?.updatedWithSnapshot(
     )
 }
 
-private fun CachedAdapterConfigOptions.withoutCurrentValues(): CachedAdapterConfigOptions = copy(
+private fun CachedAdapterConfigOptions.forPersistence(): CachedAdapterConfigOptions = copy(
     configOptions = configOptions.withoutCurrentValues(),
-    configOptionsByModel = configOptionsByModel.mapValues { (_, options) -> options.withoutCurrentValues() }
+    configOptionsByModel = configOptionsByModel.mapValues { (_, options) ->
+        options.filterNot { it.matchesCategory("model") }.withoutCurrentValues()
+    }
 )
 
 private fun List<AcpConfigOption>.withoutCurrentValues(): List<AcpConfigOption> = map { option ->
@@ -183,6 +185,7 @@ internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
     }
     val usesAdapterConfigOptions = configOptions.isEmpty() && adapterInfo.configOptions.isNotEmpty()
     val filteredOptions = filterOptions(configOptions.ifEmpty(adapterInfo::fallbackConfigOptions))
+    val modelOptions = filteredOptions.filter { it.matchesCategory("model") }
     val modelIds = filteredOptions
         .firstOrNull { it.matchesCategory("model") }
         ?.options
@@ -192,7 +195,9 @@ internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
         configOptions = filteredOptions,
         configOptionsByModel = configOptionsByModel
             .filterKeys(modelIds::contains)
-            .mapValues { (_, options) -> filterOptions(options) },
+            .mapValues { (_, options) ->
+                modelOptions + filterOptions(options.filterNot { it.matchesCategory("model") })
+            },
         usesAdapterConfigOptions = usesAdapterConfigOptions
     )
 }
