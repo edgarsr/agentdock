@@ -104,7 +104,6 @@ object AcpAdapterConfig {
         val launchBinary: PlatformBinary? = null,
         val disabledModels: List<String> = emptyList(),
         val disabledModes: List<String> = emptyList(),
-        val skipUnavailablePreferredModel: Boolean = false,
         val configOptions: JsonArray = JsonArray(emptyList()),
         val args: List<String> = emptyList(),
         val platformArgs: Map<String, List<String>> = emptyMap(),

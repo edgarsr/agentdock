@@ -6,7 +6,6 @@
   "iconPathDark": "/icons/junie-dark.svg",
   "supportsSessionList": true,
   "sessionDeleteMethod": "acp",
-  "skipUnavailablePreferredModel": true,
   "distribution": {
     "type": "archive",
     "version": "latest",

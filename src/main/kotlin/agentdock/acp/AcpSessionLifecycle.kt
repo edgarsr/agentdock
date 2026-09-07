@@ -147,7 +147,6 @@ private suspend fun AcpClientService.applySessionConfigOptions(
         } else {
             val protocol = context.sharedProcess?.protocol ?: return false
             val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
-            val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
             val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
             val orderedConfigIds = buildList {
                 modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
@@ -161,9 +160,6 @@ private suspend fun AcpClientService.applySessionConfigOptions(
                 val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
                 if (option.type == "select" && option.options.isEmpty()) continue
                 val preferredValue = preferredValues.getValue(configId).trim()
-                if (!option.accepts(preferredValue) &&
-                    adapterInfo.skipUnavailablePreferredModel && configId == modelOption?.id
-                ) continue
                 val requestedValue = option.resolvePreferredValue(preferredValue)
                     ?: continue
                 if (context.activeConfigValues[configId] == requestedValue) continue
