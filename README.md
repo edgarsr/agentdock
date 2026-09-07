@@ -10,6 +10,7 @@ Currently supported AI agents:
 - Codex
 - Cursor
 - GitHub Copilot
+- Junie
 - Google Antigravity
 - Grok Build
 - Kilo
@@ -27,11 +28,10 @@ Currently supported AI agents:
 - Slash commands and `@` mentions backed by JetBrains project file search.
 - Code selections and file references can be added to chat from the editor and project view.
 - Images can be pasted into chat and previewed inline.
-- Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it.
-  For Claude Code and Codex, quota data is fetched using the OAuth credentials.
+- Live token quota and context usage are shown in the chat input for supported agents.
 - Voice input for prompts with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.
 - Chats can be continued in the IDE terminal when CLI mode is a better fit.
-- Chat history supports opening, renaming, deleting, and bulk deletion.
+- Chat history supports opening, renaming, searching, deleting, and bulk deletion.
 - Chats can be forked from any point.
 - AI agents can be switched within the same chat while preserving the session context.
 - MCP server configuration for additional agent tools and external resources.

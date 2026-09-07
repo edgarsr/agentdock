@@ -11,6 +11,7 @@
             <li>Codex</li>
             <li>Cursor</li>
             <li>GitHub Copilot</li>
+            <li>Junie</li>
             <li>Google Antigravity</li>
             <li>Grok Build</li>
             <li>Kilo</li>
@@ -28,10 +29,10 @@
             <li>Slash commands and @ mentions backed by JetBrains project file search.</li>
             <li>Code selections and file references can be added to chat from the editor and project view.</li>
             <li>Images can be pasted into chat and previewed inline.</li>
-            <li>Live token quota and context usage are shown directly in the chat input while prompting, for agents that support it. For Claude Code and Codex, quota data is fetched using the OAuth credentials.</li>
-            <li>Voice input for prompts with a GPT Transcriber or local Whisper engine.</li>
+            <li>Live token quota and context usage are shown in the chat input for supported agents.</li>
+            <li>Voice input for prompts with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.</li>
             <li>Chats can be continued in the IDE terminal when CLI mode is a better fit.</li>
-            <li>Chat history supports opening, renaming, deleting, and bulk deletion.</li>
+            <li>Chat history supports opening, renaming, searching, deleting, and bulk deletion.</li>
             <li>Chats can be forked from any point.</li>
             <li>AI agents can be switched within the same chat while preserving the session context.</li>
             <li>MCP server configuration for additional agent tools and external resources.</li>
@@ -50,9 +51,11 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Raised the minimum IDE version to 2026.2 due to JetBrains platform JCEF module changes.</li>
-            <li>Fixed command output rendering for Codex and OpenCode.</li>
-            <li>Fixed replay rendering for multi-block user messages and images.</li>
+            <li>Antigravity usage quotas are now displayed in the plugin.</li>
+            <li>Added support for JetBrains Junie.</li>
+            <li>Added GPT Transcriber and Gemini Transcriber as voice input options.</li>
+            <li>Added the ability to search chat history by title.</li>
+            <li>Fixed minor bugs and refined the UI.</li>
         </ul>
     ]]></change-notes>
 
