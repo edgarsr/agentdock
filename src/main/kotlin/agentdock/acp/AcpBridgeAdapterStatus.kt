@@ -174,7 +174,7 @@ private fun AcpBridge.buildAdapterPayload(
 
     val savedPreference = preferences.agents[info.id]
     val rawRuntimeMetadata = service.adapterRuntimeMetadata(info.id)
-        ?: info.fallbackRuntimeMetadata()
+        ?: AcpClientService.AdapterRuntimeMetadata(emptyList())
     val preferredValues = savedPreference?.configOptions.orEmpty()
     val modelOption = rawRuntimeMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
     val selectedModelId = modelOption?.resolvePreferredValue(preferredValues[modelOption.id])

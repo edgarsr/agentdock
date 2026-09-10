@@ -6,7 +6,6 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.PermissionOption
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
@@ -21,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpAdapterPaths
@@ -28,8 +28,6 @@ import agentdock.acp.AcpClientService
 import agentdock.acp.awaitPendingSessionUpdates
 import agentdock.acp.ensureExecutionTargetCurrent
 import agentdock.acp.ensureSharedProcessStarted
-import agentdock.acp.fallbackRuntimeMetadata
-import agentdock.acp.configOptionMetaKey
 import agentdock.acp.processKey
 import agentdock.acp.resolveModelToApply
 import agentdock.acp.resolveSessionCwd
@@ -41,10 +39,6 @@ import agentdock.history.AgentDockHistoryService
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
 import com.agentclientprotocol.protocol.Protocol
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import java.util.UUID
 
 internal class GitCommitAcpExecutor(
     private val project: Project,
@@ -116,7 +110,7 @@ internal class GitCommitAcpExecutor(
                 session = session,
                 protocol = sharedProcess.protocol,
                 adapterInfo = adapterInfo,
-                initialMetadata = runtimeMetadata ?: adapterInfo.fallbackRuntimeMetadata(),
+                initialMetadata = runtimeMetadata ?: AcpClientService.AdapterRuntimeMetadata(emptyList()),
                 selectedModelId = selectedModelId,
                 selectedReasoningEffortId = config.reasoningEffortId,
             )
@@ -180,17 +174,6 @@ internal class GitCommitAcpExecutor(
         selectedModelId: String?,
         selectedReasoningEffortId: String,
     ) {
-        if (initialMetadata.usesAdapterConfigOptions) {
-            applyAdapterConfiguration(
-                session,
-                adapterInfo,
-                initialMetadata,
-                selectedModelId,
-                selectedReasoningEffortId,
-            )
-            return
-        }
-
         var metadata = initialMetadata
         if (!selectedModelId.isNullOrBlank()) {
             val configId = metadata.modelConfigId
@@ -229,32 +212,6 @@ internal class GitCommitAcpExecutor(
             adapterInfo,
             runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo),
         )
-    }
-
-    @OptIn(UnstableApi::class)
-    private suspend fun applyAdapterConfiguration(
-        session: ClientSession,
-        adapterInfo: AcpAdapterConfig.AdapterInfo,
-        metadata: AcpClientService.AdapterRuntimeMetadata,
-        selectedModelId: String?,
-        selectedReasoningEffortId: String,
-    ) {
-        val modelId = selectedModelId
-            ?: metadata.currentModelId
-            ?: metadata.availableModels.firstOrNull()?.modelId
-            ?: return
-        val effortId = selectedReasoningEffortId.trim().takeIf(String::isNotEmpty)
-        val effortOption = metadata.configOptionsForModel(modelId).firstOrNull { option ->
-            option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
-        }
-        val meta = if (effortId != null && effortOption?.accepts(effortId) == true) {
-            adapterInfo.configOptionMetaKey(effortOption.id)?.let { metaKey ->
-                buildJsonObject { put(metaKey, JsonPrimitive(effortId)) }
-            }
-        } else {
-            null
-        }
-        session.setModel(ModelId(modelId), meta)
     }
 
     private fun appendVisibleAssistantText(buffer: StringBuilder, update: SessionUpdate) {

@@ -4,7 +4,6 @@ import com.agentclientprotocol.client.ClientOperationsFactory
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
-import com.agentclientprotocol.model.ModelId
 import com.agentclientprotocol.model.SessionConfigOption
 import com.agentclientprotocol.model.SessionId
 import kotlinx.coroutines.Dispatchers
@@ -12,8 +11,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 
 internal fun AcpClientService.processKey(adapterName: String): String {
     return adapterName
@@ -142,80 +139,35 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     context.configOptionsUpdateInProgress = true
     var applied = false
     return try {
-        val result = if (initialMetadata.usesAdapterConfigOptions) {
-            applyAdapterConfigOptions(context, adapterName, preferredValues)
-        } else {
-            val protocol = context.sharedProcess?.protocol ?: return false
-            val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
-            val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
-            val orderedConfigIds = buildList {
-                modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
-                addAll(preferredValues.keys.filterNot { it == modelOption?.id })
-            }
-
-            for (configId in orderedConfigIds) {
-                val metadata = context.runtimeMetadataRef.get() ?: return false
-                // Applying one option can narrow the rest: agents drop options that the newly selected model
-                // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
-                val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
-                if (option.type == "select" && option.options.isEmpty()) continue
-                val preferredValue = preferredValues.getValue(configId).trim()
-                val requestedValue = option.resolvePreferredValue(preferredValue)
-                    ?: continue
-                if (context.activeConfigValues[configId] == requestedValue) continue
-                val response = runCatching {
-                    protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
-                }.getOrElse { return false }
-                updateMetadataFromConfigOptionResponse(adapterName, response, context)
-            }
-            true
+        val protocol = context.sharedProcess?.protocol ?: return false
+        val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
+        val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
+        val orderedConfigIds = buildList {
+            modelOption?.id?.takeIf(preferredValues::containsKey)?.let(::add)
+            addAll(preferredValues.keys.filterNot { it == modelOption?.id })
         }
-        applied = result
-        result
+
+        for (configId in orderedConfigIds) {
+            val metadata = context.runtimeMetadataRef.get() ?: return false
+            // Applying one option can narrow the rest: agents drop options that the newly selected model
+            // does not support (fast mode outside Opus, effort levels on Haiku). Those are skipped, not failed.
+            val option = metadata.configOptions.firstOrNull { it.id == configId } ?: continue
+            if (option.type == "select" && option.options.isEmpty()) continue
+            val preferredValue = preferredValues.getValue(configId).trim()
+            val requestedValue = option.resolvePreferredValue(preferredValue)
+                ?: continue
+            if (context.activeConfigValues[configId] == requestedValue) continue
+            val response = runCatching {
+                protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
+            }.getOrElse { return false }
+            updateMetadataFromConfigOptionResponse(adapterName, response, context)
+        }
+        applied = true
+        true
     } finally {
         context.configOptionsUpdateInProgress = false
         publishSessionConfigOptions(context, applyCurrentValues = applied)
     }
-}
-
-@Suppress("OPT_IN_USAGE")
-private suspend fun AcpClientService.applyAdapterConfigOptions(
-    context: AcpClientService.AgentContext,
-    adapterName: String,
-    preferredValues: Map<String, String>
-): Boolean {
-    val metadata = context.runtimeMetadataRef.get() ?: return false
-    val options = metadata.configOptions
-    if (options.none { preferredValues.containsKey(it.id) }) return true
-    val modelOption = options.firstOrNull { it.matchesCategory("model") } ?: return false
-    val resolvedValues = options.associate { option ->
-        val requested = preferredValues[option.id]?.trim()
-        val value = option.resolvePreferredValue(requested) ?: return false
-        option.id to value
-    }
-    if (resolvedValues.all { (id, value) -> context.activeConfigValues[id] == value }) return true
-
-    val modelId = resolvedValues.getValue(modelOption.id)
-    val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
-    val meta = buildJsonObject {
-        options.forEach { option ->
-            val metaKey = adapterInfo.configOptionMetaKey(option.id) ?: return@forEach
-            put(metaKey, JsonPrimitive(resolvedValues.getValue(option.id)))
-        }
-    }.takeUnless { it.isEmpty() }
-
-    val session = context.session ?: return false
-    runCatching { session.setModel(ModelId(modelId), meta) }.getOrElse { return false }
-
-    val updatedOptions = metadata.configOptions.map { option ->
-        resolvedValues[option.id]?.let { option.copy(currentValue = it) } ?: option
-    }
-    updateSessionRuntimeMetadata(
-        adapterInfo,
-        metadata.copy(configOptions = updatedOptions),
-        context
-    )
-    return true
 }
 
 private fun AcpCreatedSessionResponse.runtimeMetadata(

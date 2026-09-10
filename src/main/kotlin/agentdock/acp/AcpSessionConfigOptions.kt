@@ -55,7 +55,7 @@ internal fun runtimeMetadataFromConfigOptionsJson(
     configOptions: JsonElement?,
     adapterInfo: AcpAdapterConfig.AdapterInfo
 ): AcpClientService.AdapterRuntimeMetadata {
-    val options = configOptions as? JsonArray ?: return adapterInfo.fallbackRuntimeMetadata()
+    val options = configOptions as? JsonArray ?: return AcpClientService.AdapterRuntimeMetadata(emptyList())
     val parsed = options.mapNotNull(::parseConfigOption).map { option ->
         val filteredValues = when {
             option.matchesCategory("model") -> option.options.filterNot { model ->
@@ -75,8 +75,7 @@ internal fun runtimeMetadataFromConfigOptionsJson(
             options = filteredValues
         )
     }
-    return if (parsed.isEmpty()) adapterInfo.fallbackRuntimeMetadata()
-    else AcpClientService.AdapterRuntimeMetadata(parsed)
+    return AcpClientService.AdapterRuntimeMetadata(parsed)
 }
 
 internal fun runtimeMetadataFromSessionResponseJson(
@@ -132,16 +131,6 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
     val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
     initialMetadata.currentModelId?.let { optionsByModel[it] = initialMetadata.configOptions }
 
-    if (initialMetadata.usesAdapterConfigOptions) {
-        return CachedAdapterConfigOptions(
-            adapterId = adapterInfo.id,
-            adapterVersion = adapterVersion,
-            refreshedAtMillis = existingCache?.refreshedAtMillis ?: Instant.now().toEpochMilli(),
-            configOptions = emptyList(),
-            configOptionsByModel = emptyMap()
-        )
-    }
-
     modelOption?.options.orEmpty().forEach { model ->
         if (optionsByModel.containsKey(model.value)) return@forEach
         val metadata = if (model.value == initialMetadata.currentModelId) {
@@ -178,17 +167,16 @@ internal fun extractSessionUpdateSessionId(params: JsonElement?): String? {
     return paramsObject["sessionId"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
 }
 
-private fun parseConfigOption(element: JsonElement, fallback: Boolean = false): AcpConfigOption? {
+private fun parseConfigOption(element: JsonElement): AcpConfigOption? {
     val option = element as? JsonObject ?: return null
     val id = option["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
-    val type = option["type"]?.jsonPrimitive?.contentOrNull?.trim()
-        ?: "select".takeIf { fallback }.orEmpty()
+    val type = option["type"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     if (id.isEmpty() || type !in setOf("select", "boolean")) return null
     val values = if (type == "select") flattenSelectOptions(option["options"]) else emptyList()
     if (type == "select" && values.isEmpty()) return null
     val currentValue = option["currentValue"]?.jsonPrimitive?.let { current ->
         if (type == "boolean") current.booleanOrNull?.toString() else current.contentOrNull?.trim()
-    } ?: "".takeIf { fallback } ?: return null
+    } ?: return null
     return AcpConfigOption(
         id = id,
         name = option["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) ?: id,
@@ -223,15 +211,3 @@ private fun flattenSelectOptions(options: JsonElement?): List<AcpConfigOptionVal
         }
     }
 }
-
-internal fun AcpAdapterConfig.AdapterInfo.fallbackConfigOptions(): List<AcpConfigOption> {
-    return configOptions.mapNotNull { parseConfigOption(it, fallback = true) }
-}
-
-internal fun AcpAdapterConfig.AdapterInfo.fallbackRuntimeMetadata() = fallbackConfigOptions().let {
-    AcpClientService.AdapterRuntimeMetadata(it, usesAdapterConfigOptions = it.isNotEmpty())
-}
-
-internal fun AcpAdapterConfig.AdapterInfo.configOptionMetaKey(id: String): String? = configOptions
-    .firstOrNull { it.jsonObject["id"]?.jsonPrimitive?.contentOrNull?.trim() == id }
-    ?.jsonObject?.get("metaKey")?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)

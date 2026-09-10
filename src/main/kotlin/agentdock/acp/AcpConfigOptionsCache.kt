@@ -138,16 +138,12 @@ internal fun CachedAdapterConfigOptions?.updatedWithSnapshot(
     refreshedAtMillis: Long = this?.refreshedAtMillis ?: Instant.now().toEpochMilli()
 ): CachedAdapterConfigOptions {
     val optionsByModel = this?.configOptionsByModel.orEmpty().toMutableMap()
-    if (metadata.usesAdapterConfigOptions) {
-        optionsByModel.clear()
-    } else {
-        metadata.currentModelId?.let { modelId -> optionsByModel[modelId] = metadata.configOptions }
-    }
+    metadata.currentModelId?.let { modelId -> optionsByModel[modelId] = metadata.configOptions }
     return CachedAdapterConfigOptions(
         adapterId = adapterInfo.id,
         adapterVersion = adapterVersion,
         refreshedAtMillis = refreshedAtMillis,
-        configOptions = metadata.configOptions.takeUnless { metadata.usesAdapterConfigOptions }.orEmpty(),
+        configOptions = metadata.configOptions,
         configOptionsByModel = optionsByModel
     )
 }
@@ -183,8 +179,7 @@ internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
             options = values
         )
     }
-    val usesAdapterConfigOptions = configOptions.isEmpty() && adapterInfo.configOptions.isNotEmpty()
-    val filteredOptions = filterOptions(configOptions.ifEmpty(adapterInfo::fallbackConfigOptions))
+    val filteredOptions = filterOptions(configOptions)
     val modelOptions = filteredOptions.filter { it.matchesCategory("model") }
     val modelIds = filteredOptions
         .firstOrNull { it.matchesCategory("model") }
@@ -197,7 +192,6 @@ internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
             .filterKeys(modelIds::contains)
             .mapValues { (_, options) ->
                 modelOptions + filterOptions(options.filterNot { it.matchesCategory("model") })
-            },
-        usesAdapterConfigOptions = usesAdapterConfigOptions
+            }
     )
 }
