@@ -21,7 +21,7 @@ const UsageLifecycleContext = createContext<UsageLifecycleContextValue>(null);
 const providerCache: Record<string, string | null> = {};
 const chatCache: Record<string, string | null> = {};
 
-const RICH_USAGE_FIELDS = ['five_hour', 'seven_day', 'extra_usage', 'rate_limit', 'quota', 'usage', 'quota_snapshots'];
+const RICH_USAGE_FIELDS = ['five_hour', 'seven_day', 'extra_usage', 'rate_limit', 'quota', 'usage', 'quota_snapshots', 'individualUsage', 'isUnlimited'];
 
 function parseUsageJson(json: string | null | undefined): Record<string, unknown> | null {
   if (!json || !json.trim()) return null;
@@ -74,7 +74,7 @@ export function useAdapterUsage(adapterId: string) {
     return ACPBridge.onUsageData((e) => {
       if (e.detail.adapterId !== adapterId) return;
       const nextData = normalize(e.detail.json);
-      if (nextData === null && !isChatMode) return;
+      if (nextData === null && !isChatMode && adapterId !== 'cursor-cli') return;
       cache[adapterId] = nextData;
       setData(nextData);
     });

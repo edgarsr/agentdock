@@ -375,7 +375,11 @@ export function AgentManagementView({
                         </UsageSection>
                       )}
                       {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'github-copilot-cli' && <CopilotUsageSection />}
-                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && <CursorUsage />}
+                      {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'cursor-cli' && (
+                        <UsageSection>
+                          <CursorUsage />
+                        </UsageSection>
+                      )}
                       {showUsage && !isInstalling && isDownloaded && agent.ready === true && agent.id === 'qoder' && (
                         <UsageSection>
                           <QoderUsage />

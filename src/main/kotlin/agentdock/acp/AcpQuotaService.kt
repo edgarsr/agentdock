@@ -64,12 +64,15 @@ class AcpQuotaService : Disposable {
                             "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
                             "antigravity" -> AcpUsageDataFetcher.fetchAntigravityUsageData()
                             "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapter.id)
+                            "cursor-cli" -> AcpUsageDataFetcher.fetchCursorUsageData()
                             else -> null
                         }
-                        // Only update if we actually got a response, to avoid clearing bridge-pushed data
-                        // with a background fetch that failed or returned empty (e.g. auth file transiently missing)
+                        // Preserve bridge-pushed data for existing providers on transient failures.
+                        // Cursor has no fallback payload, so an empty response must clear its stale quota.
                         if (!rawJson.isNullOrBlank()) {
                             updateQuotaForAdapter(adapter.id, rawJson)
+                        } else if (adapter.id == "cursor-cli") {
+                            clearQuotaForAdapter(adapter.id)
                         }
                     } catch (e: Exception) {
                         log.warn("Quota poll failed for adapter ${adapter.id}", e)
@@ -90,12 +93,21 @@ class AcpQuotaService : Disposable {
             return
         }
         if (rawJson.isBlank()) {
+            if (adapter.id == "cursor-cli") clearQuotaForAdapter(adapter.id)
             log.debug("Quota update received with empty payload for ${adapter.id}")
             return
         }
 
-        val detail = parseUsageDetail(adapter, rawJson) ?: return
+        val detail = parseUsageDetail(adapter, rawJson)
+        if (detail == null) {
+            if (adapter.id == "cursor-cli") clearQuotaForAdapter(adapter.id)
+            return
+        }
         _quotas.update { it + (adapter.id to detail) }
+    }
+
+    fun clearQuotaForAdapter(adapterId: String) {
+        _quotas.update { it - adapterId }
     }
 
     private fun hasDisplayableQuotaReset(resetTime: String?): Boolean {
@@ -214,6 +226,21 @@ class AcpQuotaService : Disposable {
                                 ?.takeIf { it.isNotBlank() }
                             details.add(if (bucketName == null) "$groupName: $usedPct%" else "$groupName · $bucketName: $usedPct%")
                             mainPercent = maxOf(mainPercent, usedPct)
+                        }
+                    }
+                }
+                "cursor-cli" -> {
+                    val unlimited = (root["isUnlimited"] as? JsonPrimitive)?.booleanOrNull == true
+                    if (!unlimited) {
+                        val plan = (root["individualUsage"] as? JsonObject)?.get("plan") as? JsonObject
+                        val resetAt = (root["billingCycleEnd"] as? JsonPrimitive)?.contentOrNull
+                        val showPercents = resetAt.isNullOrBlank() || hasDisplayableQuotaReset(resetAt)
+                        if (showPercents && plan != null) {
+                            val cursorModelsPct = roundPercent((plan["autoPercentUsed"] as? JsonPrimitive)?.doubleOrNull)
+                            val otherModelsPct = roundPercent((plan["apiPercentUsed"] as? JsonPrimitive)?.doubleOrNull)
+                            cursorModelsPct?.let { details.add("Cursor Models: $it%") }
+                            otherModelsPct?.let { details.add("Other Models: $it%") }
+                            mainPercent = listOfNotNull(cursorModelsPct, otherModelsPct).maxOrNull() ?: 0
                         }
                     }
                 }

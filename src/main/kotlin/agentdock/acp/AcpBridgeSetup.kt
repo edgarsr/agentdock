@@ -534,6 +534,11 @@ internal fun AcpBridge.installAdapterQueries() {
         if (adapterId != null) {
             launchAuthAction(adapterId, null, "Logout failed") {
                 val restartRequired = AcpAuthenticationService.logout(adapterId, service)
+                AcpUsageDataFetcher.discardCachedUsage(adapterId)
+                if (adapterId == "cursor-cli") {
+                    AcpQuotaService.getInstance().clearQuotaForAdapter(adapterId)
+                    host.eval("if(window.__onUsageData) window.__onUsageData(${adapterId.jsStringLiteral()}, '');")
+                }
                 if (restartRequired) {
                     service.stopSharedProcess(adapterId)
                     service.initializeAdapterInBackground(adapterId)
@@ -550,11 +555,9 @@ internal fun AcpBridge.installAdapterQueries() {
 
     host.register("fetchUsage") { payload ->
         val raw = payload.trim()
-        var force = false
         val adapterId = if (raw.startsWith("{")) {
             runCatching {
                 val obj = Json.parseToJsonElement(raw).jsonObject
-                force = obj["force"]?.jsonPrimitive?.booleanOrNull ?: false
                 obj["adapterId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
             }.getOrNull() ?: parseIdOnlyPayload(raw) ?: raw
         } else {
@@ -564,12 +567,15 @@ internal fun AcpBridge.installAdapterQueries() {
             val result = when (adapterId) {
                 "claude-code" -> AcpUsageDataFetcher.fetchClaudeUsageData()
                 "codex" -> AcpUsageDataFetcher.fetchCodexUsageData()
-                "antigravity" -> AcpUsageDataFetcher.fetchAntigravityUsageData(forceRefresh = force)
+                "antigravity" -> AcpUsageDataFetcher.fetchAntigravityUsageData()
                 "github-copilot-cli" -> AcpUsageDataFetcher.fetchCopilotUsageData(adapterId)
+                "cursor-cli" -> AcpUsageDataFetcher.fetchCursorUsageData()
                 else -> ""
             }
             if (result.isNotBlank()) {
                 AcpQuotaService.getInstance().updateQuotaForAdapter(adapterId, result)
+            } else if (adapterId == "cursor-cli") {
+                AcpQuotaService.getInstance().clearQuotaForAdapter(adapterId)
             }
             val escapedAdapterId = adapterId.jsStringLiteral()
             val escapedResult = result.jsStringLiteral()

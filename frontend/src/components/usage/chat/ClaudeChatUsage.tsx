@@ -38,7 +38,7 @@ export function ClaudeChatUsage() {
   if (!hasData) return null;
 
   return (
-    <UsageIcon percent={displayPct}>
+    <UsageIcon adapterId="claude-code" percent={displayPct}>
       <ClaudeUsage stacked />
     </UsageIcon>
   );

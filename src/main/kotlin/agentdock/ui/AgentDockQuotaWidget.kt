@@ -142,6 +142,7 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
             "codex" -> if (isDark) "/icons/codex-dark.svg" else "/icons/codex-light.svg"
             "antigravity" -> "/icons/antigravity.svg"
             "github-copilot-cli" -> if (isDark) "/icons/copilot-dark.svg" else "/icons/copilot-light.svg"
+            "cursor-cli" -> if (isDark) "/icons/cursor-dark.svg" else "/icons/cursor-light.svg"
             else -> "/icons/agent_dock_toolwindow.svg"
         }
         return try {

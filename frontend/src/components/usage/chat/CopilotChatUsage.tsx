@@ -9,7 +9,7 @@ export function CopilotChatUsage() {
   const percentUsed = copilotPercentUsed(usage);
 
   return (
-    <UsageIcon percent={percentUsed}>
+    <UsageIcon adapterId="github-copilot-cli" percent={percentUsed}>
       <CopilotUsage />
     </UsageIcon>
   );

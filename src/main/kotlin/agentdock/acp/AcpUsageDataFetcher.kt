@@ -7,6 +7,8 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.time.YearMonth
 import java.time.ZoneOffset
+import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
@@ -15,19 +17,37 @@ import java.util.concurrent.TimeUnit
  */
 internal object AcpUsageDataFetcher {
     private const val LOCAL_USAGE_TIMEOUT_SECONDS = 30L
+    private const val USAGE_CACHE_MS = 10_000L
     private const val ANTIGRAVITY_USAGE_CACHE_MS = 60_000L
-    private val antigravityUsageLock = Any()
-    private var antigravityCliVerified = false
-    private var antigravityUsageLastAttempt = 0L
-    private var antigravityUsageCache = ""
+    private data class UsageCacheEntry(val attemptedAtNanos: Long, val value: String)
 
-    fun invalidateAntigravityCache() {
-        synchronized(antigravityUsageLock) {
-            antigravityUsageLastAttempt = 0L
+    private val usageCache = ConcurrentHashMap<String, UsageCacheEntry>()
+    private val usageCacheLocks = ConcurrentHashMap<String, Any>()
+    private var antigravityCliVerified = false
+
+    private fun cachedUsage(adapterId: String, cacheMs: Long = USAGE_CACHE_MS, fetch: () -> String): String {
+        val lock = usageCacheLocks.computeIfAbsent(adapterId) { Any() }
+        return synchronized(lock) {
+            val now = System.nanoTime()
+            val cached = usageCache[adapterId]
+            if (cached != null && now - cached.attemptedAtNanos < TimeUnit.MILLISECONDS.toNanos(cacheMs)) {
+                return@synchronized cached.value
+            }
+
+            fetch().also { usageCache[adapterId] = UsageCacheEntry(now, it) }
         }
     }
 
-    fun fetchClaudeUsageData(): String {
+    fun discardCachedUsage(adapterId: String) {
+        val lock = usageCacheLocks.computeIfAbsent(adapterId) { Any() }
+        synchronized(lock) {
+            usageCache.computeIfPresent(adapterId) { _, cached -> cached.copy(value = "") }
+        }
+    }
+
+    fun fetchClaudeUsageData(): String = cachedUsage("claude-code") { fetchClaudeUsageDataUncached() }
+
+    private fun fetchClaudeUsageDataUncached(): String {
         val accessToken = try {
             readTargetFile("~/.claude/.credentials.json")
                 ?.let { Json.parseToJsonElement(it).jsonObject.get("claudeAiOauth")?.jsonObject?.get("accessToken")?.jsonPrimitive?.content }
@@ -54,7 +74,9 @@ internal object AcpUsageDataFetcher {
         } catch (_: Exception) { """{"authType":"subscription"}""" }
     }
 
-    fun fetchCodexUsageData(): String {
+    fun fetchCodexUsageData(): String = cachedUsage("codex") { fetchCodexUsageDataUncached() }
+
+    private fun fetchCodexUsageDataUncached(): String {
         val authJson = try {
             val text = readTargetFile("~/.codex/auth.json") ?: return ""
             Json.parseToJsonElement(text).jsonObject
@@ -82,32 +104,45 @@ internal object AcpUsageDataFetcher {
         } catch (_: Exception) { """{"authType":"subscription"}""" }
     }
 
-    fun fetchAntigravityUsageData(forceRefresh: Boolean = false): String = synchronized(antigravityUsageLock) {
-        val now = System.currentTimeMillis()
-        if (!forceRefresh && now - antigravityUsageLastAttempt < ANTIGRAVITY_USAGE_CACHE_MS) {
-            return@synchronized antigravityUsageCache
-        }
-        antigravityUsageLastAttempt = now
+    fun fetchCursorUsageData(): String = cachedUsage("cursor-cli") { fetchCursorUsageDataUncached() }
 
+    private fun fetchCursorUsageDataUncached(): String {
+        val accessToken = readCursorAccessToken() ?: return ""
+        val cookie = cursorSessionCookie(accessToken) ?: return ""
+        return try {
+            val conn = java.net.URI("https://cursor.com/api/usage-summary").toURL()
+                .openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Cookie", cookie)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            if (conn.responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    fun fetchAntigravityUsageData(): String = cachedUsage("antigravity", ANTIGRAVITY_USAGE_CACHE_MS) {
         if (!antigravityCliVerified && !verifyAntigravityCli()) {
-            antigravityUsageCache = ""
-            return@synchronized ""
+            return@cachedUsage ""
         }
 
         val (_, command) = buildAdapterCliCommandParts(
             adapterId = "antigravity",
             extraArgs = listOf("--output-format", "json", "--print", "/usage")
         ) ?: run {
-            antigravityUsageCache = ""
-            return@synchronized ""
+            return@cachedUsage ""
         }
         val result = AcpExecutionMode.runCommand(command, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
-        antigravityUsageCache = if (result?.exitCode == 0) {
+        if (result?.exitCode == 0) {
             normalizeAntigravityUsage(result.stdout)
         } else {
             ""
         }
-        antigravityUsageCache
     }
 
     private fun verifyAntigravityCli(): Boolean {
@@ -156,7 +191,11 @@ internal object AcpUsageDataFetcher {
         }.getOrDefault("")
     }
 
-    fun fetchCopilotUsageData(adapterId: String): String {
+    fun fetchCopilotUsageData(adapterId: String): String = cachedUsage(adapterId) {
+        fetchCopilotUsageDataUncached(adapterId)
+    }
+
+    private fun fetchCopilotUsageDataUncached(adapterId: String): String {
         val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull() ?: return ""
         val target = AcpAdapterPaths.getExecutionTarget()
         val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterId)
@@ -306,5 +345,45 @@ internal object AcpUsageDataFetcher {
         val resolved = rawPath.replace("~", System.getProperty("user.home"))
         val file = File(resolved)
         return if (!file.exists()) null else file.readText()
+    }
+
+    private fun readCursorAccessToken(): String? {
+        for (file in cursorAuthFiles()) {
+            val token = runCatching {
+                Json.parseToJsonElement(file.readText()).jsonObject["accessToken"]?.jsonPrimitive?.content
+            }.getOrNull()?.takeIf { it.isNotBlank() }
+            if (token != null) return token
+        }
+        return null
+    }
+
+    private fun cursorAuthFiles(): List<File> {
+        val home = System.getProperty("user.home")
+        val appData = System.getenv("APPDATA")
+        val preferred = when (AcpExecutionMode.hostPlatform()) {
+            "windows" -> listOfNotNull(
+                appData?.let { File(it, "Cursor/auth.json") },
+                File(home, "AppData/Roaming/Cursor/auth.json")
+            )
+            "macos" -> listOf(File(home, ".cursor/auth.json"))
+            else -> listOf(File(home, ".config/cursor/auth.json"))
+        }
+        return (preferred + listOf(
+            File(home, ".cursor/auth.json"),
+            File(home, ".config/cursor/auth.json")
+        ) + listOfNotNull(appData?.let { File(it, "Cursor/auth.json") }))
+            .distinctBy { it.absolutePath }
+            .filter { it.isFile }
+    }
+
+    private fun cursorSessionCookie(accessToken: String): String? {
+        val payload = accessToken.split('.').getOrNull(1) ?: return null
+        val padded = payload + "=".repeat((4 - payload.length % 4) % 4)
+        val claims = runCatching {
+            Json.parseToJsonElement(String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8)).jsonObject
+        }.getOrNull() ?: return null
+        val sub = claims["sub"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+        val userId = sub.substringAfterLast('|').ifBlank { sub }
+        return "WorkosCursorSessionToken=$userId%3A%3A$accessToken"
     }
 }

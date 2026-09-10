@@ -10,6 +10,7 @@ interface TooltipProps {
   contentClassName?: string;
   variant?: 'default' | 'minimal';
   placement?: 'top' | 'bottom';
+  onShow?: () => void;
 }
 
 function cx(...values: Array<string | false | null | undefined>) {
@@ -25,6 +26,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
   contentClassName,
   variant = 'default',
   placement = 'top',
+  onShow,
 }) => {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -64,6 +66,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     setOffset(0);
     updatePosition();
     timerRef.current = setTimeout(() => {
+      onShow?.();
       setVisible(true);
     }, delay);
   };
@@ -82,6 +85,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     if (timerRef.current) clearTimeout(timerRef.current);
     setOffset(0);
     updatePosition();
+    onShow?.();
     setVisible(true);
   };
 
