@@ -211,6 +211,9 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
                     ClientCapabilities(
                         _meta = buildJsonObject {
                             put("terminal-auth", JsonPrimitive(true))
+                            adapterInfo.clientCapabilitiesMeta.forEach { (key, value) ->
+                                put(key, value)
+                            }
                         }
                     )
                 )

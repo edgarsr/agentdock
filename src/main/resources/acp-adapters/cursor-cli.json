@@ -18,6 +18,9 @@
       "unix": "cursor-agent"
     }
   },
+  "clientCapabilitiesMeta": {
+    "parameterizedModelPicker": true
+  },
   "args": [
     "acp"
   ],
