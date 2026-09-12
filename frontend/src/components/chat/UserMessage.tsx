@@ -46,6 +46,7 @@ function formatPromptTime(timestamp?: number): string | null {
 export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMessageProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLargeContent, setIsLargeContent] = useState(false);
+  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,7 +54,9 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
     if (!el) return;
 
     const checkHeight = () => {
-      if (el.scrollHeight > 300) {
+      const scrollH = el.scrollHeight;
+      setContentHeight(scrollH);
+      if (scrollH > 300) {
         setIsLargeContent(true);
       } else {
         setIsLargeContent(false);
@@ -160,6 +163,13 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
   const showCollapseToggle = isLargeContent;
   const showFooter = showCollapseToggle || promptNumber !== undefined || !!formattedTime;
 
+  const toggleExpanded = () => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+    setIsExpanded((prev) => !prev);
+  };
+
   return (
     <div className="flex flex-col mb-8 animate-in fade-in slide-in-from-bottom-2">
       <div className="flex justify-end relative">
@@ -169,12 +179,18 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
           <div>
             <div className="relative brightness-[110%]">
               <div ref={contentRef}
-                className={`break-words transition-[max-height] duration-1000 ease-in-out ${
+                className={`break-words overflow-hidden transition-[max-height] duration-300 ease-in-out ${
                   isLargeContent && !isExpanded
-                    ? 'max-h-[220px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_calc(100%-64px),transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black_calc(100%-64px),transparent)]'
-                    : 'max-h-[5000px] overflow-visible'
+                    ? '[mask-image:linear-gradient(to_bottom,black_calc(100%-64px),transparent)] [-webkit-mask-image:linear-gradient(to_bottom,black_calc(100%-64px),transparent)]'
+                    : ''
                 }`}
-                style={{ maxHeight: isLargeContent ? undefined : 'none' }}
+                style={{
+                  maxHeight: !isLargeContent
+                    ? 'none'
+                    : isExpanded
+                      ? (contentHeight !== undefined ? `${contentHeight}px` : 'none')
+                      : '220px',
+                }}
               >
                 {renderContent()}
               </div>
@@ -185,7 +201,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
             {showFooter && (
               <div className={`mt-2 flex items-center gap-3 ${showCollapseToggle ? 'justify-between' : 'justify-end'}`}>
                 {showCollapseToggle && (
-                  <button type="button" onClick={() => setIsExpanded(!isExpanded)}
+                  <button type="button" onClick={toggleExpanded}
                     className="inline-flex items-center gap-1 text-xs text-foreground hover:underline
                     focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
                   >
