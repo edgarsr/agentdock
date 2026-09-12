@@ -1,8 +1,8 @@
 package agentdock.acp
 
 import com.agentclientprotocol.protocol.JsonRpcException
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 sealed class AcpEvent {
     data class PromptDone(val stopReason: String) : AcpEvent()
@@ -10,18 +10,9 @@ sealed class AcpEvent {
 }
 
 fun formatAcpError(e: Throwable): String {
-    if (e is JsonRpcException) {
-        val data = e.data
-        if (data != null) {
-            try {
-                val dataObj = data.jsonObject
-                val detailedMessage = dataObj["message"]?.jsonPrimitive?.content
-                if (!detailedMessage.isNullOrBlank()) {
-                    return detailedMessage
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-    return e.message ?: e.toString()
+    val message = e.message ?: e.toString()
+    val data = (e as? JsonRpcException)?.data
+    if (data == null || data == JsonNull) return message
+    val details = if (data is JsonPrimitive) data.content else data.toString()
+    return if (details.isBlank() || details == message) message else "$message\n$details"
 }
