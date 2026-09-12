@@ -15,7 +15,8 @@ import kotlinx.serialization.json.put
 internal suspend fun AcpClientService.listHistorySessions(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     projectPath: String,
-    allowInitializingProcess: Boolean = false
+    allowInitializingProcess: Boolean = false,
+    preserveNativeCwd: Boolean = false
 ): List<SessionMeta> {
     ensureExecutionTargetCurrent()
     check(AcpAdapterPaths.isDownloaded(adapterInfo.id)) {
@@ -23,7 +24,12 @@ internal suspend fun AcpClientService.listHistorySessions(
     }
 
     return when (adapterInfo.sessionListMethod) {
-        "acpSessionList" -> acpSessionList(adapterInfo, projectPath, allowInitializingProcess)
+        "acpSessionList" -> acpSessionList(
+            adapterInfo,
+            projectPath,
+            allowInitializingProcess,
+            preserveNativeCwd
+        )
         "grokCliSessions" -> GrokSessionHistory.grokCliSessions(adapterInfo.id, projectPath)
         else -> throw IllegalStateException(
             "Unknown session list method '${adapterInfo.sessionListMethod}' for adapter '${adapterInfo.id}'"
@@ -35,7 +41,8 @@ internal suspend fun AcpClientService.listHistorySessions(
 private suspend fun AcpClientService.acpSessionList(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     projectPath: String,
-    allowInitializingProcess: Boolean
+    allowInitializingProcess: Boolean,
+    preserveNativeCwd: Boolean
 ): List<SessionMeta> {
     val sharedProc = activeProcesses[processKey(adapterInfo.id)]?.takeIf {
         it.isHealthy() || (allowInitializingProcess && it.client != null)
@@ -45,7 +52,7 @@ private suspend fun AcpClientService.acpSessionList(
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' does not have an initialized ACP client")
     val expectedProjectPath = historyComparablePath(projectPath)
     val sessionListCwd = resolveSessionCwd(projectPath).let { cwd ->
-        if (adapterInfo.sessionListPosixCwd) cwd.replace('\\', '/') else cwd
+        if (adapterInfo.sessionListPosixCwd && !preserveNativeCwd) cwd.replace('\\', '/') else cwd
     }
 
     return client.listSessions(cwd = sessionListCwd).toList().mapNotNull { session ->

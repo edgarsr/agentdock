@@ -59,7 +59,8 @@ private suspend fun AcpClientService.cleanupProbeSessions(
             listHistorySessions(
                 adapterInfo = adapterInfo,
                 projectPath = probeProjectPath,
-                allowInitializingProcess = true
+                allowInitializingProcess = true,
+                preserveNativeCwd = true
             )
         }.orEmpty()
             .mapTo(sessionIds) { it.sessionId }
