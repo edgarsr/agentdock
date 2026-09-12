@@ -63,7 +63,7 @@ export function HistoryListItem({
   const otherAgents = itemAgents.filter(a => a !== item.adapterName);
   const mainAgent = adapterDisplay.get(item.adapterName);
   const mainLabel = mainAgent?.name || item.adapterName;
-  const canOpenCli = !!mainAgent?.cliAvailable;
+  const canOpenCli = !!mainAgent?.cliResumeAvailable;
   const isEditing = editingId === conversationId;
 
   return (

@@ -182,6 +182,7 @@ export interface AgentOption {
   updateKnown?: boolean;
   updateAvailable?: boolean;
   cliAvailable?: boolean;
+  cliResumeAvailable?: boolean;
 }
 
 export function isAgentRunnable(agent: AgentOption): boolean {

@@ -28,11 +28,7 @@
     "executable": {
       "win": "cursor-agent.cmd",
       "unix": "./cursor-agent"
-    },
-    "resumeArgs": [
-      "--resume",
-      "{sessionId}"
-    ]
+    }
   },
   "disabledModels": [
     "composer-1",
