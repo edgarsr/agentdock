@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { AgentOption, HistorySessionMeta } from '../types/chat';
 import ConfirmationModal from './ConfirmationModal';
 import { RefreshCw, Funnel, X } from 'lucide-react';
@@ -13,6 +14,7 @@ interface HistoryPanelProps {
 }
 
 export default function HistoryPanel({ availableAgents, onOpenSession }: HistoryPanelProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const {
     historyList,
     isLoading,
@@ -143,14 +145,30 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             )}
           </div>
           
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search…"
-            aria-label="Search chats by title"
-            className="w-32 min-w-0 rounded-[4px] border border-border bg-input px-2 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none focus:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-          />
+          <div className="relative w-32 min-w-0">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search…"
+              aria-label="Search chats by title"
+              className="w-full min-w-0 rounded-[4px] border border-border bg-input pl-2 pr-6 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none focus:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-[4px] p-0.5 text-foreground-secondary hover:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
 
           <span className="shrink-0 pl-1 text-foreground-secondary text-ide-small max-[399px]:hidden">
             {filteredHistoryList.length} chat{filteredHistoryList.length !== 1 ? 's' : ''}
