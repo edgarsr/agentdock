@@ -5,6 +5,7 @@ import {
   SessionConfigOptionsPayload,
 } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
+import { findReasoningEffortOption } from '../../utils/configOptions';
 
 type UseAgentRuntimeOptionsArgs = {
   availableAgents: AgentOption[];
@@ -19,9 +20,6 @@ const matches = (option: ConfigOption, category: string) =>
 const findOption = (options: ConfigOption[], category: string) =>
   options.find((option) => option.id === category)
   ?? options.find((option) => option.category === category);
-
-const isReasoning = (option: ConfigOption) =>
-  matches(option, 'thought_level') || matches(option, 'reasoning_effort');
 
 const accepts = (option: ConfigOption, value?: string) =>
   !!value && (option.type === 'boolean'
@@ -106,9 +104,7 @@ export function useAgentRuntimeOptions({
     });
 
   const modeOption = findOption(effectiveOptions, 'mode');
-  const reasoningOption = effectiveOptions.find((option) =>
-    option.id === 'thought_level' || option.id === 'reasoning_effort'
-  ) ?? effectiveOptions.find(isReasoning);
+  const reasoningOption = findReasoningEffortOption(effectiveOptions);
   const selectedModeId = modeOption ? configValues[modeOption.id] ?? '' : '';
   const selectedReasoningEffortId = reasoningOption ? configValues[reasoningOption.id] ?? '' : '';
   const availableModes = modeOption?.options.map((option) => ({

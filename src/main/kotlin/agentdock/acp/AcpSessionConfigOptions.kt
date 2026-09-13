@@ -47,6 +47,13 @@ internal data class AcpConfigOptionValue(
     val description: String? = null
 )
 
+private val REASONING_EFFORT_OPTION_IDS = setOf("effort", "reasoning_effort")
+
+internal fun List<AcpConfigOption>.findReasoningEffortOption(): AcpConfigOption? =
+    firstOrNull { it.id in REASONING_EFFORT_OPTION_IDS }
+        ?: firstOrNull { it.id == "thought_level" }
+        ?: firstOrNull { it.category == "thought_level" }
+
 internal fun configProbeSessionKey(adapterName: String, sessionId: String): String {
     return "$adapterName\u0000$sessionId"
 }

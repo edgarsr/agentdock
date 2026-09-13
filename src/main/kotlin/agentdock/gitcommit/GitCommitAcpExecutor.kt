@@ -28,6 +28,7 @@ import agentdock.acp.AcpClientService
 import agentdock.acp.awaitPendingSessionUpdates
 import agentdock.acp.ensureExecutionTargetCurrent
 import agentdock.acp.ensureSharedProcessStarted
+import agentdock.acp.findReasoningEffortOption
 import agentdock.acp.processKey
 import agentdock.acp.resolveModelToApply
 import agentdock.acp.resolveSessionCwd
@@ -195,9 +196,7 @@ internal class GitCommitAcpExecutor(
         }
 
         val effortId = selectedReasoningEffortId.trim().takeIf(String::isNotEmpty) ?: return
-        val effortOption = metadata.configOptions.firstOrNull { option ->
-            option.matchesCategory("thought_level") || option.matchesCategory("reasoning_effort")
-        } ?: return
+        val effortOption = metadata.configOptions.findReasoningEffortOption() ?: return
         if (!effortOption.accepts(effortId)) return
 
         val activeProtocol = protocol

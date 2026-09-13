@@ -6,6 +6,7 @@ import {
 } from '../../types/chat';
 import { SettingsCheckbox, SettingsField } from './SettingsLayout';
 import { DropdownOption, DropdownSelect } from '../ui/DropdownSelect';
+import { findReasoningEffortOption } from '../../utils/configOptions';
 
 interface GitCommitGenerationSettingsProps {
   settings: GitCommitGenerationSettingsValue;
@@ -19,15 +20,9 @@ function resolveModelId(agent: AgentOption | undefined, preferredModelId: string
   return [preferredModelId, agent?.currentModelId].find(known) ?? models[0]?.modelId ?? '';
 }
 
-const matches = (option: ConfigOption, category: string) =>
-  option.id === category || option.category === category;
-
-const isReasoningEffort = (option: ConfigOption) =>
-  matches(option, 'thought_level') || matches(option, 'reasoning_effort');
-
 function resolveReasoningOption(agent: AgentOption | undefined, modelId: string): ConfigOption | undefined {
   const options = agent?.configOptionsByModel?.[modelId] ?? agent?.configOptions ?? [];
-  return options.find(isReasoningEffort);
+  return findReasoningEffortOption(options);
 }
 
 function resolveReasoningEffortId(option: ConfigOption | undefined, preferredEffortId: string): string {
