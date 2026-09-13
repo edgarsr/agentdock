@@ -4,7 +4,7 @@ import { UsageIcon } from './UsageIcon';
 
 function usesCursorModelsQuota(modelId?: string): boolean {
   const normalized = modelId?.trim().toLowerCase() ?? '';
-  return normalized.startsWith('auto') || normalized.includes('composer') || normalized.includes('grok');
+  return normalized === 'default' || normalized.includes('composer') || normalized.includes('grok');
 }
 
 export function CursorChatUsage({ modelId }: { modelId?: string }) {
