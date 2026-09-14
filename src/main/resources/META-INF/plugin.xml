@@ -51,11 +51,11 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Antigravity usage quotas are now displayed in the plugin.</li>
-            <li>Added support for JetBrains Junie.</li>
-            <li>Added GPT Transcriber and Gemini Transcriber as voice input options.</li>
-            <li>Added the ability to search chat history by title.</li>
-            <li>Fixed minor bugs and refined the UI.</li>
+            <li>Updated Cursor configuration handling to display all config options, including model-specific effort levels.</li>
+            <li>Added Cursor usage quota data to the chat.</li>
+            <li>Improved Codex error messages to show more complete details.</li>
+            <li>Updated the ACP Kotlin SDK to the latest stable version.</li>
+            <li>Refined the UI and fixed minor bugs.</li>
         </ul>
     ]]></change-notes>
 
