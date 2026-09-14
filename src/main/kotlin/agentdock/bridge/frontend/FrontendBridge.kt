@@ -115,7 +115,7 @@ internal class FrontendBridge(
         commands.register("cursor") { cursorType ->
             ApplicationManager.getApplication().invokeLater({
                 if (!browser.isDisposed) {
-                    browser.component.cursor = Cursor.getPredefinedCursor(awtCursor(cursorType))
+                    browser.cefBrowser.uiComponent.cursor = Cursor.getPredefinedCursor(awtCursor(cursorType))
                 }
             }, ModalityState.any())
         }
