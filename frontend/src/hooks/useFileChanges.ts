@@ -49,10 +49,7 @@ export function useFileChanges(
 ) {
   const sessionEventPrefix = stableToolCallEventId(adapterName, sessionId, '');
   const [undoErrorMessage, setUndoErrorMessage] = useState<string | null>(null);
-  const [computedStats, setComputedStats] = useState<{
-    source: FileChangeSummary[];
-    byFilePath: Record<string, FileChangeStatsPayload>;
-  } | null>(null);
+  const [computedStats, setComputedStats] = useState<Record<string, FileChangeStatsPayload> | null>(null);
   const [refreshRevision, setRefreshRevision] = useState(0);
   // Status-only tools may change files through the shell without supplying diffs.
   const editToolCallIdsRef = useRef(new Set<string>());
@@ -116,7 +113,6 @@ export function useFileChanges(
         && APPLIED_STATUSES.has(payload.status.toLowerCase())
         && !editToolCallIdsRef.current.has(payload.toolCallId)) {
         externalRefreshRef.current = true;
-        setComputedStats(null);
         setRefreshRevision((revision) => revision + 1);
       }
     };
@@ -275,13 +271,13 @@ export function useFileChanges(
           else knownEditDeletedPathsRef.current.delete(file.filePath);
           nextStats[file.filePath] = file;
         });
-        setComputedStats({ source: baseFileChanges, byFilePath: nextStats });
+        setComputedStats(nextStats);
       })
       .catch((err) => {
         if (!cancelled) {
           if (externalRefresh) externalRefreshRef.current = false;
           console.error('[useFileChanges] Failed to compute file change stats:', err);
-          setComputedStats({ source: baseFileChanges, byFilePath: {} });
+          setComputedStats({});
         }
       });
 
@@ -290,14 +286,13 @@ export function useFileChanges(
     };
   }, [baseFileChanges, refreshRevision]);
 
-  const statsPending = baseFileChanges.length > 0 && computedStats?.source !== baseFileChanges;
-  const statsByFilePath = computedStats?.source === baseFileChanges ? computedStats.byFilePath : {};
-
   const fileChanges = useMemo<FileChangeSummary[]>(() => {
-    if (statsPending || !sessionId || loadedSessionKey !== `${sessionId}:${adapterName}`) return [];
+    if (!sessionId || loadedSessionKey !== `${sessionId}:${adapterName}`) return [];
 
+    // Keep the last statistics visible while refreshing, but always use current
+    // operation chains so accepted/undone files disappear immediately.
     return baseFileChanges.flatMap((fc) => {
-      const stats = statsByFilePath[fc.filePath];
+      const stats = computedStats?.[fc.filePath];
       if (!stats || (stats.status !== 'D' && stats.additions === 0 && stats.deletions === 0)) return [];
       return [{
         ...fc,
@@ -306,7 +301,7 @@ export function useFileChanges(
         deletions: stats.deletions,
       }];
     });
-  }, [baseFileChanges, statsByFilePath, statsPending, sessionId, adapterName, loadedSessionKey]);
+  }, [baseFileChanges, computedStats, sessionId, adapterName, loadedSessionKey]);
   fileChangesRef.current = fileChanges;
 
   const totalAdditions = useMemo(() => fileChanges.reduce((sum, fc) => sum + fc.additions, 0), [fileChanges]);
