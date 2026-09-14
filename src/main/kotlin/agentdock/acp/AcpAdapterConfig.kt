@@ -48,7 +48,8 @@ object AcpAdapterConfig {
         val entryPath: String? = null,
         val args: List<String> = emptyList(),
         val resumeArgs: List<String> = emptyList(),
-        val minimumVersion: String? = null
+        val minimumVersion: String? = null,
+        val environment: Map<String, String> = emptyMap()
     )
 
     @Serializable

@@ -158,7 +158,7 @@ private fun AcpBridge.buildAdapterPayload(
     val updateAvailable = updateKnown && latestVersion != installedVersion
     val isAuthenticating = authActionJobs[info.id]?.isActive == true
     val cliAvailable = downloaded == true && info.cli != null && cli.isIdeTerminalAvailable()
-    val cliResumeAvailable = cliAvailable && !info.cli?.resumeArgs.isNullOrEmpty()
+    val cliResumeAvailable = cliAvailable && info.cli.resumeArgs.isNotEmpty()
     val rawInitError = service.adapterInitializationError(info.id) ?: ""
     val initializationDetail = if (isInitializing) service.adapterInitializationDetail(info.id).orEmpty() else ""
     val initError = rawInitError

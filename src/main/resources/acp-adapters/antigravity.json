@@ -24,6 +24,9 @@
       "win": "agy",
       "unix": "agy"
     },
-    "minimumVersion": "1.1.11"
+    "minimumVersion": "1.1.11",
+    "environment": {
+      "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
+    }
   }
 }

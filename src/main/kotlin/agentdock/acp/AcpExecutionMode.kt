@@ -1,6 +1,7 @@
 package agentdock.acp
 
 import agentdock.utils.AgentDockPaths
+import com.intellij.execution.configurations.GeneralCommandLine
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -39,13 +40,15 @@ internal object AcpExecutionMode {
     fun runCommand(
         command: List<String>,
         stdin: String? = null,
+        environmentOverrides: Map<String, String> = emptyMap(),
         timeoutSeconds: Long = 30
     ): CommandResult? {
         return runCatching {
-            val builder = ProcessBuilder(command)
-                .redirectErrorStream(false)
-            AcpProcessEnvironment.applyTo(builder)
-            val process = builder.start()
+            // Use the same process launcher as regular ACP processes for headless commands.
+            val commandLine = GeneralCommandLine(command)
+                .withRedirectErrorStream(false)
+                .withEnvironment(AcpProcessEnvironment.baseEnvironment() + environmentOverrides)
+            val process = commandLine.createProcess()
 
             if (stdin != null) {
                 process.outputStream.bufferedWriter().use { writer -> writer.write(stdin) }

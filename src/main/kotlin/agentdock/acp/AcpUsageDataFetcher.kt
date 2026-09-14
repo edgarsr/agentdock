@@ -131,13 +131,17 @@ internal object AcpUsageDataFetcher {
             return@cachedUsage ""
         }
 
-        val (_, command) = buildAdapterCliCommandParts(
+        val (adapter, command) = buildAdapterCliCommandParts(
             adapterId = "antigravity",
             extraArgs = listOf("--output-format", "json", "--print", "/usage")
         ) ?: run {
             return@cachedUsage ""
         }
-        val result = AcpExecutionMode.runCommand(command, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
+        val result = AcpExecutionMode.runCommand(
+            command = command,
+            environmentOverrides = adapter.cli?.environment.orEmpty(),
+            timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS
+        )
         if (result?.exitCode == 0) {
             normalizeAntigravityUsage(result.stdout)
         } else {
@@ -151,7 +155,11 @@ internal object AcpUsageDataFetcher {
             extraArgs = listOf("--version")
         ) ?: return false
         val minimumVersion = adapter.cli?.minimumVersion?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-        val result = AcpExecutionMode.runCommand(command, timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS)
+        val result = AcpExecutionMode.runCommand(
+            command = command,
+            environmentOverrides = adapter.cli.environment,
+            timeoutSeconds = LOCAL_USAGE_TIMEOUT_SECONDS
+        )
             ?.takeIf { it.exitCode == 0 }
             ?: return false
         val version = Regex("""\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b""")
