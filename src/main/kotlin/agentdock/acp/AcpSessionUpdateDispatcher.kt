@@ -34,7 +34,7 @@ internal fun AcpClientService.ensureAsyncSessionUpdates(sharedProcess: AcpClient
             val handlers = field.get(protocol) as AtomicRef<
                 PersistentMap<MethodName, suspend (JsonRpcNotification) -> Unit>
             >
-            val methodName = AcpMethod.ClientMethods.SessionUpdate.methodName
+            val methodName = AcpMethod.ClientMethods.V1.SessionUpdate.methodName
             val original = handlers.value[methodName] ?: return
 
             val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

@@ -28,7 +28,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.agentclientprotocol:acp:0.24.0") {
+    implementation("com.agentclientprotocol:acp:0.30.1") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")

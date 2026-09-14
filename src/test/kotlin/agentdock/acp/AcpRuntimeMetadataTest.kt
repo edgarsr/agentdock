@@ -378,7 +378,7 @@ class AcpRuntimeMetadataTest {
         assertEquals(null, runtime.currentModeId)
         assertEquals(null, runtime.currentReasoningEffortId)
         assertEquals(listOf("model", "mode"), runtime.configOptionsForModel("model-a").map { it.id })
-        assertEquals(listOf("fast_mode"), runtime.configOptionsForModel("model-b").map { it.id })
+        assertEquals(listOf("model", "fast_mode"), runtime.configOptionsForModel("model-b").map { it.id })
     }
 
     @Test

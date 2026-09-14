@@ -10,7 +10,7 @@ dependencies {
     implementation(project(":shared"))
     // Runtime copies are packaged as separate JARs in the root plugin lib directory. The
     // agent-dock.backend-libraries embedded module exposes that classpath to this content module.
-    compileOnly("com.agentclientprotocol:acp:0.24.0") {
+    compileOnly("com.agentclientprotocol:acp:0.30.1") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
@@ -22,6 +22,14 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     testImplementation(kotlin("test-junit"))
+}
+
+configurations.named("testCompileOnly") {
+    extendsFrom(configurations.named("compileOnly").get())
+}
+
+configurations.named("testRuntimeOnly") {
+    extendsFrom(configurations.named("compileOnly").get())
 }
 
 kotlin {

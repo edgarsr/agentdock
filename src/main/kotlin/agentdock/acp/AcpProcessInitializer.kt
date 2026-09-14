@@ -4,7 +4,7 @@ import agentdock.BuildConfig
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.model.ClientCapabilities
-import com.agentclientprotocol.model.LATEST_PROTOCOL_VERSION
+import com.agentclientprotocol.model.PROTOCOL_VERSION_V1
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.transport.StdioTransport
 import java.io.File
@@ -207,7 +207,7 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
         val result = withTimeoutOrNull(ACP_INITIALIZE_ATTEMPT_TIMEOUT_MS) {
             client.initialize(
                 ClientInfo(
-                    LATEST_PROTOCOL_VERSION,
+                    PROTOCOL_VERSION_V1,
                     ClientCapabilities(
                         _meta = buildJsonObject {
                             put("terminal-auth", JsonPrimitive(true))
