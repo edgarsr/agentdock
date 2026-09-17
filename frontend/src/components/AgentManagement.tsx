@@ -272,7 +272,11 @@ export function AgentManagementView({
             const usesCliLogin = agent.loginMethod === 'cli';
             const hasLoginMenu = usesAcpLogin || usesCliLogin;
             const isStarting = !!agent.initializing;
-            const showLogin = !isStarting && agent.loggedIn !== true;
+            const showLogin = !isStarting && (
+              hasLoginMenu
+                ? agent.loggedIn === false
+                : agent.loggedIn !== true
+            );
             const showLogout = !isStarting && agent.logoutAvailable === true && agent.loggedIn === true;
             const showCliAuthFallback = !isStarting && agent.loggedIn === true && agent.logoutAvailable !== true;
             const showUsage = agent.loginStatusSupported !== true || agent.loggedIn === true;

@@ -69,7 +69,7 @@ sourceSets {
 
 intellijPlatform {
     buildSearchableOptions = false
-    splitMode = true
+    splitMode = false
     pluginInstallationTarget = SplitModeAware.PluginInstallationTarget.BOTH
 
     pluginConfiguration {

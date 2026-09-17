@@ -38,7 +38,6 @@ class AcpBridge(
     internal val authActionMethodIds = ConcurrentHashMap<String, String>()
     internal val authErrors = ConcurrentHashMap<String, String>()
     internal val loginStatusJobs = ConcurrentHashMap<String, Job>()
-    internal val pendingLoginStatusStates = ConcurrentHashMap<String, Boolean>()
     internal val completedLoginStatusRefreshes = ConcurrentHashMap.newKeySet<String>()
     internal val updateCheckJobs = ConcurrentHashMap<String, Job>()
     internal val latestVersionStates = ConcurrentHashMap<String, String>()

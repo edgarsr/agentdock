@@ -294,11 +294,7 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
                 val loggedIn = AcpLoginStatus.resolve(info, target)
                 if (loggedIn != null) {
                     val becameLoggedIn = loggedIn && service.loginStatusStates[info.id] == false
-                    if (stageForFullRefresh) {
-                        pendingLoginStatusStates[info.id] = loggedIn
-                    } else {
-                        service.loginStatusStates[info.id] = loggedIn
-                    }
+                    service.loginStatusStates[info.id] = loggedIn
                     if (becameLoggedIn) {
                         service.stopSharedProcess(info.id)
                         service.initializeAdapterInBackground(info.id)
@@ -321,7 +317,7 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
             }
         }
         if (stageForFullRefresh) completedLoginStatusRefreshes.add(info.id)
-        if (!stageForFullRefresh) pushAdapters()
+        pushAdapters()
     }
 }
 
@@ -495,8 +491,6 @@ internal fun AcpBridge.finishFullAdapterRefreshIfIdle() {
             agentVersionJobs.values.any { !it.isCompleted }
     if (!hasActiveChecks) {
         if (fullAdapterRefreshInProgress.compareAndSet(true, false)) {
-            service.loginStatusStates.putAll(pendingLoginStatusStates)
-            pendingLoginStatusStates.clear()
             completedLoginStatusRefreshes.clear()
             pushAdapters()
             pushAdapterRefreshState(false)
@@ -516,7 +510,6 @@ internal fun AcpBridge.resetAdapterRefreshState() {
     downloadProbeStates.clear()
     loginStatusJobs.values.forEach { it.cancel() }
     loginStatusJobs.clear()
-    pendingLoginStatusStates.clear()
     completedLoginStatusRefreshes.clear()
     updateCheckJobs.values.forEach { it.cancel() }
     updateCheckJobs.clear()
@@ -535,7 +528,6 @@ internal fun AcpBridge.resetDownloadProbeState(adapterId: String? = null) {
         loginStatusJobs.values.forEach { it.cancel() }
         loginStatusJobs.clear()
         service.loginStatusStates.clear()
-        pendingLoginStatusStates.clear()
         completedLoginStatusRefreshes.clear()
         agentVersionJobs.values.forEach { it.cancel() }
         agentVersionJobs.clear()
@@ -549,7 +541,6 @@ internal fun AcpBridge.resetDownloadProbeState(adapterId: String? = null) {
     }
     loginStatusJobs.remove(adapterId)?.cancel()
     service.loginStatusStates.remove(adapterId)
-    pendingLoginStatusStates.remove(adapterId)
     completedLoginStatusRefreshes.remove(adapterId)
     agentVersionJobs.remove(adapterId)?.cancel()
     agentVersionStates.remove(adapterId)
