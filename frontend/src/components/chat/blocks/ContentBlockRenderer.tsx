@@ -34,7 +34,7 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       if (block.entry.kind === 'edit') {
         return <EditBlock block={block} />;
       }
-      return <OtherToolBlock block={block} />;
+      return <OtherToolBlock block={block} onImageClick={onImageClick} />;
     case 'plan':
       return <PlanBlockComponent block={block} />;
     case 'image': {
