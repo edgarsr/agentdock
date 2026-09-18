@@ -255,7 +255,7 @@ export function AgentManagementView({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto w-full px-2 pb-16">
-        <div className="flex flex-col max-w-[1200px] mx-auto w-full">
+        <div className="flex flex-col max-w-[800px] mx-auto w-full">
           {agents.map((agent, index) => {
             const isDownloadedKnown = agent.downloadedKnown === true;
             const isDownloaded = agent.downloaded === true;

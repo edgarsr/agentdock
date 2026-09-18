@@ -14,7 +14,7 @@ const PermissionBar = memo(({ request, onRespond }: PermissionBarProps) => {
     <>
       <div className="border-t border-border w-full text-foreground-secondary text-ide-small" />
 
-      <div className="mx-auto w-full max-w-[1200px] px-5 py-2">
+      <div className="mx-auto w-full max-w-[800px] px-5 py-2">
         <div className="flex items-center gap-3 min-w-0 overflow-x-auto">
 
           <div className="">

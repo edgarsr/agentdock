@@ -85,7 +85,7 @@ export default function ChatInput(props: ChatInputProps) {
 
   return (
     <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-2 pt-2">
-      <div className="mx-auto h-full w-full max-w-[1200px] flex flex-col">
+      <div className="mx-auto h-full w-full max-w-[800px] flex flex-col">
         <div className="relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)]
           bg-editor-bg transition-all focus-within:ring-1 focus-within:[--tw-ring-color:color-mix(in_srgb,var(--ide-Button-default-focusColor)_70%,transparent)]">
 

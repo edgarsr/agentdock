@@ -200,7 +200,7 @@ export function McpServersView() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
+        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {servers.length === 0 && !form && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary p-4">
             <Network size={28} strokeWidth={1.5} />

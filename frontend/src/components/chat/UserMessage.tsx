@@ -173,7 +173,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber }: UserMe
   return (
     <div className="flex flex-col mb-8 animate-in fade-in slide-in-from-bottom-2">
       <div className="flex justify-end relative">
-        <div className="user-message-bubble bg-accent rounded-[6px] group max-w-[85%] px-4 pt-3 pb-2 text-foreground"
+        <div className="user-message-bubble bg-accent rounded-[6px] group max-w-[80%] px-4 pt-3 pb-2 text-foreground"
           style={{backgroundColor: 'var(--user-message-bg)',}}
         >
           <div>

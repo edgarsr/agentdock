@@ -6,8 +6,8 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbAware
-import com.intellij.openapi.wm.ToolWindowManager
 import org.jetbrains.annotations.NotNull
+import agentdock.ui.AgentDockUiHost
 import agentdock.utils.toProjectRelativePath
 
 class AddFileReferenceToChatAction : AnAction(), DumbAware {
@@ -31,9 +31,8 @@ class AddFileReferenceToChatAction : AnAction(), DumbAware {
             fileName = virtualFile.name
         )
 
-        ToolWindowManager.getInstance(project).getToolWindow("Agent Dock")?.activate(
-            { ExternalCodeReferenceDispatcher.dispatch(project, reference) },
-            true
-        )
+        AgentDockUiHost.getInstance(project).show {
+            ExternalCodeReferenceDispatcher.dispatch(project, reference)
+        }
     }
 }

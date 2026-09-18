@@ -9,6 +9,7 @@
         <postStartupActivity implementation="agentdock.bridge.frontend.FrontendNativeStateActivity"/>
         <toolWindow id="Agent Dock" icon="/icons/agent_dock_toolwindow.svg" anchor="right"
                     factoryClass="agentdock.AgentDockToolWindowFactory"/>
+        <fileEditorProvider id="agent-dock-ui" implementation="agentdock.ui.AgentDockFileEditorProvider"/>
         <statusBarWidgetFactory id="AgentDockQuotaWidget" implementation="agentdock.ui.AgentDockQuotaWidgetFactory"/>
     </extensions>
 

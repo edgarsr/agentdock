@@ -167,7 +167,7 @@ export function PromptQueueList({
 
   return (
     <div className="border-t border-border px-4 py-2">
-      <div className="mx-auto w-full max-w-[1200px] overflow-hidden rounded-[6px] border border-border bg-editor-bg">
+      <div className="mx-auto w-full max-w-[800px] overflow-hidden rounded-[6px] border border-border bg-editor-bg">
         <div
           role="button"
           tabIndex={0}

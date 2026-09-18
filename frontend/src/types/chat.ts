@@ -509,6 +509,7 @@ export interface GlobalSettings {
   audioTranscription: AudioTranscriptionSettings;
   gitCommitGeneration: GitCommitGenerationSettings;
   quotaWidgetEnabled: boolean;
+  openInEditor: boolean;
 }
 
 export interface GlobalSettingsPayload {

@@ -199,7 +199,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
       </div>
 
       <div className="flex-1 overflow-y-auto w-full space-y-1 mt-1">
-        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
+        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {isLoading ? (
           <div className="flex justify-center p-8 text-foreground">Loading history...</div>
         ) : filteredHistoryList.length === 0 ? (

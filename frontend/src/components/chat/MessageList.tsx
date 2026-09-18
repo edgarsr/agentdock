@@ -365,7 +365,7 @@ function MessageList({
         onKeyDown={handleKeyDown}
         className="flex-1 min-h-0 overflow-y-auto scroll-auto [overflow-anchor:none] px-6 py-6 space-y-6 opacity-100 transition-opacity duration-300"
       >
-      <div ref={contentRef} className="mx-auto w-full max-w-[1200px] flex flex-col">
+      <div ref={contentRef} className="mx-auto w-full max-w-[800px] flex flex-col">
         
         {hiddenCount > 0 && !isHistoryReplaying && (
           <div className="flex justify-center mb-12">

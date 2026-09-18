@@ -43,7 +43,8 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
         providers: payload?.settings?.audioTranscription?.providers ?? {}
       },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
-      quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false
+      quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false,
+      openInEditor: payload?.settings?.openInEditor ?? false
     }
   };
 }
@@ -176,8 +177,16 @@ export function SettingsView() {
   return (
     <div className='flex h-full flex-col overflow-hidden'>
       <div className='w-full flex-1 overflow-y-auto'>
-        <div className='mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-8 pt-6'>
+        <div className='mx-auto flex w-full max-w-[800px] flex-col gap-8 px-4 pb-8 pt-6'>
           <SettingsSection title='Appearance'>
+            <SettingsCheckbox
+              title='Open in Editor'
+              description='Show the plugin as an editor tab instead of the side tool window'
+              checked={globalSettings.settings.openInEditor}
+              onToggle={() => updateGlobalSettings({ openInEditor: !globalSettings.settings.openInEditor })}
+              ariaLabel='Open in the editor'
+            />
+
             <SettingsField label='Base Font Size' colon>
               <DropdownSelect
                 value={String(globalSettings.settings.uiFontSizeOffsetPx)}

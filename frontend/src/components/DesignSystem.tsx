@@ -19,7 +19,7 @@ export function DesignSystemView() {
 
     return (
         <div className="h-full overflow-y-auto bg-background text-foreground">
-            <div className="max-w-[1200px] mx-auto w-full p-6 space-y-8">
+            <div className="max-w-[800px] mx-auto w-full p-6 space-y-8">
             {/* Colors */}
             <section className="space-y-4">
                 <h2 className="text-sm font-bold text-foreground-secondary">COLORS</h2>

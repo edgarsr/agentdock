@@ -234,7 +234,7 @@ export function EmptyStateView({
         </div>
       ) : (
         <>
-          <div className="mx-auto flex min-h-full w-full max-w-[1200px] flex-col px-4 pb-4 sm:px-6">
+          <div className="mx-auto flex min-h-full w-full max-w-[800px] flex-col px-4 pb-4 sm:px-6">
             <div className="flex flex-1 items-center justify-center pt-8 pb-16">
               <div className="flex flex-col items-center text-center">
                 {runnableAgents.length > 0 ? (

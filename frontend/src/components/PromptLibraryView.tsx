@@ -105,7 +105,7 @@ export function PromptLibraryView() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[1200px] mx-auto w-full min-h-full flex flex-col">
+        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {prompts.length === 0 && !form && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary">
             <Bookmark size={28} strokeWidth={1.5} />
