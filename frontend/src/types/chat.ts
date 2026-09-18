@@ -505,6 +505,7 @@ export interface GitCommitGenerationSettings {
 export interface GlobalSettings {
   audioNotificationsEnabled: boolean;
   uiFontSizeOffsetPx: number;
+  uiZoomPercent: number;
   userMessageBackgroundStyle: 'default' | 'blue' | 'background-secondary' | 'primary' | 'secondary' | 'accent' | 'input' | 'editor-bg';
   audioTranscription: AudioTranscriptionSettings;
   gitCommitGeneration: GitCommitGenerationSettings;

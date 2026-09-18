@@ -78,6 +78,7 @@ class AgentDockUiHost(
         ApplicationManager.getApplication().invokeLater({
             if (project.isDisposed) return@invokeLater
             applyOpenInEditor(settings.openInEditor)
+            applyUiZoom(settings.uiZoomPercent)
             bridge?.eval(IdeTheme.generateCssUpdateScript())
         }, ModalityState.any())
     }
@@ -235,6 +236,9 @@ class AgentDockUiHost(
                         cefBrowser.executeJavaScript(bridge.invokeApiScript(), cefBrowser.url, 0)
                         cefBrowser.executeJavaScript(BridgeScripts.bridgeApi(), cefBrowser.url, 0)
                         cefBrowser.executeJavaScript(BridgeScripts.cursorTracking(), cefBrowser.url, 0)
+                        ApplicationManager.getApplication().invokeLater({
+                            applyUiZoom(FrontendSettings.current.uiZoomPercent)
+                        }, ModalityState.any())
                     }
                 }
             }, browser.cefBrowser)
@@ -272,10 +276,27 @@ class AgentDockUiHost(
         browser.loadHTML(AssetLoader.loadAndInlineAssets(javaClass))
     }
 
+    private fun applyUiZoom(percent: Int) {
+        val browser = browser ?: return
+        if (browser.isDisposed) return
+        val target = percent.coerceIn(25, 500) / 100.0
+        if (kotlin.math.abs(browser.zoomLevel - target) < 0.005) return
+        browser.setZoomLevel(target)
+    }
+
+    private fun applyZoomShortcut(keyCode: Int) {
+        val browser = browser ?: return
+        if (browser.isDisposed) return
+        val current = kotlin.math.round(browser.zoomLevel * 100.0).toInt().coerceIn(25, 500)
+        val next = nextUiZoomPercent(current, keyCode)
+        applyUiZoom(next)
+        bridge?.eval("window.dispatchEvent(new CustomEvent('agent-dock-ui-zoom',{detail:$next}));")
+    }
+
     private fun installDirectJcefInput(browser: JBCefBrowser) {
         val dispatcher = object : IdeEventQueue.NonLockedEventDispatcher {
             override fun dispatch(e: AWTEvent): Boolean {
-                if (e !is KeyEvent || !e.shouldGoDirectlyToJcef()) return false
+                if (e !is KeyEvent) return false
 
                 val focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
                 if (focusOwner == null ||
@@ -285,6 +306,16 @@ class AgentDockUiHost(
                     return false
                 }
 
+                if (e.isControlDown && !e.isAltDown && !e.isMetaDown && e.isZoomShortcut()) {
+                    if (e.id == KeyEvent.KEY_PRESSED) {
+                        applyZoomShortcut(e.keyCode)
+                    }
+                    return e.id == KeyEvent.KEY_PRESSED ||
+                        e.id == KeyEvent.KEY_RELEASED ||
+                        e.id == KeyEvent.KEY_TYPED
+                }
+
+                if (!e.shouldGoDirectlyToJcef()) return false
                 browser.cefBrowser.sendKeyEvent(e)
                 return true
             }
@@ -366,4 +397,25 @@ private fun KeyEvent.isTextControlShortcut(): Boolean {
         KeyEvent.VK_END -> true
         else -> false
     }
+}
+
+private fun KeyEvent.isZoomShortcut(): Boolean = when (keyCode) {
+    KeyEvent.VK_EQUALS,
+    KeyEvent.VK_PLUS,
+    KeyEvent.VK_ADD,
+    KeyEvent.VK_MINUS,
+    KeyEvent.VK_SUBTRACT,
+    KeyEvent.VK_0,
+    KeyEvent.VK_NUMPAD0 -> true
+    else -> false
+}
+
+private val UI_ZOOM_PRESETS = intArrayOf(50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300)
+
+private fun nextUiZoomPercent(current: Int, keyCode: Int): Int = when (keyCode) {
+    KeyEvent.VK_0, KeyEvent.VK_NUMPAD0 -> 100
+    KeyEvent.VK_MINUS, KeyEvent.VK_SUBTRACT ->
+        UI_ZOOM_PRESETS.lastOrNull { it < current } ?: UI_ZOOM_PRESETS.first()
+    else ->
+        UI_ZOOM_PRESETS.firstOrNull { it > current } ?: UI_ZOOM_PRESETS.last()
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AgentOption,
   AudioTranscriptionSettings,
@@ -24,6 +24,30 @@ function normalizeGitCommitGenerationSettings(
   };
 }
 
+const UI_ZOOM_PRESETS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+
+function normalizeUiZoomPercent(value: unknown): number {
+  const percent = Math.round(Number(value));
+  if (!Number.isFinite(percent)) return 100;
+  return Math.max(25, Math.min(500, percent));
+}
+
+function zoomSelectOptions(currentPercent: number): DropdownOption[] {
+  const percents = UI_ZOOM_PRESETS.includes(currentPercent)
+    ? UI_ZOOM_PRESETS
+    : [...UI_ZOOM_PRESETS, currentPercent].sort((left, right) => left - right);
+  return percents.map((percent) => ({
+    value: String(percent),
+    label: `${percent}%`
+  }));
+}
+
+function readUiZoom() {
+  (
+    window as Window & { __agentDockInvoke?: (name: string, payload?: string) => void }
+  ).__agentDockInvoke?.('readUiZoom', '');
+}
+
 function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undefined): GlobalSettingsPayload {
   const uiFontSizeOffsetPx = Number.isFinite(payload?.settings?.uiFontSizeOffsetPx)
     ? Math.max(-3, Math.min(3, Math.round(payload!.settings!.uiFontSizeOffsetPx)))
@@ -32,6 +56,7 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
     settings: {
       audioNotificationsEnabled: payload?.settings?.audioNotificationsEnabled ?? true,
       uiFontSizeOffsetPx,
+      uiZoomPercent: normalizeUiZoomPercent(payload?.settings?.uiZoomPercent),
       userMessageBackgroundStyle: userMessageBackgroundOptions.some(
         (option) => option.id === payload?.settings?.userMessageBackgroundStyle
       )
@@ -101,10 +126,12 @@ export function SettingsView() {
   );
   const [installedAgents, setInstalledAgents] = useState<AgentOption[]>([]);
   const [uiFontSizeBasePx, setUiFontSizeBasePx] = useState(() => readIdeFontSizePx());
+  const liveZoomRef = useRef<number | null>(null);
+  const persistLiveZoomRef = useRef(false);
   const uiFontSizeSelectOptions: DropdownOption[] = Array.from({ length: 7 }, (_, index) => {
     const offset = index - 3;
     const px = uiFontSizeBasePx + offset;
-    return { value: String(offset), label: offset === 0 ? `${px}px (default)` : `${px}px` };
+    return { value: String(offset), label: `${px}px` };
   });
 
   useEffect(() => {
@@ -129,8 +156,24 @@ export function SettingsView() {
 
     const cleanupGlobalSettings = ACPBridge.onGlobalSettings((e) => {
       const normalized = normalizeGlobalSettings(e.detail?.payload);
+      if (liveZoomRef.current != null) {
+        normalized.settings.uiZoomPercent = liveZoomRef.current;
+      }
       setGlobalSettings(normalized);
     });
+    const onUiZoom = (event: Event) => {
+      const percent = Number((event as CustomEvent).detail);
+      if (!Number.isFinite(percent)) return;
+      liveZoomRef.current = percent;
+      setGlobalSettings((prev) => {
+        const next = { ...prev.settings, uiZoomPercent: percent };
+        if (persistLiveZoomRef.current) {
+          ACPBridge.saveGlobalSettings(next);
+        }
+        return { ...prev, settings: next };
+      });
+    };
+    window.addEventListener('agent-dock-ui-zoom', onUiZoom);
     const cleanupAdapters = ACPBridge.onAdapters((e) => {
       const nextInstalledAgents = Array.isArray(e.detail.adapters)
         ? e.detail.adapters.filter((agent) => agent.downloaded === true)
@@ -148,10 +191,44 @@ export function SettingsView() {
       window.addEventListener('settings-bridge-ready', handleBridgeReady);
     }
 
+    persistLiveZoomRef.current = false;
+    readUiZoom();
+
+    let zoomReadTimer: number | undefined;
+    const scheduleZoomRead = () => {
+      persistLiveZoomRef.current = true;
+      window.clearTimeout(zoomReadTimer);
+      zoomReadTimer = window.setTimeout(() => readUiZoom(), 50);
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      scheduleZoomRead();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (
+        event.code !== 'Equal' &&
+        event.code !== 'Minus' &&
+        event.code !== 'Digit0' &&
+        event.code !== 'NumpadAdd' &&
+        event.code !== 'NumpadSubtract' &&
+        event.code !== 'Numpad0'
+      ) {
+        return;
+      }
+      scheduleZoomRead();
+    };
+    window.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+
     return () => {
       cleanupGlobalSettings();
+      window.removeEventListener('agent-dock-ui-zoom', onUiZoom);
       cleanupAdapters();
       window.removeEventListener('settings-bridge-ready', handleBridgeReady);
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(zoomReadTimer);
     };
   }, []);
 
@@ -186,6 +263,24 @@ export function SettingsView() {
               onToggle={() => updateGlobalSettings({ openInEditor: !globalSettings.settings.openInEditor })}
               ariaLabel='Open in the editor'
             />
+
+            <SettingsField
+              label='Zoom'
+              colon
+              description='Ctrl+scroll, Ctrl++, Ctrl+-, and Ctrl+0 also change this'
+            >
+              <DropdownSelect
+                value={String(globalSettings.settings.uiZoomPercent)}
+                onChange={(value) => {
+                  const percent = Number(value);
+                  liveZoomRef.current = percent;
+                  persistLiveZoomRef.current = false;
+                  updateGlobalSettings({ uiZoomPercent: percent });
+                }}
+                options={zoomSelectOptions(globalSettings.settings.uiZoomPercent)}
+                className='max-w-full'
+              />
+            </SettingsField>
 
             <SettingsField label='Base Font Size' colon>
               <DropdownSelect
