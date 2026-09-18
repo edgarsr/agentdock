@@ -49,6 +49,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, enabl
       if (codeBlockMatches && codeBlockMatches.length % 2 !== 0) {
         processed += '\n```';
       }
+      processed = rewriteWindowsMarkdownImageHrefs(processed);
       const parsed = marked.parse(processed);
       const sanitizedHtml = sanitizeMarkdownHtml(typeof parsed === 'string' ? parsed : '');
       return enableCodeCopy ? decorateCodeBlocks(sanitizedHtml) : sanitizedHtml;
@@ -149,6 +150,23 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, enabl
     </>
   );
 };
+
+function rewriteWindowsMarkdownImageHrefs(markdown: string): string {
+  const rewritePart = (part: string) => part.replace(
+    /!\[([^\]]*)]\((?:<([^>\n]+)>|([^)\s]+))(\s+(?:"[^"]*"|'[^']*'))?\)/g,
+    (full, alt: string, bracketHref: string | undefined, plainHref: string | undefined, title = '') => {
+      const href = bracketHref ?? plainHref;
+      if (!href?.includes('\\')) return full;
+      const next = href.replace(/\\/g, '/');
+      const dest = bracketHref !== undefined ? `<${next}>` : next;
+      return `![${alt}](${dest}${title})`;
+    }
+  );
+
+  return markdown.split(/(```[\s\S]*?```)/).map((part, index) => (
+    index % 2 === 1 ? part : rewritePart(part)
+  )).join('');
+}
 
 function decorateCodeBlocks(html: string): string {
   const template = document.createElement('template');
