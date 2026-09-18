@@ -165,7 +165,7 @@ internal class FrontendBridge(
     }
 
     private fun awtCursor(cursorType: String): Int = when (cursorType) {
-        "pointer", "grab", "grabbing" -> Cursor.HAND_CURSOR
+        "pointer", "grab", "grabbing", "zoom-in" -> Cursor.HAND_CURSOR
         "text" -> Cursor.TEXT_CURSOR
         "move", "all-scroll" -> Cursor.MOVE_CURSOR
         "wait", "progress" -> Cursor.WAIT_CURSOR

@@ -30,7 +30,7 @@ internal object BridgeScripts {
                 '__onMode', '__onSessionConfigOptions', '__onPermissionRequest', '__onUndoResult',
                 '__onChangesState', '__onFileChangeStats', '__onConversationTranscriptSaved',
                 '__onConversationReplayLoaded', '__onAdapterDeleted', '__onFilesResult',
-                '__onFileIconResult', '__onThemeChanged', '__onHistoryList', '__onHistoryDeleteResult',
+                '__onFileIconResult', '__onLocalImageResult', '__onThemeChanged', '__onHistoryList', '__onHistoryDeleteResult',
                 '__onAssistantActivity',
                 '__onMcpServers', '__onMcpStatus', '__onPromptLibrary', '__onSystemInstructions',
                 '__onAudioTranscriptionFeature', '__onAudioTranscriptionResult',
@@ -83,6 +83,7 @@ internal object BridgeScripts {
             };
             window.__searchFiles = function(query) { invoke('searchFiles', query); };
             window.__requestFileIcon = function(path) { invoke('iconFile', JSON.stringify({ path: path })); };
+            window.__readLocalImage = function(path) { invoke('readLocalImage', JSON.stringify({ path: path })); };
             window.__undoFile = function(payload) { invoke('undoFile', payload); };
             window.__undoAllFiles = function(payload) { invoke('undoAllFiles', payload); };
             window.__processFile = function(payload) { invoke('processFile', payload); };

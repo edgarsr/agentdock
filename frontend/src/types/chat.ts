@@ -601,6 +601,8 @@ declare global {
     __searchFiles?: (query: string) => void;
     __requestFileIcon?: (path: string) => void;
     __onFileIconResult?: (result: { path: string; icon: string }) => void;
+    __readLocalImage?: (path: string) => void;
+    __onLocalImageResult?: (result: { path: string; dataUrl: string }) => void;
     __onThemeChanged?: () => void;
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;

@@ -12,9 +12,10 @@ import { MarkdownMessage } from '../MarkdownMessage';
 interface Props {
   block: RichContentBlock;
   isActivePrompt?: boolean;
+  onImageClick?: (src: string) => void;
 }
 
-export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = false }) => {
+export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = false, onImageClick }) => {
   switch (block.type) {
     case 'text':
       return <MarkdownMessage content={block.text} enableCodeCopy />;
@@ -36,16 +37,19 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
       return <OtherToolBlock block={block} />;
     case 'plan':
       return <PlanBlockComponent block={block} />;
-    case 'image':
+    case 'image': {
+      const src = block.data.startsWith('data:') ? block.data : `data:${block.mimeType};base64,${block.data}`;
       return (
         <div className="rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-sm">
           <img
-            src={block.data.startsWith('data:') ? block.data : `data:${block.mimeType};base64,${block.data}`}
+            src={src}
             alt="AI Attachment"
-            className="w-full h-auto"
+            className={`w-full h-auto${onImageClick ? ' cursor-zoom-in hover:opacity-90' : ''}`}
+            onClick={onImageClick ? () => onImageClick(src) : undefined}
           />
         </div>
       );
+    }
     case 'audio':
       return (
         <div className="rounded-lg overflow-hidden border border-[var(--ide-Borders-color)] shadow-sm max-w-md">

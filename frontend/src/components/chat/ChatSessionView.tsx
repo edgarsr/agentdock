@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useChatSession, UseChatSessionOptions } from '../../hooks/useChatSession';
 import { useFileChanges } from '../../hooks/useFileChanges';
 import { FileChangeSummary, Message } from '../../types/chat';
-import { Check, Copy, Download, X } from 'lucide-react';
 import { acquireJcefLivePromptRepaint } from '../../utils/jcefHostRepaint';
 import {
   buildConversationHandoffFromTranscriptFile,
@@ -17,11 +16,10 @@ import { PromptQueueList } from './input/PromptQueueList';
 import PermissionBar from './PermissionBar';
 import FileChangesPanel from './FileChangesPanel';
 import ConfirmationModal from '../ConfirmationModal';
-import { Tooltip } from './shared/Tooltip';
+import { ImageOverlayModal } from './shared/ImageOverlayModal';
 import { useAgentHandoffRequest } from './session/useAgentHandoffRequest';
 import { useChatInputResize } from './session/useChatInputResize';
 import { useChatSessionNotifications } from './session/useChatSessionNotifications';
-import { useImageOverlayActions } from './session/useImageOverlayActions';
 
 interface ChatSessionProps extends UseChatSessionOptions {
   isActive?: boolean;
@@ -163,15 +161,7 @@ export default function ChatSessionView({
     startResizing,
   } = useChatInputResize(attachments);
 
-  const {
-    selectedImage,
-    setSelectedImage,
-    closeSelectedImage,
-    overlayActionState,
-    overlayPrimaryActionRef,
-    handleDownload,
-    handleCopyImage,
-  } = useImageOverlayActions();
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const {
     handleAtBottomChange,
@@ -256,7 +246,7 @@ export default function ChatSessionView({
         <div className={`flex-1 flex flex-col min-h-0`}>
           <MessageList 
             messages={messages} 
-            onImageClick={setSelectedImage} 
+            onImageClick={setPreviewImage} 
             onAtBottomChange={handleAtBottomChange}
             onCanMarkReadChange={handleCanMarkReadChange}
             isSending={isSending}
@@ -357,7 +347,7 @@ export default function ChatSessionView({
             availableCommands={availableCommands}
             attachments={attachments}
             onAttachmentsChange={setAttachments}
-            onImageClick={setSelectedImage}
+            onImageClick={setPreviewImage}
             onHeightChange={setContentHeight}
             customHeight={inputHeight}
             autoFocus={isActive}
@@ -367,59 +357,7 @@ export default function ChatSessionView({
       </div>
 
       {/* Full-size Image Overlay */}
-      {selectedImage && (
-        <div 
-          className="fixed inset-0 z-[100] bg-black bg-opacity-50 flex items-center
-            justify-center p-8 animate-in fade-in duration-200 cursor-zoom-out"
-          onClick={closeSelectedImage}
-        >
-          <div
-            className="absolute right-4 top-16 z-10 flex items-center gap-1.5 px-2 py-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Tooltip content="Copy" variant="minimal">
-              <button
-                ref={overlayPrimaryActionRef}
-                type="button"
-                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
-                transition-colors hover:bg-hover hover:text-foreground focus:outline-none
-                focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                onClick={handleCopyImage}
-              >
-                {overlayActionState === 'copied' ? <Check size={13} /> : <Copy size={16} />}
-              </button>
-            </Tooltip>
-            <Tooltip content="Download" variant="minimal">
-              <a href={selectedImage} download="image.png"
-                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
-                transition-colors hover:bg-hover hover:text-foreground focus:outline-none focus-visible:ring-2
-                focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                onClick={handleDownload}
-              >
-                {overlayActionState === 'downloaded' ? <Check size={14} /> : <Download size={16} />}
-              </a>
-            </Tooltip>
-            <Tooltip content="Close" variant="minimal">
-              <button type="button"
-                className="flex h-8 w-8 items-center justify-center rounded bg-secondary text-foreground
-                transition-colors hover:bg-hover hover:text-foreground focus:outline-none focus-visible:ring-2
-                focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                onClick={(e) => { e.stopPropagation(); closeSelectedImage(); }}
-              >
-                <X size={14} />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="relative max-w-full max-h-full flex items-center justify-center">
-            <img src={selectedImage} tabIndex={0}
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4
-              focus-visible:ring-offset-black"
-            />
-          </div>
-        </div>
-      )}
+      <ImageOverlayModal src={previewImage} onClose={() => setPreviewImage(null)} />
 
       <ConfirmationModal
         isOpen={undoErrorMessage !== null}

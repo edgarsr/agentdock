@@ -20,6 +20,7 @@ import agentdock.changes.UndoFileHandler
 import agentdock.changes.UndoOperation
 import agentdock.utils.LocalFilePathPolicy
 import agentdock.utils.jsStringLiteral
+import com.intellij.openapi.project.Project
 import java.io.File
 
 
@@ -331,6 +332,18 @@ internal fun AcpBridge.installMiscQueries() {
         }
     }
 
+    host.register("readLocalImage") { payload ->
+        val path = runCatching {
+            Json.parseToJsonElement(payload).jsonObject["path"]?.jsonPrimitive?.content
+        }.getOrNull().orEmpty()
+
+        if (path.isNotBlank()) scope.launch(Dispatchers.IO) {
+            val dataUrl = readLocalImageDataUrl(service.project, path).orEmpty()
+            host.eval("if(window.__onLocalImageResult) window.__onLocalImageResult(" +
+                "${buildJsonObject { put("path", path); put("dataUrl", dataUrl) }});")
+        }
+    }
+
 }
 
 internal fun AcpBridge.installFileIconQuery() {
@@ -386,6 +399,33 @@ internal fun isHiddenDirectoryFileSearchPath(relPath: String, rawQuery: String):
         .filter { it.isNotBlank() }
 
     return segments.dropLast(1).any { it.startsWith(".") }
+}
+
+private const val LOCAL_IMAGE_MAX_BYTES = 16L * 1024 * 1024
+
+private fun readLocalImageDataUrl(project: Project, filePath: String): String? {
+    val resolved = LocalFilePathPolicy.resolve(project, filePath)
+    val ioFile = File(resolved.canonicalPath)
+    if (!ioFile.isFile || ioFile.length() > LOCAL_IMAGE_MAX_BYTES) return null
+    val mimeType = imageMimeType(ioFile.name) ?: return null
+    return runCatching {
+        "data:$mimeType;base64," + java.util.Base64.getEncoder().encodeToString(ioFile.readBytes())
+    }.getOrNull()
+}
+
+private fun imageMimeType(fileName: String): String? {
+    val guessed = java.net.URLConnection.guessContentTypeFromName(fileName)
+    if (guessed?.startsWith("image/") == true) return guessed
+    val lower = fileName.lowercase()
+    return when {
+        lower.endsWith(".png") -> "image/png"
+        lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
+        lower.endsWith(".gif") -> "image/gif"
+        lower.endsWith(".webp") -> "image/webp"
+        lower.endsWith(".bmp") -> "image/bmp"
+        lower.endsWith(".svg") -> "image/svg+xml"
+        else -> null
+    }
 }
 
 private fun AcpBridge.openRequestedFile(request: OpenFileRequest): Boolean {

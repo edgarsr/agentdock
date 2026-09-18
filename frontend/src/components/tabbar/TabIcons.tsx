@@ -20,7 +20,7 @@ export const getAgentIcon = (agentId: string | undefined, agents: AgentOption[])
     }
     return <img src={agent.iconPath} className="w-4 h-4 flex-shrink-0" alt="icon" />;
   }
-  return <Bot size={14} className="text-foreground/70 flex-shrink-0" />;
+  return <Bot size={14} className="text-foreground flex-shrink-0" />;
 };
 
 export const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {

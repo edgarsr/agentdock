@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback, type MouseEvent } from 'react';
 import type { ExploringBlock, Message, RichContentBlock, TextBlock } from '../../types/chat';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ContentBlockRenderer } from './blocks/ContentBlockRenderer';
@@ -77,7 +77,7 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
           {groupedBlocks.map((group) => (
             <div key={group.key} className={`flex flex-col [&>.markdown-body]:my-0 ${group.blocks.length > 1 ? 'gap-1' : ''}`}>
               {group.blocks.map((block, idx) => (
-                <ContentBlockRenderer key={`${group.key}-${idx}`} block={block} isActivePrompt={isActivePrompt} />
+                <ContentBlockRenderer key={`${group.key}-${idx}`} block={block} isActivePrompt={isActivePrompt} onImageClick={onImageClick} />
               ))}
             </div>
           ))}
@@ -114,6 +114,15 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
     );
   };
 
+  const handleReplyImageClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    const img = (event.target as HTMLElement | null)?.closest('img');
+    if (!img || !img.closest('.markdown-body')) return;
+    const src = img.getAttribute('src')?.trim();
+    if (!src) return;
+    event.preventDefault();
+    onImageClick(src);
+  }, [onImageClick]);
+
   const promptTime = formatPromptTime(message.promptStartedAtMillis);
   const duration = formatDuration(message.duration);
   const contextUsage = formatContextUsage(message.contextTokensUsed, message.contextWindowSize);
@@ -144,7 +153,7 @@ export const AssistantMessage = memo(({ message, onImageClick, showBorder, agent
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex justify-start mb-2">
         <div className="w-full text-foreground">
-          <div className="break-words">
+          <div className="break-words" onClick={handleReplyImageClick}>
             {renderContent()}
           </div>
         </div>

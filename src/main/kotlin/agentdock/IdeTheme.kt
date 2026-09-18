@@ -54,22 +54,25 @@ object IdeTheme {
         val sb = StringBuilder()
         sb.append(":root {\n")
         val scheme = EditorColorsManager.getInstance().globalScheme
+        val isDark = isDarkTheme()
         val editorBackground = scheme.defaultBackground
-        val baseBackground = uiColor("Panel.background", editorBackground)
+        val panelBackground = uiColor("Panel.background", editorBackground)
+        val baseBackground = if (isTransparent(panelBackground)) editorBackground else panelBackground
 
         // 1. UI Component colors from UIManager
         for ((component, def) in uiComponents) {
             for (prop in def.colorProps) {
                 val uiKey = "$component.$prop"
-                val fallback = Color(0, 0, 0, 0)
-                val originalColor = UIManager.getColor(uiKey) ?: JBColor.namedColor(uiKey, fallback)
-                val color = if (
+                val originalColor = UIManager.getColor(uiKey) ?: JBColor.namedColor(uiKey, Color(0, 0, 0, 0))
+                val color = when {
                     uiKey == "List.hoverBackground" &&
-                    (isTransparent(originalColor) || areColorsSimilar(originalColor, baseBackground))
-                ) {
-                    adjustBrightness(baseBackground, 1.30)
-                } else {
-                    originalColor
+                        (isTransparent(originalColor) || areColorsSimilar(originalColor, baseBackground)) ->
+                        adjustBrightness(baseBackground, 1.30)
+                    uiKey == "Panel.background" && isTransparent(originalColor) ->
+                        baseBackground
+                    isTransparent(originalColor) ->
+                        adjustBrightness(baseBackground, if (isDark) 1.20 else 0.80)
+                    else -> originalColor
                 }
                 sb.append("  --ide-${uiKey.replace(".", "-")}: ${toCssColor(color)};\n")
             }
@@ -120,7 +123,6 @@ object IdeTheme {
         }
 
         // 6. Dynamic background variations
-        val isDark = isDarkTheme()
         val isIslands = isIslandsTheme()
         sb.append("  --ide-theme-is-dark: ${if (isDark) "1" else "0"};\n")
         sb.append("  --ide-theme-is-islands: ${if (isIslands) "1" else "0"};\n")

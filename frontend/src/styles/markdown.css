@@ -103,6 +103,10 @@
         @apply mt-0;
     }
 
+    & img {
+        @apply max-w-full cursor-zoom-in;
+    }
+
     & h1 {
         @apply text-ide-h1 font-bold my-6;
     }
