@@ -178,8 +178,7 @@ internal fun AcpBridge.installConversationQueries() {
             val captureId = beginLivePromptCapture(
                 chatId,
                 parsed.rawBlocks,
-                parsed.forkBase,
-                parsed.configValues
+                parsed.forkBase
             )
             val previousPromptJob = promptJobs[chatId]?.takeIf { it.isActive }
             lateinit var job: Job
@@ -213,6 +212,7 @@ internal fun AcpBridge.installConversationQueries() {
                             "The agent did not become ready within ${AcpBridge.START_AGENT_TIMEOUT_MS / 1000}s."
                         )
                     }
+                    refreshLivePromptAssistantMetadata(chatId, captureId)
                     pushAdapters(includeRuntimeChecks = false)
                     pushStatus(chatId, "prompting")
                     service.prompt(chatId, blocks).collect { event ->

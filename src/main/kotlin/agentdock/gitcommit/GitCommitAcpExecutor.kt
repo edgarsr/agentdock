@@ -110,6 +110,7 @@ internal class GitCommitAcpExecutor(
             applyConfiguration(
                 session = session,
                 protocol = sharedProcess.protocol,
+                sharedProcess = sharedProcess,
                 adapterInfo = adapterInfo,
                 initialMetadata = runtimeMetadata ?: AcpClientService.AdapterRuntimeMetadata(emptyList()),
                 selectedModelId = selectedModelId,
@@ -170,6 +171,7 @@ internal class GitCommitAcpExecutor(
     private suspend fun applyConfiguration(
         session: ClientSession,
         protocol: Protocol?,
+        sharedProcess: AcpClientService.SharedProcess,
         adapterInfo: AcpAdapterConfig.AdapterInfo,
         initialMetadata: AcpClientService.AdapterRuntimeMetadata,
         selectedModelId: String?,
@@ -190,6 +192,7 @@ internal class GitCommitAcpExecutor(
                     configId,
                     selectedModelId,
                 )
+                sharedProcess.markConfigMutated()
                 metadata = runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
                 acpService.storeFreshAdapterRuntimeMetadata(adapterInfo, metadata)
             }
@@ -207,6 +210,7 @@ internal class GitCommitAcpExecutor(
             effortId,
             effortOption.type,
         )
+        sharedProcess.markConfigMutated()
         acpService.storeFreshAdapterRuntimeMetadata(
             adapterInfo,
             runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo),

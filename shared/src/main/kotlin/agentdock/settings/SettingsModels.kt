@@ -72,7 +72,7 @@ data class GlobalSettings(
     val audioTranscription: AudioTranscriptionSettings = AudioTranscriptionSettings(),
     val gitCommitGeneration: GitCommitGenerationSettings = GitCommitGenerationSettings(),
     val quotaWidgetEnabled: Boolean = false,
-    val openInEditor: Boolean = false
+    val openInEditor: Boolean = true
 )
 
 @Serializable

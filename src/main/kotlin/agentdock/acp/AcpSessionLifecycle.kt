@@ -111,6 +111,7 @@ internal suspend fun AcpClientService.startAgent(
                 } else {
                     context.runtimeMetadataRef.set(runtimeMetadata)
                 }
+                context.syncAppliedConfigGeneration()
                 val applied = applySessionConfigOptions(
                     context = context,
                     adapterName = requestedAdapterName,
@@ -136,10 +137,11 @@ private suspend fun AcpClientService.applySessionConfigOptions(
     if (context.session == null) return false
     val initialMetadata = context.runtimeMetadataRef.get() ?: return false
     if (preferredValues.isEmpty()) return true
+    val sharedProcess = context.sharedProcess ?: return false
     context.configOptionsUpdateInProgress = true
     var applied = false
     return try {
-        val protocol = context.sharedProcess?.protocol ?: return false
+        val protocol = sharedProcess.protocol ?: return false
         val sessionId = context.sessionIdRef.get()?.takeIf(String::isNotBlank) ?: return false
         val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
         val orderedConfigIds = buildList {
@@ -147,6 +149,10 @@ private suspend fun AcpClientService.applySessionConfigOptions(
             addAll(preferredValues.keys.filterNot { it == modelOption?.id })
         }
 
+        // The per-session cache is trustworthy only while this session was the last to
+        // configure the shared process. Another session's set_config_option increments
+        // the process generation, so this session re-applies before the next prompt.
+        var cacheIsAuthoritative = context.appliedConfigGeneration == sharedProcess.configGeneration.get()
         for (configId in orderedConfigIds) {
             val metadata = context.runtimeMetadataRef.get() ?: return false
             // Applying one option can narrow the rest: agents drop options that the newly selected model
@@ -156,18 +162,25 @@ private suspend fun AcpClientService.applySessionConfigOptions(
             val preferredValue = preferredValues.getValue(configId).trim()
             val requestedValue = option.resolvePreferredValue(preferredValue)
                 ?: continue
-            if (context.activeConfigValues[configId] == requestedValue) continue
+            if (cacheIsAuthoritative && context.activeConfigValues[configId] == requestedValue) continue
             val response = runCatching {
                 protocol.setSessionConfigOptionRaw(sessionId, configId, requestedValue, option.type)
             }.getOrElse { return false }
+            sharedProcess.markConfigMutated()
             updateMetadataFromConfigOptionResponse(adapterName, response, context)
+            cacheIsAuthoritative = true
         }
+        context.appliedConfigGeneration = sharedProcess.configGeneration.get()
         applied = true
         true
     } finally {
         context.configOptionsUpdateInProgress = false
         publishSessionConfigOptions(context, applyCurrentValues = applied)
     }
+}
+
+internal fun AcpClientService.AgentContext.syncAppliedConfigGeneration() {
+    appliedConfigGeneration = sharedProcess?.configGeneration?.get() ?: -1L
 }
 
 private fun AcpCreatedSessionResponse.runtimeMetadata(
@@ -301,6 +314,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
             preferredModelId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModelIdRef::set)
             preferredModeId?.trim()?.takeIf(String::isNotEmpty)?.let(context.activeModeIdRef::set)
         }
+        context.syncAppliedConfigGeneration()
     } else {
         context.session = null
     }

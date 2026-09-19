@@ -44,7 +44,7 @@ export const ContentBlockRenderer: React.FC<Props> = ({ block, isActivePrompt = 
           <img
             src={src}
             alt="AI Attachment"
-            className={`w-full h-auto${onImageClick ? ' cursor-zoom-in hover:opacity-90' : ''}`}
+            className={`w-full h-auto`}
             onClick={onImageClick ? () => onImageClick(src) : undefined}
           />
         </div>

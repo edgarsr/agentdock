@@ -69,7 +69,7 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
       quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false,
-      openInEditor: payload?.settings?.openInEditor ?? false
+      openInEditor: payload?.settings?.openInEditor ?? true
     }
   };
 }

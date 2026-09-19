@@ -132,7 +132,8 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     adapterVersion: String,
     initialMetadata: AcpClientService.AdapterRuntimeMetadata,
-    existingCache: CachedAdapterConfigOptions? = null
+    existingCache: CachedAdapterConfigOptions? = null,
+    onConfigMutated: (() -> Unit)? = null
 ): CachedAdapterConfigOptions {
     val optionsByModel = existingCache?.configOptionsByModel.orEmpty().toMutableMap()
     val modelOption = initialMetadata.configOptions.firstOrNull { it.matchesCategory("model") }
@@ -144,6 +145,7 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
             initialMetadata
         } else {
             val response = setSessionConfigOptionRaw(sessionId, modelOption!!.id, model.value)
+            onConfigMutated?.invoke()
             runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
         }
         optionsByModel[model.value] = metadata.configOptions

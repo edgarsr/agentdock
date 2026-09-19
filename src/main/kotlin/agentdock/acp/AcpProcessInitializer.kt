@@ -246,7 +246,7 @@ private suspend fun AcpClientService.fetchAndStoreRuntimeMetadata(
         ?: throw IllegalStateException("ACP protocol was not initialized for adapter '${adapterInfo.id}'")
     try {
         val metadata = withTimeoutOrNull(CONFIG_OPTIONS_FETCH_TIMEOUT_MS) {
-            fetchAdapterRuntimeMetadata(protocol, adapterInfo)
+            fetchAdapterRuntimeMetadata(protocol, adapterInfo, onConfigMutated = sharedProcess::markConfigMutated)
         } ?: throw TimeoutException(
             "Config options fetch timed out after ${CONFIG_OPTIONS_FETCH_TIMEOUT_MS / 1000}s"
         )

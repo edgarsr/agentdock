@@ -8,8 +8,7 @@ import agentdock.history.ForkConversationBase
 internal fun AcpBridge.beginLivePromptCapture(
     chatId: String,
     blocks: List<JsonObject>,
-    forkBase: ForkConversationBase?,
-    configValues: Map<String, String>
+    forkBase: ForkConversationBase?
 ): String? {
     val projectPath = service.project.basePath.orEmpty()
     val sessionId = service.sessionId(chatId).orEmpty()
@@ -28,7 +27,7 @@ internal fun AcpBridge.beginLivePromptCapture(
         startedAtMillis = System.currentTimeMillis(),
         assistantMeta = buildAssistantMetadata(
             adapterName = adapterName,
-            configValues = configValues
+            chatId = chatId
         )
     )
     livePromptCaptures.put(chatId, capture)?.let { previous ->
@@ -37,6 +36,20 @@ internal fun AcpBridge.beginLivePromptCapture(
         }
     }
     return captureId
+}
+
+internal fun AcpBridge.refreshLivePromptAssistantMetadata(chatId: String, expectedCaptureId: String? = null) {
+    val capture = livePromptCaptures[chatId] ?: return
+    if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return
+    val metadata = buildAssistantMetadata(
+        adapterName = capture.adapterName,
+        chatId = chatId,
+        promptStartedAtMillis = capture.startedAtMillis
+    ) ?: return
+    synchronized(capture) {
+        if (capture.closed) return
+        capture.assistantMeta = metadata
+    }
 }
 
 internal fun AcpBridge.appendLivePromptTextEvent(chatId: String, text: String, expectedCaptureId: String? = null) {
@@ -103,13 +116,14 @@ internal fun AcpBridge.flushLivePromptCapture(
     }
 
     val durationSeconds = ((System.currentTimeMillis() - snapshot.startedAtMillis).coerceAtLeast(0L)) / 1000.0
-    val assistantMeta = snapshot.assistantMeta?.copy(
+    val assistantMeta = buildAssistantMetadata(
+        adapterName = snapshot.adapterName,
+        chatId = chatId,
         promptStartedAtMillis = snapshot.startedAtMillis,
         durationSeconds = durationSeconds,
         contextTokensUsed = snapshot.contextTokensUsed,
         contextWindowSize = snapshot.contextWindowSize
-    ) ?: buildAssistantMetadata(
-        adapterName = snapshot.adapterName,
+    ) ?: snapshot.assistantMeta?.copy(
         promptStartedAtMillis = snapshot.startedAtMillis,
         durationSeconds = durationSeconds,
         contextTokensUsed = snapshot.contextTokensUsed,

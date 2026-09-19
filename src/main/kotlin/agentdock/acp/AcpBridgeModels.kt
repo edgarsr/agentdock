@@ -160,7 +160,7 @@ internal data class LivePromptCapture(
     val blocks: List<JsonObject>,
     val forkBase: ForkConversationBase?,
     val startedAtMillis: Long,
-    val assistantMeta: ConversationAssistantMetadata?,
+    var assistantMeta: ConversationAssistantMetadata?,
     @Volatile var closed: Boolean = false,
     var hasVisibleAssistantOutput: Boolean = false,
     var historyPersisted: Boolean = false,

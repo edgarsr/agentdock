@@ -141,9 +141,9 @@ internal object HistoryDeletionService {
             .distinct()
 
         return if (adapterLabels.size == 1) {
-            "Failed to delete  conversation files because they may be locked by another application. Close the external tool and try again."
+            "Failed to delete conversation data."
         } else {
-            "Failed to delete one or more conversation files because they may be locked by another application. Close the external tools and try again."
+            "Failed to delete one or more conversation data."
         }
     }
 }

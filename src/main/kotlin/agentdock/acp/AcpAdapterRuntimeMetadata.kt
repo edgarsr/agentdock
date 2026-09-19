@@ -15,7 +15,8 @@ private const val PROBE_SESSION_OPERATION_TIMEOUT_MS = 3_000L
 @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     protocol: Protocol,
-    adapterInfo: AcpAdapterConfig.AdapterInfo
+    adapterInfo: AcpAdapterConfig.AdapterInfo,
+    onConfigMutated: (() -> Unit)? = null
 ): AcpClientService.AdapterRuntimeMetadata {
     val probeProjectPath = AcpAdapterPaths.getProbeSessionDir().absolutePath
     val result = protocol.newSessionRaw(resolveSessionCwd(probeProjectPath))
@@ -33,7 +34,8 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
             adapterInfo = adapterInfo,
             adapterVersion = AcpConfigOptionsCache.adapterVersion(adapterInfo),
             initialMetadata = configMetadata,
-            existingCache = AcpConfigOptionsCache.readValid(adapterInfo)
+            existingCache = AcpConfigOptionsCache.readValid(adapterInfo),
+            onConfigMutated = onConfigMutated
         )
         AcpConfigOptionsCache.write(cached)
         return cached.toRuntimeMetadata(adapterInfo)

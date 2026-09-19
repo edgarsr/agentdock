@@ -507,7 +507,7 @@ internal fun AcpBridge.buildStoredContentChunk(
 
 internal fun AcpBridge.buildAssistantMetadata(
     adapterName: String,
-    configValues: Map<String, String> = emptyMap(),
+    chatId: String? = null,
     promptStartedAtMillis: Long? = null,
     durationSeconds: Double? = null,
     contextTokensUsed: Long? = null,
@@ -517,8 +517,18 @@ internal fun AcpBridge.buildAssistantMetadata(
     if (cleanAdapterName.isBlank()) return null
 
     val adapterInfo = runCatching { AcpAdapterPaths.getAdapterInfo(cleanAdapterName) }.getOrNull()
-    val runtimeMetadata = service.adapterRuntimeMetadata(cleanAdapterName)
-    val optionsById = runtimeMetadata?.configOptions.orEmpty().associateBy { it.id }
+    val runtimeMetadata = chatId?.let(service::sessionRuntimeMetadata)
+        ?: service.adapterRuntimeMetadata(cleanAdapterName)
+    val configOptions = runtimeMetadata?.configOptions.orEmpty().mapNotNull { option ->
+        val value = option.currentValue.trim()
+        if (value.isEmpty()) return@mapNotNull null
+        ConversationConfigOptionMetadata(
+            id = option.id,
+            name = option.name,
+            value = value,
+            displayValue = option.options.firstOrNull { it.value == value }?.name ?: value
+        )
+    }
 
     return ConversationAssistantMetadata(
         agentId = cleanAdapterName,
@@ -527,15 +537,7 @@ internal fun AcpBridge.buildAssistantMetadata(
         durationSeconds = durationSeconds,
         contextTokensUsed = contextTokensUsed,
         contextWindowSize = contextWindowSize,
-        configOptions = configValues.map { (id, value) ->
-            val option = optionsById[id]
-            ConversationConfigOptionMetadata(
-                id = id,
-                name = option?.name ?: id,
-                value = value,
-                displayValue = option?.options?.firstOrNull { it.value == value }?.name ?: value
-            )
-        }
+        configOptions = configOptions
     )
 }
 
