@@ -167,6 +167,7 @@ export function AudioTranscriptionSettingsView({
                   options={transcriptionLanguageOptions}
                   disabled={!activeFeature.installed}
                   className='max-w-full'
+                  menuClassName='!bottom-[calc(100%+0.35em)] !top-auto'
                 />
               </SettingsField>
 

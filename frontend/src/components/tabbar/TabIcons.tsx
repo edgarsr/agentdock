@@ -24,12 +24,5 @@ export const getAgentIcon = (agentId: string | undefined, agents: AgentOption[])
 };
 
 export const getTabIcon = (tab: ChatTab, agents: AgentOption[]) => {
-  if (tab.type === 'management') return <ManagementTabIcon />;
-  if (tab.type === 'design') return <DesignTabIcon />;
-  if (tab.type === 'history') return <HistoryTabIcon />;
-  if (tab.type === 'mcp') return <McpTabIcon />;
-  if (tab.type === 'prompt-library') return <PromptLibraryTabIcon />;
-  if (tab.type === 'system-instructions') return <SystemInstructionsTabIcon />;
-  if (tab.type === 'settings') return <SettingsTabIcon />;
   return getAgentIcon(tab.agentId, agents);
 };

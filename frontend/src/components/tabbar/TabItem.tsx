@@ -19,7 +19,6 @@ interface TabItemProps {
   onCloseTab: (id: string) => void;
   onFocusTab: (id: string) => void;
   onBlurTab: (id: string) => void;
-  canRename: boolean;
   isRenaming: boolean;
   onStartRename: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -42,7 +41,6 @@ export function TabItem({
   onCloseTab,
   onFocusTab,
   onBlurTab,
-  canRename,
   isRenaming,
   onStartRename,
   onRename,
@@ -73,7 +71,7 @@ export function TabItem({
 
   return (
     <div
-      data-tab-id={tab.id}
+      data-reorder-tab-id={tab.id}
       onPointerDown={(event) => onPointerDown(tab.id, event)}
       className={`text-foreground group relative pl-1 pr-2 flex w-full min-w-0 max-w-[210px] ${tabHeightClassName} items-center ${tabRadiusClassName}
         bg-background cursor-grab active:cursor-grabbing ${activeClassName}`}
@@ -112,9 +110,7 @@ export function TabItem({
             }
             onSelectTab(tab.id);
           }}
-          onDoubleClick={() => {
-            if (canRename) onStartRename(tab.id);
-          }}
+          onDoubleClick={() => onStartRename(tab.id)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();

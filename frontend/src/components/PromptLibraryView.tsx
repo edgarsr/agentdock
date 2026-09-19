@@ -4,6 +4,7 @@ import { ACPBridge } from '../utils/bridge';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { Button } from './ui/Button';
 import { Tooltip } from './chat/shared/Tooltip';
+import { SectionTitle } from './ui/SectionTitle';
 import ConfirmationModal from './ConfirmationModal';
 import { FormDialog } from './ui/FormDialog';
 
@@ -92,8 +93,10 @@ export function PromptLibraryView() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground text-ide-small">
-      <div className="flex items-center justify-end px-2 min-h-12 border-b border-border flex-shrink-0">
+    <div className="h-full overflow-hidden bg-background text-foreground text-ide-small">
+      <div className="h-full w-full overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-app-content flex-col">
+      <SectionTitle actions={(
         <Button
           onClick={openAdd}
           variant="primary"
@@ -102,12 +105,12 @@ export function PromptLibraryView() {
         >
           <span>Add</span>
         </Button>
-      </div>
+      )}>
+        Prompt Library
+      </SectionTitle>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {prompts.length === 0 && !form && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary">
+          <div className="flex-1 flex flex-col mt-12 items-center gap-2 text-foreground-secondary">
             <Bookmark size={28} strokeWidth={1.5} />
             <span>Prompt library is empty</span>
             <p className="max-w-[400px] text-center mt-2">
@@ -119,7 +122,7 @@ export function PromptLibraryView() {
         {prompts.map((prompt) => (
           <div
             key={prompt.id}
-            className="flex items-start gap-3 px-4 py-2.5 border-b border-border"
+            className="flex items-start gap-3 px-4 py-2.5 border-b border-border last:border-b-0"
           >
 
             <div className="flex-1 min-w-0">

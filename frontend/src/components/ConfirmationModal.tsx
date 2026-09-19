@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './ui/Button';
 
 interface ConfirmationModalProps {
@@ -46,7 +47,7 @@ export default function ConfirmationModal({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 animate-in fade-in duration-200"
       onClick={onCancel}
@@ -130,6 +131,7 @@ export default function ConfirmationModal({
           <Button onClick={onConfirm} variant="primary" className="min-w-[4.7em]">{confirmLabel}</Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -70,6 +70,7 @@ export const EVENT_NAMES = {
   LOG: 'acp-log',
   HISTORY_LIST: 'history-list',
   HISTORY_DELETE_RESULT: 'history-delete-result',
+  HISTORY_DELETE_REQUEST: 'history-delete-request',
   UNDO_RESULT: 'acp-undo-result',
   CHANGES_STATE: 'acp-changes-state',
   BRIDGE_OPERATION_RESULT: 'acp-bridge-operation-result',

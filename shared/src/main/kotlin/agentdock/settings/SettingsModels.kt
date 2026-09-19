@@ -72,7 +72,10 @@ data class GlobalSettings(
     val audioTranscription: AudioTranscriptionSettings = AudioTranscriptionSettings(),
     val gitCommitGeneration: GitCommitGenerationSettings = GitCommitGenerationSettings(),
     val quotaWidgetEnabled: Boolean = false,
-    val openInEditor: Boolean = true
+    val openInEditor: Boolean = true,
+    val sidebarEnabled: Boolean = true,
+    val sidebarPosition: String = "left",
+    val sidebarExpandedSections: List<String> = listOf("recent-chats", "sections")
 )
 
 @Serializable

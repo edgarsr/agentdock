@@ -13,32 +13,45 @@ const MAX_HEIGHT_RATIO = 0.8;
 export function useChatInputResize(attachments: ChatAttachment[]) {
   const [inputHeight, setInputHeight] = useState(INPUT_DEFAULT_HEIGHT);
   const [contentHeight, setContentHeight] = useState(0);
-  const isResizingRef = useRef(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const previousBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null);
   const [isManualSize, setIsManualSize] = useState(false);
 
   const handleMouseMoveRef = useRef<((e: globalThis.MouseEvent) => void) | null>(null);
   const handleMouseUpRef = useRef<(() => void) | null>(null);
 
   const stopResizing = useCallback(() => {
-    isResizingRef.current = false;
-    document.body.style.cursor = 'default';
+    setIsResizing(false);
+    if (previousBodyStyleRef.current) {
+      document.body.style.cursor = previousBodyStyleRef.current.cursor;
+      document.body.style.userSelect = previousBodyStyleRef.current.userSelect;
+      previousBodyStyleRef.current = null;
+    }
     if (handleMouseMoveRef.current) {
       document.removeEventListener('mousemove', handleMouseMoveRef.current);
     }
     if (handleMouseUpRef.current) {
       document.removeEventListener('mouseup', handleMouseUpRef.current);
     }
+    window.removeEventListener('blur', stopResizing);
   }, []);
 
   const startResizing = useCallback((e: MouseEvent) => {
+    if (e.button !== 0) return;
     e.preventDefault();
-    isResizingRef.current = true;
+    setIsResizing(true);
     setIsManualSize(true);
+    const startY = e.clientY;
+    const startHeight = inputHeight;
+    previousBodyStyleRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    };
     document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
 
     handleMouseMoveRef.current = (ev: globalThis.MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const newHeight = window.innerHeight - ev.clientY;
+      const newHeight = startHeight + startY - ev.clientY;
       const maxHeight = window.innerHeight * MAX_HEIGHT_RATIO;
       const clampedHeight = Math.max(INPUT_MIN_HEIGHT, Math.min(newHeight, maxHeight));
       setInputHeight(clampedHeight);
@@ -48,7 +61,8 @@ export function useChatInputResize(attachments: ChatAttachment[]) {
 
     document.addEventListener('mousemove', handleMouseMoveRef.current);
     document.addEventListener('mouseup', handleMouseUpRef.current);
-  }, [stopResizing]);
+    window.addEventListener('blur', stopResizing);
+  }, [inputHeight, stopResizing]);
 
   useEffect(() => {
     if (isManualSize) return;
@@ -72,6 +86,7 @@ export function useChatInputResize(attachments: ChatAttachment[]) {
 
   return {
     inputHeight,
+    isResizing,
     setContentHeight,
     startResizing,
   };

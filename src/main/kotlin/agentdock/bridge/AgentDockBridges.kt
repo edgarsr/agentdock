@@ -3,6 +3,7 @@ package agentdock.bridge
 import agentdock.acp.AcpBridge
 import agentdock.acp.AcpClientService
 import agentdock.acp.initializeDownloadedAdaptersInBackground
+import agentdock.acp.stopConversation
 import agentdock.history.HistoryBridge
 import agentdock.mcp.McpBridge
 import agentdock.promptlibrary.PromptLibraryBridge
@@ -32,7 +33,7 @@ internal object AgentDockBridges {
 
         val acpBridge = AcpBridge(host, service, scope)
         acpBridge.install()
-        HistoryBridge(host, project, scope).install()
+        HistoryBridge(host, project, scope) { acpBridge.stopConversation(it, awaitPrompt = true) }.install()
         McpBridge(host, scope).install()
         SystemInstructionsBridge(host, scope).install()
         PromptLibraryBridge(host, scope).install()

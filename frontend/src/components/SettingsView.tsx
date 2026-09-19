@@ -5,11 +5,13 @@ import {
   GitCommitGenerationSettings as GitCommitGenerationSettingsValue,
   GlobalSettingsPayload
 } from '../types/chat';
+import { DEFAULT_SIDEBAR_EXPANDED_SECTIONS } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
 import { AudioTranscriptionSettingsView } from './audio/AudioTranscriptionSettingsView';
 import { normalizeAudioTranscriptionProvider } from './audio/audioTranscription';
 import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSettings';
 import { SettingsCheckbox, SettingsField, SettingsSection } from './settings/SettingsLayout';
+import { SectionTitle } from './ui/SectionTitle';
 import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
 
 function normalizeGitCommitGenerationSettings(
@@ -25,6 +27,10 @@ function normalizeGitCommitGenerationSettings(
 }
 
 const UI_ZOOM_PRESETS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+const SIDEBAR_POSITION_OPTIONS: DropdownOption[] = [
+  { value: 'right', label: 'Right' },
+  { value: 'left', label: 'Left' },
+];
 
 function normalizeUiZoomPercent(value: unknown): number {
   const percent = Math.round(Number(value));
@@ -69,7 +75,12 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       },
       gitCommitGeneration: normalizeGitCommitGenerationSettings(payload?.settings?.gitCommitGeneration),
       quotaWidgetEnabled: payload?.settings?.quotaWidgetEnabled ?? false,
-      openInEditor: payload?.settings?.openInEditor ?? true
+      openInEditor: payload?.settings?.openInEditor ?? true,
+      sidebarEnabled: payload?.settings?.sidebarEnabled ?? true,
+      sidebarPosition: payload?.settings?.sidebarPosition === 'right' ? 'right' : 'left',
+      sidebarExpandedSections: Array.isArray(payload?.settings?.sidebarExpandedSections)
+        ? payload.settings.sidebarExpandedSections
+        : [...DEFAULT_SIDEBAR_EXPANDED_SECTIONS]
     }
   };
 }
@@ -254,7 +265,9 @@ export function SettingsView() {
   return (
     <div className='flex h-full flex-col overflow-hidden'>
       <div className='w-full flex-1 overflow-y-auto'>
-        <div className='mx-auto flex w-full max-w-[800px] flex-col gap-8 px-4 pb-8 pt-6'>
+        <div className='mx-auto flex min-h-full w-full max-w-app-content flex-col'>
+          <SectionTitle>Settings</SectionTitle>
+          <div className='flex flex-col gap-8 px-4 pb-8 text-ide-small'>
           <SettingsSection title='Appearance'>
             <SettingsCheckbox
               title='Open in Editor'
@@ -264,11 +277,27 @@ export function SettingsView() {
               ariaLabel='Open in the editor'
             />
 
-            <SettingsField
-              label='Zoom'
-              colon
-              description='Ctrl+scroll, Ctrl++, Ctrl+-, and Ctrl+0 also change this'
-            >
+            <SettingsCheckbox
+              title='Use Sidebar Layout'
+              description='Use the sidebar for navigation instead of the horizontal top tabbar'
+              checked={globalSettings.settings.sidebarEnabled}
+              onToggle={() => updateGlobalSettings({ sidebarEnabled: !globalSettings.settings.sidebarEnabled })}
+              ariaLabel='Use sidebar layout'
+            />
+
+            <SettingsField label='Sidebar Position' colon>
+              <DropdownSelect
+                value={globalSettings.settings.sidebarPosition}
+                onChange={(value) => updateGlobalSettings({
+                  sidebarPosition: value === 'left' ? 'left' : 'right'
+                })}
+                options={SIDEBAR_POSITION_OPTIONS}
+                disabled={!globalSettings.settings.sidebarEnabled}
+                className='max-w-full'
+              />
+            </SettingsField>
+
+            <SettingsField label='Zoom' colon>
               <DropdownSelect
                 value={String(globalSettings.settings.uiZoomPercent)}
                 onChange={(value) => {
@@ -346,6 +375,7 @@ export function SettingsView() {
             onSettingsChange={updateAudioSettings}
             onSettingsSave={saveAudioSettings}
           />
+          </div>
         </div>
       </div>
     </div>

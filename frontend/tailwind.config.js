@@ -78,6 +78,9 @@ export default {
       borderRadius: {
         'ide': '6px',
       },
+      maxWidth: {
+        'app-content': '800px',
+      },
       spacing: {
         'ide-paragraph': 'var(--ide-paragraph-spacing)',
         'ide-indent': 'var(--ide-list-indent)',

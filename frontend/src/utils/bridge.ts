@@ -456,11 +456,15 @@ export const ACPBridge = {
 
   onHistoryDeleteResult: (callback: (e: CustomEvent<HistoryDeleteResultEvent>) => void) => onBridgeEvent(EVENT_NAMES.HISTORY_DELETE_RESULT, callback),
 
+  onHistoryDeleteRequest: (callback: (e: CustomEvent<{ conversationIds: string[] }>) => void) => onBridgeEvent(EVENT_NAMES.HISTORY_DELETE_REQUEST, callback),
+
   loadHistoryConversation: (conversationId: string, projectPath: string, historyConversationId: string) => {
     window.__loadHistoryConversation?.(conversationId, projectPath, historyConversationId);
   },
 
   deleteHistoryConversations: (projectPath: string, conversationIds: string[]) => {
+    if (!window.__deleteHistoryConversations) return;
+    window.dispatchEvent(new CustomEvent(EVENT_NAMES.HISTORY_DELETE_REQUEST, { detail: { conversationIds } }));
     window.__deleteHistoryConversations?.({ projectPath, conversationIds });
   },
 

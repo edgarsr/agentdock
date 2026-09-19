@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import AttachmentBar from './input/AttachmentBar';
 import SlashCommandMenu from './input/SlashCommandMenu';
 import FileMentionMenu from './input/FileMentionMenu';
@@ -8,6 +9,7 @@ import { useChatInputController } from './input/useChatInputController';
 import { VoiceInputButton } from '../audio/VoiceInputButton';
 
 export default function ChatInput(props: ChatInputProps) {
+  const [resizeHovered, setResizeHovered] = useState(false);
   const {
     conversationId,
     contextTokensUsed,
@@ -42,6 +44,8 @@ export default function ChatInput(props: ChatInputProps) {
     onAttachmentsChange,
     onImageClick,
     onHeightChange,
+    onResizeStart,
+    isResizing = false,
     isActive = false
   } = props;
 
@@ -84,10 +88,23 @@ export default function ChatInput(props: ChatInputProps) {
   const handleSubmit = isSending ? (() => onQueueDraft?.()) : onSend;
 
   return (
-    <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 px-4 pb-2 pt-2">
-      <div className="mx-auto h-full w-full max-w-[800px] flex flex-col">
-        <div className="relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)]
-          bg-editor-bg transition-all focus-within:ring-1 focus-within:[--tw-ring-color:color-mix(in_srgb,var(--ide-Button-default-focusColor)_70%,transparent)]">
+    <div ref={inputRootRef} style={{ height: customHeight ? `${customHeight}px` : undefined }} className="relative flex-shrink-0 pb-2 pt-1">
+      <div className="h-full w-full flex flex-col">
+        <div className={`relative flex h-full flex-col rounded-ide border border-[var(--ide-Button-startBorderColor)]
+          bg-editor-bg transition-all focus-within:ring-1 focus-within:[--tw-ring-color:color-mix(in_srgb,var(--ide-Button-default-focusColor)_70%,transparent)] ${
+            resizeHovered || isResizing ? 'border-t-[var(--ide-Button-default-focusColor)]' : ''
+          }`}>
+          {onResizeStart && (
+            <div
+              role="separator"
+              aria-label="Resize chat input"
+              aria-orientation="horizontal"
+              onMouseDown={onResizeStart}
+              onMouseEnter={() => setResizeHovered(true)}
+              onMouseLeave={() => setResizeHovered(false)}
+              className="absolute -top-px inset-x-0 -translate-y-1/2 h-4 z-10 cursor-row-resize select-none"
+            />
+          )}
 
           <AttachmentBar
             attachments={attachments}

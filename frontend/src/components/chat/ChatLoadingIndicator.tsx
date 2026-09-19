@@ -5,7 +5,7 @@ interface ChatLoadingIndicatorProps {
   agentName: string | undefined;
 }
 
-const SpinnerIcon = ({ size = 16 }: { size?: number }) => (
+export const ChatSpinnerIcon = ({ size = 16 }: { size?: number }) => (
   <svg 
     width={size} 
     height={size} 
@@ -58,7 +58,7 @@ export function ChatLoadingIndicator({ status, agentName }: ChatLoadingIndicator
 
   return (
     <div className="flex items-center mt-2 gap-2 text-foreground-secondary text-ide-small animate-in fade-in duration-300">
-      <div className="flex-shrink-0 mt-[-1px]"><SpinnerIcon /></div>
+      <div className="flex-shrink-0 mt-[-1px]"><ChatSpinnerIcon /></div>
       <div className="flex items-center">
         <span>{isInitializing && `Connect to ${agentName || 'agent'}...`}</span>
         {!isInitializing && (<span className="tabular-nums">{formatTime(seconds)}</span>)}

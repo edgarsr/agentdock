@@ -67,8 +67,8 @@ export function HistoryListItem({
   const isEditing = editingId === conversationId;
 
   return (
-    <div className="group relative">
-      <div className="min-h-[56px] border-b border-border flex items-center gap-3 max-[400px]:gap-2 py-1 px-4">
+    <div className="group relative border-b border-border last:border-b-0">
+      <div className="min-h-[56px] flex items-center gap-3 max-[400px]:gap-2 py-1 px-4">
         <div
           role="button"
           tabIndex={isEditing ? -1 : 0}
@@ -174,7 +174,7 @@ export function HistoryListItem({
           </Tooltip>
 
           {canOpenCli && (
-            <Tooltip variant="minimal" content="Open chat in CLI">
+            <Tooltip variant="minimal" content="Open chat in terminal">
               <button
                 onClick={(e) => {
                   e.stopPropagation();

@@ -5,6 +5,7 @@ import { SystemInstruction } from '../types/systemInstructions';
 import { Button } from './ui/Button';
 import { Checkbox } from './ui/Checkbox';
 import { Tooltip } from './chat/shared/Tooltip';
+import { SectionTitle } from './ui/SectionTitle';
 import ConfirmationModal from './ConfirmationModal';
 import { FormDialog } from './ui/FormDialog';
 
@@ -104,8 +105,10 @@ export function SystemInstructionsView() {
   };
 
   return (
-    <div className="h-full flex flex-col text-ide-small">
-      <div className="flex items-center justify-end px-2 min-h-12 border-b border-border flex-shrink-0">
+    <div className="h-full overflow-hidden text-ide-small">
+      <div className="h-full w-full overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-app-content flex-col">
+      <SectionTitle actions={(
         <Button
           onClick={openAdd}
           variant="primary"
@@ -114,12 +117,12 @@ export function SystemInstructionsView() {
         >
           <span>Add</span>
         </Button>
-      </div>
+      )}>
+        System Instructions
+      </SectionTitle>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {instructions.length === 0 && !form && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary">
+          <div className="flex-1 flex flex-col mt-12 items-center gap-2 text-foreground-secondary">
             <FileText size={28} strokeWidth={1.5} />
             <span>No system instructions configured</span>
             <p className="max-w-[400px] text-center mt-2">
@@ -131,7 +134,7 @@ export function SystemInstructionsView() {
         {instructions.map((instruction) => (
           <div
             key={instruction.id}
-            className="flex items-center gap-3 px-4 py-2.5 border-b border-border"
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-b-0"
           >
             <Tooltip variant="minimal" content={instruction.enabled ? 'Enabled' : 'Disabled'}>
               <Checkbox

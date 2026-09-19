@@ -10,7 +10,7 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
   return (
     <section>
       <div className='mb-3 flex items-center gap-2'>
-        <span className='shrink-0 text-foreground'>{title}</span>
+        <span className='shrink-0 text-ide-regular text-foreground'>{title}</span>
         <span className='h-px flex-1 bg-border' />
       </div>
       <div className='flex flex-col gap-4 pl-4'>{children}</div>

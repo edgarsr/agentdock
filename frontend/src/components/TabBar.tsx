@@ -1,28 +1,26 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Menu, Plus } from 'lucide-react';
-import { AgentOption, ChatTab, TabUiFlags, isAgentRunnable } from '../types/chat';
-import { HamburgerMenuPanel } from './tabbar/HamburgerMenuPanel';
+import { History, Menu, Plus } from 'lucide-react';
+import { AgentOption, ChatTab, GlobalSettings, SectionType, TabUiFlags, isAgentRunnable } from '../types/chat';
+import { UseSidebarButton } from './LayoutControls';
 import { TabItem } from './tabbar/TabItem';
-import { TabOverflowMenu } from './tabbar/TabOverflowMenu';
+import { NavigationMenu } from './tabbar/NavigationMenu';
 import { focusMenuItem } from './tabbar/menuFocus';
+import { useTabReordering } from './tabbar/useTabReordering';
+import { Tooltip } from './chat/shared/Tooltip';
 
-function readIslandsTheme(): boolean {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue('--ide-theme-is-islands')
-    .trim() === '1';
-}
-
-interface TabBarProps {
+export interface TabBarProps {
+  isIslandsTheme: boolean;
   tabs: ChatTab[];
   activeTabId: string;
+  activeSection: SectionType | null;
   tabUi?: Record<string, TabUiFlags>;
   onSelectTab: (id: string) => void;
   onReorderTabs: (draggedId: string, targetId: string, position: 'before' | 'after') => void;
   onCloseTab: (id: string) => void;
-  onCloseAllTabs: () => void;
+  onCloseAllChats: () => void;
+  onCloseActiveSection: () => void;
   onNewTab: () => void;
   onNewTabWithAgent: (agentId: string) => void;
-  renamableTabIds: Set<string>;
   onRenameTab: (tabId: string, newTitle: string) => void;
   agents: AgentOption[];
   onOpenHistory: () => void;
@@ -32,19 +30,23 @@ interface TabBarProps {
   onOpenPromptLibrary: () => void;
   onOpenSystemInstructions: () => void;
   onOpenSettings: () => void;
+  sidebarPosition?: GlobalSettings['sidebarPosition'];
+  onUseSidebar?: () => void;
 }
 
 export default function TabBar({
+  isIslandsTheme,
   tabs,
   activeTabId,
+  activeSection,
   tabUi = {},
   onSelectTab,
   onReorderTabs,
   onCloseTab,
-  onCloseAllTabs,
+  onCloseAllChats,
+  onCloseActiveSection,
   onNewTab,
   onNewTabWithAgent,
-  renamableTabIds,
   onRenameTab,
   agents,
   onOpenHistory,
@@ -53,46 +55,26 @@ export default function TabBar({
   onOpenMcp,
   onOpenPromptLibrary,
   onOpenSystemInstructions,
-  onOpenSettings
+  onOpenSettings,
+  sidebarPosition = 'left',
+  onUseSidebar,
 }: TabBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
-  const [tabFocusedControl, setTabFocusedControl] = useState<'new' | 'menu' | 'hamburger' | null>(null);
+  const [tabFocusedControl, setTabFocusedControl] = useState<'new' | 'history' | 'menu' | null>(null);
   const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
-  const [isIslandsTheme, setIsIslandsTheme] = useState(readIslandsTheme);
-  const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'after' } | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
-  const tabsListRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const hamburgerRef = useRef<HTMLDivElement>(null);
   const menuListRef = useRef<HTMLDivElement>(null);
-  const hamburgerMenuListRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const hamburgerButtonRef = useRef<HTMLButtonElement>(null);
   const lastInteractionWasTabRef = useRef(false);
   const focusFirstMenuItemOnOpenRef = useRef(false);
-  const focusFirstHamburgerItemOnOpenRef = useRef(false);
-  const suppressClickTabIdRef = useRef<string | null>(null);
+  const {
+    listRef: tabsListRef,
+    dropTarget,
+    startReordering,
+    shouldSuppressClick,
+  } = useTabReordering('horizontal', onReorderTabs);
   const runnableAgents = agents.filter(isAgentRunnable);
-
-  useEffect(() => {
-    const updateThemeClass = () => {
-      const nextIsIslands = readIslandsTheme();
-      document.documentElement.classList.toggle('ide-theme-islands', nextIsIslands);
-      setIsIslandsTheme(nextIsIslands);
-    };
-
-    updateThemeClass();
-    const themeStyle = document.getElementById('ide-theme-style');
-    if (!themeStyle) {
-      return;
-    }
-    const observer = new MutationObserver(updateThemeClass);
-    observer.observe(themeStyle, { childList: true, characterData: true, subtree: true });
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -100,9 +82,6 @@ export default function TabBar({
       setTabFocusedControl(null);
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
-      }
-      if (hamburgerRef.current && !hamburgerRef.current.contains(event.target as Node)) {
-        setHamburgerMenuOpen(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -130,90 +109,20 @@ export default function TabBar({
     focusMenuItem(menuListRef.current, 0);
   }, [menuOpen]);
 
-  useEffect(() => {
-    if (!hamburgerMenuOpen) {
-      return;
-    }
-    if (!focusFirstHamburgerItemOnOpenRef.current) {
-      return;
-    }
-    focusFirstHamburgerItemOnOpenRef.current = false;
-    focusMenuItem(hamburgerMenuListRef.current, 0);
-  }, [hamburgerMenuOpen]);
-
-  const findDropTarget = (sourceId: string, clientX: number, clientY: number) => {
-    const tabElements = Array.from(tabsListRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]') ?? []);
-    for (const element of tabElements) {
-      const id = element.dataset.tabId;
-      if (!id || id === sourceId) {
-        continue;
-      }
-      const rect = element.getBoundingClientRect();
-      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-        continue;
-      }
-      return {
-        id,
-        position: clientX < rect.left + rect.width / 2 ? 'before' as const : 'after' as const,
-      };
-    }
-    return null;
-  };
-
   const handleTabPointerDown = (id: string, event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest('[data-close-tab]')) {
       return;
     }
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let moved = false;
-    let latestDropTarget: { id: string; position: 'before' | 'after' } | null = null;
-
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      const distance = Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY);
-      if (distance < 4) {
-        return;
-      }
-
-      moved = true;
-      latestDropTarget = findDropTarget(id, moveEvent.clientX, moveEvent.clientY);
-      setDropTarget(latestDropTarget);
-    };
-
-    const onPointerUp = () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-      setDropTarget(null);
-
-      if (!moved) {
-        return;
-      }
-
-      suppressClickTabIdRef.current = id;
-      window.setTimeout(() => {
-        if (suppressClickTabIdRef.current === id) {
-          suppressClickTabIdRef.current = null;
-        }
-      }, 0);
-
-      if (latestDropTarget) {
-        onReorderTabs(id, latestDropTarget.id, latestDropTarget.position);
-      }
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
+    startReordering(id, event);
   };
 
   return (
     <div className="relative z-30 flex h-[40px] bg-background border-t border-b
       border-[var(--ide-Borders-ContrastBorderColor)] select-none shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+      {onUseSidebar ? <UseSidebarButton position={sidebarPosition} onClick={onUseSidebar} /> : null}
       {/* Tabs List */}
       <div ref={tabsListRef} role="tablist"
-        className={`flex min-w-0 flex-1 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:h-1.5 ${isIslandsTheme ? 'pl-1' : ''}`}
+        className={`flex min-w-0 flex-1 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:h-1.5 ${isIslandsTheme ? '' : 'pl-2'}`}
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -234,11 +143,10 @@ export default function TabBar({
                 isIslandsTheme={isIslandsTheme}
                 onSelectTab={onSelectTab}
                 onPointerDown={handleTabPointerDown}
-                shouldSuppressClick={(id) => suppressClickTabIdRef.current === id}
+                shouldSuppressClick={shouldSuppressClick}
                 onCloseTab={onCloseTab}
                 onFocusTab={(id) => setFocusedTabId(lastInteractionWasTabRef.current ? id : null)}
                 onBlurTab={(id) => setFocusedTabId((current) => current === id ? null : current)}
-                canRename={renamableTabIds.has(tab.id)}
                 isRenaming={renamingTabId === tab.id}
                 onStartRename={setRenamingTabId}
                 onRename={onRenameTab}
@@ -250,7 +158,7 @@ export default function TabBar({
         })}
       </div>
 
-      {/* Controls: +, More (chevron), Hamburger */}
+      {/* Controls: new chat and navigation */}
       <div className="flex shrink-0 items-center bg-background pl-1 pr-2 gap-0.5 z-10 shadow-[-10px_0_10px_-5px_var(--background)]">
         {/* New Tab (+ matches default agent) */}
         <button
@@ -264,19 +172,31 @@ export default function TabBar({
           <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
 
-        {/* More/Menu (Chevron dropdown) */}
+        <Tooltip variant="minimal" placement="bottom" content="History" className="flex">
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenHistory();
+            }}
+            onFocus={() => setTabFocusedControl(lastInteractionWasTabRef.current ? 'history' : null)}
+            onBlur={() => setTabFocusedControl((current) => current === 'history' ? null : current)}
+            className={`flex h-[24px] w-[28px] items-center justify-center rounded bg-background
+              transition-colors hover:bg-hover hover:text-foreground focus:outline-none
+              ${tabFocusedControl === 'history' ? 'shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]' : ''}`}
+            aria-label="History"
+          >
+            <History size={15} aria-hidden="true" />
+          </button>
+        </Tooltip>
+
+        {/* Navigation menu */}
         <div className="relative" ref={menuRef}>
           <button
             ref={menuButtonRef}
             onClick={() => {
               focusFirstMenuItemOnOpenRef.current = false;
-              setMenuOpen((current) => {
-                const next = !current;
-                if (next) {
-                  setHamburgerMenuOpen(false);
-                }
-                return next;
-              });
+              setMenuOpen((current) => !current);
             }}
             onFocus={() => setTabFocusedControl(lastInteractionWasTabRef.current ? 'menu' : null)}
             onBlur={() => setTabFocusedControl((current) => current === 'menu' ? null : current)}
@@ -284,78 +204,38 @@ export default function TabBar({
               if ((event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') && !menuOpen) {
                 event.preventDefault();
                 focusFirstMenuItemOnOpenRef.current = true;
-                setHamburgerMenuOpen(false);
                 setMenuOpen(true);
               }
             }}
-            className={`flex items-center justify-center w-[24px] h-[24px] rounded bg-background 
-              hover:text-foreground hover:bg-hover transition-colors focus:outline-none 
-              ${menuOpen ? 'bg-hover text-foreground' : ''} 
+            className={`flex items-center justify-center w-[28px] h-[24px] rounded bg-background
+              hover:text-foreground hover:bg-hover transition-colors focus:outline-none
+              ${menuOpen ? 'bg-hover text-foreground' : ''}
               ${tabFocusedControl === 'menu' ? 'shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]' : ''}`}
+            aria-label="Navigation menu"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <ChevronDown size={12} aria-hidden="true" />
+            <Menu size={16} aria-hidden="true" />
           </button>
 
           {menuOpen && (
-            <TabOverflowMenu
+            <NavigationMenu
               menuListRef={menuListRef}
               menuButtonRef={menuButtonRef}
               tabs={tabs}
               tabUi={tabUi}
               activeTabId={activeTabId}
+              activeSection={activeSection}
               agents={agents}
               runnableAgents={runnableAgents}
               onSelectTab={onSelectTab}
+              onReorderTabs={onReorderTabs}
               onCloseTab={onCloseTab}
-              onCloseAllTabs={onCloseAllTabs}
+              onCloseAllChats={onCloseAllChats}
+              onCloseActiveSection={onCloseActiveSection}
               onNewTabWithAgent={onNewTabWithAgent}
-              renamableTabIds={renamableTabIds}
               onRenameTab={onRenameTab}
               onCloseMenu={() => setMenuOpen(false)}
-            />
-          )}
-        </div>
-
-        {/* Hamburger Menu */}
-        <div className="relative" ref={hamburgerRef}>
-          <button
-            ref={hamburgerButtonRef}
-            onClick={() => {
-              focusFirstHamburgerItemOnOpenRef.current = false;
-              setHamburgerMenuOpen((current) => {
-                const next = !current;
-                if (next) {
-                  setMenuOpen(false);
-                }
-                return next;
-              });
-            }}
-            onFocus={() => setTabFocusedControl(lastInteractionWasTabRef.current ? 'hamburger' : null)}
-            onBlur={() => setTabFocusedControl((current) => current === 'hamburger' ? null : current)}
-            onKeyDown={(event) => {
-              if ((event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') && !hamburgerMenuOpen) {
-                event.preventDefault();
-                focusFirstHamburgerItemOnOpenRef.current = true;
-                setMenuOpen(false);
-                setHamburgerMenuOpen(true);
-              }
-            }}
-            className={`flex items-center justify-center w-[28px] h-[24px] rounded bg-background transition-colors 
-              focus:outline-none ${hamburgerMenuOpen ? 'bg-hover text-foreground' : 'hover:text-foreground hover:bg-hover'} 
-              ${tabFocusedControl === 'hamburger' ? 'shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]' : ''}`}
-            aria-haspopup="menu"
-            aria-expanded={hamburgerMenuOpen}
-          >
-            <Menu size={16} aria-hidden="true" />
-          </button>
-
-          {hamburgerMenuOpen && (
-            <HamburgerMenuPanel
-              menuListRef={hamburgerMenuListRef}
-              menuButtonRef={hamburgerButtonRef}
-              onCloseMenu={() => setHamburgerMenuOpen(false)}
               onOpenHistory={onOpenHistory}
               onOpenManagement={onOpenManagement}
               onOpenDesignSystem={onOpenDesignSystem}
@@ -366,6 +246,7 @@ export default function TabBar({
             />
           )}
         </div>
+
       </div>
     </div>
   );

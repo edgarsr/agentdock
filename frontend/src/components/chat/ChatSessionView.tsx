@@ -157,6 +157,7 @@ export default function ChatSessionView({
 
   const {
     inputHeight,
+    isResizing,
     setContentHeight,
     startResizing,
   } = useChatInputResize(attachments);
@@ -240,10 +241,6 @@ export default function ChatSessionView({
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-background">
-      {/* Message List Area with Scoped Overlay */}
-      <div className="flex-1 flex flex-col min-h-0 relative">
-
-        <div className={`flex-1 flex flex-col min-h-0`}>
           <MessageList 
             messages={messages} 
             onImageClick={setPreviewImage} 
@@ -257,11 +254,7 @@ export default function ChatSessionView({
             isHistoryReplaying={isHistoryReplaying}
             onForkFromMessage={handleForkFromMessage}
             scrollToBottomOnInitialMessages={Boolean(initialMessages?.length) && !historySession}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col shrink-0 relative z-20 shadow-[0_-2px_8px_rgba(0,0,0,0.05)] bg-background">
+            footer={<>
         <FileChangesPanel
           hasPluginEdits={hasPluginEdits}
           fileChanges={fileChanges}
@@ -293,22 +286,10 @@ export default function ChatSessionView({
           />
         )}
 
-        {/* Resize Handle / Divider */}
-        <div 
-          onMouseDown={startResizing}
-          className="h-[12px] -my-[6px] w-full cursor-row-resize relative z-10 group select-none"
-        >
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px]
-            bg-[var(--ide-Borders-ContrastBorderColor)] transition-[background-color,box-shadow] duration-500
-            delay-150 ease-out group-hover:bg-[var(--ide-Button-default-focusColor)] group-hover:opacity-70" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-[2px]
-            bg-[var(--ide-Borders-ContrastBorderColor)] rounded-full transition-[background-color,box-shadow]
-            duration-500 delay-150 ease-out group-hover:bg-[var(--ide-Button-default-focusColor)] group-hover:opacity-70
-            group-hover:shadow-[0_0_6px_color-mix(in_srgb,var(--ide-Button-default-focusColor),transparent_45%)]" />
-        </div>
-
         <div style={{ height: `${inputHeight}px` }} className="flex flex-col">
           <ChatInput
+            onResizeStart={startResizing}
+            isResizing={isResizing}
             conversationId={conversationId}
             contextTokensUsed={lastAssistantMsgWithContext?.contextTokensUsed}
             contextWindowSize={lastAssistantMsgWithContext?.contextWindowSize}
@@ -354,7 +335,9 @@ export default function ChatSessionView({
             isActive={isActive}
           />
         </div>
-      </div>
+        <div aria-hidden="true" className="h-2 shrink-0" />
+            </>}
+          />
 
       {/* Full-size Image Overlay */}
       <ImageOverlayModal src={previewImage} onClose={() => setPreviewImage(null)} />

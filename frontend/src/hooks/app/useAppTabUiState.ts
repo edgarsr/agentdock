@@ -29,22 +29,6 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     delete pendingPermissionRef.current[id];
   }, []);
 
-  const cleanupTabUiStateForIds = useCallback((ids: string[]) => {
-    setTabUi(prev => {
-      const next = { ...prev };
-      ids.forEach(id => delete next[id]);
-      return next;
-    });
-    ids.forEach(id => {
-      delete pendingPermissionRef.current[id];
-    });
-  }, []);
-
-  const resetTabUiState = useCallback(() => {
-    setTabUi({});
-    pendingPermissionRef.current = {};
-  }, []);
-
   const markTabReadIfAllowed = useCallback((id: string) => {
     if ((tabUi[id]?.canMarkRead ?? true)) {
       setTabUi(prev => prev[id]?.unread ? { ...prev, [id]: { ...prev[id], unread: false } } : prev);
@@ -135,7 +119,12 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
   const handleProcessingChange = useCallback((tabId: string, isProcessing: boolean) => {
     setTabUi(prev => {
       const current = prev[tabId];
-      if (!current || current.processing === isProcessing) return prev;
+      if (!current) {
+        return isProcessing
+          ? { ...prev, [tabId]: { ...DEFAULT_TAB_UI, processing: true } }
+          : prev;
+      }
+      if (current.processing === isProcessing) return prev;
       return { ...prev, [tabId]: { ...current, processing: isProcessing } };
     });
   }, []);
@@ -144,7 +133,11 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     pendingPermissionRef.current[tabId] = hasPendingPermission;
     setTabUi(prev => {
       const current = prev[tabId];
-      if (!current) return prev;
+      if (!current) {
+        return hasPendingPermission
+          ? { ...prev, [tabId]: { ...DEFAULT_TAB_UI, warning: true } }
+          : prev;
+      }
       const needsUpdate = current.warning !== hasPendingPermission;
       if (!needsUpdate) return prev;
       return {
@@ -170,8 +163,6 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     pendingPermissionRef,
     initTabUi,
     cleanupTabUiState,
-    cleanupTabUiStateForIds,
-    resetTabUiState,
     markTabReadIfAllowed,
     clearTabUnread,
     handleAssistantActivity,

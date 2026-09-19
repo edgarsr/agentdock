@@ -13,6 +13,7 @@ import java.io.RandomAccessFile
 
 object GlobalSettingsStore {
     private val storeLock = Any()
+    private val sidebarSectionIds = setOf("new-chat", "recent-chats", "sections")
 
     @Volatile
     private var gitCommitGenerationEnabled = false
@@ -45,6 +46,8 @@ object GlobalSettingsStore {
             audioNotificationsEnabled = settings.audioNotificationsEnabled,
             uiFontSizeOffsetPx = normalizeUiFontSizeOffsetPx(settings.uiFontSizeOffsetPx),
             userMessageBackgroundStyle = normalizeUserMessageBackgroundStyle(settings.userMessageBackgroundStyle),
+            sidebarPosition = normalizeSidebarPosition(settings.sidebarPosition),
+            sidebarExpandedSections = settings.sidebarExpandedSections.filter { it in sidebarSectionIds }.distinct(),
             audioTranscription = normalizeAudioTranscriptionSettings(settings.audioTranscription),
             gitCommitGeneration = settings.gitCommitGeneration.copy(
                 adapterId = settings.gitCommitGeneration.adapterId.trim(),
@@ -139,4 +142,7 @@ object GlobalSettingsStore {
             else -> "default"
         }
     }
+
+    private fun normalizeSidebarPosition(position: String?): String =
+        if (position?.trim()?.lowercase() == "right") "right" else "left"
 }

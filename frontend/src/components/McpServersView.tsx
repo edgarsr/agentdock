@@ -5,6 +5,7 @@ import { ACPBridge } from '../utils/bridge';
 import { Button } from './ui/Button';
 import { Checkbox } from './ui/Checkbox';
 import { Tooltip } from './chat/shared/Tooltip';
+import { SectionTitle } from './ui/SectionTitle';
 import ConfirmationModal from './ConfirmationModal';
 import { DropdownSelect } from './ui/DropdownSelect';
 import { FormDialog } from './ui/FormDialog';
@@ -179,30 +180,34 @@ export function McpServersView() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground text-ide-small">
-      <div className="flex items-center justify-end gap-2 px-2 min-h-12 border-b border-border flex-shrink-0">
-        <Button
-          onClick={() => ACPBridge.checkMcpStatus()}
-          variant="secondary"
-          leftIcon={<RefreshCw size={14} />}
-          className="max-h-8"
-        >
-          Check Status
-        </Button>
-        <Button
-          onClick={openAdd}
-          variant="primary"
-          leftIcon={<Plus size={14} />}
-          className="max-h-8"
-        >
-          Add
-        </Button>
-      </div>
+    <div className="h-full overflow-hidden bg-background text-foreground text-ide-small">
+      <div className="h-full w-full overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-app-content flex-col">
+      <SectionTitle actions={(
+        <>
+          <Button
+            onClick={() => ACPBridge.checkMcpStatus()}
+            variant="secondary"
+            leftIcon={<RefreshCw size={14} />}
+            className="max-h-8"
+          >
+            Check Status
+          </Button>
+          <Button
+            onClick={openAdd}
+            variant="primary"
+            leftIcon={<Plus size={14} />}
+            className="max-h-8"
+          >
+            Add
+          </Button>
+        </>
+      )}>
+        MCP Servers
+      </SectionTitle>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
         {servers.length === 0 && !form && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-foreground-secondary p-4">
+          <div className="flex-1 flex flex-col mt-12 items-center gap-2 text-foreground-secondary">
             <Network size={28} strokeWidth={1.5} />
             <span>No MCP servers configured</span>
             <p className="max-w-[400px] text-center">
@@ -220,7 +225,7 @@ export function McpServersView() {
             return (
             <div
               key={s.id}
-              className="flex items-start gap-3 px-4 py-2.5 border-b border-border"
+              className="flex items-start gap-3 px-4 py-2.5 border-b border-border last:border-b-0"
             >
               <Checkbox
                 checked={s.enabled}

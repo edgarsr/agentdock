@@ -215,11 +215,10 @@ export interface TabUiFlags {
   processing: boolean;
 }
 
-export type TabType = 'chat' | 'management' | 'design' | 'history' | 'mcp' | 'system-instructions' | 'prompt-library' | 'settings';
+export type SectionType = 'management' | 'design' | 'history' | 'mcp' | 'system-instructions' | 'prompt-library' | 'settings';
 
 export interface ChatTab {
   id: string;
-  type: TabType;
   title: string;
   conversationId: string;
   agentId?: string; // If pre-selected
@@ -502,6 +501,13 @@ export interface GitCommitGenerationSettings {
   instructions: string;
 }
 
+export type SidebarSectionId = 'new-chat' | 'recent-chats' | 'sections';
+
+export const DEFAULT_SIDEBAR_EXPANDED_SECTIONS: SidebarSectionId[] = [
+  'recent-chats',
+  'sections',
+];
+
 export interface GlobalSettings {
   audioNotificationsEnabled: boolean;
   uiFontSizeOffsetPx: number;
@@ -511,6 +517,9 @@ export interface GlobalSettings {
   gitCommitGeneration: GitCommitGenerationSettings;
   quotaWidgetEnabled: boolean;
   openInEditor: boolean;
+  sidebarEnabled: boolean;
+  sidebarPosition: 'left' | 'right';
+  sidebarExpandedSections: SidebarSectionId[];
 }
 
 export interface GlobalSettingsPayload {

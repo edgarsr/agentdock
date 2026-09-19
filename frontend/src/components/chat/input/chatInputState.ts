@@ -1,3 +1,4 @@
+import type { MouseEventHandler } from 'react';
 import {
   ApprovalMode,
   AvailableCommand,
@@ -42,6 +43,8 @@ export interface ChatInputProps {
   onImageClick: (src: string) => void;
   onHeightChange?: (contentHeight: number) => void;
   customHeight?: number;
+  onResizeStart?: MouseEventHandler<HTMLDivElement>;
+  isResizing?: boolean;
   autoFocus?: boolean;
   isActive?: boolean;
 }

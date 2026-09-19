@@ -2,8 +2,10 @@ package agentdock.history
 
 import agentdock.bridge.BridgeHost
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -19,7 +21,8 @@ private val permissiveJson = Json {
 class HistoryBridge(
     private val host: BridgeHost,
     private val project: Project,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val closeConversation: suspend (String) -> Unit
 ) {
     @Serializable
     private data class DeleteHistoryPayload(
@@ -74,14 +77,34 @@ class HistoryBridge(
             scope.launch(Dispatchers.Default) {
                 try {
                     val request = permissiveJson.decodeFromString<DeleteHistoryPayload>(payload)
-                    val result = AgentDockHistoryService.deleteConversations(request.projectPath, request.conversationIds)
+                    val closeFailures = mutableListOf<DeleteConversationFailure>()
+                    val deletableConversationIds = request.conversationIds.distinct().filter { conversationId ->
+                        try {
+                            closeConversation(conversationId)
+                            true
+                        } catch (e: Exception) {
+                            if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                            closeFailures.add(
+                                DeleteConversationFailure(
+                                    conversationId = conversationId,
+                                    message = "Failed to close conversation before deletion: ${e.message ?: e.toString()}"
+                                )
+                            )
+                            false
+                        }
+                    }
+                    val result = AgentDockHistoryService.deleteConversations(
+                        request.projectPath,
+                        deletableConversationIds
+                    )
+                    val failures = closeFailures + result.failures
                     val history = AgentDockHistoryService.getHistoryList(request.projectPath)
                     pushHistoryList(permissiveJson.encodeToString(history))
                     pushDeleteResult(
                         DeleteHistoryResultPayload(
-                            success = result.success,
+                            success = closeFailures.isEmpty() && result.success,
                             requestedConversationIds = request.conversationIds,
-                            failures = result.failures
+                            failures = failures
                         )
                     )
                 } catch (e: Exception) {

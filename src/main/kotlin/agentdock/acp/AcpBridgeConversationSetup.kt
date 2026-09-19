@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
@@ -334,11 +335,7 @@ internal fun AcpBridge.installConversationQueries() {
         val chatId = chatIdPayload.trim()
         if (chatId.isNotEmpty()) {
             scope.launch(Dispatchers.Default) {
-                service.stopAgent(chatId)
-                awaitingBackgroundOutput.remove(chatId)
-                livePromptCaptures.remove(chatId)
-                lateHistoryEventQueues.remove(chatId)?.close()
-                historyReplayCaptures.remove(chatId)
+                stopConversation(chatId)
             }
         }
     }
@@ -352,4 +349,18 @@ internal fun AcpBridge.installConversationQueries() {
     }
 
     installConversationHistoryQueries()
+}
+
+internal suspend fun AcpBridge.stopConversation(chatId: String, awaitPrompt: Boolean = false) {
+    if (awaitPrompt) {
+        historyLoadMutexes[chatId]?.mutex?.withLock { }
+        val promptJob = promptJobs[chatId]
+        withTimeout(CANCEL_REQUEST_TIMEOUT_MS) { service.cancel(chatId) }
+        withTimeout(CANCELLED_PROMPT_RESPONSE_TIMEOUT_MS) { promptJob?.join() }
+    }
+    service.stopAgent(chatId)
+    awaitingBackgroundOutput.remove(chatId)
+    livePromptCaptures.remove(chatId)
+    lateHistoryEventQueues.remove(chatId)?.close()
+    historyReplayCaptures.remove(chatId)
 }

@@ -40,9 +40,13 @@ function formatConversationLength(promptCount?: number) {
   return `${promptCount} prompt${promptCount === 1 ? '' : 's'}`;
 }
 
-export function useHistoryPanelController(availableAgents: AgentOption[]) {
-  const [historyList, setHistoryList] = useState<HistorySessionMeta[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function useHistoryPanelController(
+  availableAgents: AgentOption[],
+  isActive: boolean,
+  historyList: HistorySessionMeta[],
+  historyLoaded: boolean
+) {
+  const [isLoading, setIsLoading] = useState(!historyLoaded);
   const [selectedConversationIds, setSelectedConversationIds] = useState<string[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [deleteProjectPath, setDeleteProjectPath] = useState<string>('');
@@ -57,16 +61,6 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
   const filterOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
-    const unsubHistory = ACPBridge.onHistoryList((e) => {
-      const list = Array.isArray(e.detail.list) ? e.detail.list : [];
-      setHistoryList(list);
-      setSelectedConversationIds((prev) => prev.filter((id) => list.some((item) => item.conversationId === id)));
-      setDeleteErrors((prev) => Object.fromEntries(
-        Object.entries(prev).filter(([conversationId]) => list.some((item) => item.conversationId === conversationId))
-      ));
-      setIsLoading(false);
-    });
-
     const unsubDeleteResult = ACPBridge.onHistoryDeleteResult((e) => {
       const result = e.detail.result;
       const failures = Array.isArray(result.failures) ? result.failures : [];
@@ -85,17 +79,34 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
       setIsDeleting(false);
     });
 
+    return () => {
+      unsubDeleteResult();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!historyLoaded) return;
+    setSelectedConversationIds((prev) => prev.filter((id) => (
+      historyList.some((item) => item.conversationId === id)
+    )));
+    setDeleteErrors((prev) => Object.fromEntries(
+      Object.entries(prev).filter(([conversationId]) => (
+        historyList.some((item) => item.conversationId === conversationId)
+      ))
+    ));
+    setIsLoading(false);
+  }, [historyList, historyLoaded]);
+
+  useEffect(() => {
+    if (!isActive) return;
+
     ACPBridge.requestHistoryList();
     const intervalId = window.setInterval(() => {
       ACPBridge.requestHistoryList();
     }, 30_000);
 
-    return () => {
-      window.clearInterval(intervalId);
-      unsubDeleteResult();
-      unsubHistory();
-    };
-  }, []);
+    return () => window.clearInterval(intervalId);
+  }, [isActive]);
 
   const adapterDisplay = useMemo(() => {
     const map = new Map<string, AgentOption>();
@@ -200,10 +211,6 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
       return;
     }
     
-    setHistoryList(prev => prev.map(item => 
-      item.conversationId === conversationId ? { ...item, title: editTitle.trim() } : item
-    ));
-    
     ACPBridge.renameHistoryConversation(projectPath, conversationId, editTitle.trim());
     setEditingId(null);
   };
@@ -283,7 +290,6 @@ export function useHistoryPanelController(availableAgents: AgentOption[]) {
   };
 
   return {
-    historyList,
     isLoading,
     selectedConversationIds,
     pendingDeleteIds,

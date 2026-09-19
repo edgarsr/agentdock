@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, memo, useState, useMemo, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { Message, RichContentBlock, ExploringBlock, ToolCallBlock, PlanBlock, AgentOption } from '../../types/chat';
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
@@ -34,6 +35,7 @@ function expandCutoffByPromptCount(messages: Message[], cutoffIndex: number, pro
 }
 
 interface MessageListProps {
+  footer?: ReactNode;
   messages: Message[];
   onImageClick: (src: string) => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
@@ -49,6 +51,7 @@ interface MessageListProps {
 }
 
 function MessageList({ 
+  footer,
   messages,
   onImageClick,
   onAtBottomChange,
@@ -64,6 +67,7 @@ function MessageList({
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
   const followBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
   const atBottomChangeRef = useRef(onAtBottomChange);
@@ -230,12 +234,14 @@ function MessageList({
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (footerRef.current?.contains(e.target as Node)) return;
     if (e.deltaY < 0) {
       handleUserIntentScrollUp();
     }
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (footerRef.current?.contains(e.target as Node)) return;
     touchStartYRef.current = e.touches[0].clientY;
   };
 
@@ -253,6 +259,7 @@ function MessageList({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (footerRef.current?.contains(e.target as Node)) return;
     if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) {
       handleUserIntentScrollUp();
     }
@@ -363,9 +370,10 @@ function MessageList({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onKeyDown={handleKeyDown}
-        className="flex-1 min-h-0 overflow-y-auto scroll-auto [overflow-anchor:none] px-6 py-6 space-y-6 opacity-100 transition-opacity duration-300"
+        className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-auto [overflow-anchor:none] px-4 opacity-100 transition-opacity duration-300"
       >
-      <div ref={contentRef} className="mx-auto w-full max-w-[800px] flex flex-col">
+      <div ref={contentRef} className="mx-auto min-h-full w-full max-w-app-content flex flex-col">
+        <div className="flex flex-1 flex-col pb-6 pt-[calc(1.5rem+var(--content-top-inset,0px))]">
         
         {hiddenCount > 0 && !isHistoryReplaying && (
           <div className="flex justify-center mb-12">
@@ -418,6 +426,17 @@ function MessageList({
         {isSending && !isHistoryReplaying && (
           <div className="flex justify-start mb-8">
             <ChatLoadingIndicator status={status} agentName={agentName} />
+          </div>
+        )}
+        </div>
+        {footer && (
+          <div ref={footerRef} className="sticky bottom-0 z-20 flex shrink-0 flex-col pt-2">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-screen -translate-x-1/2 bg-background shadow-[0_4px_0_0_var(--ide-Panel-background)]">
+              <div className="absolute inset-x-0 bottom-full h-8 bg-gradient-to-b from-transparent to-background" />
+            </div>
+            <div className="relative flex flex-col">
+              {footer}
+            </div>
           </div>
         )}
       </div>

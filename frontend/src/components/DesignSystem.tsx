@@ -5,6 +5,7 @@ import { Checkbox } from './ui/Checkbox';
 import { DropdownSelect } from './ui/DropdownSelect';
 import { MenuButton } from './ui/MenuButton';
 import { SplitButton } from './ui/SplitButton';
+import { SectionTitle } from './ui/SectionTitle';
 
 export function DesignSystemView() {
     const [reloadInBrowser, setReloadInBrowser] = useState('on-save');
@@ -19,10 +20,12 @@ export function DesignSystemView() {
 
     return (
         <div className="h-full overflow-y-auto bg-background text-foreground">
-            <div className="max-w-[800px] mx-auto w-full p-6 space-y-8">
+            <div className="mx-auto flex min-h-full w-full max-w-app-content flex-col">
+            <SectionTitle>Design System</SectionTitle>
+            <div className="space-y-8 p-6">
             {/* Colors */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">COLORS</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">COLORS</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     <ColorTile tw="bg-background" var="--ide-Panel-background" />
                     <ColorTile tw="bg-background-secondary" var="--ide-background-secondary" />
@@ -59,7 +62,7 @@ export function DesignSystemView() {
 
             {/* Syntax */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">SYNTAX</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">SYNTAX</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <ColorTile tw="text-syntax-keyword" var="--ide-syntax-keyword" isText />
                     <ColorTile tw="text-syntax-string" var="--ide-syntax-string" isText />
@@ -74,7 +77,7 @@ export function DesignSystemView() {
 
             {/* Typography */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">TYPOGRAPHY</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">TYPOGRAPHY</h3>
                 <div className="space-y-2">
                     <TypeRow tw="text-ide-h1" sample="Heading 1" />
                     <TypeRow tw="text-ide-h2" sample="Heading 2" />
@@ -88,7 +91,7 @@ export function DesignSystemView() {
 
             {/* Spacing */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">SPACING</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">SPACING</h3>
                 <div className="space-y-2">
                     <SpaceRow tw="space-y-ide-paragraph" var="--ide-paragraph-spacing" />
                     <SpaceRow tw="pl-ide-indent" var="--ide-list-indent" />
@@ -97,7 +100,7 @@ export function DesignSystemView() {
 
             {/* Border */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">BORDER RADIUS</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">BORDER RADIUS</h3>
                 <div className="flex items-center gap-3 p-3 bg-background-secondary border border-border">
                     <div className="w-16 h-16 bg-primary rounded-ide"></div>
                     <code className="text-xs">rounded-ide</code>
@@ -107,7 +110,7 @@ export function DesignSystemView() {
 
             {/* Buttons */}
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">BUTTONS</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">BUTTONS</h3>
                 <div className="space-y-4 rounded-[10px] border border-border bg-background px-5 py-5">
                     <div className="flex flex-wrap items-center gap-4">
                         <Button variant="primary">OK</Button>
@@ -132,7 +135,7 @@ export function DesignSystemView() {
             </section>
 
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">DROPDOWNS</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">DROPDOWNS</h3>
                 <div className="flex flex-wrap items-start gap-4 rounded-[10px] border border-border bg-background px-5 py-5">
                     <DropdownSelect
                         value={reloadInBrowser}
@@ -148,7 +151,7 @@ export function DesignSystemView() {
             </section>
 
             <section className="space-y-4">
-                <h2 className="text-sm font-bold text-foreground-secondary">CHECKBOXES</h2>
+                <h3 className="text-sm font-bold text-foreground-secondary">CHECKBOXES</h3>
                 <div className="overflow-hidden rounded-[10px] border border-border bg-background">
                     <CheckboxRow
                         title="Mercurial"
@@ -164,6 +167,7 @@ export function DesignSystemView() {
                     />
                 </div>
             </section>
+            </div>
             </div>
         </div>
     );

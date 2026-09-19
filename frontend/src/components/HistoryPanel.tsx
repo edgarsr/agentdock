@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import type { AgentOption, HistorySessionMeta } from '../types/chat';
+import type { AgentOption, ChatTab, HistorySessionMeta } from '../types/chat';
 import ConfirmationModal from './ConfirmationModal';
 import { RefreshCw, Funnel, X } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -7,16 +7,27 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { Tooltip } from './chat/shared/Tooltip';
 import { HistoryListItem } from './history/HistoryListItem';
 import { useHistoryPanelController } from './history/useHistoryPanelController';
+import { SectionTitle } from './ui/SectionTitle';
 
 interface HistoryPanelProps {
   availableAgents: AgentOption[];
+  tabs: ChatTab[];
+  historyList: HistorySessionMeta[];
+  historyLoaded: boolean;
+  isActive: boolean;
   onOpenSession: (session: HistorySessionMeta) => void;
 }
 
-export default function HistoryPanel({ availableAgents, onOpenSession }: HistoryPanelProps) {
+export default function HistoryPanel({
+  availableAgents,
+  tabs,
+  historyList,
+  historyLoaded,
+  isActive,
+  onOpenSession,
+}: HistoryPanelProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const {
-    historyList,
     isLoading,
     selectedConversationIds,
     pendingDeleteIds,
@@ -55,11 +66,20 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
     handleFilterOptionKeyDown,
     toggleSelection,
     cancelDelete,
-  } = useHistoryPanelController(availableAgents);
+  } = useHistoryPanelController(
+    availableAgents,
+    isActive,
+    historyList,
+    historyLoaded
+  );
+  const hasOpenPendingChat = tabs.some((tab) => pendingDeleteIds.includes(tab.historySession?.conversationId || tab.conversationId));
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground z-10 w-full overflow-hidden relative pb-4">
-      <div className="flex items-center justify-between min-h-12 px-3 py-1 border-b border-border shrink-0 relative z-20">
+    <div className="h-full bg-background text-foreground z-10 w-full overflow-hidden relative">
+      <div className="h-full w-full overflow-y-auto pb-4">
+        <div className="mx-auto flex min-h-full w-full max-w-app-content flex-col">
+      <SectionTitle>History</SectionTitle>
+      <div className="sticky top-0 flex items-center justify-between min-h-12 px-3 py-1 border-b border-border shrink-0 z-20 bg-background">
         <div className="flex min-w-0 items-center gap-2">
           <Tooltip variant="minimal" content="Synchronize history">
             <button
@@ -153,7 +173,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search…"
               aria-label="Search chats by title"
-              className="w-full min-w-0 rounded-[4px] border border-border bg-input pl-2 pr-6 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none focus:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+              className="w-full min-w-0 rounded-[4px] border border-border bg-input pl-2 pr-6 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none"
             />
             {searchQuery && (
               <button
@@ -163,7 +183,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
                   setSearchQuery('');
                   searchInputRef.current?.focus();
                 }}
-                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-[4px] p-0.5 text-foreground-secondary hover:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-[4px] p-0.5 text-foreground-secondary hover:text-foreground focus-visible:outline-none"
               >
                 <X size={12} />
               </button>
@@ -198,8 +218,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto w-full space-y-1 mt-1">
-        <div className="max-w-[800px] mx-auto w-full min-h-full flex flex-col">
+      <div className="flex flex-1 flex-col w-full space-y-1 mt-1">
         {isLoading ? (
           <div className="flex justify-center p-8 text-foreground">Loading history...</div>
         ) : filteredHistoryList.length === 0 ? (
@@ -232,6 +251,7 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
             );
           })
         )}
+      </div>
         </div>
       </div>
 
@@ -239,9 +259,13 @@ export default function HistoryPanel({ availableAgents, onOpenSession }: History
         isOpen={pendingDeleteIds.length > 0}
         title={pendingDeleteIds.length > 1 ? 'Delete Chats' : 'Delete Chat'}
         message={
-          pendingDeleteIds.length > 1
+          (pendingDeleteIds.length > 1
             ? `Do you want to delete these ${pendingDeleteIds.length} chats?`
-            : 'Do you want to delete this chat?'
+            : 'Do you want to delete this chat?') + (hasOpenPendingChat
+              ? pendingDeleteIds.length > 1
+                ? '\nOpen chats in this selection will be closed before deletion.'
+                : '\nThis chat is open and will be closed before deletion.'
+              : '')
         }
         onConfirm={confirmDelete}
         confirmLabel="Yes"
