@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Palette } from 'lucide-react';
 import {
   AgentOption,
   AudioTranscriptionSettings,
@@ -11,6 +12,7 @@ import { AudioTranscriptionSettingsView } from './audio/AudioTranscriptionSettin
 import { normalizeAudioTranscriptionProvider } from './audio/audioTranscription';
 import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSettings';
 import { SettingsCheckbox, SettingsField, SettingsSection } from './settings/SettingsLayout';
+import { Tooltip } from './chat/shared/Tooltip';
 import { SectionTitle } from './ui/SectionTitle';
 import { DropdownOption, DropdownSelect } from './ui/DropdownSelect';
 
@@ -63,11 +65,13 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       audioNotificationsEnabled: payload?.settings?.audioNotificationsEnabled ?? true,
       uiFontSizeOffsetPx,
       uiZoomPercent: normalizeUiZoomPercent(payload?.settings?.uiZoomPercent),
-      userMessageBackgroundStyle: userMessageBackgroundOptions.some(
+      userMessageBackgroundStyle: payload?.settings?.userMessageBackgroundStyle === 'custom' || userMessageBackgroundOptions.some(
         (option) => option.id === payload?.settings?.userMessageBackgroundStyle
       )
         ? payload!.settings!.userMessageBackgroundStyle
         : 'default',
+      userMessageCustomColor: /^#[0-9a-fA-F]{6}$/.test(payload?.settings?.userMessageCustomColor ?? '')
+        ? payload!.settings!.userMessageCustomColor : '#193d70',
       audioTranscription: {
         provider: normalizeAudioTranscriptionProvider(payload?.settings?.audioTranscription?.provider),
         language: payload?.settings?.audioTranscription?.language ?? 'auto',
@@ -114,20 +118,19 @@ const userMessageBackgroundOptions: Array<{
     background: 'var(--ide-user-message-blue-bg)',
     toneClass: 'bg-user-message-blue'
   },
-  { id: 'primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
   { id: 'accent', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
   {
     id: 'background-secondary',
     background: 'var(--ide-background-secondary)',
     toneClass: 'bg-background-secondary'
   },
-  { id: 'secondary', background: 'var(--ide-Button-startBackground)', toneClass: 'bg-secondary' },
 ];
 
-function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userMessageBackgroundStyle']) {
+function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userMessageBackgroundStyle'], customColor: string) {
   const selected =
     userMessageBackgroundOptions.find((option) => option.id === styleId) ?? userMessageBackgroundOptions[0];
-  document.documentElement.style.setProperty('--user-message-bg', selected.background);
+  document.documentElement.style.setProperty('--ide-user-message-custom-bg', customColor);
+  document.documentElement.style.setProperty('--user-message-bg', styleId === 'custom' ? 'var(--ide-user-message-custom-bg)' : selected.background);
 }
 
 export function SettingsView() {
@@ -156,8 +159,8 @@ export function SettingsView() {
   }, [globalSettings]);
 
   useEffect(() => {
-    applyUserMessageTheme(globalSettings.settings.userMessageBackgroundStyle);
-  }, [globalSettings.settings.userMessageBackgroundStyle]);
+    applyUserMessageTheme(globalSettings.settings.userMessageBackgroundStyle, globalSettings.settings.userMessageCustomColor);
+  }, [globalSettings.settings.userMessageBackgroundStyle, globalSettings.settings.userMessageCustomColor]);
 
   useEffect(() => {
     const requestSettings = () => {
@@ -267,7 +270,7 @@ export function SettingsView() {
         <div className='mx-auto flex min-h-full w-full max-w-app-content flex-col'>
           <SectionTitle>Settings</SectionTitle>
           <div className='flex flex-col gap-8 px-4 pb-8 text-ide-small'>
-          <SettingsSection title='Appearance'>
+          <SettingsSection title='Appearance' compact>
             <SettingsCheckbox
               title='Open in Editor'
               description='Show the plugin as an editor tab instead of the side tool window'
@@ -339,6 +342,29 @@ export function SettingsView() {
                     }`}
                   />
                 ))}
+                <Tooltip variant='minimal' content='Choose custom color'>
+                  <label
+                    style={{ backgroundColor: 'var(--ide-user-message-custom-bg)' }}
+                    className={`relative flex h-8 w-8 items-center justify-center rounded-[4px] border focus-within:ring-1 focus-within:ring-[var(--ide-Button-default-focusColor)] ${
+                      globalSettings.settings.userMessageBackgroundStyle === 'custom'
+                        ? 'border-[var(--ide-Button-focusedBorderColor)] shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]'
+                        : 'border-border'
+                    }`}
+                  >
+                    <Palette size={16} aria-hidden='true' />
+                    <input
+                      type='color'
+                      aria-label='Custom message background'
+                      value={globalSettings.settings.userMessageCustomColor}
+                      onClick={() => updateGlobalSettings({ userMessageBackgroundStyle: 'custom' })}
+                      onChange={(event) => updateGlobalSettings({
+                        userMessageBackgroundStyle: 'custom',
+                        userMessageCustomColor: event.target.value
+                      })}
+                      className='absolute inset-0 h-full w-full cursor-pointer opacity-0'
+                    />
+                  </label>
+                </Tooltip>
               </div>
             </SettingsField>
           </SettingsSection>

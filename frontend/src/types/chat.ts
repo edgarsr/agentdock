@@ -512,7 +512,8 @@ export interface GlobalSettings {
   audioNotificationsEnabled: boolean;
   uiFontSizeOffsetPx: number;
   uiZoomPercent: number;
-  userMessageBackgroundStyle: 'default' | 'blue-highlight' | 'blue' | 'background-secondary' | 'primary' | 'secondary' | 'accent';
+  userMessageBackgroundStyle: 'default' | 'blue-highlight' | 'blue' | 'background-secondary' | 'accent' | 'custom';
+  userMessageCustomColor: string;
   audioTranscription: AudioTranscriptionSettings;
   gitCommitGeneration: GitCommitGenerationSettings;
   quotaWidgetEnabled: boolean;

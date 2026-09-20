@@ -69,6 +69,7 @@ data class GlobalSettings(
     val uiFontSizeOffsetPx: Int = 0,
     val uiZoomPercent: Int = 100,
     val userMessageBackgroundStyle: String = "default",
+    val userMessageCustomColor: String = "#193d70",
     val audioTranscription: AudioTranscriptionSettings = AudioTranscriptionSettings(),
     val gitCommitGeneration: GitCommitGenerationSettings = GitCommitGenerationSettings(),
     val quotaWidgetEnabled: Boolean = false,

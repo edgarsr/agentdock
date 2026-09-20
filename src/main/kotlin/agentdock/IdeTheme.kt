@@ -190,13 +190,15 @@ object IdeTheme {
         sb.append("  --ide-scrollbar-color: ${toCssColor(scrollbarColor)};\n")
 
         val userMessageStyle = FrontendSettings.current.userMessageBackgroundStyle
+        val customColor = FrontendSettings.current.userMessageCustomColor
+            .takeIf { Regex("#[0-9a-fA-F]{6}").matches(it) } ?: "#193d70"
+        sb.append("  --ide-user-message-custom-bg: $customColor;\n")
         val userMessageBackgroundVar = when (userMessageStyle) {
+            "custom" -> "--ide-user-message-custom-bg"
             "default" -> "--ide-user-message-default-bg"
             "blue-highlight" -> "--ide-user-message-blue-highlight-bg"
             "blue" -> "--ide-user-message-blue-bg"
             "background-secondary" -> "--ide-background-secondary"
-            "primary" -> "--ide-Button-default-startBackground"
-            "secondary" -> "--ide-Button-startBackground"
             "accent" -> "--ide-List-selectionBackground"
             else -> "--ide-user-message-default-bg"
         }

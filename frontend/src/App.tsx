@@ -61,9 +61,8 @@ function App() {
       'blue-highlight': 'var(--ide-user-message-blue-highlight-bg)',
       'blue': 'var(--ide-user-message-blue-bg)',
       'background-secondary': 'var(--ide-background-secondary)',
-      'primary': 'var(--ide-Button-default-startBackground)',
-      'secondary': 'var(--ide-Button-startBackground)',
       'accent': 'var(--ide-List-selectionBackground)',
+      'custom': 'var(--ide-user-message-custom-bg)',
     };
 
     const applyGlobalSettings = (payload: { settings?: Partial<GlobalSettings> } | undefined) => {
@@ -76,6 +75,10 @@ function App() {
       document.documentElement.style.setProperty('--ui-font-size-offset', `${offset}px`);
 
       const styleId = payload?.settings?.userMessageBackgroundStyle ?? 'default';
+      const customColor = payload?.settings?.userMessageCustomColor ?? '#193d70';
+      document.documentElement.style.setProperty(
+        '--ide-user-message-custom-bg', /^#[0-9a-fA-F]{6}$/.test(customColor) ? customColor : '#193d70'
+      );
       const bg = userMessageBgMap[styleId] ?? userMessageBgMap['default'];
       document.documentElement.style.setProperty('--user-message-bg', bg);
     };
