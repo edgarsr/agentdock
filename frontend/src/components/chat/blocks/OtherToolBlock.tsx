@@ -123,7 +123,7 @@ export const OtherToolBlock: React.FC<Props> = ({ block, onImageClick }) => {
     <div className="border border-border rounded-[6px] overflow-hidden mb-2">
       <button
         onClick={hasContent ? toggle : undefined}
-        className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}${hasContent ? '' : ' cursor-default'}`}
+        className={`flex items-center gap-2 w-full px-3 h-9 bg-background-secondary ${chatInsetFocusClassName}${hasContent ? '' : ' cursor-default'}`}
       >
         <div className="flex-shrink-0 text-editor-fg opacity-70">
           <Wrench size={14} />
@@ -152,7 +152,7 @@ export const OtherToolBlock: React.FC<Props> = ({ block, onImageClick }) => {
           style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
         >
           <div className="overflow-hidden">
-          <div tabIndex={-1} className="p-3 bg-editor-bg max-h-[400px] text-ide-small overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent border-t border-border">
+          <div tabIndex={-1} className="p-3 bg-background-secondary max-h-[400px] text-ide-small overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent border-t border-border">
               <div className="leading-relaxed text-editor-fg min-h-[0.5rem]">
                 {argsText && (<div className="mb-2 text-sm font-mono whitespace-pre-wrap break-words opacity-70">Arguments: {argsText}</div>)}
                 {promptText && (<div className="mb-2"><b>Prompt: </b>{promptText}<hr /></div>)}

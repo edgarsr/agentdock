@@ -155,7 +155,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
     <div className="border border-border rounded-[6px] overflow-hidden mb-2">
       <button
         onClick={toggle}
-        className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
+        className={`flex items-center gap-2 w-full px-3 h-9 bg-background-secondary ${chatInsetFocusClassName}`}
       >
         <div className="flex-shrink-0 text-foreground-secondary">
           <FileIcon filePath={diffData?.filePath} className="h-[14px] w-[14px] flex-shrink-0 text-foreground" />

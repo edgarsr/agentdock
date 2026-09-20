@@ -173,7 +173,8 @@ export default function HistoryPanel({
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search…"
               aria-label="Search chats by title"
-              className="w-full min-w-0 rounded-[4px] border border-border bg-input pl-2 pr-6 py-0.5 text-ide-small text-foreground placeholder:text-foreground-secondary focus:outline-none"
+              className="w-full min-w-0 rounded-[4px] border border-border bg-input pl-2 pr-6 py-0.5 text-ide-small
+                text-foreground placeholder:text-foreground-secondary focus:outline-none"
             />
             {searchQuery && (
               <button
@@ -183,7 +184,8 @@ export default function HistoryPanel({
                   setSearchQuery('');
                   searchInputRef.current?.focus();
                 }}
-                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-[4px] p-0.5 text-foreground-secondary hover:text-foreground focus-visible:outline-none"
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded-[4px] p-0.5 text-foreground-secondary
+                  hover:text-foreground focus-visible:outline-none"
               >
                 <X size={12} />
               </button>

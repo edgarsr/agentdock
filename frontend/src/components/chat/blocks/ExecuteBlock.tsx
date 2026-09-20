@@ -65,7 +65,7 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false, t
   return (
     <div className={`border border-border rounded-[6px] overflow-hidden 
       ${type === 'single-exploring' ? '-mt-2' : type === 'exploring' ? '' : 'mb-2'}`}>
-      <button onClick={toggle} className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}>
+      <button onClick={toggle} className={`flex items-center gap-2 w-full px-3 h-9 bg-background-secondary ${chatInsetFocusClassName}`}>
         <div className="flex-shrink-0 grayscale"><TerminalIcon /></div>
         <div className="flex-1 text-left font-mono truncate pr-2 text-foreground">{command}</div>
         <div className="flex-shrink-0 flex items-center gap-2">
@@ -82,7 +82,7 @@ export const ExecuteBlock: React.FC<Props> = ({ block, isActivePrompt = false, t
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div tabIndex={-1} className="p-3 text-ide-small bg-editor-bg max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb
+          <div tabIndex={-1} className="p-3 text-ide-small bg-background-secondary max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb
               border-t border-border scrollbar-track-transparent [&_.markdown-body]:my-0 [&_.markdown-body_pre]:my-0
               [&_.markdown-body_pre]:border-0 [&_.markdown-body_pre]:rounded-none
               [&_.markdown-body_pre]:bg-transparent [&_.markdown-body_pre]:overflow-visible [&_.markdown-body_pre]:p-0

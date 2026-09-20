@@ -24,7 +24,7 @@ function ActiveVoiceInputButton({ conversationId, insertText }: VoiceInputButton
       <button type="button" onClick={onCancel}
         aria-label="Cancel transcription"
         className="flex items-center h-full px-1.5 rounded appearance-none
-          border-0 bg-editor-bg outline-none text-ide-small text-foreground-secondary
+          border-0 bg-background-secondary outline-none text-ide-small text-foreground-secondary
           hover:bg-hover hover:text-foreground
           focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
       >
@@ -40,7 +40,7 @@ function ActiveVoiceInputButton({ conversationId, insertText }: VoiceInputButton
 
   const recordClassName = isRecording
     ? 'bg-[#db5c5c] text-foreground'
-    : 'bg-editor-bg text-foreground hover:text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:text-foreground';
+    : 'bg-background-secondary text-foreground hover:text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:text-foreground';
 
   return (
     <button type="button" onClick={onRecord}

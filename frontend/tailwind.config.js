@@ -41,6 +41,7 @@ export default {
         },
         'user-message': {
           default: 'var(--ide-user-message-default-bg)',
+          'blue-highlight': 'var(--ide-user-message-blue-highlight-bg)',
           blue: 'var(--ide-user-message-blue-bg)',
         },
         success: '#57965c',

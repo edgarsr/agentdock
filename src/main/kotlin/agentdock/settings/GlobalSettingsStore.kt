@@ -138,7 +138,7 @@ object GlobalSettingsStore {
 
     private fun normalizeUserMessageBackgroundStyle(style: String?): String {
         return when (style?.trim()?.lowercase()) {
-            "default", "blue", "background-secondary", "primary", "secondary", "accent", "input", "editor-bg" -> style.trim().lowercase()
+            "default", "blue-highlight", "blue", "background-secondary", "primary", "secondary", "accent" -> style.trim().lowercase()
             else -> "default"
         }
     }

@@ -49,12 +49,12 @@ const FileChangesPanel = memo(({
 
   return (
     <div className="py-1">
-      <div className="w-full border border-border rounded-[6px] overflow-hidden bg-editor-bg">
+      <div className="w-full border border-border rounded-[6px] overflow-hidden bg-background-secondary">
           <div
             role="button"
             tabIndex={0}
             aria-expanded={expanded}
-            className={`flex items-center h-9 w-full px-3 bg-editor-bg transition-colors cursor-pointer group/header ${chatInsetFocusClassName}`}
+            className={`flex items-center h-9 w-full px-3 bg-background-secondary transition-colors cursor-pointer group/header ${chatInsetFocusClassName}`}
             onClick={toggleExpanded}
             onKeyDown={handleHeaderKeyDown}
           >
@@ -121,7 +121,7 @@ const FileChangesPanel = memo(({
           <div
             className={`grid transition-[grid-template-rows] duration-300 ease-in-out overflow-hidden ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
           >
-            <div className={`overflow-hidden bg-editor-bg border-t transition-colors duration-300 ${expanded ? 'border-border' : 'border-transparent'}`}>
+            <div className={`overflow-hidden bg-background-secondary border-t transition-colors duration-300 ${expanded ? 'border-border' : 'border-transparent'}`}>
               <div className="py-1 max-h-48 overflow-y-auto">
                 {fileChanges.map((fc) => (
                   <div

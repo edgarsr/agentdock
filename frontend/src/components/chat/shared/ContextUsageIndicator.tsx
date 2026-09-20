@@ -42,7 +42,7 @@ export function ContextUsageIndicator({ used, size }: ContextUsageIndicatorProps
         </div>
       }
     >
-      <button className="flex items-center h-full px-1.5 ml-0.5 appearance-none border-0 bg-editor-bg hover:text-foreground cursor-default transition-colors outline-none rounded hover:bg-hover text-ide-small group focus-visible:bg-hover focus-visible:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]">
+      <button className="flex items-center h-full px-1.5 ml-0.5 appearance-none border-0 bg-background-secondary hover:text-foreground cursor-default transition-colors outline-none rounded hover:bg-hover text-ide-small group focus-visible:bg-hover focus-visible:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]">
         <div className="flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 14 14" className="rotate-[-90deg]">
             <circle cx="7" cy="7" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />

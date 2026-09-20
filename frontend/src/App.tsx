@@ -58,13 +58,12 @@ function App() {
   useEffect(() => {
     const userMessageBgMap: Record<string, string> = {
       'default': 'var(--ide-user-message-default-bg)',
+      'blue-highlight': 'var(--ide-user-message-blue-highlight-bg)',
       'blue': 'var(--ide-user-message-blue-bg)',
       'background-secondary': 'var(--ide-background-secondary)',
       'primary': 'var(--ide-Button-default-startBackground)',
       'secondary': 'var(--ide-Button-startBackground)',
       'accent': 'var(--ide-List-selectionBackground)',
-      'input': 'var(--ide-TextField-background)',
-      'editor-bg': 'var(--ide-editor-bg)',
     };
 
     const applyGlobalSettings = (payload: { settings?: Partial<GlobalSettings> } | undefined) => {

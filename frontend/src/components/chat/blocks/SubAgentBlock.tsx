@@ -35,7 +35,7 @@ export const SubAgentBlock: React.FC<Props> = ({ block }) => {
   return (
     <div className="border border-border rounded-[6px] overflow-hidden mb-2">
       <button onClick={toggle}
-        className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}
+        className={`flex items-center gap-2 w-full px-3 h-9 bg-background-secondary ${chatInsetFocusClassName}`}
       >
         <div className="flex-shrink-0 text-editor-fg opacity-70 relative top-[-1px]"><BotIcon size={14} /></div>
         <div className="flex-1 text-left font-mono truncate text-editor-fg opacity-90 pr-2">{title}</div>
@@ -53,7 +53,7 @@ export const SubAgentBlock: React.FC<Props> = ({ block }) => {
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div tabIndex={-1} className="p-3 bg-editor-bg max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border
+          <div tabIndex={-1} className="p-3 bg-background-secondary max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-border
             scrollbar-track-transparent border-t border-border">
 
             <div className="leading-relaxed">

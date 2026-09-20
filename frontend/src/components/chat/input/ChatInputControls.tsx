@@ -260,7 +260,7 @@ export function ChatInputControls({
           <>
           {promptQueueEnabled && hasInput && (
             <button key="queue-button" type="button" onClick={onQueueDraft}
-              className={`flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg outline-none
+              className={`flex items-center h-full px-1.5 rounded appearance-none border-0 bg-background-secondary outline-none
                 text-ide-small focus-visible:bg-hover focus-visible:text-foreground
                 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]
                 hover:bg-hover hover:text-foreground text-foreground-secondary`}
@@ -274,7 +274,7 @@ export function ChatInputControls({
             </button>
           )}
           <button key="stop-button" type="button" onClick={onStop}
-            className="flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg
+            className="flex items-center h-full px-1.5 rounded appearance-none border-0 bg-background-secondary
                 outline-none text-ide-small text-error hover:bg-hover focus-visible:bg-hover
                 focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
           >
@@ -288,7 +288,7 @@ export function ChatInputControls({
           </>
         ) : (
           <button key="send-button" type="button" onClick={onSend} disabled={!hasInput}
-            className={`flex items-center h-full px-1.5 rounded appearance-none border-0 bg-editor-bg outline-none
+            className={`flex items-center h-full px-1.5 rounded appearance-none border-0 bg-background-secondary outline-none
               text-ide-small focus-visible:bg-hover focus-visible:text-foreground
               focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]
               hover:bg-hover disabled:pointer-events-none hover:text-foreground

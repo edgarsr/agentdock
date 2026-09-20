@@ -59,7 +59,7 @@ object IdeTheme {
         val panelBackground = uiColor("Panel.background", editorBackground)
         val baseBackground = if (isTransparent(panelBackground)) editorBackground else panelBackground
 
-        // 1. UI Component colors from UIManager
+        // UI Component colors from UIManager
         for ((component, def) in uiComponents) {
             for (prop in def.colorProps) {
                 val uiKey = "$component.$prop"
@@ -71,14 +71,14 @@ object IdeTheme {
                     uiKey == "Panel.background" && isTransparent(originalColor) ->
                         baseBackground
                     isTransparent(originalColor) ->
-                        adjustBrightness(baseBackground, if (isDark) 1.20 else 0.80)
+                        adjustBrightness(baseBackground, if (isDark) 1.3 else 0.80)
                     else -> originalColor
                 }
                 sb.append("  --ide-${uiKey.replace(".", "-")}: ${toCssColor(color)};\n")
             }
         }
 
-        // 2. Base fonts only — UI and Code
+        // Base fonts only — UI and Code
         val baseFont = com.intellij.util.ui.JBFont.regular()
         sb.append("  --ide-font-family: '${baseFont.family}', sans-serif;\n")
         sb.append("  --ide-font-size: ${baseFont.size2D + 1}px;\n")
@@ -91,7 +91,7 @@ object IdeTheme {
         sb.append("  --ide-editor-bg: ${toCssColor(scheme.defaultBackground)};\n")
         sb.append("  --ide-editor-fg: ${toCssColor(scheme.defaultForeground)};\n")
 
-        // 4. Syntax highlighting
+        // Syntax highlighting
         val syntaxMap = mapOf(
             "keyword" to DefaultLanguageHighlighterColors.KEYWORD,
             "string" to DefaultLanguageHighlighterColors.STRING,
@@ -111,7 +111,7 @@ object IdeTheme {
             }
         }
 
-        // 5. VCS and semantic colors from EditorColorsScheme
+        // VCS and semantic colors from EditorColorsScheme
         val addedColor = scheme.getColor(EditorColors.ADDED_LINES_COLOR)
         if (addedColor != null) {
             sb.append("  --ide-vcs-added: ${toCssColor(addedColor)};\n")
@@ -122,33 +122,36 @@ object IdeTheme {
             sb.append("  --ide-vcs-deleted: ${toCssColor(deletedColor)};\n")
         }
 
-        // 6. Dynamic background variations
+        // Dynamic background variations
         val isIslands = isIslandsTheme()
         sb.append("  --ide-theme-is-dark: ${if (isDark) "1" else "0"};\n")
         sb.append("  --ide-theme-is-islands: ${if (isIslands) "1" else "0"};\n")
         val shimmerHighlightColor = if (isDark) Color(255, 255, 255) else Color(0, 0, 0)
         sb.append("  --ide-shimmer-highlight-color: ${toCssColor(shimmerHighlightColor)};\n")
+        val blueHighlightUserMessageBackground =
+            if (isDark) Color(0x19, 0x3d, 0x70) else Color(0xe0, 0xf0, 0xff)
         val blueUserMessageBackground = if (isDark) Color(0x25, 0x32, 0x4d) else Color(225, 235, 253, 220)
         val defaultUserMessageBackground = if (isDark) Color(100, 100, 100, 65) else Color(100, 100, 100, 18)
 
         // Secondary: use editor background if different from panel, otherwise calculate
         val secondaryBackground = if (areColorsSimilar(baseBackground, editorBackground)) {
             // Editor and panel backgrounds are similar - calculate variation
-            adjustBrightness(baseBackground, if (isDark) 1.15 else 0.9)
+            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.95)
         } else {
             // Use editor background as secondary
             editorBackground
         }
         sb.append("  --ide-background-secondary: ${toCssColor(secondaryBackground)};\n")
         sb.append("  --ide-user-message-default-bg: ${toCssColor(defaultUserMessageBackground)};\n")
+        sb.append("  --ide-user-message-blue-highlight-bg: ${toCssColor(blueHighlightUserMessageBackground)};\n")
         sb.append("  --ide-user-message-blue-bg: ${toCssColor(blueUserMessageBackground)};\n")
-        sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.2)" else "brightness(0.96)"};\n")
-        sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.32)" else "brightness(0.96)"};\n")
+        sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.75)" else "brightness(0.95)"};\n")
+        sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.75)" else "brightness(0.95)"};\n")
 
-        // 7. Dynamic border color (must be different from both backgrounds)
+        // Dynamic border color (must be different from both backgrounds)
         val originalBorder = uiColor(
             "Borders.color",
-            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.85)
+            adjustBrightness(baseBackground, if (isDark) 1.75 else 0.8)
         )
         val borderColor = if (isTransparent(originalBorder) ||
                              areColorsSimilar(originalBorder, baseBackground) ||
@@ -156,7 +159,7 @@ object IdeTheme {
             // Border is too similar to backgrounds - adjust it
             // In dark theme: make lighter than both backgrounds
             // In light theme: make darker than both backgrounds
-            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.85)
+            adjustBrightness(baseBackground, if (isDark) 1.75 else 0.8)
         } else {
             // Border is distinct - use original
             originalBorder
@@ -176,26 +179,26 @@ object IdeTheme {
         val rawButtonStartBorderColor = uiColor("Button.startBorderColor", Color(0, 0, 0, 0))
         val buttonStartBorderColor = if (isTransparent(rawButtonStartBorderColor) ||
                                          areColorsSimilar(rawButtonStartBorderColor, baseBackground)) {
-            adjustBrightness(borderColor, if (isDark) 1.25 else 0.8)
+            adjustBrightness(borderColor, if (isDark) 1.5 else 0.8)
         } else {
             rawButtonStartBorderColor
         }
         sb.append("  --ide-Button-startBorderColor: ${toCssColor(buttonStartBorderColor)};\n")
 
         // Scrollbar color based on border
-        val scrollbarColor = adjustBrightness(borderColor, if (isDark) 1.15 else 0.90)
+        val scrollbarColor = adjustBrightness(borderColor, if (isDark) 1.25 else 0.90)
         sb.append("  --ide-scrollbar-color: ${toCssColor(scrollbarColor)};\n")
 
         val userMessageStyle = FrontendSettings.current.userMessageBackgroundStyle
         val userMessageBackgroundVar = when (userMessageStyle) {
             "default" -> "--ide-user-message-default-bg"
+            "blue-highlight" -> "--ide-user-message-blue-highlight-bg"
             "blue" -> "--ide-user-message-blue-bg"
             "background-secondary" -> "--ide-background-secondary"
             "primary" -> "--ide-Button-default-startBackground"
             "secondary" -> "--ide-Button-startBackground"
-            "input" -> "--ide-TextField-background"
-            "editor-bg" -> "--ide-editor-bg"
-            else -> "--ide-List-selectionBackground"
+            "accent" -> "--ide-List-selectionBackground"
+            else -> "--ide-user-message-default-bg"
         }
         sb.append("  --user-message-bg: var($userMessageBackgroundVar);\n")
 

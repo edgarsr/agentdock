@@ -27,7 +27,7 @@ export default function PopupMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full z-[140] mb-2 overflow-hidden rounded-md border border-border bg-editor-bg"
+      className="absolute bottom-full z-[140] mb-2 overflow-hidden rounded-md border border-border bg-background-secondary"
       style={{
         left: `${layout.left}px`,
         width: `${layout.width}px`,

@@ -84,7 +84,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
 
   return (
     <div className="mb-2 border border-border rounded-md overflow-hidden">
-      <button onClick={toggleExpanded} className={`flex items-center gap-2 w-full px-3 h-9 bg-editor-bg ${chatInsetFocusClassName}`}>
+      <button onClick={toggleExpanded} className={`flex items-center gap-2 w-full px-3 h-9 bg-background-secondary ${chatInsetFocusClassName}`}>
         <div className="flex-shrink-0 text-foreground-secondary">
           <ClipboardList className="text-foreground" size={14} />
         </div>
@@ -103,7 +103,7 @@ export const PlanBlockComponent: React.FC<Props> = ({ block }) => {
         style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <div className="p-3 bg-editor-bg space-y-2 border-t border-border">
+          <div className="p-3 bg-background-secondary space-y-2 border-t border-border">
             {entries.map((entry, idx) => (
               <div key={idx} className="flex gap-3 items-start group">
                 <div className="relative top-1 flex-shrink-0 grayscale">{getStatusIcon(entry.status)}</div>

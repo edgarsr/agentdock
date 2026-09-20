@@ -18,7 +18,7 @@ export function UsageIcon({
 
   return (
     <Tooltip content={children} onShow={() => ACPBridge.fetchAdapterUsage(adapterId)}>
-      <button className="flex items-center h-full ml-0.5 gap-1.5 rounded px-1.5 border-0 bg-editor-bg text-ide-small text-foreground transition-colors outline-none cursor-default hover:bg-hover hover:text-foreground focus-visible:bg-hover focus-visible:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]">
+      <button className="flex items-center h-full ml-0.5 gap-1.5 rounded px-1.5 border-0 bg-background-secondary text-ide-small text-foreground transition-colors outline-none cursor-default hover:bg-hover hover:text-foreground focus-visible:bg-hover focus-visible:text-foreground focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]">
         <div className="flex items-center gap-1">
           <QuotaMeter percent={percent} size={12} className="mr-0.5 relative top-[-1px]" />
           <span className="whitespace-nowrap">{displayLabel}</span>

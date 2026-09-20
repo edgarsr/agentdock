@@ -105,24 +105,23 @@ const userMessageBackgroundOptions: Array<{
     toneClass: 'bg-user-message-default'
   },
   {
+    id: 'blue-highlight',
+    background: 'var(--ide-user-message-blue-highlight-bg)',
+    toneClass: 'bg-user-message-blue-highlight'
+  },
+  {
     id: 'blue',
     background: 'var(--ide-user-message-blue-bg)',
     toneClass: 'bg-user-message-blue'
   },
+  { id: 'primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
+  { id: 'accent', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
   {
     id: 'background-secondary',
     background: 'var(--ide-background-secondary)',
     toneClass: 'bg-background-secondary'
   },
-  { id: 'primary', background: 'var(--ide-Button-default-startBackground)', toneClass: 'bg-primary' },
   { id: 'secondary', background: 'var(--ide-Button-startBackground)', toneClass: 'bg-secondary' },
-  { id: 'accent', background: 'var(--ide-List-selectionBackground)', toneClass: 'bg-accent' },
-  { id: 'input', background: 'var(--ide-TextField-background)', toneClass: 'bg-input' },
-  {
-    id: 'editor-bg',
-    background: 'var(--ide-editor-bg)',
-    toneClass: 'bg-editor-bg'
-  }
 ];
 
 function applyUserMessageTheme(styleId: GlobalSettingsPayload['settings']['userMessageBackgroundStyle']) {

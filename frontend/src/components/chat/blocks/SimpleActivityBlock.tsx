@@ -32,7 +32,7 @@ export const SimpleActivityBlock: React.FC<Props> = ({ block }) => {
 
   return (
     <div className="border border-border rounded-[6px] overflow-hidden">
-      <div className="flex items-center gap-2 w-full px-3 py-2 bg-editor-bg">
+      <div className="flex items-center gap-2 w-full px-3 py-2 bg-background-secondary">
         <div className="flex-shrink-0 text-editor-fg opacity-70 relative top-[-1px]">
           {kind === 'delete' ? <TrashIcon size={14} /> : <MoveIcon size={14} />}
         </div>

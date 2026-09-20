@@ -167,12 +167,12 @@ export function PromptQueueList({
 
   return (
     <div className="py-1">
-      <div className="w-full overflow-hidden rounded-[6px] border border-border bg-editor-bg">
+      <div className="w-full overflow-hidden rounded-[6px] border border-border bg-background-secondary">
         <div
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
-          className={`group/header flex h-9 w-full cursor-pointer items-center bg-editor-bg px-3 transition-colors ${chatInsetFocusClassName}`}
+          className={`group/header flex h-9 w-full cursor-pointer items-center bg-background-secondary px-3 transition-colors ${chatInsetFocusClassName}`}
           onClick={toggleExpanded}
           onKeyDown={handleHeaderKeyDown}
         >
@@ -190,7 +190,7 @@ export function PromptQueueList({
         <div
           className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-in-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
         >
-          <div className={`overflow-hidden border-t bg-editor-bg transition-colors duration-300 ${expanded ? 'border-border' : 'border-transparent'}`}>
+          <div className={`overflow-hidden border-t bg-background-secondary transition-colors duration-300 ${expanded ? 'border-border' : 'border-transparent'}`}>
             <div
               ref={listRef}
               className={`max-h-48 overflow-y-auto py-1 ${draggingId ? 'select-none' : ''}`}

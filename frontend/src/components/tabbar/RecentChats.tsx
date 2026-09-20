@@ -95,7 +95,7 @@ export function RecentChats({
         <div className="min-h-0 overflow-hidden">
           <div className="py-1">
           {historyList.length > RECENT_PAGE_SIZE ? (
-            <div className="relative mx-2 my-2 px-2">
+            <div className="relative mx-2 mt-1 mb-2 px-2">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -103,7 +103,7 @@ export function RecentChats({
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search…"
                 aria-label="Search recent chats by title"
-                className="h-7 w-full rounded-[4px] border border-border bg-input py-0 pl-2 pr-6 text-ide-small text-foreground
+                className="h-8 w-full rounded-[4px] border border-border bg-input py-0 pl-2 pr-6 text-ide-small text-foreground
                   placeholder:text-foreground-secondary focus:outline-none"
               />
               {searchQuery ? (
