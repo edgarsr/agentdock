@@ -1,25 +1,27 @@
 {
   "id": "opencode",
-  "name": "OpenCode",
+  "name": "OpenCode v2",
   "iconPath": "/icons/opencode.svg",
   "iconPathLight": "/icons/opencode-light.svg",
   "iconPathDark": "/icons/opencode-dark.svg",
   "distribution": {
     "type": "npm",
     "version": "latest",
-    "packageName": "opencode-ai"
+    "minimumVersion": "2.0.0",
+    "packageName": "@opencode/cli"
   },
   "launchBinary": {
     "win": "node_modules/.bin/opencode.cmd",
-    "unix": "node_modules/opencode-ai/bin/opencode.exe"
+    "unix": "node_modules/.bin/opencode"
   },
+  "sessionDeleteMethod": "acp",
   "args": [
     "acp"
   ],
   "cli": {
     "executable": {
       "win": "node_modules/.bin/opencode.cmd",
-      "unix": "node_modules/opencode-ai/bin/opencode.exe"
+      "unix": "node_modules/.bin/opencode"
     },
     "resumeArgs": [
       "--session",

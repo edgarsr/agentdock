@@ -46,15 +46,12 @@ internal object SessionListDeleteSupport {
             "kilo" -> runCatching {
                 runAgentHistoryCliCommand("kilo", projectPath, listOf("session", "delete", sessionId))
             }.isSuccess
-            "opencode" -> runCatching {
-                runAgentHistoryCliCommand("opencode", projectPath, listOf("session", "delete", sessionId))
-            }.isSuccess
             else -> if (isAcpSessionDeleteAvailable(adapterName)) deleteAcpSession(adapterName, sessionId) else false
         }
     }
 
     private fun hasDefaultDeleteMethod(adapterName: String): Boolean = when (adapterName) {
-        "cursor-cli", "github-copilot-cli", "kilo", "opencode" -> true
+        "cursor-cli", "github-copilot-cli", "kilo" -> true
         else -> false
     }
 
