@@ -27,6 +27,9 @@ function normalizeSidebarExpandedSections(value: unknown): SidebarSectionId[] {
 
 function App() {
   const { isWide, isIslandsTheme, viewportWidth } = useAppLayout();
+  const [openInEditor, setOpenInEditor] = useState(
+    () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.openInEditor ?? true
+  );
   const [sidebarEnabled, setSidebarEnabled] = useState(
     () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.sidebarEnabled ?? true
   );
@@ -66,6 +69,7 @@ function App() {
     };
 
     const applyGlobalSettings = (payload: { settings?: Partial<GlobalSettings> } | undefined) => {
+      setOpenInEditor(payload?.settings?.openInEditor ?? true);
       const nextSidebarEnabled = payload?.settings?.sidebarEnabled ?? true;
       setSidebarEnabled(nextSidebarEnabled);
       if (!nextSidebarEnabled) setSidebarHidden(false);
@@ -177,6 +181,23 @@ function App() {
     }
   }
 
+  const toggleOpenInEditor = () => {
+    const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
+    if (settings) {
+      ACPBridge.saveGlobalSettings({ ...settings, openInEditor: !settings.openInEditor });
+    }
+  };
+
+  const toggleSidebarPosition = () => {
+    const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
+    if (settings) {
+      ACPBridge.saveGlobalSettings({
+        ...settings,
+        sidebarPosition: settings.sidebarPosition === 'right' ? 'left' : 'right',
+      });
+    }
+  };
+
   const setSidebarSectionExpanded = (section: SidebarSectionId, expanded: boolean) => {
     const next = expanded
       ? [...new Set([...sidebarExpandedSections, section])]
@@ -209,6 +230,9 @@ function App() {
           onWidthChange={setSidebarWidth}
           onHide={() => setSidebarVisibility(true)}
           onUseTabBar={() => setSidebarLayoutEnabled(false)}
+          openInEditor={openInEditor}
+          onToggleOpenInEditor={toggleOpenInEditor}
+          onTogglePosition={toggleSidebarPosition}
         />
       ) : <TabBar {...navigationProps} />}
 
@@ -218,6 +242,9 @@ function App() {
           hidden
           onToggleVisibility={() => setSidebarVisibility(false)}
           onUseTabBar={() => setSidebarLayoutEnabled(false)}
+          openInEditor={openInEditor}
+          onToggleOpenInEditor={toggleOpenInEditor}
+          onTogglePosition={toggleSidebarPosition}
           floating
         />
       ) : null}

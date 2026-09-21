@@ -21,6 +21,9 @@ type SidebarProps = Omit<TabBarProps, 'isIslandsTheme' | 'onUseSidebar' | 'sideb
   onWidthChange: (width: number) => void;
   onHide: () => void;
   onUseTabBar: () => void;
+  openInEditor: boolean;
+  onToggleOpenInEditor: () => void;
+  onTogglePosition: () => void;
 };
 
 export function Sidebar({
@@ -37,6 +40,9 @@ export function Sidebar({
   onWidthChange,
   onHide,
   onUseTabBar,
+  openInEditor,
+  onToggleOpenInEditor,
+  onTogglePosition,
   onNewTab,
   ...navigationProps
 }: SidebarProps) {
@@ -122,6 +128,9 @@ export function Sidebar({
             hidden={false}
             onToggleVisibility={onHide}
             onUseTabBar={onUseTabBar}
+            openInEditor={openInEditor}
+            onToggleOpenInEditor={onToggleOpenInEditor}
+            onTogglePosition={onTogglePosition}
           />
         </div>
         <nav

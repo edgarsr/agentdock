@@ -1,4 +1,7 @@
 import {
+  ArrowLeft,
+  ArrowRight,
+  FoldHorizontal,
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -6,6 +9,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PanelTop,
+  UnfoldHorizontal,
 } from 'lucide-react';
 import type { GlobalSettings } from '../types/chat';
 import { Tooltip } from './chat/shared/Tooltip';
@@ -19,6 +23,9 @@ interface SidebarLayoutControlsProps {
   hidden: boolean;
   onToggleVisibility: () => void;
   onUseTabBar: () => void;
+  openInEditor: boolean;
+  onToggleOpenInEditor: () => void;
+  onTogglePosition: () => void;
   floating?: boolean;
 }
 
@@ -27,14 +34,19 @@ export function SidebarLayoutControls({
   hidden,
   onToggleVisibility,
   onUseTabBar,
+  openInEditor,
+  onToggleOpenInEditor,
+  onTogglePosition,
   floating = false,
 }: SidebarLayoutControlsProps) {
+  const editorLabel = openInEditor ? 'Open in tool window' : 'Open in editor tab';
+  const positionLabel = position === 'left' ? 'Move sidebar to right' : 'Move sidebar to left';
   const visibilityIcon = position === 'left'
     ? hidden ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />
     : hidden ? <PanelRightOpen size={16} aria-hidden="true" /> : <PanelRightClose size={16} aria-hidden="true" />;
 
   return (
-    <div className={`flex items-center gap-0.5 ${floating
+    <div className={`flex items-center gap-0.5 ${position === 'right' ? 'flex-row-reverse' : ''} ${floating
       ? `fixed top-2 z-40 rounded-[5px] border border-border bg-background p-0.5 ${position === 'left' ? 'left-1.5' : 'right-1.5'}`
       : ''}`}
     >
@@ -48,16 +60,44 @@ export function SidebarLayoutControls({
           {visibilityIcon}
         </button>
       </Tooltip>
-      <Tooltip variant="minimal" placement="bottom" content="Use tab bar">
-        <button
-          type="button"
-          onClick={onUseTabBar}
-          className={buttonClassName}
-          aria-label="Use tab bar"
-        >
-          <PanelTop size={16} aria-hidden="true" />
-        </button>
-      </Tooltip>
+      {!hidden && (
+        <>
+          <Tooltip variant="minimal" placement="bottom" content={positionLabel}>
+            <button
+              type="button"
+              onClick={onTogglePosition}
+              className={buttonClassName}
+              aria-label={positionLabel}
+            >
+              {position === 'left'
+                ? <ArrowRight size={16} aria-hidden="true" />
+                : <ArrowLeft size={16} aria-hidden="true" />}
+            </button>
+          </Tooltip>
+          <Tooltip variant="minimal" placement="bottom" content="Use tab bar">
+            <button
+              type="button"
+              onClick={onUseTabBar}
+              className={buttonClassName}
+              aria-label="Use tab bar"
+            >
+              <PanelTop size={16} aria-hidden="true" />
+            </button>
+          </Tooltip>
+          <Tooltip variant="minimal" placement="bottom" content={editorLabel}>
+            <button
+              type="button"
+              onClick={onToggleOpenInEditor}
+              className={buttonClassName}
+              aria-label={editorLabel}
+            >
+              {openInEditor
+                ? <FoldHorizontal size={16} aria-hidden="true" />
+                : <UnfoldHorizontal size={16} aria-hidden="true" />}
+            </button>
+          </Tooltip>
+        </>
+      )}
     </div>
   );
 }

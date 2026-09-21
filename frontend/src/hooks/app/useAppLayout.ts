@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const MIN_SIDEBAR_WIDTH = 200;
+export const MIN_SIDEBAR_WIDTH = 150;
 export const MIN_CONTENT_WIDTH = 500;
 export const SIDEBAR_BREAKPOINT = MIN_SIDEBAR_WIDTH + MIN_CONTENT_WIDTH;
 
