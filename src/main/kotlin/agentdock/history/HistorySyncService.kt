@@ -4,6 +4,7 @@ import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpAdapterPaths
 import agentdock.acp.AcpClientService
 import agentdock.acp.listHistorySessions
+import agentdock.acp.canListHistorySessions
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
@@ -250,6 +251,7 @@ internal object HistorySyncService {
                 }
             }
             .filter { service.isAdapterReady(it.id) }
+            .filter(service::canListHistorySessions)
 
         val scans = adapters.map { adapterInfo ->
             async(Dispatchers.IO) {
@@ -380,6 +382,9 @@ internal object HistorySyncService {
                     filePath = latestSession.sourceFilePath.orEmpty(),
                     createdAt = latestSession.createdAt,
                     updatedAt = latestSession.updatedAt,
+                    deletable = conversation.sessions.all { session ->
+                        SessionListDeleteSupport.canDeleteSession(session.adapterName)
+                    },
                     allAdapterNames = visibleAdapterNames.ifEmpty {
                         visibleSessions.map { it.adapterName }.distinct()
                     }

@@ -136,7 +136,7 @@ object IdeTheme {
         // Secondary: use editor background if different from panel, otherwise calculate
         val secondaryBackground = if (areColorsSimilar(baseBackground, editorBackground)) {
             // Editor and panel backgrounds are similar - calculate variation
-            adjustBrightness(baseBackground, if (isDark) 1.25 else 0.95)
+            adjustBrightness(baseBackground, if (isDark) 1.2 else 0.95)
         } else {
             // Use editor background as secondary
             editorBackground
@@ -145,7 +145,7 @@ object IdeTheme {
         sb.append("  --ide-user-message-default-bg: ${toCssColor(defaultUserMessageBackground)};\n")
         sb.append("  --ide-user-message-blue-highlight-bg: ${toCssColor(blueHighlightUserMessageBackground)};\n")
         sb.append("  --ide-user-message-blue-bg: ${toCssColor(blueUserMessageBackground)};\n")
-        sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.75)" else "brightness(0.95)"};\n")
+        sb.append("  --ide-surface-hover-filter: ${if (isDark) "brightness(1.2)" else "brightness(0.98)"};\n")
         sb.append("  --ide-surface-active-filter: ${if (isDark) "brightness(1.75)" else "brightness(0.95)"};\n")
 
         // Dynamic border color (must be different from both backgrounds)

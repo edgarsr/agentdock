@@ -19,6 +19,7 @@ data class SessionMeta(
     val filePath: String,
     val createdAt: Long = Instant.now().toEpochMilli(),
     val updatedAt: Long = Instant.now().toEpochMilli(),
+    val deletable: Boolean = true,
     val allAdapterNames: List<String> = emptyList()
 )
 

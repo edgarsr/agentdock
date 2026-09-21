@@ -55,6 +55,7 @@ object AcpAdapterPaths {
         target: AcpExecutionTarget = currentTarget()
     ): String? {
         val adapterInfo = getAdapterInfo(adapterName)
+        if (adapterInfo.isCustom) return null
         val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
         return installedVersionFromRuntimeDir(runtimeDir, adapterInfo)
     }
@@ -64,6 +65,7 @@ object AcpAdapterPaths {
         target: AcpExecutionTarget = currentTarget()
     ): Boolean {
         val adapterInfo = getAdapterInfo(adapterName)
+        if (adapterInfo.isCustom) return isCustomExecutableAvailable(adapterInfo.customCommand.orEmpty())
         val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
         return hasInstalledAdapterLaunch(runtimeDir, adapterInfo, target) &&
             isInstalledVersionSupported(adapterInfo, installedVersionFromRuntimeDir(runtimeDir, adapterInfo))
@@ -94,6 +96,7 @@ object AcpAdapterPaths {
         versionOverride: String? = null,
         cancellation: AcpAdapterInstallCancellation? = null
     ): Boolean {
+        check(!adapterInfo.isCustom) { "Custom ACP agents are configured externally and cannot be installed" }
         cancellation?.throwIfCancelled()
         val baseAdapterInfo = versionOverride?.trim()?.takeIf { it.isNotEmpty() }?.let {
             adapterInfo.withDistributionVersion(it)
@@ -162,10 +165,35 @@ object AcpAdapterPaths {
         adapterInfo: AcpAdapterConfig.AdapterInfo,
         target: AcpExecutionTarget
     ): Boolean {
+        if (adapterInfo.isCustom) return isCustomExecutableAvailable(adapterInfo.customCommand.orEmpty())
         return runtimeDir.isDirectory &&
             (adapterInfo.distribution.type != AcpAdapterConfig.DistributionType.NPM ||
                 File(runtimeDir, "node_modules").isDirectory) &&
             resolveAdapterLaunchFile(runtimeDir, adapterInfo, target)?.isFile == true
+    }
+
+    private fun isCustomExecutableAvailable(command: String): Boolean {
+        val cleanCommand = command.trim()
+        if (cleanCommand.isEmpty()) return false
+        val direct = File(cleanCommand)
+        if (direct.isAbsolute || cleanCommand.contains('/') || cleanCommand.contains('\\')) {
+            return direct.isFile
+        }
+
+        val path = System.getenv("PATH").orEmpty()
+        if (path.isBlank()) return false
+        val suffixes = if (AcpExecutionMode.isWindowsHost()) {
+            val configured = System.getenv("PATHEXT").orEmpty()
+                .split(';')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+            listOf("") + configured.ifEmpty { listOf(".EXE", ".CMD", ".BAT", ".COM") }
+        } else {
+            listOf("")
+        }
+        return path.split(File.pathSeparatorChar).any { directory ->
+            suffixes.any { suffix -> File(directory, cleanCommand + suffix).isFile }
+        }
     }
 
     private fun missingLaunchTargetError(

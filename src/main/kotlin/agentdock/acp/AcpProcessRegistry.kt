@@ -22,6 +22,12 @@ internal object AcpProcessRegistry {
         currentOwnerId = "${ProcessHandle.current().pid()}-${UUID.randomUUID()}",
         isProcessAlive = { pid -> runCatching { ProcessHandle.of(pid).map { it.isAlive }.orElse(false) }.getOrDefault(false) },
         destroyRegisteredProcess = { pid, root -> AcpProcessUtils.destroyProcessTreeIfUsingAdapterRoot(pid, File(root)) },
+        destroyRegisteredCustomProcess = { pid, startedAt ->
+            val handle = ProcessHandle.of(pid).orElse(null)
+            if (startedAt.isNotEmpty() && handle?.info()?.startInstant()?.orElse(null)?.toString() == startedAt) {
+                AcpProcessUtils.destroyProcessTree(handle)
+            }
+        },
         // Only reached while the last owner closes, where nothing will touch the adapter files
         // again, so the kill is issued without waiting for the processes to confirm they died.
         stopProcessesUsingRoots = { roots ->
@@ -39,9 +45,15 @@ internal object AcpProcessRegistry {
         store.registerOwner()
     }
 
-    fun registerProcess(adapterId: String, adapterRoot: String, process: Process) = runQuietly {
-        val pid = runCatching { process.toHandle().pid() }.getOrNull() ?: return@runQuietly
-        store.registerProcess(adapterId, adapterRoot, pid)
+    fun registerProcess(
+        adapterId: String,
+        adapterRoot: String,
+        custom: Boolean,
+        process: Process
+    ) = runQuietly {
+        val handle = process.toHandle()
+        val customStartedAt = if (custom) handle.info().startInstant().orElse(null)?.toString().orEmpty() else null
+        store.registerProcess(adapterId, adapterRoot, handle.pid(), customStartedAt)
     }
 
     fun unregisterProcess(process: Process?) = runQuietly {
@@ -60,7 +72,8 @@ internal class AcpProcessRegistryStore(
     private val currentOwnerId: String,
     private val isProcessAlive: (Long) -> Boolean,
     private val destroyRegisteredProcess: (Long, String) -> Unit,
-    private val stopProcessesUsingRoots: (List<String>) -> Unit
+    private val stopProcessesUsingRoots: (List<String>) -> Unit,
+    private val destroyRegisteredCustomProcess: (Long, String) -> Unit = { _, _ -> }
 ) {
     private val ownersDir = File(baseDir, "owners")
     private val rootsDir = File(baseDir, "roots")
@@ -75,15 +88,21 @@ internal class AcpProcessRegistryStore(
         writeOwnerLocked(readCurrentOwnerLocked() ?: OwnerState(currentOwnerId, currentOwnerPid))
     }
 
-    fun registerProcess(adapterId: String, adapterRoot: String, pid: Long) = withRegistryLock {
+    fun registerProcess(adapterId: String, adapterRoot: String, pid: Long, customStartedAt: String? = null) = withRegistryLock {
         ownersDir.mkdirs()
         rootsDir.mkdirs()
         val normalizedRoot = normalizeRoot(adapterRoot)
-        rememberRootLocked(normalizedRoot)
+        if (customStartedAt == null) rememberRootLocked(normalizedRoot)
         val current = readCurrentOwnerLocked() ?: OwnerState(currentOwnerId, currentOwnerPid)
-        val roots = (current.adapterRoots + AdapterRoot(adapterId, normalizedRoot))
+        val newRoot = if (customStartedAt == null) listOf(AdapterRoot(adapterId, normalizedRoot)) else emptyList()
+        val roots = (current.adapterRoots + newRoot)
             .distinctBy { "${it.adapterId}\u0000${it.root}" }
-        val processes = (current.processes.filterNot { it.pid == pid } + OwnedProcess(pid, adapterId, normalizedRoot))
+        val processes = (current.processes.filterNot { it.pid == pid } + OwnedProcess(
+            pid = pid,
+            adapterId = adapterId,
+            adapterRoot = normalizedRoot,
+            customStartedAt = customStartedAt
+        ))
             .filter { isProcessAlive(it.pid) || it.pid == pid }
         writeOwnerLocked(current.copy(adapterRoots = roots, processes = processes))
     }
@@ -95,6 +114,7 @@ internal class AcpProcessRegistryStore(
 
     fun closeOwnerAndCleanupIfLast() = withRegistryLock {
         val current = readCurrentOwnerLocked()
+        current?.processes?.filter { it.customStartedAt != null }?.forEach(::cleanupRegisteredProcess)
         if (ownerFile.exists()) {
             ownerFile.delete()
         }
@@ -103,14 +123,17 @@ internal class AcpProcessRegistryStore(
         val liveOwners = otherOwners.filter { isProcessAlive(it.ownerPid) }
         val deadOwners = otherOwners.filterNot { isProcessAlive(it.ownerPid) }
         deadOwners.forEach { owner ->
-            owner.processes.forEach { process -> destroyRegisteredProcess(process.pid, process.adapterRoot) }
+            owner.processes.forEach(::cleanupRegisteredProcess)
             File(ownersDir, "${owner.ownerId}.json").delete()
         }
 
         if (liveOwners.isNotEmpty()) return@withRegistryLock
 
         val roots = (listOfNotNull(current) + deadOwners)
-            .flatMap { it.adapterRoots.map(AdapterRoot::root) + it.processes.map(OwnedProcess::adapterRoot) }
+            .flatMap { owner ->
+                owner.adapterRoots.map(AdapterRoot::root) +
+                    owner.processes.filter { it.customStartedAt == null }.map(OwnedProcess::adapterRoot)
+            }
             .plus(readRememberedRootsLocked())
             .map(::normalizeRoot)
             .filter { it.isNotBlank() }
@@ -129,7 +152,7 @@ internal class AcpProcessRegistryStore(
                 return@forEach
             }
             if (owner.ownerId == currentOwnerId || isProcessAlive(owner.ownerPid)) return@forEach
-            owner.processes.forEach { process -> destroyRegisteredProcess(process.pid, process.adapterRoot) }
+            owner.processes.forEach(::cleanupRegisteredProcess)
             file.delete()
         }
     }
@@ -154,14 +177,24 @@ internal class AcpProcessRegistryStore(
             val adapterRoot = root["root"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             AdapterRoot(adapterId, adapterRoot)
         }.orEmpty()
+        // Old Custom ACP versions remembered external directories as owned roots.
+        // Remove only their registry markers; never scan those directories for processes.
+        val builtInRoots = roots.filterNot { it.adapterId.startsWith("custom-acp-") }
+        roots.filter { it.adapterId.startsWith("custom-acp-") }.forEach { root ->
+            if (builtInRoots.none { normalizeRoot(it.root) == normalizeRoot(root.root) }) {
+                File(rootsDir, "${sha256(normalizeRoot(root.root))}.root").delete()
+            }
+        }
         val processes = json["processes"]?.jsonArray?.mapNotNull { element ->
             val process = element.jsonObject
             val pid = process["pid"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@mapNotNull null
             val adapterId = process["adapterId"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val adapterRoot = process["adapterRoot"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            OwnedProcess(pid, adapterId, adapterRoot)
+            val customStartedAt = process["customStartedAt"]?.jsonPrimitive?.contentOrNull
+                ?: "".takeIf { adapterId.startsWith("custom-acp-") }
+            OwnedProcess(pid, adapterId, adapterRoot, customStartedAt)
         }.orEmpty()
-        return OwnerState(ownerId, ownerPid, roots, processes)
+        return OwnerState(ownerId, ownerPid, builtInRoots, processes)
     }
 
     private fun writeOwnerLocked(owner: OwnerState) {
@@ -183,6 +216,7 @@ internal class AcpProcessRegistryStore(
                         put("pid", JsonPrimitive(process.pid.toString()))
                         put("adapterId", JsonPrimitive(process.adapterId))
                         put("adapterRoot", JsonPrimitive(process.adapterRoot))
+                        process.customStartedAt?.let { put("customStartedAt", JsonPrimitive(it)) }
                     })
                 }
             })
@@ -204,6 +238,15 @@ internal class AcpProcessRegistryStore(
 
     private fun normalizeRoot(root: String): String =
         File(root).absoluteFile.normalize().path.replace('\\', '/').trimEnd('/')
+
+    private fun cleanupRegisteredProcess(process: OwnedProcess) {
+        val customStartedAt = process.customStartedAt
+        if (customStartedAt != null) {
+            destroyRegisteredCustomProcess(process.pid, customStartedAt)
+        } else {
+            destroyRegisteredProcess(process.pid, process.adapterRoot)
+        }
+    }
 
     private fun sha256(value: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
@@ -238,6 +281,7 @@ internal class AcpProcessRegistryStore(
     internal data class OwnedProcess(
         val pid: Long,
         val adapterId: String,
-        val adapterRoot: String
+        val adapterRoot: String,
+        val customStartedAt: String? = null
     )
 }

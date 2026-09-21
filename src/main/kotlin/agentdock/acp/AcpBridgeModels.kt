@@ -83,7 +83,8 @@ internal data class AdapterPayload(
     val downloadStatus: String,
     val disabledModels: List<String>,
     val cliAvailable: Boolean,
-    val cliResumeAvailable: Boolean
+    val cliResumeAvailable: Boolean,
+    val custom: Boolean = false
 )
 
 @Serializable

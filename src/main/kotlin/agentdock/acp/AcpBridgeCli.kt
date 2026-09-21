@@ -48,7 +48,7 @@ internal class AcpBridgeCli(
         ) + args
         val shellFlavor = detectIdeTerminalShellFlavor()
         val command = toShellCommand(
-            commandParts.map { normalizeInteractiveShellPart(it, shellFlavor) },
+            normalizeInteractiveCommandParts(commandParts, shellFlavor, adapterInfo.isCustom),
             shellFlavor,
             environment
         )
@@ -98,7 +98,7 @@ internal class AcpBridgeCli(
         shellFlavor: TerminalShellFlavor
     ): Pair<AcpAdapterConfig.AdapterInfo, String>? {
         val (adapterInfo, commandParts) = buildAdapterCliCommandParts(adapterId, extraArgs) ?: return null
-        val interactiveParts = commandParts.map { normalizeInteractiveShellPart(it, shellFlavor) }
+        val interactiveParts = normalizeInteractiveCommandParts(commandParts, shellFlavor, adapterInfo.isCustom)
         val command = toShellCommand(interactiveParts, shellFlavor)
         return adapterInfo to command
     }
@@ -119,6 +119,22 @@ internal class AcpBridgeCli(
         }
     }
 
+}
+
+private fun normalizeInteractiveCommandParts(
+    parts: List<String>,
+    shellFlavor: TerminalShellFlavor,
+    unwrapWindowsCommand: Boolean
+): List<String> {
+    val normalized = parts.map { normalizeInteractiveShellPart(it, shellFlavor) }
+    if (
+        unwrapWindowsCommand && shellFlavor == TerminalShellFlavor.POSIX &&
+        normalized.getOrNull(0)?.equals("cmd.exe", ignoreCase = true) == true &&
+        normalized.getOrNull(1)?.equals("/c", ignoreCase = true) == true
+    ) {
+        return normalized.drop(2)
+    }
+    return normalized
 }
 
 internal enum class TerminalShellFlavor {

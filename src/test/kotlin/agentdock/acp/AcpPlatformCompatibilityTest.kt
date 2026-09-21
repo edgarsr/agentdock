@@ -54,7 +54,7 @@ class AcpPlatformCompatibilityTest {
         assertEquals("@moonshot-ai/kimi-code", adapter.distribution.packageName)
         assertEquals(listOf("acp"), adapter.args)
         assertEquals("acpSessionList", adapter.sessionListMethod)
-        assertEquals("kimiCodeSessionDelete", adapter.sessionDeleteMethod)
+        assertEquals("acp", adapter.sessionDeleteMethod)
         assertEquals(
             listOf("cmd.exe", "/c", File("C:/agent/node_modules/.bin/kimi.cmd").absolutePath, "acp"),
             buildAdapterLaunchCommand("C:/agent", adapter, "C:/project", AcpExecutionTarget.LOCAL)

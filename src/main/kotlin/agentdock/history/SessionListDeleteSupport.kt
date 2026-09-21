@@ -1,20 +1,26 @@
 package agentdock.history
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
-import agentdock.utils.atomicWriteText
 import agentdock.acp.AcpAdapterConfig
 import agentdock.acp.AcpClientService
 import agentdock.acp.deleteHistorySession
+import agentdock.acp.canDeleteHistorySession
 import com.intellij.openapi.project.ProjectManager
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.UUID
 
 internal object SessionListDeleteSupport {
+    fun canDeleteSession(adapterName: String): Boolean {
+        val method = runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
+        return when (method) {
+            "acp" -> isAcpSessionDeleteAvailable(adapterName)
+            "antigravitySessionDelete", "grokCliSessionDelete" -> true
+            null -> hasDefaultDeleteMethod(adapterName) || isAcpSessionDeleteAvailable(adapterName)
+            else -> false
+        }
+    }
+
     fun resolveSourceFilePath(projectPath: String, adapterName: String, sessionId: String): String {
         return when (adapterName) {
             "claude-code" -> resolveClaudeSourceFilePath(projectPath, sessionId)
@@ -30,14 +36,11 @@ internal object SessionListDeleteSupport {
             "acp" -> return deleteAcpSession(adapterName, sessionId)
             "antigravitySessionDelete" -> return deleteAntigravitySession(sessionId)
             "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
-            "kimiCodeSessionDelete" -> return KimiSessionHistory.kimiCodeSessionDelete(projectPath, sessionId)
             null -> Unit
             else -> return false
         }
 
         return when (adapterName) {
-            "claude-code" -> deleteClaudeSession(projectPath, sessionId, sourceFilePath)
-            "codex" -> deleteCodexSession(sourceFilePath)
             "cursor-cli" -> deleteCursorSession(sourceFilePath)
             "github-copilot-cli" -> deleteGithubCopilotSession(sourceFilePath)
             "kilo" -> runCatching {
@@ -46,8 +49,13 @@ internal object SessionListDeleteSupport {
             "opencode" -> runCatching {
                 runAgentHistoryCliCommand("opencode", projectPath, listOf("session", "delete", sessionId))
             }.isSuccess
-            else -> false
+            else -> if (isAcpSessionDeleteAvailable(adapterName)) deleteAcpSession(adapterName, sessionId) else false
         }
+    }
+
+    private fun hasDefaultDeleteMethod(adapterName: String): Boolean = when (adapterName) {
+        "cursor-cli", "github-copilot-cli", "kilo", "opencode" -> true
+        else -> false
     }
 
     private fun deleteAntigravitySession(sessionId: String): Boolean {
@@ -71,10 +79,16 @@ internal object SessionListDeleteSupport {
         val service = ProjectManager.getInstance().openProjects
             .asSequence()
             .map(AcpClientService::getInstance)
-            .firstOrNull { it.isAdapterReady(adapterName) }
+            .firstOrNull { it.isAdapterReady(adapterName) && it.canDeleteHistorySession(adapterName) }
             ?: return false
         return runBlocking { service.deleteHistorySession(adapterName, sessionId) }
     }
+
+    private fun isAcpSessionDeleteAvailable(adapterName: String): Boolean =
+        ProjectManager.getInstance().openProjects
+            .asSequence()
+            .map(AcpClientService::getInstance)
+            .any { service -> service.isAdapterReady(adapterName) && service.canDeleteHistorySession(adapterName) }
 
     private fun resolveClaudeSourceFilePath(projectPath: String, sessionId: String): String {
         val files = findMatchingHistoryFiles(resolveHistoryPathTemplate("~/.claude/projects/{projectPathSlug}/*.jsonl", projectPath))
@@ -94,34 +108,6 @@ internal object SessionListDeleteSupport {
             }
             matchedSessionId == sessionId
         }?.absolutePath.orEmpty()
-    }
-
-    private fun deleteClaudeSession(projectPath: String, sessionId: String, sourceFilePath: String?): Boolean {
-        val sourcePath = sourceFilePath?.takeIf { it.isNotBlank() } ?: return false
-        val deletedFile = deleteHistoryFileIfExists(File(sourcePath))
-        if (!deletedFile) return false
-
-        val indexFile = File(resolveHistoryPathTemplate("~/.claude/projects/{projectPathSlug}/sessions-index.json", projectPath))
-        if (!indexFile.exists()) return true
-
-        return runCatching {
-            val root = historyJson.parseToJsonElement(indexFile.readText()).jsonObject
-            val entries = root["entries"] as? JsonArray ?: JsonArray(emptyList())
-            val filtered = buildJsonArray {
-                entries.forEach { entry ->
-                    val entrySessionId = entry.jsonObject["sessionId"]?.toString()?.trim('"')
-                    if (entrySessionId != sessionId) add(entry)
-                }
-            }
-            val updatedRoot = buildJsonObject {
-                root.forEach { (key, value) ->
-                    if (key == "entries") put(key, filtered) else put(key, value)
-                }
-                if (!root.containsKey("entries")) put("entries", filtered)
-            }
-            indexFile.atomicWriteText(historyJson.encodeToString(JsonObject.serializer(), updatedRoot))
-            true
-        }.getOrDefault(true)
     }
 
     private fun resolveCodexSourceFilePath(projectPath: String, sessionId: String): String {
@@ -146,11 +132,6 @@ internal object SessionListDeleteSupport {
                 !sessionProjectPath.isNullOrBlank() &&
                 (expectedProjectPath.isBlank() || sessionProjectPath == expectedProjectPath)
         }?.absolutePath.orEmpty()
-    }
-
-    private fun deleteCodexSession(sourceFilePath: String?): Boolean {
-        val sourcePath = sourceFilePath?.takeIf { it.isNotBlank() } ?: return false
-        return deleteHistoryFileIfExists(File(sourcePath))
     }
 
     private fun resolveGithubCopilotSourceFilePath(projectPath: String, sessionId: String): String {

@@ -87,7 +87,7 @@ export function useHistoryPanelController(
   useEffect(() => {
     if (!historyLoaded) return;
     setSelectedConversationIds((prev) => prev.filter((id) => (
-      historyList.some((item) => item.conversationId === id)
+      historyList.some((item) => item.conversationId === id && item.deletable !== false)
     )));
     setDeleteErrors((prev) => Object.fromEntries(
       Object.entries(prev).filter(([conversationId]) => (
@@ -147,7 +147,9 @@ export function useHistoryPanelController(
   }, [isFilterOpen, selectedAgents, uniqueAgentsInHistory]);
 
   const selectedCount = selectedConversationIds.length;
-  const filteredConversationIds = filteredHistoryList.map((item) => item.conversationId);
+  const filteredConversationIds = filteredHistoryList
+    .filter((item) => item.deletable !== false)
+    .map((item) => item.conversationId);
   const areAllFilteredSelected = filteredConversationIds.length > 0 &&
     filteredConversationIds.every((conversationId) => selectedConversationIds.includes(conversationId));
 
@@ -194,9 +196,10 @@ export function useHistoryPanelController(
   };
 
   const openDeleteConfirmation = (items: HistorySessionMeta[]) => {
-    if (items.length === 0) return;
-    setPendingDeleteIds(items.map((item) => item.conversationId));
-    setDeleteProjectPath(items[0].projectPath);
+    const deletableItems = items.filter((item) => item.deletable !== false);
+    if (deletableItems.length === 0) return;
+    setPendingDeleteIds(deletableItems.map((item) => item.conversationId));
+    setDeleteProjectPath(deletableItems[0].projectPath);
   };
 
   const startEditing = (item: HistorySessionMeta, e: MouseEvent) => {

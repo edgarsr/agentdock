@@ -125,6 +125,7 @@ export function RecentChats({
           {recentConversations.map((item) => {
         const isRenaming = renamingId === item.conversationId;
         const canOpenCli = agents.find((agent) => agent.id === item.adapterName)?.cliResumeAvailable === true;
+        const canDelete = item.deletable !== false;
 
         return (
           <div key={item.conversationId} className="group ml-2 mr-2 mb-0.5">
@@ -182,23 +183,25 @@ export function RecentChats({
                     </Tooltip>
                   </div>
 
-                  <div className="relative z-10 w-0 overflow-hidden opacity-0 pointer-events-none
-                    group-hover:w-6 group-hover:opacity-100 group-hover:pointer-events-auto
-                    group-focus-within:w-6 group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-                  >
-                    <Tooltip variant="minimal" placement="top" content="Delete" className="flex h-full w-6">
-                      <button
-                        type="button"
-                        onClick={() => setPendingDeleteItem(item)}
-                        className="flex min-h-8 w-6 shrink-0 items-center justify-center text-foreground-secondary
-                          hover:text-error focus:outline-none
-                          focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-                        aria-label={`Delete ${item.title}`}
-                      >
-                        <Trash2 size={13} className="-translate-y-px" aria-hidden="true" />
-                      </button>
-                    </Tooltip>
-                  </div>
+                  {canDelete ? (
+                    <div className="relative z-10 w-0 overflow-hidden opacity-0 pointer-events-none
+                      group-hover:w-6 group-hover:opacity-100 group-hover:pointer-events-auto
+                      group-focus-within:w-6 group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+                    >
+                      <Tooltip variant="minimal" placement="top" content="Delete" className="flex h-full w-6">
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteItem(item)}
+                          className="flex min-h-8 w-6 shrink-0 items-center justify-center text-foreground-secondary
+                            hover:text-error focus:outline-none
+                            focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
+                          aria-label={`Delete ${item.title}`}
+                        >
+                          <Trash2 size={13} className="-translate-y-px" aria-hidden="true" />
+                        </button>
+                      </Tooltip>
+                    </div>
+                  ) : null}
 
                   {canOpenCli ? (
                     <div className="relative z-10 w-0 overflow-hidden opacity-0 pointer-events-none

@@ -12,6 +12,7 @@ internal object AcpProcessUtils {
 
     fun stopProcessesUsingAdapterRoot(adapterName: String, target: AcpExecutionTarget = AcpAdapterPaths.getExecutionTarget()) {
         val adapterRoot = runCatching {
+            if (AcpAdapterPaths.getAdapterInfo(adapterName).isCustom) return
             File(AcpAdapterPaths.getDownloadPath(adapterName, target))
         }.getOrNull() ?: return
 

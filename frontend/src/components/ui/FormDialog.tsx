@@ -44,7 +44,7 @@ export function FormDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50  px-3 pb-3 pt-24 animate-in fade-in duration-150"
+      className="absolute inset-0 z-[100] flex items-start justify-center bg-black/50 px-3 pb-3 pt-24 animate-in fade-in duration-150"
     >
       <div
         ref={dialogRef}

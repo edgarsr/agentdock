@@ -216,7 +216,7 @@ export const EditBlock: React.FC<Props> = ({ block }) => {
       >
         <div className="overflow-hidden">
           {diffData && (
-            <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent ">
+            <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto [&::-webkit-scrollbar]:!h-[7px]">
               <div className="syntax-highlighted font-mono text-ide-small py-2 min-w-max inline-block w-full">
                 {diffData.lines.map((line, i) => (
                   <React.Fragment key={i}>

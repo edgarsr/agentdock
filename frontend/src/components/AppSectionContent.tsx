@@ -3,6 +3,7 @@ import { AgentManagementView } from './AgentManagement';
 import { DesignSystemView } from './DesignSystem';
 import HistoryPanel from './HistoryPanel';
 import { McpServersView } from './McpServersView';
+import { CustomAcpView } from './CustomAcpView';
 import { PromptLibraryView } from './PromptLibraryView';
 import { SettingsView } from './SettingsView';
 import { SystemInstructionsView } from './SystemInstructionsView';
@@ -52,6 +53,7 @@ export function AppSectionContent({
         />
       )}
       {section === 'mcp' && <McpServersView />}
+      {section === 'custom-acp' && <CustomAcpView />}
       {section === 'prompt-library' && <PromptLibraryView />}
       {section === 'system-instructions' && <SystemInstructionsView />}
       {section === 'settings' && <SettingsView />}

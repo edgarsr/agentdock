@@ -168,8 +168,12 @@ export function McpServersView() {
 
   const cancelForm = () => { setForm(null); setEditingId(null); };
 
+  const canSubmit = form !== null
+    && form.name.trim().length > 0
+    && (form.transport === 'stdio' ? form.command.trim().length > 0 : form.url.trim().length > 0);
+
   const submitForm = () => {
-    if (!form || !form.name.trim()) return;
+    if (!form || !canSubmit) return;
     if (editingId) {
       save(servers.map(s => s.id === editingId ? { ...formToServer(form, editingId), enabled: s.enabled } : s));
     } else {
@@ -286,7 +290,7 @@ export function McpServersView() {
         onClose={cancelForm}
         footer={(
           <>
-            <Button onClick={submitForm} disabled={!form?.name.trim()} variant="primary">Save</Button>
+            <Button onClick={submitForm} disabled={!canSubmit} variant="primary">Save</Button>
             <Button onClick={cancelForm} variant="secondary">Cancel</Button>
           </>
         )}
@@ -294,11 +298,13 @@ export function McpServersView() {
         {form ? (
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-              <span className="text-foreground-secondary">Name</span>
+              <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
                 data-autofocus="true"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
+                required
+                aria-required="true"
               />
             </div>
 
@@ -320,10 +326,12 @@ export function McpServersView() {
             {form.transport === 'stdio' ? (
               <>
                 <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-                  <span className="text-foreground-secondary">Command</span>
+                  <span className="text-foreground-secondary">Command <span className="text-error" aria-hidden="true">*</span></span>
                   <input
                     value={form.command}
                     onChange={e => setForm({ ...form, command: e.target.value })}
+                    required
+                    aria-required="true"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -348,10 +356,12 @@ export function McpServersView() {
             ) : (
               <>
                 <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-                  <span className="text-foreground-secondary">URL</span>
+                  <span className="text-foreground-secondary">URL <span className="text-error" aria-hidden="true">*</span></span>
                   <input
                     value={form.url}
                     onChange={e => setForm({ ...form, url: e.target.value })}
+                    required
+                    aria-required="true"
                   />
                 </div>
                 <div className="flex flex-col gap-1">

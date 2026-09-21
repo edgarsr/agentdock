@@ -17,6 +17,7 @@
     "-5.3"
   ],
   "disabledModes": [],
+  "sessionDeleteMethod": "acp",
   "loginMethod": "acp",
   "logoutMethod": "acp",
   "loginStatusMethod": "codexCliLoginStatus",

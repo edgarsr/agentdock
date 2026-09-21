@@ -21,6 +21,7 @@ import {
 import { McpServerConfig, McpStatusUpdate } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
+import { CustomAcpConfig } from '../types/customAcp';
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
 export interface AssistantActivityEvent { chatId: string; }
@@ -42,6 +43,7 @@ export interface ConversationReplayLoadedEvent { payload: ConversationReplayLoad
 export interface FileChangeStatsEvent { payload: FileChangeStatsResultPayload; }
 export interface McpServersEvent { servers: McpServerConfig[]; }
 export interface McpStatusEvent { update: McpStatusUpdate; }
+export interface CustomAcpConfigsEvent { configs: CustomAcpConfig[]; }
 export interface PromptLibraryEvent { items: PromptLibraryItem[]; }
 export interface SystemInstructionsEvent { instructions: SystemInstruction[]; }
 export interface AudioTranscriptionFeatureEvent { state: AudioTranscriptionFeatureState; }
@@ -56,6 +58,7 @@ export const EVENT_NAMES = {
   ASSISTANT_ACTIVITY: 'acp-assistant-activity',
   MCP_SERVERS: 'mcp-servers',
   MCP_STATUS: 'mcp-status',
+  CUSTOM_ACP_CONFIGS: 'custom-acp-configs',
   PROMPT_LIBRARY: 'prompt-library',
   SYSTEM_INSTRUCTIONS: 'system-instructions',
   STATUS: 'acp-status',

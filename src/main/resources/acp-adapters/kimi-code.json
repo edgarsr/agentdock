@@ -16,7 +16,7 @@
   "args": [
     "acp"
   ],
-  "sessionDeleteMethod": "kimiCodeSessionDelete",
+  "sessionDeleteMethod": "acp",
   "disabledModels": [],
   "disabledModes": [],
   "agentVersionConfig": {

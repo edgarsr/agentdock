@@ -15,6 +15,7 @@ import {
 } from '../types/chat';
 import { extractToolCallDiffEntries, ToolCallRawInputCache } from './toolCallUtils';
 import { McpServerConfig } from '../types/mcp';
+import { CustomAcpConfig } from '../types/customAcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
 import {
@@ -38,6 +39,7 @@ import {
   HistoryListEvent,
   McpServersEvent,
   McpStatusEvent,
+  CustomAcpConfigsEvent,
   ModeEvent,
   PermissionRequestEvent,
   PromptLibraryEvent,
@@ -288,6 +290,10 @@ export const ACPBridge = {
 
     window.__onMcpServers = (servers) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.MCP_SERVERS, { detail: { servers } }));
+    };
+
+    window.__onCustomAcpConfigs = (configs) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.CUSTOM_ACP_CONFIGS, { detail: { configs } }));
     };
 
     window.__onMcpStatus = (update) => {
@@ -639,6 +645,17 @@ export const ACPBridge = {
   },
 
   onMcpServers: (callback: (e: CustomEvent<McpServersEvent>) => void) => onBridgeEvent(EVENT_NAMES.MCP_SERVERS, callback),
+
+  loadCustomAcpConfigs: () => {
+    window.__loadCustomAcpConfigs?.();
+  },
+
+  saveCustomAcpConfigs: (configs: CustomAcpConfig[]) => {
+    window.__saveCustomAcpConfigs?.(JSON.stringify(configs));
+  },
+
+  onCustomAcpConfigs: (callback: (e: CustomEvent<CustomAcpConfigsEvent>) => void) =>
+    onBridgeEvent(EVENT_NAMES.CUSTOM_ACP_CONFIGS, callback),
 
   checkMcpStatus: () => {
     window.__checkMcpStatus?.();

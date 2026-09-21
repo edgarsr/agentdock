@@ -22,7 +22,14 @@ internal fun platformBinaryForTarget(
 internal fun resolveDownloadPath(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     target: AcpExecutionTarget
-): String = File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id).absolutePath
+): String {
+    val customCommand = adapterInfo.customCommand
+    if (customCommand != null) {
+        return File(customCommand).absoluteFile.parentFile?.absolutePath
+            ?: AcpAdapterPaths.getBaseRuntimeDir().absolutePath
+    }
+    return File(AcpAdapterPaths.getDependenciesDir(), adapterInfo.id).absolutePath
+}
 
 internal fun resolveAdapterLaunchFile(
     adapterRoot: File,
@@ -64,6 +71,19 @@ internal fun buildAdapterLaunchCommand(
     projectPath: String?,
     target: AcpExecutionTarget
 ): List<String> {
+    adapterInfo.customCommand?.let { command ->
+        val resolvedCommand = resolveCustomWindowsCommand(command, adapterInfo.environment, target)
+        val name = File(resolvedCommand).name.lowercase()
+        val base = when {
+            isWindowsLocalTarget(target) && (name.endsWith(".cmd") || name.endsWith(".bat")) ->
+                mutableListOf("cmd.exe", "/c", resolvedCommand)
+            isWindowsLocalTarget(target) && name.endsWith(".ps1") ->
+                mutableListOf("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", resolvedCommand)
+            else -> mutableListOf(resolvedCommand)
+        }
+        base.addAll(adapterInfo.args)
+        return base
+    }
     val launchPath = resolveAdapterLaunchPath(adapterRootPath, adapterInfo, target)
         ?: throw IllegalStateException("Missing launch target for adapter '${adapterInfo.id}'")
     val launchFile = File(launchPath)
@@ -84,6 +104,55 @@ internal fun buildAdapterLaunchCommand(
     base.addAll(adapterInfo.platformArgs[AcpExecutionMode.hostPlatform()].orEmpty())
     return base
 }
+
+private fun resolveCustomWindowsCommand(
+    command: String,
+    environmentOverrides: Map<String, String>,
+    target: AcpExecutionTarget
+): String {
+    if (!isWindowsLocalTarget(target)) return command
+
+    val commandFile = File(command)
+    if (commandFile.extension.isNotEmpty()) return command
+
+    val environment = AcpProcessEnvironment.baseEnvironment()
+    val pathExtensions = environmentValue(environmentOverrides, "PATHEXT")
+        ?: environmentValue(environment, "PATHEXT")
+        ?: ".COM;.EXE;.BAT;.CMD"
+    val candidates = pathExtensions
+        .split(';')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .map { extension -> if (extension.startsWith('.')) extension else ".$extension" }
+
+    if (commandFile.isAbsolute || command.contains('/') || command.contains('\\')) {
+        return candidates
+            .asSequence()
+            .map { extension -> File(command + extension) }
+            .firstOrNull(File::isFile)
+            ?.absolutePath
+            ?: command
+    }
+
+    val path = environmentValue(environmentOverrides, "PATH")
+        ?: environmentValue(environment, "PATH")
+        ?: return command
+    return path
+        .split(File.pathSeparatorChar)
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .flatMap { directory ->
+            val cleanDirectory = directory.removeSurrounding("\"")
+            candidates.asSequence().map { extension -> File(cleanDirectory, command + extension) }
+        }
+        .firstOrNull(File::isFile)
+        ?.absolutePath
+        ?: command
+}
+
+private fun environmentValue(environment: Map<String, String>, name: String): String? =
+    environment.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
 
 internal fun resolvePatchRoot(adapterRoot: File, adapterInfo: AcpAdapterConfig.AdapterInfo): File {
     if (adapterInfo.patchRoot == AcpAdapterConfig.PatchRoot.RUNTIME) {

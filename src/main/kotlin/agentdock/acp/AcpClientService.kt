@@ -207,6 +207,8 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var protocol: Protocol? = null
         @Volatile var authMethods: List<AuthMethod> = emptyList()
         @Volatile var logoutAvailable: Boolean = false
+        @Volatile var sessionListAvailable: Boolean = false
+        @Volatile var sessionDeleteAvailable: Boolean = false
         @Volatile var protocolScope: CoroutineScope? = null
         @Volatile var isInitialized: Boolean = false
         @Volatile var sessionUpdateWrapped: Boolean = false
@@ -241,6 +243,8 @@ class AcpClientService private constructor(val project: Project) {
             protocol = null
             authMethods = emptyList()
             logoutAvailable = false
+            sessionListAvailable = false
+            sessionDeleteAvailable = false
             protocolScope?.coroutineContext?.cancel()
             protocolScope = null
             isInitialized = false

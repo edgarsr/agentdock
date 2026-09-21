@@ -6,6 +6,7 @@ import {
   HistoryTabIcon,
   ManagementTabIcon,
   McpTabIcon,
+  CustomAcpTabIcon,
   PromptLibraryTabIcon,
   SettingsTabIcon,
   SystemInstructionsTabIcon,
@@ -25,6 +26,7 @@ export interface NavigationActionsProps {
   onOpenManagement: () => void;
   onOpenDesignSystem: () => void;
   onOpenMcp: () => void;
+  onOpenCustomAcp: () => void;
   onOpenPromptLibrary: () => void;
   onOpenSystemInstructions: () => void;
   onOpenSettings: () => void;
@@ -39,6 +41,7 @@ export function NavigationActions({
   onOpenManagement,
   onOpenDesignSystem,
   onOpenMcp,
+  onOpenCustomAcp,
   onOpenPromptLibrary,
   onOpenSystemInstructions,
   onOpenSettings,
@@ -52,6 +55,7 @@ export function NavigationActions({
     { type: 'prompt-library', label: 'Prompt Library', icon: <PromptLibraryTabIcon />, onClick: onOpenPromptLibrary },
     { type: 'system-instructions', label: 'System Instructions', icon: <SystemInstructionsTabIcon />, onClick: onOpenSystemInstructions },
     { type: 'mcp', label: 'MCP Servers', icon: <McpTabIcon />, onClick: onOpenMcp },
+    { type: 'custom-acp', label: 'Custom ACP', icon: <CustomAcpTabIcon />, onClick: onOpenCustomAcp },
     ...(isDev ? [{ type: 'design' as const, label: 'Design System', icon: <DesignTabIcon />, onClick: onOpenDesignSystem }] : []),
   ];
 

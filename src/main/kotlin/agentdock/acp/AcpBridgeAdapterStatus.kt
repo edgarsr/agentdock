@@ -116,7 +116,8 @@ private fun AcpBridge.buildAdapterPayload(
 
     val dlStatus = downloadStatuses[info.id] ?: ""
     val isDownloading = dlStatus.isNotEmpty() && !dlStatus.startsWith("Error")
-    val usesAcpLogin = info.loginMethod == "acp"
+    val exposedLoginMethod = if (info.isCustom && info.cli != null) "cli" else info.loginMethod
+    val usesAcpLogin = exposedLoginMethod == "acp"
     val authMethods = if (usesAcpLogin) {
         service.adapterAuthMethods(info.id).mapNotNull { method ->
             when (method) {
@@ -208,8 +209,10 @@ private fun AcpBridge.buildAdapterPayload(
         configOptionsByModel = runtimeMetadata.configOptionsByModel,
         downloaded = downloaded,
         downloadedKnown = downloadedKnown,
-        downloadPath = if (downloaded == true) AcpAdapterPaths.getDownloadPath(info.id, target) else "",
-        loginMethod = info.loginMethod,
+        downloadPath = if (downloaded == true) {
+            info.customCommand ?: AcpAdapterPaths.getDownloadPath(info.id, target)
+        } else "",
+        loginMethod = exposedLoginMethod,
         authMethods = authMethods,
         authenticating = isAuthenticating,
         authenticatingMethodId = authActionMethodIds[info.id].orEmpty(),
@@ -233,7 +236,8 @@ private fun AcpBridge.buildAdapterPayload(
         downloadStatus = dlStatus,
         disabledModels = info.disabledModels,
         cliAvailable = cliAvailable,
-        cliResumeAvailable = cliResumeAvailable
+        cliResumeAvailable = cliResumeAvailable,
+        custom = info.isCustom
     )
 }
 

@@ -160,6 +160,7 @@ function App() {
     onOpenManagement: () => openSection('management'),
     onOpenDesignSystem: () => openSection('design'),
     onOpenMcp: () => openSection('mcp'),
+    onOpenCustomAcp: () => openSection('custom-acp'),
     onOpenPromptLibrary: () => openSection('prompt-library'),
     onOpenSystemInstructions: () => openSection('system-instructions'),
     onOpenSettings: () => openSection('settings'),
@@ -190,7 +191,7 @@ function App() {
   return (
     <div
       style={{ '--content-top-inset': sidebarEnabled && isWide ? '1rem' : '0px' } as CSSProperties}
-      className={`h-screen bg-background text-foreground overflow-hidden flex ${sidebarEnabled ? 'flex-row' : 'flex-col'}`}
+      className={`h-full bg-background text-foreground overflow-hidden flex ${sidebarEnabled ? 'flex-row' : 'flex-col'}`}
     >
       {sidebarEnabled ? (
         <Sidebar

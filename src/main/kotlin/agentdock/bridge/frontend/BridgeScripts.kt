@@ -107,6 +107,9 @@ internal object BridgeScripts {
             window.__saveMcpServers = function(json) { invoke('saveMcpServers', json); };
             window.__checkMcpStatus = function() { invoke('checkMcpStatus', ''); };
 
+            window.__loadCustomAcpConfigs = function() { invoke('loadCustomAcpConfigs', ''); };
+            window.__saveCustomAcpConfigs = function(json) { invoke('saveCustomAcpConfigs', json); };
+
             window.__loadPromptLibrary = function() { invoke('loadPromptLibrary', ''); };
             window.__savePromptLibrary = function(json) { invoke('savePromptLibrary', json); };
 

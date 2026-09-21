@@ -9,6 +9,7 @@
   },
   "disabledModels": [],
   "disabledModes": [],
+  "sessionDeleteMethod": "acp",
   "loginMethod": "acp",
   "logoutMethod": "acp",
   "loginStatusMethod": "claudeCodeCliAuthStatus",

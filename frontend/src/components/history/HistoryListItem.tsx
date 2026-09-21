@@ -1,4 +1,4 @@
-import { Check, Pencil, Terminal, Trash2, X } from 'lucide-react';
+import { Bot, Check, Pencil, Terminal, Trash2, X } from 'lucide-react';
 import { ACPBridge } from '../../utils/bridge';
 import type { AgentOption, HistorySessionMeta } from '../../types/chat';
 import { Checkbox } from '../ui/Checkbox';
@@ -64,6 +64,7 @@ export function HistoryListItem({
   const mainAgent = adapterDisplay.get(item.adapterName);
   const mainLabel = mainAgent?.name || item.adapterName;
   const canOpenCli = !!mainAgent?.cliResumeAvailable;
+  const canDelete = item.deletable !== false;
   const isEditing = editingId === conversationId;
 
   return (
@@ -78,7 +79,9 @@ export function HistoryListItem({
           onKeyDown={(event) => handleHistoryRowKeyDown(event, isEditing, () => onOpenSession(item))}
         >
           <div className="flex flex-col items-center shrink-0 gap-0.5 pt-0.5 mx-0.5 max-[350px]:hidden">
-            {mainAgent?.iconPath ? (
+            {mainAgent?.custom ? (
+              <Bot className="h-7 w-7 text-foreground-secondary opacity-75" strokeWidth={1.5} />
+            ) : mainAgent?.iconPath ? (
               <img src={mainAgent.iconPath} alt={mainLabel} className="h-7 w-7 object-contain opacity-75" />
             ) : (
               <div className="flex items-center justify-center rounded bg-background border border-border font-bold uppercase shrink-0 h-8 w-8 text-base">
@@ -91,6 +94,9 @@ export function HistoryListItem({
                 {otherAgents.map((agentId, idx) => {
                   const adapter = adapterDisplay.get(agentId);
                   const iconLabel = adapter?.name || agentId;
+                  if (adapter?.custom) {
+                    return <Bot key={idx} className="h-4 w-4 text-foreground-secondary opacity-80" strokeWidth={1.5} />;
+                  }
                   if (adapter?.iconPath) {
                     return <img key={idx} src={adapter.iconPath} className="h-4 w-4 object-contain opacity-80" />;
                   }
@@ -159,19 +165,21 @@ export function HistoryListItem({
             </button>
           </Tooltip>
 
-          <Tooltip variant="minimal" content="Delete chat">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenDeleteConfirmation([item]);
-              }}
-              className="m-0.5 rounded-[4px] p-0.5 text-foreground-secondary opacity-0 transition-opacity
-                hover:text-error group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100
-                focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </Tooltip>
+          {canDelete ? (
+            <Tooltip variant="minimal" content="Delete chat">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDeleteConfirmation([item]);
+                }}
+                className="m-0.5 rounded-[4px] p-0.5 text-foreground-secondary opacity-0 transition-opacity
+                  hover:text-error group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100
+                  focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] focus-visible:outline-none"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          ) : null}
 
           {canOpenCli && (
             <Tooltip variant="minimal" content="Open chat in terminal">
@@ -191,9 +199,10 @@ export function HistoryListItem({
 
           <Checkbox
             checked={isSelected}
+            disabled={!canDelete}
             onCheckedChange={() => onToggleSelection(conversationId)}
             onClick={(e) => e.stopPropagation()}
-            className="shrink-0 ml-2 mt-[-2px]"
+            className="shrink-0 ml-2 mt-[-2px] disabled:opacity-50"
             aria-label={`Select ${item.title}`}
           />
         </div>

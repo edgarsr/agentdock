@@ -127,7 +127,7 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
 
         var commandLine = com.intellij.execution.configurations.GeneralCommandLine(command)
             .withWorkDirectory(resolveAdapterProcessWorkingDirectory(File(adapterRoot)))
-            .withEnvironment(AcpProcessEnvironment.baseEnvironment())
+            .withEnvironment(AcpProcessEnvironment.baseEnvironment() + adapterInfo.environment)
             .withRedirectErrorStream(false)
         AcpNodeRuntimeResolver.resolveAvailable()?.let { runtime ->
             commandLine = AcpNodeRuntimeResolver.applyTo(commandLine, runtime)
@@ -135,7 +135,7 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
 
         val process = withContext(Dispatchers.IO) { commandLine.createProcess() }
         sharedProcess.process = process
-        AcpProcessRegistry.registerProcess(adapterInfo.id, adapterRoot, process)
+        AcpProcessRegistry.registerProcess(adapterInfo.id, adapterRoot, adapterInfo.isCustom, process)
         updateAdapterInitializationState(
             adapterInfo.id,
             AcpClientService.AdapterInitializationStatus.Initializing,
@@ -223,6 +223,8 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
         )
         sharedProcess.authMethods = result.authMethods
         sharedProcess.logoutAvailable = result.capabilities.auth.logout != null
+        sharedProcess.sessionListAvailable = result.capabilities.sessionCapabilities.list != null
+        sharedProcess.sessionDeleteAvailable = result.capabilities.sessionCapabilities.delete != null
     } catch (error: Exception) {
         if (error is CancellationException) {
             sharedProcess.stop()

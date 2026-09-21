@@ -22,6 +22,9 @@ internal suspend fun AcpClientService.listHistorySessions(
     check(AcpAdapterPaths.isDownloaded(adapterInfo.id)) {
         "Adapter '${adapterInfo.id}' is not installed"
     }
+    check(canListHistorySessions(adapterInfo)) {
+        "Adapter '${adapterInfo.id}' did not advertise session/list support"
+    }
 
     return when (adapterInfo.sessionListMethod) {
         "acpSessionList" -> acpSessionList(
@@ -37,6 +40,15 @@ internal suspend fun AcpClientService.listHistorySessions(
     }
 }
 
+internal fun AcpClientService.canListHistorySessions(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean =
+    when (adapterInfo.sessionListMethod) {
+        "acpSessionList" -> activeProcesses[processKey(adapterInfo.id)]?.sessionListAvailable == true
+        else -> true
+    }
+
+internal fun AcpClientService.canDeleteHistorySession(adapterName: String): Boolean =
+    activeProcesses[processKey(adapterName)]?.sessionDeleteAvailable == true
+
 @OptIn(UnstableApi::class)
 private suspend fun AcpClientService.acpSessionList(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
@@ -50,6 +62,9 @@ private suspend fun AcpClientService.acpSessionList(
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' is not ready for session/list")
     val client = sharedProc.client
         ?: throw IllegalStateException("Adapter '${adapterInfo.id}' does not have an initialized ACP client")
+    check(sharedProc.sessionListAvailable) {
+        "Adapter '${adapterInfo.id}' did not advertise session/list support"
+    }
     val expectedProjectPath = historyComparablePath(projectPath)
     val sessionListCwd = resolveSessionCwd(projectPath).let { cwd ->
         if (adapterInfo.sessionListPosixCwd && !preserveNativeCwd) cwd.replace('\\', '/') else cwd
@@ -77,6 +92,7 @@ private suspend fun AcpClientService.acpSessionList(
 @OptIn(UnstableApi::class)
 internal suspend fun AcpClientService.deleteHistorySession(adapterName: String, sessionId: String): Boolean {
     val sharedProc = activeProcesses[processKey(adapterName)]?.takeIf { it.isHealthy() } ?: return false
+    if (!sharedProc.sessionDeleteAvailable) return false
     val protocol = sharedProc.protocol ?: return false
     return runCatching {
         protocol.sendRequestRaw(

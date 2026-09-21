@@ -183,6 +183,7 @@ export interface AgentOption {
   updateAvailable?: boolean;
   cliAvailable?: boolean;
   cliResumeAvailable?: boolean;
+  custom?: boolean;
 }
 
 export function isAgentRunnable(agent: AgentOption): boolean {
@@ -215,7 +216,7 @@ export interface TabUiFlags {
   processing: boolean;
 }
 
-export type SectionType = 'management' | 'design' | 'history' | 'mcp' | 'system-instructions' | 'prompt-library' | 'settings';
+export type SectionType = 'management' | 'design' | 'history' | 'mcp' | 'custom-acp' | 'system-instructions' | 'prompt-library' | 'settings';
 
 export interface ChatTab {
   id: string;
@@ -258,6 +259,7 @@ export interface HistorySessionMeta {
   filePath: string;
   createdAt: number;
   updatedAt: number;
+  deletable?: boolean;
 }
 
 export interface ContentChunk {
@@ -607,6 +609,7 @@ declare global {
 
     __onMcpServers?: (servers: unknown) => void;
     __onMcpStatus?: (update: unknown) => void;
+    __onCustomAcpConfigs?: (configs: unknown) => void;
     __onFilesResult?: (filesJson: unknown) => void;
     __searchFiles?: (query: string) => void;
     __requestFileIcon?: (path: string) => void;
@@ -617,6 +620,8 @@ declare global {
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;
     __checkMcpStatus?: () => void;
+    __loadCustomAcpConfigs?: () => void;
+    __saveCustomAcpConfigs?: (json: string) => void;
     __onPromptLibrary?: (items: unknown) => void;
     __loadPromptLibrary?: () => void;
     __savePromptLibrary?: (json: string) => void;

@@ -54,7 +54,9 @@ internal object AcpAuthenticationService {
 
             is AuthMethod.TerminalAuth -> {
                 openTerminalAuth(method.name, method.args.orEmpty(), method.env.orEmpty())
-                waitForLogin(adapterInfo)
+                if (!adapterInfo.isCustom) {
+                    waitForLogin(adapterInfo)
+                }
             }
 
             else -> throw IllegalStateException(

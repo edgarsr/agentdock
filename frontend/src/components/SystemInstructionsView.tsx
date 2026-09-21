@@ -206,22 +206,26 @@ export function SystemInstructionsView() {
         {form ? (
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
-              <span className="text-foreground-secondary">Name</span>
+              <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
                 data-autofocus="true"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
                 className="w-full rounded-[4px] px-2 py-1"
+                required
+                aria-required="true"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-foreground-secondary">Instruction</span>
+              <span className="text-foreground-secondary">Instruction <span className="text-error" aria-hidden="true">*</span></span>
               <textarea
                 value={form.content}
                 onChange={(event) => setForm({ ...form, content: event.target.value })}
                 rows={8}
                 className="w-full min-h-[120px] h-auto resize-none rounded-[4px] px-2 py-1"
+                required
+                aria-required="true"
               />
             </div>
           </div>

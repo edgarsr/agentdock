@@ -4,11 +4,14 @@
 
 @layer base {
 
-  html, body {
+  html, body, #root {
     height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    overflow: hidden;
+  }
+
+  html, body {
     background-color: var(--ide-Panel-background);
     color: var(--ide-Panel-foreground);
     font-size: calc(var(--ide-font-size) + var(--ui-font-size-offset, 0px));
@@ -116,45 +119,45 @@
     margin: calc(var(--ide-paragraph-spacing) * 0.3) 0;
   }
 
-  *::-webkit-scrollbar {
-    width: 8px;
-    height: 6px;
-    position: absolute;
-  }
-
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  *::-webkit-scrollbar-thumb {
-    background-color: var(--ide-scrollbar-color);
-    opacity: 0.8;
-    border-radius: 0;
-  }
-
-  *::-webkit-scrollbar-thumb:hover {
-    opacity: 1;
-  }
-
-  *::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  html.ide-theme-islands *::-webkit-scrollbar {
-    width: 8px;
-    height: 6px;
-  }
-
-  html.ide-theme-islands *::-webkit-scrollbar-thumb {
-    background-clip: content-box;
-    border: 1px solid transparent;
-    border-radius: 999px;
-  }
-  
   .user-message-bubble .code-refrence-chip {
     margin: 1px;
     top: -1px;
   }
+}
+
+/* Keep outside @layer so Chromium opts into a classic 8px gutter instead of overlay. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--ide-scrollbar-color);
+  opacity: 0.8;
+  border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  opacity: 1;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html.ide-theme-islands *::-webkit-scrollbar {
+  width: 9px;
+  height: 8px;
+}
+
+html.ide-theme-islands *::-webkit-scrollbar-thumb {
+  background-clip: content-box;
+  border: 1px solid transparent;
+  border-radius: 999px;
 }
 
 @keyframes tooltip-in {

@@ -116,8 +116,12 @@ object AcpAdapterConfig {
         val loginArgs: List<String> = listOf("login"),
         val logoutArgs: List<String> = listOf("logout"),
         val agentVersionConfig: AgentVersionConfig? = null,
-        val cli: CliConfig? = null
+        val cli: CliConfig? = null,
+        val customCommand: String? = null,
+        val environment: Map<String, String> = emptyMap()
     ) {
+        val isCustom: Boolean get() = customCommand != null
+
         fun getConfiguredVersion(): String = distribution.version
 
         fun withDistributionVersion(version: String): AdapterInfo {
@@ -140,13 +144,21 @@ object AcpAdapterConfig {
 
     private val loadedConfig: Map<String, AdapterInfo> by lazy { parseConfig() }
 
+    internal fun isBuiltIn(id: String): Boolean = loadedConfig.containsKey(id)
+
     fun getAdapterInfo(name: String): AdapterInfo {
-        return loadedConfig[name] ?: throw IllegalStateException(
-            "Adapter '$name' not found. Available: ${loadedConfig.keys.joinToString(", ")}"
+        loadedConfig[name]?.let { return it }
+        return CustomAcpConfigStore.getAdapter(name) ?: throw IllegalStateException(
+            "Adapter '$name' not found. Available: ${(loadedConfig.keys + CustomAcpConfigStore.loadAdapters().keys).joinToString(", ")}"
         )
     }
 
-    fun getAllAdapters(): Map<String, AdapterInfo> = loadedConfig
+    fun getAllAdapters(): Map<String, AdapterInfo> = buildMap {
+        putAll(loadedConfig)
+        CustomAcpConfigStore.loadAdapters().forEach { (id, adapter) ->
+            if (!containsKey(id)) put(id, adapter)
+        }
+    }
 
     private fun parseConfig(): Map<String, AdapterInfo> {
         val content = readResource(CONFIG_INDEX_FILE)
