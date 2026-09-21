@@ -136,7 +136,7 @@ object IdeTheme {
         // Secondary: use editor background if different from panel, otherwise calculate
         val secondaryBackground = if (areColorsSimilar(baseBackground, editorBackground)) {
             // Editor and panel backgrounds are similar - calculate variation
-            adjustBrightness(baseBackground, if (isDark) 1.2 else 0.95)
+            adjustBrightness(baseBackground, if (isDark) 1.17 else 0.95)
         } else {
             // Use editor background as secondary
             editorBackground

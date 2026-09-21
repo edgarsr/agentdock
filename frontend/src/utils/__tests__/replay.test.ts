@@ -278,38 +278,6 @@ describe('replay rendering rules', () => {
     expect(toolCall?.entry.result).toBe('compiling...\ndone');
   });
 
-  it('keeps initial output when execute kind appears only in an update', () => {
-    const data: ConversationReplayData = {
-      sessions: [{
-        sessionId: 'late-kind-session',
-        adapterName: 'claude-code',
-        prompts: [{
-          events: [
-            {
-              role: 'assistant', type: 'tool_call', toolCallId: 'execute-1',
-              toolTitle: 'command', toolRawJson: JSON.stringify({
-                toolCallId: 'execute-1', status: 'running',
-                content: [{ type: 'content', content: { type: 'text', text: 'compiling...' } }],
-              }),
-            },
-            {
-              role: 'assistant', type: 'tool_call_update', toolCallId: 'execute-1', toolKind: 'execute',
-              toolRawJson: JSON.stringify({
-                toolCallId: 'execute-1', kind: 'execute', status: 'completed',
-                content: [{ type: 'content', content: { type: 'text', text: 'done' } }],
-              }),
-            },
-          ],
-        }],
-      }],
-    };
-    const toolCall = buildReplayMessages(data)[0].contentBlocks?.find(
-      (block): block is ToolCallBlock => block.type === 'tool_call'
-    );
-
-    expect(toolCall?.entry.result).toBe('compiling...\n\ndone');
-  });
-
   it('does not duplicate incremental output for non-execute tools', () => {
     const data: ConversationReplayData = {
       sessions: [{

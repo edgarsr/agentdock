@@ -4,8 +4,8 @@
     <vendor url="https://github.com/edgarsr/agentdock">EdgarsR</vendor>
 
     <description><![CDATA[
-        <p>Agent Dock brings widely used AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
-        <h4>Supported AI agents:</h4>
+        <p>Agent Dock brings AI coding agents into a unified GUI that follows the active JetBrains IDE theme.</p>
+        <h4>Built-in AI agent integrations:</h4>
         <ul>
             <li>Claude Code</li>
             <li>Codex</li>
@@ -16,30 +16,32 @@
             <li>Grok Build</li>
             <li>Kilo</li>
             <li>Kimi Code</li>
-            <li>OpenCode</li>
+            <li>OpenCode v2</li>
             <li>Qoder</li>
         </ul>
+        <p>Any other ACP-compatible agent can be added through the custom configuration option.</p>
         <h4>Features:</h4>
         <ul>
-            <li>Installation, update, uninstall, login, and logout flows for supported AI agents inside the plugin.</li>
-            <li>Communication with supported AI agents through ACP (Agent Client Protocol) in a GUI.</li>
-            <li>Structured display of agent output, including tool use, thinking blocks, terminal commands, plans, file edits, and diffs.</li>
-            <li>Review of files changed by an agent, with options to accept selected changes or revert them from the IDE.</li>
-            <li>Audio notifications for important chat and agent events.</li>
-            <li>Slash commands and @ mentions backed by JetBrains project file search.</li>
-            <li>Code selections and file references can be added to chat from the editor and project view.</li>
-            <li>Images can be pasted into chat and previewed inline.</li>
-            <li>Live token quota and context usage are shown in the chat input for supported agents.</li>
-            <li>Voice input for prompts with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.</li>
-            <li>Chats can be continued in the IDE terminal when CLI mode is a better fit.</li>
-            <li>Chat history supports opening, renaming, searching, deleting, and bulk deletion.</li>
-            <li>Chats can be forked from any point.</li>
-            <li>AI agents can be switched within the same chat while preserving the session context.</li>
-            <li>MCP server configuration for additional agent tools and external resources.</li>
-            <li>Reusable prompts can be saved in the prompt library and inserted into chat when needed.</li>
-            <li>Prompts can be queued while an agent is already working.</li>
-            <li>System instructions can be managed and applied to agent sessions.</li>
-            <li>Git commit messages can be generated from the current changes.</li>
+            <li>Manage integrated agents: install, update, remove, log in, and log out inside the plugin.</li>
+            <li>Communication with AI agents through ACP (Agent Client Protocol) in a GUI.</li>
+            <li>Connect any ACP-compatible agent using a custom configuration.</li>
+            <li>View tool calls, thinking, terminal commands, plans, file edits, and diffs.</li>
+            <li>Review, accept, or revert agent file changes.</li>
+            <li>Receive audio notifications for chat and agent events.</li>
+            <li>Use slash commands and reference project files through @ mentions.</li>
+            <li>Add code selections and file references from the editor or project view.</li>
+            <li>Paste images into chat. Preview pasted and agent-generated images full-screen.</li>
+            <li>View live token quota and context usage in the chat input.</li>
+            <li>Use voice input with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.</li>
+            <li>Continue chats in the IDE terminal.</li>
+            <li>Find, reopen, and rename saved chats, or delete them individually or in bulk.</li>
+            <li>Switch agents within a chat while preserving context.</li>
+            <li>Fork chats from any point.</li>
+            <li>Configure MCP servers for additional tools and resources.</li>
+            <li>Save and insert reusable prompts.</li>
+            <li>Queue prompts while an agent is working.</li>
+            <li>Manage system instructions for agent sessions.</li>
+            <li>Generate Git commit messages from current changes.</li>
         </ul>
         <h4>Requirements:</h4>
         <ul>
@@ -51,10 +53,12 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Updated Cursor configuration handling to display all config options, including model-specific effort levels.</li>
-            <li>Added Cursor usage quota data to the chat.</li>
-            <li>Improved Codex error messages to show more complete details.</li>
-            <li>Updated the ACP Kotlin SDK to the latest stable version.</li>
+            <li>Added an option to open the plugin in an editor tab instead of the tool window.</li>
+            <li>Added optional sidebar navigation for wider plugin windows.</li>
+            <li>Added support for connecting any ACP-compatible agent through a custom configuration.</li>
+            <li>Updated the OpenCode integration to support v2.</li>
+            <li>Added a color picker for customizing the background color of user messages.</li>
+            <li>Improved the display of images generated by AI agents.</li>
             <li>Refined the UI and fixed minor bugs.</li>
         </ul>
     ]]></change-notes>
