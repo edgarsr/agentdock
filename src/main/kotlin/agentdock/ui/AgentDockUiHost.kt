@@ -91,8 +91,12 @@ class AgentDockUiHost(
             object : ToolWindowManagerListener {
                 override fun toolWindowShown(shown: ToolWindow) {
                     if (shown.id != TOOL_WINDOW_ID || !openInEditor) return
-                    shown.hide(null)
-                    openEditorTab()
+                    if (isEditorTabOpen()) {
+                        shown.hide(null)
+                        closeEditorTab()
+                        return
+                    }
+                    redirectToEditor(shown)
                 }
             },
         )
@@ -114,12 +118,27 @@ class AgentDockUiHost(
                 return
             }
         if (openInEditor && toolWindow != null) {
-            window.hide(null)
-            openEditorTab()
-            afterShow?.invoke()
+            redirectToEditor(window, afterShow)
             return
         }
         window.activate(afterShow, true)
+    }
+
+    /**
+     * Opens the editor tab after the current UI event. Doing it synchronously from
+     * [ToolWindowManagerListener.toolWindowShown] during layout restoration created the tab while
+     * the editor splitters were still being restored, so the tab was dropped or left unfocused and
+     * the plugin appeared not to open on the first start.
+     */
+    private fun redirectToEditor(window: ToolWindow, afterShow: (() -> Unit)? = null) {
+        ApplicationManager.getApplication().invokeLater({
+            if (project.isDisposed) return@invokeLater
+            if (openInEditor) {
+                window.hide(null)
+                openEditorTab()
+            }
+            afterShow?.invoke()
+        }, ModalityState.nonModal(), project.disposed)
     }
 
     fun attachEditor(panel: JPanel) {
@@ -142,29 +161,28 @@ class AgentDockUiHost(
         if (enabled == openInEditor) return
         val showing = isShowing()
         openInEditor = enabled
-        if (toolWindow == null || !showing) return
+        val window = toolWindow
+        if (window == null || !showing) return
         if (enabled) {
-            openEditorTab()
-            toolWindow?.hide(null)
+            redirectToEditor(window)
         } else {
             closeEditorTab()
-            toolWindow?.activate(null, true)
+            window.activate(null, true)
         }
     }
 
-    private fun isShowing(): Boolean {
-        if (FileEditorManager.getInstance(project).isFileOpen(virtualFile)) return true
-        return toolWindow?.isVisible == true
-    }
+    private fun isShowing(): Boolean = isEditorTabOpen() || toolWindow?.isVisible == true
+
+    private fun isEditorTabOpen(): Boolean =
+        FileEditorManager.getInstance(project).isFileOpen(virtualFile)
 
     private fun openEditorTab() {
         FileEditorManager.getInstance(project).openFile(virtualFile, true)
     }
 
     private fun closeEditorTab() {
-        val manager = FileEditorManager.getInstance(project)
-        if (manager.isFileOpen(virtualFile)) {
-            manager.closeFile(virtualFile)
+        if (isEditorTabOpen()) {
+            FileEditorManager.getInstance(project).closeFile(virtualFile)
         }
     }
 
