@@ -33,6 +33,15 @@ data class PermissionRequest(
     val options: List<PermissionOption>
 )
 
+internal fun mergeAvailableCommands(
+    declared: List<AvailableCommandPayload>,
+    runtime: List<AvailableCommandPayload>
+): List<AvailableCommandPayload> {
+    if (declared.isEmpty()) return runtime
+    val runtimeNames = runtime.mapTo(hashSetOf()) { it.name.lowercase() }
+    return declared.filter { it.name.lowercase() !in runtimeNames } + runtime
+}
+
 class AcpClientService private constructor(val project: Project) {
     internal data class AdapterRuntimeMetadata(
         val configOptions: List<AcpConfigOption>,
@@ -294,8 +303,24 @@ class AcpClientService private constructor(val project: Project) {
     fun adapterInitializationError(adapterName: String): String? = adapterInitializationErrors[adapterName]
     fun adapterInitializationDetail(adapterName: String): String? = adapterInitializationDetails[adapterName]
     internal fun adapterRuntimeMetadata(adapterName: String): AdapterRuntimeMetadata? = adapterRuntimeMetadataMap[adapterName]
-    internal fun availableCommands(adapterName: String): List<AvailableCommandPayload> = availableCommandsByAdapter[adapterName] ?: emptyList()
-    internal fun allAvailableCommands(): Map<String, List<AvailableCommandPayload>> = availableCommandsByAdapter.toMap()
+    internal fun availableCommands(adapterName: String): List<AvailableCommandPayload> =
+        mergeAvailableCommands(declaredAdapterCommands(adapterName), availableCommandsByAdapter[adapterName] ?: emptyList())
+
+    internal fun allAvailableCommands(): Map<String, List<AvailableCommandPayload>> {
+        val runtime = availableCommandsByAdapter.toMap()
+        val declared = AcpAdapterConfig.getAllAdapters().mapValues { (_, adapter) ->
+            adapter.commands.map { AvailableCommandPayload(name = it.name, description = it.description, inputHint = it.inputHint) }
+        }
+        return (declared.keys + runtime.keys).associateWith { adapter ->
+            mergeAvailableCommands(declared[adapter].orEmpty(), runtime[adapter] ?: emptyList())
+        }.filterValues { it.isNotEmpty() }
+    }
+
+    private fun declaredAdapterCommands(adapterName: String): List<AvailableCommandPayload> =
+        runCatching { AcpAdapterPaths.getAdapterInfo(adapterName) }.getOrNull()
+            ?.commands.orEmpty()
+            .map { AvailableCommandPayload(name = it.name, description = it.description, inputHint = it.inputHint) }
+
     fun isAdapterReady(adapterName: String): Boolean {
         val sharedProc = activeProcesses[processKey(adapterName)] ?: return false
         return sharedProc.isHealthy()
@@ -309,7 +334,7 @@ class AcpClientService private constructor(val project: Project) {
 
     internal fun updateAvailableCommands(adapterName: String, commands: List<AvailableCommandPayload>) {
         availableCommandsByAdapter[adapterName] = commands
-        runCatching { availableCommandsHandler?.invoke(adapterName, commands) }
+        runCatching { availableCommandsHandler?.invoke(adapterName, availableCommands(adapterName)) }
     }
 
     internal fun updateAdapterInitializationState(

@@ -72,6 +72,7 @@ class CustomAcpBridge(
 
                     push(saved)
                     acpBridge.pushAdapters(includeRuntimeChecks = true)
+                    acpBridge.pushAllAvailableCommands()
                 }
             }
         }

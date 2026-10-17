@@ -3,6 +3,11 @@ export interface CustomAcpEnvironmentVariable {
   value: string;
 }
 
+export interface CustomAcpCommand {
+  name: string;
+  description: string;
+}
+
 export interface CustomAcpConfig {
   id: string;
   name: string;
@@ -13,6 +18,7 @@ export interface CustomAcpConfig {
   cliCommand?: string;
   cliArgs: string[];
   cliResumeArgs: string[];
+  commands?: CustomAcpCommand[];
 }
 
 export interface CustomAcpStatusUpdate {

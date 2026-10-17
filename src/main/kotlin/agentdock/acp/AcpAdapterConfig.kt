@@ -90,6 +90,13 @@ object AcpAdapterConfig {
     )
 
     @Serializable
+    data class AdapterCommand(
+        val name: String,
+        val description: String = "",
+        val inputHint: String? = null
+    )
+
+    @Serializable
     data class AdapterInfo(
         val id: String = "", // Filled after parsing
         val name: String,
@@ -118,7 +125,8 @@ object AcpAdapterConfig {
         val agentVersionConfig: AgentVersionConfig? = null,
         val cli: CliConfig? = null,
         val customCommand: String? = null,
-        val environment: Map<String, String> = emptyMap()
+        val environment: Map<String, String> = emptyMap(),
+        val commands: List<AdapterCommand> = emptyList()
     ) {
         val isCustom: Boolean get() = customCommand != null
 

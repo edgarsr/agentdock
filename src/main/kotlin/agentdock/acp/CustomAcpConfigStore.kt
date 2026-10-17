@@ -13,6 +13,12 @@ data class CustomAcpEnvironmentVariable(
 )
 
 @Serializable
+data class CustomAcpCommandConfig(
+    val name: String,
+    val description: String = ""
+)
+
+@Serializable
 data class CustomAcpConfig(
     val id: String,
     val name: String,
@@ -22,7 +28,8 @@ data class CustomAcpConfig(
     val env: List<CustomAcpEnvironmentVariable> = emptyList(),
     val cliCommand: String? = null,
     val cliArgs: List<String> = emptyList(),
-    val cliResumeArgs: List<String> = emptyList()
+    val cliResumeArgs: List<String> = emptyList(),
+    val commands: List<CustomAcpCommandConfig> = emptyList()
 )
 
 object CustomAcpConfigStore {
@@ -61,7 +68,7 @@ object CustomAcpConfigStore {
         return configs
     }
 
-    private fun normalize(configs: List<CustomAcpConfig>): List<CustomAcpConfig> {
+    internal fun normalize(configs: List<CustomAcpConfig>): List<CustomAcpConfig> {
         val seenIds = hashSetOf<String>()
         return configs.mapNotNull { config ->
             val id = config.id.trim()
@@ -83,7 +90,12 @@ object CustomAcpConfigStore {
                 }.distinctBy { it.name },
                 cliCommand = config.cliCommand?.trim()?.takeIf(String::isNotEmpty),
                 cliArgs = config.cliArgs.map(String::trim).filter(String::isNotEmpty),
-                cliResumeArgs = config.cliResumeArgs.map(String::trim).filter(String::isNotEmpty)
+                cliResumeArgs = config.cliResumeArgs.map(String::trim).filter(String::isNotEmpty),
+                commands = config.commands.mapNotNull { command ->
+                    val name = command.name.trim().removePrefix("/").trim()
+                    if (name.isEmpty()) null
+                    else CustomAcpCommandConfig(name, command.description.trim())
+                }.distinctBy { it.name.lowercase() }
             )
         }
     }
@@ -114,7 +126,8 @@ object CustomAcpConfigStore {
             cli = cliConfig,
             customCommand = command,
             environment = env.associate { it.name to it.value },
-            args = args
+            args = args,
+            commands = commands.map { AcpAdapterConfig.AdapterCommand(name = it.name, description = it.description) }
         )
     }
 }

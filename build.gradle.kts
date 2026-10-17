@@ -39,7 +39,9 @@ dependencies {
     implementation("io.github.java-diff-utils:java-diff-utils:4.15")
 
     intellijPlatform {
-        intellijIdea("2026.2")
+        intellijIdea("2026.2") {
+            useInstaller = false
+        }
         jetbrainsRuntime()
         pluginModule(implementation(project(":shared")))
         pluginModule(implementation(project(":frontend")))

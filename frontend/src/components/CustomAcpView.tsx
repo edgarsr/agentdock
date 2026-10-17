@@ -15,13 +15,14 @@ interface FormState {
   command: string;
   args: string;
   env: string;
+  commands: string;
   cliCommand: string;
   cliArgs: string;
   cliResumeArg: string;
 }
 
 const emptyForm = (): FormState => ({
-  name: '', command: '', args: '', env: '', cliCommand: '', cliArgs: '', cliResumeArg: '',
+  name: '', command: '', args: '', env: '', commands: '', cliCommand: '', cliArgs: '', cliResumeArg: '',
 });
 
 function configToForm(config: CustomAcpConfig): FormState {
@@ -30,6 +31,9 @@ function configToForm(config: CustomAcpConfig): FormState {
     command: config.command,
     args: config.args.join('\n'),
     env: config.env.map(variable => `${variable.name}=${variable.value}`).join('\n'),
+    commands: (config.commands ?? []).map(command =>
+      command.description ? `${command.name}=${command.description}` : command.name
+    ).join('\n'),
     cliCommand: config.cliCommand ?? '',
     cliArgs: config.cliArgs.join('\n'),
     cliResumeArg: config.cliResumeArgs.find(argument => argument !== '{sessionId}') ?? '',
@@ -45,6 +49,12 @@ function formToConfig(form: FormState, id: string): CustomAcpConfig {
     command: form.command.trim(),
     args: parseLines(form.args),
     env: parsePairs(form.env, '='),
+    commands: parseLines(form.commands).flatMap((line) => {
+      const index = line.indexOf('=');
+      const name = (index > 0 ? line.slice(0, index) : line).trim().replace(/^\//, '');
+      const description = index > 0 ? line.slice(index + 1).trim() : '';
+      return name ? [{ name, description }] : [];
+    }),
     cliCommand: form.cliCommand.trim() || undefined,
     cliArgs: parseLines(form.cliArgs),
     cliResumeArgs: cliResumeArg ? [cliResumeArg, '{sessionId}'] : [],
@@ -219,6 +229,15 @@ export function CustomAcpView() {
                 value={form.env}
                 onChange={event => setForm({ ...form, env: event.target.value })}
                 placeholder={'One KEY=value per line, e.g.:\nAPI_KEY=your-key'}
+                rows={3}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-foreground-secondary">Commands</span>
+              <textarea
+                value={form.commands}
+                onChange={event => setForm({ ...form, commands: event.target.value })}
+                placeholder={'One command per line as name=description, e.g.:\ncompact=Summarize the conversation'}
                 rows={3}
               />
             </div>
