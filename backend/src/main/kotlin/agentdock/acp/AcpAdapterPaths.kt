@@ -140,7 +140,7 @@ object AcpAdapterPaths {
 
     private fun isCustomExecutableAvailable(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean {
         val command = adapterInfo.customCommand.orEmpty().trim()
-        return command.isNotEmpty() && findCustomCommandFile(command, adapterInfo.environment) != null
+        return command.isNotEmpty() && findCommandFile(command, adapterInfo.environment) != null
     }
 
     private fun missingLaunchTargetError(

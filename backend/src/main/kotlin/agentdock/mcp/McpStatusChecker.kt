@@ -1,6 +1,9 @@
 package agentdock.mcp
 
+import agentdock.acp.AcpNodeRuntimeResolver
+import agentdock.acp.AcpProcessEnvironment
 import agentdock.acp.AcpProcessUtils
+import agentdock.acp.findCommandFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -83,13 +86,17 @@ object McpStatusChecker {
                 "No command configured"
             )
 
+        // Agents start this server with their own environment, so it is checked with the same one:
+        // the shell PATH and the Node runtime the plugin supplies. The command is looked up there
+        // too, because ProcessBuilder would search the IDE's PATH instead.
+        val serverEnvironment = AcpProcessEnvironment.withPrependedPathEntries(
+            AcpNodeRuntimeResolver.resolveAvailable()?.pathEntries.orEmpty()
+        ) + server.env.orEmpty().filter { it.name.isNotBlank() }.associate { it.name to it.value }
+        val executable = findCommandFile(command, serverEnvironment)?.absolutePath ?: command
+
         val process = try {
-            ProcessBuilder(listOf(command) + server.args.orEmpty())
-                .apply {
-                    server.env.orEmpty()
-                        .filter { it.name.isNotBlank() }
-                        .forEach { environment()[it.name] = it.value }
-                }
+            ProcessBuilder(listOf(executable) + server.args.orEmpty())
+                .apply { environment().putAll(serverEnvironment) }
                 .start()
         } catch (e: IOException) {
             return@withContext status(

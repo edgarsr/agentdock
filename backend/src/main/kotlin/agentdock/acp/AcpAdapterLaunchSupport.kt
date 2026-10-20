@@ -97,14 +97,14 @@ private fun resolveCustomWindowsCommand(
     environmentOverrides: Map<String, String>
 ): String {
     if (!AcpExecutionMode.isWindowsHost() || File(command).extension.isNotEmpty()) return command
-    return findCustomCommandFile(command, environmentOverrides)?.absolutePath ?: command
+    return findCommandFile(command, environmentOverrides)?.absolutePath ?: command
 }
 
 /**
- * Finds the file a custom adapter command starts, searching PATH and, for a Windows command without
- * an extension, PATHEXT of the environment the adapter process is launched with.
+ * Finds the file a command starts, searching PATH and, for a Windows command without an extension,
+ * PATHEXT of the environment the process is launched with.
  */
-internal fun findCustomCommandFile(command: String, environmentOverrides: Map<String, String>): File? {
+internal fun findCommandFile(command: String, environmentOverrides: Map<String, String>): File? {
     val environment = AcpProcessEnvironment.baseEnvironment()
     val extensions = if (AcpExecutionMode.isWindowsHost() && File(command).extension.isEmpty()) {
         (environmentValue(environmentOverrides, "PATHEXT")
