@@ -1,4 +1,4 @@
-import { KeyboardEvent, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { CSSProperties, KeyboardEvent, ReactNode, RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { focusMenuItem, getMenuItems, moveMenuFocus } from '../tabbar/menuFocus';
 
@@ -68,30 +68,75 @@ interface PopupMenuProps {
   renderTrigger: (props: PopupMenuTriggerProps) => ReactNode;
   children: (close: () => void) => ReactNode;
   placement?: 'top' | 'bottom';
+  /**
+   * The panel is placed next to the trigger instead of portaled, so it scrolls along with it, e.g. in the chat. On
+   * opening it takes the other side where only that one has room inside the containers that clip it, and is shifted
+   * left from their right edge.
+   */
+  inline?: boolean;
 }
 
-export function PopupMenu({ renderTrigger, children, placement = 'bottom' }: PopupMenuProps) {
+/**
+ * The part of the window that all of the element's ancestors clipping their overflow leave visible, without their
+ * scrollbars; their scroll padding is covered by overlays, such as the chat input.
+ */
+export function visibleRect(element: HTMLElement) {
+  const visible = { top: 0, left: 0, bottom: window.innerHeight, right: window.innerWidth };
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    if (style.overflow === 'visible') continue;
+    const rect = parent.getBoundingClientRect();
+    const top = rect.top + parent.clientTop;
+    const left = rect.left + parent.clientLeft;
+    visible.top = Math.max(visible.top, top + (parseFloat(style.scrollPaddingTop) || 0));
+    visible.left = Math.max(visible.left, left);
+    visible.bottom = Math.min(visible.bottom, top + parent.clientHeight - (parseFloat(style.scrollPaddingBottom) || 0));
+    visible.right = Math.min(visible.right, left + parent.clientWidth);
+  }
+  return visible;
+}
+
+export function PopupMenu({ renderTrigger, children, placement = 'bottom', inline = false }: PopupMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   /** Item to focus once the panel opens; -1 is the last. */
   const focusItemRef = useRef<number | null>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<CSSProperties | null>(null);
 
   // The panel is first rendered transparent (still focusable) at the top left, measured, then placed.
   useLayoutEffect(() => {
+    const root = rootRef.current;
     const trigger = triggerRef.current?.getBoundingClientRect();
     const panel = panelRef.current;
-    if (!open || !trigger || !panel) {
+    if (!open || !root || !trigger || !panel) {
       setPosition(null);
       return;
     }
+    if (!inline) {
+      setPosition({
+        top: placement === 'top' ? trigger.top - PANEL_GAP_PX - panel.offsetHeight : trigger.bottom + PANEL_GAP_PX,
+        left: Math.max(0, Math.min(trigger.left, window.innerWidth - WINDOW_EDGE_PX - panel.offsetWidth)),
+      });
+      return;
+    }
+    // The placement's side unless only the other one has room for the panel.
+    const anchor = root.getBoundingClientRect();
+    const visible = visibleRect(root);
+    const roomAbove = anchor.top - visible.top;
+    const roomBelow = visible.bottom - anchor.bottom;
+    const [preferred, other] = placement === 'top' ? [roomAbove, roomBelow] : [roomBelow, roomAbove];
+    const keepSide = preferred >= PANEL_GAP_PX + panel.offsetHeight || preferred >= other;
+    const offset = `calc(100% + ${PANEL_GAP_PX}px)`;
     setPosition({
-      top: placement === 'top' ? trigger.top - PANEL_GAP_PX - panel.offsetHeight : trigger.bottom + PANEL_GAP_PX,
-      left: Math.max(0, Math.min(trigger.left, window.innerWidth - WINDOW_EDGE_PX - panel.offsetWidth)),
+      ...((placement === 'top') === keepSide ? { bottom: offset } : { top: offset }),
+      left: Math.max(
+        visible.left - anchor.left,
+        Math.min(0, visible.right - WINDOW_EDGE_PX - anchor.left - panel.offsetWidth)
+      ),
     });
-  }, [open, placement]);
+  }, [open, placement, inline]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,9 +153,10 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom' }: Pop
   }, [open]);
 
   const close = () => setOpen(false);
+  const portal = (panel: ReactNode) => inline ? panel : createPortal(panel, document.body);
 
   return (
-    <div ref={rootRef} className="flex min-w-0">
+    <div ref={rootRef} className="relative flex min-w-0">
       {renderTrigger({
         ref: triggerRef,
         'aria-haspopup': 'menu',
@@ -137,7 +183,7 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom' }: Pop
           }
         },
       })}
-      {open ? createPortal(
+      {open ? portal(
         <div
           ref={panelRef}
           role="menu"
@@ -167,15 +213,14 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom' }: Pop
             }
           }}
           style={position ?? { top: 0, left: 0, opacity: 0 }}
-          className={`fixed ${popupMenuPanelClassName}`}
+          className={`${inline ? 'absolute' : 'fixed'} ${popupMenuPanelClassName}`}
         >
           {/* The chosen item unmounts with the panel, so focus returns to the trigger instead of the page start. */}
           {children(() => {
             close();
             triggerRef.current?.focus();
           })}
-        </div>,
-        document.body,
+        </div>
       ) : null}
     </div>
   );

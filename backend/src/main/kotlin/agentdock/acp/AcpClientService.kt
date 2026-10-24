@@ -32,6 +32,11 @@ data class PermissionRequest(
     val options: List<PermissionOption>
 )
 
+internal class PendingPermission(
+    val request: PermissionRequest,
+    val response: CompletableDeferred<RequestPermissionResponse>
+)
+
 class AcpClientService private constructor(val project: Project) {
     internal data class AdapterRuntimeMetadata(
         val configOptions: List<AcpConfigOption>,
@@ -305,6 +310,8 @@ class AcpClientService private constructor(val project: Project) {
     fun activeModeId(chatId: String): String? = sessions[chatId]?.activeModeIdRef?.get()
     internal fun sessionRuntimeMetadata(chatId: String): AdapterRuntimeMetadata? =
         sessions[chatId]?.runtimeMetadataRef?.get()
+    internal fun pendingPermissionRequests(chatId: String): List<PermissionRequest> =
+        sessions[chatId]?.pendingRequests?.values?.map { it.request }.orEmpty()
     fun adapterInitializationStatus(adapterName: String): AdapterInitializationStatus {
         return adapterInitializationState[adapterName] ?: AdapterInitializationStatus.NotStarted
     }
@@ -395,7 +402,8 @@ class AcpClientService private constructor(val project: Project) {
         @Volatile var allowReplayDelivery: Boolean = true
         @Volatile var ignoreUpdatesUntilPrompt: Boolean = false
 
-        val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<RequestPermissionResponse>>()
+        /** Kept with the request, so a UI taking the chat over can show the ones still waiting. */
+        val pendingRequests = ConcurrentHashMap<String, PendingPermission>()
         val observedToolCallIds = mutableSetOf<String>()
 
         fun deliverSessionUpdate(update: SessionUpdate, isReplay: Boolean, meta: JsonElement?, isPermission: Boolean = false) {
@@ -451,7 +459,7 @@ class AcpClientService private constructor(val project: Project) {
         fun cancelPendingPermissions() {
             // Each request is removed before it completes, so one added meanwhile is never dropped unanswered.
             pendingRequests.keys.forEach { requestId ->
-                pendingRequests.remove(requestId)?.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
+                pendingRequests.remove(requestId)?.response?.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
             }
         }
     }
@@ -493,7 +501,7 @@ class AcpClientService private constructor(val project: Project) {
             )
 
             val deferred = CompletableDeferred<RequestPermissionResponse>()
-            primaryCtx.pendingRequests[requestId] = deferred
+            primaryCtx.pendingRequests[requestId] = PendingPermission(request, deferred)
 
             permissionRequestHandler?.invoke(request)
                 ?: deferred.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))

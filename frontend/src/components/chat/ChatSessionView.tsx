@@ -106,6 +106,7 @@ export default function ChatSessionView({
   metadataTitleOverride,
   inheritedAdapterNames,
   forkBase,
+  restored,
   isActive = false,
   promptNavigationHoverOnly,
   onUserMessageSent,
@@ -173,6 +174,7 @@ export default function ChatSessionView({
     metadataTitleOverride,
     inheritedAdapterNames,
     forkBase,
+    restored,
     onHandoffConsumed,
     onUserMessageSent
   });

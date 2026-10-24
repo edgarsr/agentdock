@@ -1,7 +1,13 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { focusMenuItem, moveMenuFocus } from '../tabbar/menuFocus';
-import { PANEL_GAP_PX, popupMenuItemClassName, popupMenuPanelClassName, WINDOW_EDGE_PX } from './PopupMenu';
+import {
+  PANEL_GAP_PX,
+  popupMenuItemClassName,
+  popupMenuPanelClassName,
+  visibleRect,
+  WINDOW_EDGE_PX,
+} from './PopupMenu';
 
 interface PopupSubmenuProps {
   label: string;
@@ -26,7 +32,7 @@ export function PopupSubmenuOption({ label, chosen, onClick }: { label: string; 
 export const PopupSubmenuSeparator = () => <div className="mx-1 my-1 h-px bg-border" />;
 
 /**
- * `PopupMenu` item opening a submenu beside the menu, right of it where the window allows: on hover, click, ArrowRight,
+ * `PopupMenu` item opening a submenu beside the menu, right of it where there is room: on hover, click, ArrowRight,
  * Enter or Space, the keys focusing its first item. ArrowLeft, Escape and Tab return to the item. As in `ChatDropdown`,
  * it stays open until the pointer is over another item of the menu, so the pointer can cross the gap to it.
  */
@@ -51,24 +57,30 @@ export function PopupSubmenu({ label, icon, value, compact, children }: PopupSub
     return () => menu?.removeEventListener('pointerover', closeOnOtherItem);
   }, [open]);
 
-  // As in `PopupMenu`: rendered transparent first, measured, then placed, its first item level with the item.
+  // As in `PopupMenu`: rendered transparent first, measured, then placed, its first item level with the item. It is
+  // placed in the menu's panel, so it moves along with an inline menu, and kept inside what clips the menu.
   useLayoutEffect(() => {
     const item = itemRef.current?.getBoundingClientRect();
-    const menu = itemRef.current?.closest('[role="menu"]')?.getBoundingClientRect();
+    const menuElement = itemRef.current?.closest<HTMLElement>('[role="menu"]');
     const panel = panelRef.current;
-    if (!open || !item || !menu || !panel) {
+    if (!open || !item || !menuElement || !panel) {
       setPosition(null);
       return;
     }
+    const menu = menuElement.getBoundingClientRect();
+    const visible = visibleRect(menuElement);
     const right = menu.right + PANEL_GAP_PX;
     // The panel's border, padding and the item's margin.
     const firstItemOffset = 5;
-    setPosition({
-      top: Math.max(0, Math.min(item.top - firstItemOffset, window.innerHeight - WINDOW_EDGE_PX - panel.offsetHeight)),
-      left: right + panel.offsetWidth <= window.innerWidth - WINDOW_EDGE_PX
-        ? right
-        : Math.max(0, menu.left - PANEL_GAP_PX - panel.offsetWidth),
-    });
+    const top = Math.max(
+      visible.top,
+      Math.min(item.top - firstItemOffset, visible.bottom - WINDOW_EDGE_PX - panel.offsetHeight)
+    );
+    const left = right + panel.offsetWidth <= visible.right - WINDOW_EDGE_PX
+      ? right
+      : Math.max(visible.left, menu.left - PANEL_GAP_PX - panel.offsetWidth);
+    // Relative to the menu panel's padding box.
+    setPosition({ top: top - menu.top - menuElement.clientTop, left: left - menu.left - menuElement.clientLeft });
     if (focusFirstRef.current) {
       focusFirstRef.current = false;
       focusMenuItem(panel, 0);
@@ -126,7 +138,7 @@ export function PopupSubmenu({ label, icon, value, compact, children }: PopupSub
             event.stopPropagation();
           }}
           style={position ?? { top: 0, left: 0, opacity: 0 }}
-          className={`group/menu fixed ${popupMenuPanelClassName}`}
+          className={`group/menu absolute ${popupMenuPanelClassName}`}
         >
           {children}
         </div>

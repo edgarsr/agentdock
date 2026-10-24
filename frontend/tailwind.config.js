@@ -97,6 +97,8 @@ export default {
       // A section popup content too narrow for the buttons beside the text.
       addVariant('section-medium', '@container section (max-width: 450px)');
       addVariant('app-wide', '#app-content[data-wide] &');
+      // Touch screens: the primary pointer is a finger, so controls need larger targets.
+      addVariant('touch', '@media (pointer: coarse)');
       // A row is revealed while hovered, while it holds focus, and while one of its popup menus is open.
       const revealed = [':hover', ':focus-within', ':has([aria-haspopup][aria-expanded=true])'];
       addVariant('reveal', revealed.map((state) => `&${state}`));

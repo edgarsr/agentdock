@@ -218,6 +218,7 @@ export const AssistantMessage = memo(({ message, onImageClick, hasFollowingMessa
           {actions.length > 0 && (
             <PopupMenu
               placement="top"
+              inline
               renderTrigger={(trigger) => (
                 <Tooltip content="Actions" variant="minimal">
                   <button

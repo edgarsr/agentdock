@@ -13,9 +13,14 @@ import agentdock.BuildConfig
  */
 internal object BridgeScripts {
 
-    fun bridgeApi(): String = """
+    /**
+     * [client] is the kind of page: `jcef` or `browser`. A web browser paints and zooms the page
+     * itself and opens links in a new tab.
+     */
+    fun bridgeApi(client: String): String = """
         (function() {
             window.__IS_DEV = ${BuildConfig.IS_DEV};
+            window.__AGENT_DOCK_CLIENT = '$client';
 
             var invoke = function(name, payload) {
                 try { window.__agentDockInvoke(name, payload == null ? '' : String(payload)); }
@@ -49,6 +54,9 @@ internal object BridgeScripts {
             window.__loadHistoryConversation = function(chatId, projectPath, conversationId) {
                 invoke('loadConversation', JSON.stringify({ chatId: chatId, projectPath: (projectPath || ''), conversationId: (conversationId || '') }));
             };
+            window.__attachChat = function(chatId, projectPath) {
+                invoke('attachChat', JSON.stringify({ chatId: chatId, projectPath: (projectPath || '') }));
+            };
             window.__downloadAgent = function(adapterId) { invoke('downloadAgent', adapterId); };
             window.__cancelAgentInstall = function(adapterId) { invoke('cancelAgentInstall', adapterId); };
             window.__deleteAgent = function(adapterId) { invoke('deleteAgent', adapterId); };
@@ -74,7 +82,7 @@ internal object BridgeScripts {
             window.__computeFileChangeStats = function(payload) { invoke('computeFileChangeStats', payload); };
             window.__showDiff = function(payload) { invoke('showDiff', payload); };
             window.__openFile = function(payload) { invoke('openFile', payload); };
-            window.__openUrl = function(url) { invoke('openUrl', url); };
+            window.__openUrl = ${if (client == "browser") "function(url) { window.open(url, '_blank', 'noopener,noreferrer'); }" else "function(url) { invoke('openUrl', url); }"};
             window.__attachFile = function(chatId) { invoke('attachFile', chatId); };
             window.__updateSessionMetadata = function(payload) { invoke('updateSessionMetadata', JSON.stringify(payload)); };
             window.__continueConversationWithSession = function(payload) { invoke('continueConversation', JSON.stringify(payload)); };
@@ -117,14 +125,99 @@ internal object BridgeScripts {
             window.__startSpeech = function(payload) { invoke('startSpeech', payload); };
             window.__stopSpeech = function(requestId) { invoke('stopSpeech', requestId || ''); };
             window.__agentDockPlaySound = function(sound) { invoke('playSound', sound); };
-            window.__requestHostRepaint = function(reason) { invoke('repaint', reason || ''); };
+            ${if (client == "browser") "" else "window.__requestHostRepaint = function(reason) { invoke('repaint', reason || ''); };"}
             window.__readUiVisibility = function() { invoke('readUiVisibility', ''); };
-            window.__readUiZoom = function() { invoke('readUiZoom', ''); };
+            ${if (client == "browser") "" else "window.__readUiZoom = function() { invoke('readUiZoom', ''); };"}
             window.__setAttentionBadge = function(level) { invoke('setAttentionBadge', level || ''); };
+            window.__readBrowserAddress = function() { invoke('readBrowserAddress', ''); };
+            window.__loadUiWorkspace = function() { invoke('loadUiWorkspace', ''); };
+            window.__saveUiWorkspace = function(json) { invoke('saveUiWorkspace', json); };
 
             window.__settingsBridgeReady = true;
             window.dispatchEvent(new CustomEvent('settings-bridge-ready'));
             window.__notifyReady();
+        })();
+    """.trimIndent()
+
+    /** Makes a page that does not show the UI say so and offer to take it over. */
+    const val ELSEWHERE = "window.__agentDockElsewhere = true; window.dispatchEvent(new CustomEvent('agent-dock-elsewhere'));"
+
+    /**
+     * The web page's side of [WebUi], run once the page has loaded. Commands go out as POSTs in the
+     * order they were made, scripts come in as server-sent events, and the bridge API is installed
+     * only once the server says this page shows the UI. The page keeps its ID across reloads.
+     */
+    fun browserBridge(): String = """
+        (function() {
+            // A duplicated tab gets a copy of sessionStorage, so the ID is kept there only while the page is not shown.
+            var id = sessionStorage.getItem('agentDockUiId') || crypto.randomUUID();
+            sessionStorage.removeItem('agentDockUiId');
+            window.addEventListener('pagehide', function() { sessionStorage.setItem('agentDockUiId', id); });
+            window.addEventListener('pageshow', function() { sessionStorage.removeItem('agentDockUiId'); });
+            var query = 'c=' + encodeURIComponent(id);
+            var shown = false;
+            var lost = false;
+            var pending = [];
+            var sending = false;
+            var send = function() {
+                if (sending || pending.length === 0) return;
+                sending = true;
+                var batch = pending;
+                pending = [];
+                fetch('commands?' + query, { method: 'POST', body: JSON.stringify(batch) })
+                    // The server no longer knows this page that showed the UI: a reload asks it again.
+                    .then(function(r) { if (r.status === 409 && shown && !window.__agentDockElsewhere) location.reload(); })
+                    .catch(function() { })
+                    .then(function() { sending = false; send(); });
+            };
+            // Saving the workspace does not hold up the commands, and a newer workspace replaces one not yet sent.
+            var workspace = null;
+            var saving = false;
+            var saveWorkspace = function() {
+                if (saving || workspace === null) return;
+                saving = true;
+                var body = JSON.stringify([{ n: 'saveUiWorkspace', p: workspace }]);
+                workspace = null;
+                fetch('commands?' + query, { method: 'POST', body: body })
+                    .catch(function() { })
+                    .then(function() { saving = false; saveWorkspace(); });
+            };
+            window.__agentDockInvoke = function(name, payload) {
+                if (name === 'saveUiWorkspace') {
+                    workspace = payload;
+                    return saveWorkspace();
+                }
+                pending.push({ n: name, p: payload });
+                send();
+            };
+            window.__takeOverUi = function() {
+                fetch('takeover?' + query, { method: 'POST' }).then(function() { location.reload(); });
+            };
+            window.__reloadUi = function() { location.reload(); };
+            document.addEventListener('visibilitychange', function() {
+                window.dispatchEvent(new CustomEvent('agent-dock-ui-visibility', { detail: !document.hidden }));
+            });
+
+            var events = new EventSource('events?' + query);
+            events.onmessage = function(e) { (0, eval)(e.data); };
+            // The IDE or the project closed, or the connection went; the stream reconnects by itself.
+            events.onerror = function() {
+                if (lost) return;
+                lost = true;
+                window.__agentDockDisconnected = true;
+                window.dispatchEvent(new CustomEvent('agent-dock-disconnected'));
+            };
+            events.addEventListener('reload', function() { location.reload(); });
+            events.addEventListener('elsewhere', function() {
+                events.close();
+                $ELSEWHERE
+            });
+            // A reconnected stream may have missed events: the page reloads and restores the UI.
+            events.addEventListener('active', function() {
+                if (shown || lost) return location.reload();
+                shown = true;
+                ${bridgeApi("browser")}
+            });
         })();
     """.trimIndent()
 

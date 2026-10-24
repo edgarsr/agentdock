@@ -1,7 +1,11 @@
 package agentdock.acp
 
 import agentdock.history.AgentDockHistoryService
+import agentdock.history.ConversationPromptReplayEntry
 import agentdock.history.ConversationReplayData
+import agentdock.history.HistoryReplayStore
+import agentdock.utils.jsCallback
+import agentdock.utils.jsStringLiteral
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -96,7 +100,65 @@ private suspend fun AcpBridge.importConversationFromAgent(
     pushSessionId(chatId, service.sessionId(chatId))
 }
 
+/**
+ * Sends a UI taking the chat over the chat as the backend knows it: the stored prompts, the one the
+ * agent is still answering, the status and the permission requests still waiting. The stored
+ * conversation is read and encoded outside [AcpBridge.withChatDelivery], and again if a prompt was
+ * stored meanwhile.
+ */
+private fun AcpBridge.attachChat(chatId: String, projectPath: String) {
+    while (true) {
+        val revision = historyRevisions[chatId]
+        val stored = runCatching { AgentDockHistoryService.loadConversationReplay(projectPath, chatId) }.getOrNull()
+        val storedJs = "JSON.parse(${adapterJson.encodeToString(stored).jsStringLiteral()})"
+        val sent = withChatDelivery(chatId) {
+            if (historyRevisions[chatId] != revision) return@withChatDelivery false
+            val payload = ChatAttachedPayload(
+                chatId = chatId,
+                livePrompt = livePromptCaptures[chatId]?.let(::livePromptPayload),
+                // Bridges rebuilt for a reconnected UI have not sent a status yet.
+                status = lastStatusByChatId[chatId]
+                    ?: service.status(chatId).takeUnless { it == AcpClientService.Status.NotStarted }?.name?.lowercase(),
+                sessionId = service.sessionId(chatId),
+                permissions = service.pendingPermissionRequests(chatId).map(::permissionRequestJson)
+            )
+            val payloadJs = "JSON.parse(${adapterJson.encodeToString(payload).jsStringLiteral()})"
+            host.eval(jsCallback("__onChatAttached", "Object.assign($payloadJs, { data: $storedJs })"))
+            pushMode(chatId, service.activeModeId(chatId))
+            service.sessionRuntimeMetadata(chatId)?.let { pushSessionConfigOptions(chatId, it, applyCurrentValues = false) }
+            true
+        }
+        if (sent) return
+    }
+}
+
+private fun livePromptPayload(capture: LivePromptCapture): LivePromptPayload? = synchronized(capture) {
+    if (capture.closed) return null
+    LivePromptPayload(
+        sessionId = capture.sessionId,
+        adapterName = capture.adapterName,
+        prompt = ConversationPromptReplayEntry(
+            blocks = HistoryReplayStore.normalizeReplayBlocks(capture.blocks),
+            events = HistoryReplayStore.normalizeReplayBlocks(capture.events.toList()),
+            assistantMeta = capture.assistantMeta?.copy(
+                promptStartedAtMillis = capture.startedAtMillis,
+                contextTokensUsed = capture.contextTokensUsed,
+                contextWindowSize = capture.contextWindowSize
+            )
+        )
+    )
+}
+
 internal fun AcpBridge.installConversationHistoryQueries() {
+    host.register("attachChat") { payload ->
+        val request = runCatching { adapterJson.decodeFromString<AttachChatRequest>(payload) }.getOrNull()
+            ?.takeIf { it.chatId.isNotBlank() }
+            ?: return@register
+        scope.launch(Dispatchers.IO) {
+            attachChat(request.chatId, request.projectPath.ifBlank { service.project.basePath.orEmpty() })
+        }
+    }
+
     host.register("loadConversation") { payload ->
         val (chatId, projectPath, conversationId) = parseConversationLoadPayload(payload)
         if (chatId != null && projectPath != null && conversationId != null) {

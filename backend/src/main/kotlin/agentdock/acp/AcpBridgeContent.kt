@@ -227,7 +227,7 @@ internal fun AcpBridge.pushPlanChunk(chatId: String, entries: JsonArray) {
     dispatchContentChunkJson(json)
 }
 
-internal fun AcpBridge.pushStatus(chatId: String, status: String) {
+internal fun AcpBridge.pushStatus(chatId: String, status: String): Unit = withChatDelivery(chatId) {
     if (status != "ready") awaitingBackgroundOutput.remove(chatId)
     val previousStatus = lastStatusByChatId.put(chatId, status)
     val escapedStatus = status.jsStringLiteral()
@@ -281,21 +281,23 @@ internal fun AcpBridge.pushSessionId(chatId: String, sid: String?) {
     host.eval(jsCallback("__onSessionId", escapedChatId, escapedSessionId))
 }
 
+internal fun permissionRequestJson(request: PermissionRequest): JsonObject = buildJsonObject {
+    put("requestId", request.requestId)
+    put("chatId", request.chatId)
+    put("title", request.title)
+    put("options", buildJsonArray {
+        request.options.forEach { opt ->
+            add(buildJsonObject {
+                put("optionId", opt.optionId.value)
+                put("label", opt.name)
+                put("kind", Json.encodeToJsonElement(opt.kind))
+            })
+        }
+    })
+}
+
 internal fun AcpBridge.pushPermissionRequest(request: PermissionRequest) {
-    val payload = buildJsonObject {
-        put("requestId", request.requestId)
-        put("chatId", request.chatId)
-        put("title", request.title)
-        put("options", buildJsonArray {
-            request.options.forEach { opt ->
-                add(buildJsonObject {
-                    put("optionId", opt.optionId.value)
-                    put("label", opt.name)
-                    put("kind", Json.encodeToJsonElement(opt.kind))
-                })
-            }
-        })
-    }.toString().jsStringLiteral()
+    val payload = permissionRequestJson(request).toString().jsStringLiteral()
     host.eval(jsCallback("__onPermissionRequest", "JSON.parse($payload)"))
     host.eval(jsCallback("__agentDockPlaySound", "'permissionRequest'"))
 }

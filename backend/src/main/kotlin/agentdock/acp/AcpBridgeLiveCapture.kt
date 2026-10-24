@@ -140,6 +140,7 @@ internal fun AcpBridge.flushLivePromptCapture(
         assistantMeta = assistantMeta,
         forkBase = snapshot.forkBase
     )
+    historyRevisions.merge(chatId, 1L, Long::plus)
 
     while (true) {
         val lateEvents = synchronized(capture) {

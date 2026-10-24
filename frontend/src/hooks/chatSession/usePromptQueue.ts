@@ -8,6 +8,8 @@ interface UsePromptQueueOptions {
   canPreempt: boolean;
   onDrain: (prompt: QueuedPrompt) => void;
   onPreempt: () => Promise<boolean>;
+  /** The queue a restored chat had; read on mount only. */
+  initialItems?: QueuedPrompt[];
 }
 
 let promptQueueCounter = 0;
@@ -17,9 +19,14 @@ function nextQueuedPromptId(): string {
   return `queued-${promptQueueCounter}-${Date.now()}`;
 }
 
-export function usePromptQueue({ canDrain, canPreempt, onDrain, onPreempt }: UsePromptQueueOptions) {
-  const [items, setItems] = useState<QueuedPrompt[]>([]);
-  const itemsRef = useRef<QueuedPrompt[]>([]);
+/** A prompt taken out of the queue keeps its ID, a new one gets one. */
+export function asQueuedPrompt(prompt: QueuePromptDraft): QueuedPrompt {
+  return 'id' in prompt ? prompt as QueuedPrompt : { ...prompt, id: nextQueuedPromptId() };
+}
+
+export function usePromptQueue({ canDrain, canPreempt, onDrain, onPreempt, initialItems = [] }: UsePromptQueueOptions) {
+  const [items, setItems] = useState<QueuedPrompt[]>(initialItems);
+  const itemsRef = useRef<QueuedPrompt[]>(initialItems);
   const onDrainRef = useRef(onDrain);
   const onPreemptRef = useRef(onPreempt);
   const preemptingRef = useRef(false);

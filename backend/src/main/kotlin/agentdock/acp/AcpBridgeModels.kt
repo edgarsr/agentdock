@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import agentdock.history.ConversationAssistantMetadata
+import agentdock.history.ConversationPromptReplayEntry
 import agentdock.history.ForkConversationBase
 
 @Serializable
@@ -145,6 +146,34 @@ internal data class FileChangeStatsPayload(
 internal data class FileChangeStatsResultPayload(
     val requestId: String,
     val files: List<FileChangeStatsPayload>
+)
+
+@Serializable
+internal data class AttachChatRequest(
+    val chatId: String,
+    /** The project of the stored conversation; blank for the open project. */
+    val projectPath: String = ""
+)
+
+/** The prompt the agent is still answering, in the stored form of a finished one. */
+@Serializable
+internal data class LivePromptPayload(
+    val sessionId: String,
+    val adapterName: String,
+    val prompt: ConversationPromptReplayEntry
+)
+
+/**
+ * What a UI taking a chat over needs from the backend, apart from the stored conversation, which is
+ * encoded on its own; the chat's later events follow as usual.
+ */
+@Serializable
+internal data class ChatAttachedPayload(
+    val chatId: String,
+    val livePrompt: LivePromptPayload? = null,
+    val status: String? = null,
+    val sessionId: String? = null,
+    val permissions: List<JsonObject> = emptyList()
 )
 
 internal val adapterJson = Json { encodeDefaults = true }

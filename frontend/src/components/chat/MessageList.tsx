@@ -11,6 +11,8 @@ import { useChatSearch } from './ChatSearch';
 const BOTTOM_PIN_THRESHOLD_PX = 10;
 const READ_ACK_THRESHOLD_PX = 48;
 const EARLIER_PROMPTS_BATCH_SIZE = 20;
+/** The prompt navigation shows only while the chat content stays 12px clear of its widest dash, which ends at 24px. */
+const NAVIGATION_CONTENT_MIN_LEFT_PX = 36;
 function promptPreview(message: Message): string {
   const blocks = message.blocks?.length ? message.blocks : message.contentBlocks;
   let text = message.content.slice(0, 161);
@@ -237,7 +239,8 @@ function MessageList({
   }, [messages]);
   const previousPromptCountRef = useRef(prompts.length);
 
-  const showNavigation = prompts.length > 1 && !isHistoryReplaying;
+  const [navigationFits, setNavigationFits] = useState(false);
+  const showNavigation = prompts.length > 1 && !isHistoryReplaying && navigationFits;
 
   const updateNavigationEdges = useCallback(() => {
     const el = navigationRef.current;
@@ -449,7 +452,10 @@ function MessageList({
         const height = `${Math.ceil(footerEl.getBoundingClientRect().height)}px`;
         if (footerEl.style.right !== right) footerEl.style.right = right;
         if (spacer.style.height !== height) spacer.style.height = height;
+        // The footer covers the list's bottom: focus scrolling, and menus choosing their side, keep clear of it.
+        if (el.style.scrollPaddingBottom !== height) el.style.scrollPaddingBottom = height;
       }
+      setNavigationFits(content.offsetLeft >= NAVIGATION_CONTENT_MIN_LEFT_PX);
       updateViewport();
     });
     observer.observe(el);
@@ -524,8 +530,10 @@ function MessageList({
               markNavigationScrollIntent();
             }
           }}
-          className={`absolute top-[45px] bottom-[45px] z-30 overflow-y-auto overscroll-contain [scrollbar-width:none] 
-            [&::-webkit-scrollbar]:hidden left-0 w-[12px] app-wide:left-[4px] 
+          // Above the footer (z-50), beside the chat content. It shows from 6px from the edge; the dashes start 14px
+          // from it, and the one pointed at widens to 10px.
+          className={`absolute top-[45px] bottom-[45px] z-[51] left-[6px] w-[19px] pl-[7px] overflow-y-auto
+            overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
             ${promptNavigationHoverOnly ? 'opacity-0 transition-opacity duration-75 hover:duration-200 hover:opacity-100 ' +
             'hover:delay-200 focus-within:opacity-100 focus-within:delay-0' : ''} ${navigationFade}`}
         >
@@ -536,15 +544,17 @@ function MessageList({
                 placement="right"
                 content={<PromptTooltip message={message} number={index + 1} />}
                 contentClassName="max-w-[min(280px,calc(100vw-48px))]"
+                className="!w-full"
               >
                 <button
                   type="button"
                   aria-label={`Go to prompt ${index + 1}`}
                   onClick={() => handlePromptClick(message, index + 1)}
-                  className="group flex h-[8px] shrink-0 cursor-pointer items-center justify-center rounded-sm border
-                    border-transparent focus-visible:border-[var(--ide-Button-default-focusColor)] w-[12px]"
+                  className="group flex h-[8px] w-full shrink-0 cursor-pointer items-center rounded-sm border
+                    border-transparent focus-visible:border-[var(--ide-Button-default-focusColor)]"
                 >
-                  <span className="h-[2px] w-[6px] bg-foreground-secondary opacity-60 group-hover:opacity-100" />
+                  <span className="h-[2px] w-[8px] bg-foreground-secondary opacity-60 group-hover:w-full
+                    group-hover:opacity-100 group-focus-visible:w-full group-focus-visible:opacity-100" />
                 </button>
               </Tooltip>
             ))}
@@ -629,7 +639,7 @@ function MessageList({
     </div>
     {footer && (
       <div ref={footerRef} onWheel={handleFooterWheel} onClick={handleFooterClick}
-        className="absolute bottom-0 left-0 right-0 z-20 bg-background px-4 pt-1 app-wide:px-6">
+        className="absolute bottom-0 left-0 right-0 z-50 bg-background px-4 pt-1 app-wide:px-6">
         <div aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-gradient-to-b from-transparent to-background" />
         <div className="relative mx-auto flex w-full max-w-app-content flex-col">

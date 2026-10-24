@@ -2,6 +2,8 @@ import { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } f
 import { AttentionLevel, TabUiFlags } from '../../types/chat';
 
 const DEFAULT_TAB_UI: TabUiFlags = { unread: false, canMarkRead: true, warning: false, processing: false, queued: false };
+// ChatStatusIndicator's colours: the theme's `warning`, grey and Tailwind's `sky-500`.
+const ATTENTION_COLORS: Partial<Record<AttentionLevel, string>> = { warning: '#ba9752', unread: '#0ea5e9' };
 
 export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRefObject<string>) {
   const [tabUi, setTabUi] = useState<Record<string, TabUiFlags>>({});
@@ -162,12 +164,12 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     }
   }, [activeTabId, canUserSeeResponse, uiVisible]);
 
-  // The plugin icon shows a dot while any open chat does, in the colour ChatStatusIndicator gives it.
+  // The plugin icon shows a dot while any open chat waits for a permission or has an unread reply, in the colour
+  // ChatStatusIndicator gives it.
   const attention = useMemo<AttentionLevel>(() => {
     const flags = Object.values(tabUi);
     if (flags.some((f) => f.warning)) return 'warning';
     if (flags.some((f) => f.unread && !f.processing && !f.queued)) return 'unread';
-    if (flags.some((f) => f.processing)) return 'processing';
     return '';
   }, [tabUi]);
 
@@ -177,6 +179,17 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
     if (window.__settingsBridgeReady) sendAttention();
     else window.addEventListener('settings-bridge-ready', sendAttention);
     return () => window.removeEventListener('settings-bridge-ready', sendAttention);
+  }, [attention]);
+
+  // A web browser tab's icon shows the same dot.
+  useEffect(() => {
+    const color = ATTENTION_COLORS[attention];
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (window.__AGENT_DOCK_CLIENT !== 'browser' || !color || !icon) return;
+    const original = icon.href;
+    const svg = atob(original.slice(original.indexOf(',') + 1));
+    icon.href = 'data:image/svg+xml;base64,' + btoa(svg.replace('</svg>', `<circle cx="25" cy="3" r="8" fill="${color}"/></svg>`));
+    return () => { icon.href = original; };
   }, [attention]);
 
   return {

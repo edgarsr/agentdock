@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { History, Settings } from 'lucide-react';
+import { History, House, Settings } from 'lucide-react';
 import { isAgentRunnable } from '../types/chat';
 import type { GlobalSettings } from '../types/chat';
 import { clampSidebarWidth, MIN_SIDEBAR_WIDTH } from '../hooks/app/useAppLayout';
 import { TabBarProps } from './TabBar';
-import { SidebarLayoutMenu, SidebarVisibilityButton } from './LayoutControls';
+import {
+  iconButtonClassName,
+  OpenInBrowserButton,
+  SidebarLayoutMenu,
+  SidebarVisibilityButton,
+  touchIconButtonClassName,
+} from './LayoutControls';
+import { Tooltip } from './chat/shared/Tooltip';
 import { rowButtonClassName, sidebarRowClassName } from './tabbar/rows';
 import { NewChatSplitButton } from './tabbar/NewChatSplitButton';
 import { OpenChatList } from './tabbar/OpenChatList';
@@ -20,9 +27,11 @@ type SidebarProps = Omit<TabBarProps, 'isIslandsTheme' | 'onUseSidebar' | 'sideb
   newTabAgentId?: string;
   onWidthChange: (width: number) => void;
   onHide: () => void;
+  onShowHome: () => void;
   onUseTabBar: () => void;
   openInEditor: boolean;
   onToggleOpenInEditor: () => void;
+  browserAccessEnabled: boolean;
   onTogglePosition: () => void;
 };
 
@@ -36,9 +45,11 @@ export function Sidebar({
   newTabAgentId,
   onWidthChange,
   onHide,
+  onShowHome,
   onUseTabBar,
   openInEditor,
   onToggleOpenInEditor,
+  browserAccessEnabled,
   onTogglePosition,
   onNewTab,
   onNewTabWithAgent,
@@ -124,8 +135,9 @@ export function Sidebar({
       >
         <div className="flex shrink-0 flex-col gap-1 px-2 pb-2 text-ide-small">
           {/* Hide sits at the outer edge, where Show appears once the sidebar is hidden. */}
-          <div className={`flex h-10 items-center ${position === 'right' ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex h-10 items-center touch:h-12 touch:gap-2 ${position === 'right' ? 'flex-row-reverse' : ''}`}>
             <SidebarVisibilityButton position={position} hidden={false} onClick={onHide} />
+            <OpenInBrowserButton browserAccessEnabled={browserAccessEnabled} />
             <SidebarLayoutMenu
               position={position}
               onTogglePosition={onTogglePosition}
@@ -133,6 +145,17 @@ export function Sidebar({
               openInEditor={openInEditor}
               onToggleOpenInEditor={onToggleOpenInEditor}
             />
+            {/* At the inner edge, next to the content it shows. */}
+            <Tooltip variant="minimal" placement="bottom" content="Home" className={position === 'left' ? 'ml-auto' : 'mr-auto'}>
+              <button
+                type="button"
+                onClick={onShowHome}
+                className={`${iconButtonClassName} ${touchIconButtonClassName}`}
+                aria-label="Home"
+              >
+                <House size={16} aria-hidden="true" />
+              </button>
+            </Tooltip>
           </div>
           {!noRunnableAgents ? (
             <NewChatSplitButton

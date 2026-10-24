@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ToolCallEvent, FileChangeStatsPayload, FileChangeSummary, ProcessedFileState, UndoFileResultPayload } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
-import { buildReplayToolCallEvents } from '../utils/replay';
+import { attachedConversation, buildReplayToolCallEvents } from '../utils/replay';
 import { applyToolCallEvent, pendingToolCallEvents, stableToolCallEventId } from '../utils/toolCallUtils';
 
 /**
@@ -51,12 +51,15 @@ export function useFileChanges(
 
     // CRITICAL: Reset state when switching sessions to prevent old session data from contaminating new session
     // Reset refs IMMEDIATELY (synchronously) to prevent race conditions with event handlers
-    replayToolCallEventsRef.current = [];
+    // The first session keeps the events a chat taken over by this UI arrived with.
+    if (loadedSessionKey) {
+      replayToolCallEventsRef.current = [];
+      setReplayToolCallEvents([]);
+      setLiveToolCallEvents([]);
+    }
 
     setProcessedFileStates([]);
     setKeptToolCallIds([]);
-    setReplayToolCallEvents([]);
-    setLiveToolCallEvents([]);
     setComputedStats(null);
     setRefreshRevision(0);
     setHasPluginEdits(false);
@@ -155,11 +158,20 @@ export function useFileChanges(
       setReplayToolCallEvents(replayEvents);
     });
 
+    const unsubChatAttached = ACPBridge.onChatAttached((e) => {
+      if (e.detail.payload.chatId !== conversationId) return;
+      const replayEvents = buildReplayToolCallEvents(attachedConversation(e.detail.payload));
+      replayToolCallEventsRef.current = replayEvents;
+      setReplayToolCallEvents(replayEvents);
+      setLiveToolCallEvents([]);
+    });
+
     return () => {
       unsubChangesState();
       unsubToolCall();
       unsubToolCallUpdate();
       unsubConversationReplayLoaded();
+      unsubChatAttached();
     };
   }, [conversationId, sessionId, adapterName, sessionEventPrefix]);
 

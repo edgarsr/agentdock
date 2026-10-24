@@ -3,17 +3,14 @@
 package agentdock.ui
 
 import agentdock.AssetLoader
-import agentdock.ExternalCodeReferenceDispatcher
 import agentdock.IdeTheme
 import agentdock.JcefDragAndDropSupport
 import agentdock.bridge.frontend.BridgeScripts
 import agentdock.bridge.frontend.FrontendBridge
 import agentdock.bridge.frontend.FrontendSettings
+import agentdock.bridge.frontend.JcefUi
 import agentdock.settings.GlobalSettings
-import agentdock.utils.jsCallback
-import agentdock.utils.jsStringLiteral
 import com.intellij.ide.IdeEventQueue
-import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -25,8 +22,6 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.BadgeIconSupplier
-import com.intellij.ui.IconManager
-import com.intellij.ui.JBColor
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
@@ -78,14 +73,15 @@ class AgentDockUiHost(
 
     private var toolWindow: ToolWindow? = null
     private val badgeIcons = BadgeIconSupplier(AgentDockFileType.getIcon())
-    private val processingIcon = IconManager.getInstance().withIconBadge(badgeIcons.originalIcon, JBColor.GRAY)
     /** The plugin icon with the open chats' dot, or `null`; the editor tab may read it off the EDT. */
     @Volatile
     var attentionIcon: Icon? = null
         private set
     private var browserStarted = false
     private var browser: JBCefBrowser? = null
+    @Volatile
     private var bridge: FrontendBridge? = null
+    private var jcefUi: JcefUi? = null
     private var liveContent: JComponent? = loadingPanel
     private var dropTarget: DropTarget? = null
     /** Unknown until the saved settings arrive, so the startup defaults do not move the UI. */
@@ -136,6 +132,11 @@ class AgentDockUiHost(
     }
 
     fun show(afterShow: (() -> Unit)? = null) {
+        // The web browser showing the UI gets what follows; here only "open elsewhere" would show.
+        if (bridge?.shownInBrowser == true) {
+            afterShow?.invoke()
+            return
+        }
         val window = toolWindow
             ?: ToolWindowManager.getInstance(project).getToolWindow(TOOL_WINDOW_ID)
             ?: run {
@@ -182,12 +183,11 @@ class AgentDockUiHost(
 
     /**
      * Mirrors the open chats' dot on the tool window button and the editor tab: `warning` while one waits for a
-     * permission, `processing` while one is replying, `unread` while one has an unread reply, anything else clears it.
+     * permission, `unread` while one has an unread reply, anything else clears it.
      */
     fun setAttention(level: String) {
         val icon = when (level) {
             "warning" -> badgeIcons.warningIcon
-            "processing" -> processingIcon
             "unread" -> badgeIcons.infoIcon
             else -> null
         }
@@ -281,24 +281,43 @@ class AgentDockUiHost(
         }
     }
 
+    /** Runs a script in the page showing the UI; returns `false` when there is none yet. */
+    internal fun eval(js: String): Boolean = bridge?.eval(js) ?: false
+
+    /** Created by the first page that shows the UI, here or in a web browser. */
+    @Synchronized
+    internal fun bridge(): FrontendBridge = bridge ?: FrontendBridge(project, scope).also {
+        bridge = it
+        Disposer.register(this, it)
+        it.install()
+    }
+
+    /** Shows the UI here again once the web server stops. */
+    internal fun returnToIde() {
+        val ui = jcefUi
+        if (ui != null) ui.takeOver() else bridge?.attach(null)
+    }
+
     private fun createBrowser() {
         try {
             val browser = JBCefBrowser()
             this.browser = browser
-            ExternalCodeReferenceDispatcher.register(project, browser)
             installDirectJcefInput(browser)
             dropTarget = JcefDragAndDropSupport.install(project, browser)
 
-            val bridge = FrontendBridge(project, browser, scope) { loadContent(browser) }
-            this.bridge = bridge
-            bridge.install()
+            val bridge = bridge()
+            val ui = JcefUi(project, browser, bridge) { loadContent(browser) }
+            jcefUi = ui
+            ui.install()
+            bridge.claim(ui)
             installNavigationGuard(browser, bridge)
 
             browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
                 override fun onLoadEnd(cefBrowser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
                     if (frame.isMain) {
-                        cefBrowser.executeJavaScript(bridge.invokeApiScript(), cefBrowser.url, 0)
-                        cefBrowser.executeJavaScript(BridgeScripts.bridgeApi(), cefBrowser.url, 0)
+                        cefBrowser.executeJavaScript(ui.invokeApiScript(), cefBrowser.url, 0)
+                        val start = if (bridge.isActive(ui)) BridgeScripts.bridgeApi("jcef") else BridgeScripts.ELSEWHERE
+                        cefBrowser.executeJavaScript(start, cefBrowser.url, 0)
                         cefBrowser.executeJavaScript(BridgeScripts.cursorTracking(), cefBrowser.url, 0)
                         ApplicationManager.getApplication().invokeLater({
                             applyUiZoom(FrontendSettings.current.uiZoomPercent)
@@ -308,17 +327,17 @@ class AgentDockUiHost(
             }, browser.cefBrowser)
 
             browser.component.addKeyListener(object : java.awt.event.KeyAdapter() {
-                override fun keyPressed(e: java.awt.event.KeyEvent) {
-                    if (e.keyCode == java.awt.event.KeyEvent.VK_F12) {
+                override fun keyPressed(e: KeyEvent) {
+                    if (e.keyCode == KeyEvent.VK_F12) {
                         browser.openDevtools()
                     }
                 }
             })
 
             Disposer.register(this, browser)
-            Disposer.register(this, bridge)
+            Disposer.register(browser, ui)
             showStatus(browser.component)
-            installBrowserChrome(browser, bridge)
+            loadWhenSized(browser)
         } catch (e: Exception) {
             showStatus(JLabel("Error initializing browser: ${e.message}"))
         }
@@ -345,18 +364,6 @@ class AgentDockUiHost(
         }, browser.cefBrowser)
     }
 
-    private fun installBrowserChrome(browser: JBCefBrowser, bridge: FrontendBridge) {
-        loadWhenSized(browser)
-
-        val connection = ApplicationManager.getApplication().messageBus.connect(browser)
-        connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
-            bridge.eval(IdeTheme.generateCssUpdateScript())
-            bridge.eval(jsCallback("__onThemeChanged"))
-            val theme = (if (IdeTheme.isDarkTheme()) "dark" else "light").jsStringLiteral()
-            bridge.eval(jsCallback("__agentDockInvoke", "'themeChanged'", theme))
-        })
-    }
-
     /** Loads the page only once the browser has its size in its surface, so the UI never starts at a size it does not have. */
     private fun loadWhenSized(browser: JBCefBrowser) {
         val component = browser.component
@@ -379,7 +386,7 @@ class AgentDockUiHost(
         if (browser.isDisposed) return
         val target = percent.coerceIn(25, 500) / 100.0
         if (kotlin.math.abs(browser.zoomLevel - target) < 0.005) return
-        browser.setZoomLevel(target)
+        browser.zoomLevel = target
     }
 
     private fun applyZoomShortcut(keyCode: Int) {
@@ -388,7 +395,7 @@ class AgentDockUiHost(
         val current = kotlin.math.round(browser.zoomLevel * 100.0).toInt().coerceIn(25, 500)
         val next = nextUiZoomPercent(current, keyCode)
         applyUiZoom(next)
-        bridge?.eval("window.dispatchEvent(new CustomEvent('agent-dock-ui-zoom',{detail:$next}));")
+        jcefUi?.pushUiZoom(next)
     }
 
     private fun installDirectJcefInput(browser: JBCefBrowser) {
@@ -423,7 +430,6 @@ class AgentDockUiHost(
 
     override fun dispose() {
         FrontendSettings.removeListener(settingsListener)
-        browser?.let { ExternalCodeReferenceDispatcher.unregister(project, it) }
         dropTarget?.component = null
     }
 

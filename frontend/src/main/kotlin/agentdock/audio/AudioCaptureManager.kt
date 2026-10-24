@@ -275,6 +275,21 @@ object AudioCaptureManager {
         return currentFile != null || stoppedFile != null
     }
 
+    /** Keeps a recording made elsewhere, such as in a web browser, until [releaseRecording]. */
+    @Synchronized
+    fun saveRecording(wav: ByteArray): File {
+        cleanupStaleRecordings()
+        val file = File(openSessionDirectory(), "capture-${UUID.randomUUID()}.wav")
+        retainedRecordings.add(file.canonicalPath)
+        try {
+            file.writeBytes(wav)
+        } catch (error: Throwable) {
+            releaseRecording(file)
+            throw error
+        }
+        return file
+    }
+
     @Synchronized
     fun releaseRecording(file: File) {
         val path = file.canonicalPath

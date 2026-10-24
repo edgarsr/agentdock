@@ -45,85 +45,89 @@ internal fun AcpBridge.installServiceCallbacks() {
             }
             return@setOnSessionUpdate
         }
-        // Replay is capture-only: it is collected into ConversationReplayData and delivered
-        // to the UI in one piece by pushConversationReplayLoaded, never as streamed chunks.
-        val sessionId = if (isReplay) {
-            historyReplayCaptures[chatId]?.currentSessionId.orEmpty()
-        } else {
-            service.sessionId(chatId).orEmpty()
-        }
-        val adapterName = if (isReplay) {
-            historyReplayCaptures[chatId]?.currentAdapterName.orEmpty()
-        } else {
-            service.activeAdapterName(chatId).orEmpty()
-        }
-        val hasAssistantOutput = when (update) {
-            is SessionUpdate.AgentMessageChunk -> contentBlockHasVisibleOutput(update.content)
-            is SessionUpdate.AgentThoughtChunk -> contentBlockHasVisibleOutput(update.content, textType = "thinking")
-            else -> false
-        }
-        if (!isReplay && hasAssistantOutput && awaitingBackgroundOutput.remove(chatId, sessionId)) {
-            val escapedChatId = chatId.jsStringLiteral()
-            host.eval(jsCallback("__onAssistantActivity", escapedChatId))
-            host.eval(jsCallback("__agentDockPlaySound", "'backgroundResumed'"))
-        }
-        when (update) {
-            is SessionUpdate.UserMessageChunk -> {
-                if (isReplay) {
-                    recordReplayUserBlock(
-                        chatId,
-                        sessionId,
-                        adapterName,
-                        sessionUpdateMessageIdFromMeta(meta),
-                        update.content
-                    )
-                }
+        withChatDelivery(chatId) { handleSessionUpdate(chatId, update, isReplay, meta) }
+    }
+}
+
+private fun AcpBridge.handleSessionUpdate(chatId: String, update: SessionUpdate, isReplay: Boolean, meta: JsonElement?) {
+    // Replay is capture-only: it is collected into ConversationReplayData and delivered
+    // to the UI in one piece by pushConversationReplayLoaded, never as streamed chunks.
+    val sessionId = if (isReplay) {
+        historyReplayCaptures[chatId]?.currentSessionId.orEmpty()
+    } else {
+        service.sessionId(chatId).orEmpty()
+    }
+    val adapterName = if (isReplay) {
+        historyReplayCaptures[chatId]?.currentAdapterName.orEmpty()
+    } else {
+        service.activeAdapterName(chatId).orEmpty()
+    }
+    val hasAssistantOutput = when (update) {
+        is SessionUpdate.AgentMessageChunk -> contentBlockHasVisibleOutput(update.content)
+        is SessionUpdate.AgentThoughtChunk -> contentBlockHasVisibleOutput(update.content, textType = "thinking")
+        else -> false
+    }
+    if (!isReplay && hasAssistantOutput && awaitingBackgroundOutput.remove(chatId, sessionId)) {
+        val escapedChatId = chatId.jsStringLiteral()
+        host.eval(jsCallback("__onAssistantActivity", escapedChatId))
+        host.eval(jsCallback("__agentDockPlaySound", "'backgroundResumed'"))
+    }
+    when (update) {
+        is SessionUpdate.UserMessageChunk -> {
+            if (isReplay) {
+                recordReplayUserBlock(
+                    chatId,
+                    sessionId,
+                    adapterName,
+                    sessionUpdateMessageIdFromMeta(meta),
+                    update.content
+                )
             }
-            is SessionUpdate.AgentMessageChunk -> {
-                recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = false, isReplay = isReplay)
+        }
+        is SessionUpdate.AgentMessageChunk -> {
+            recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = false, isReplay = isReplay)
+            if (!isReplay) {
+                if (contentBlockHasVisibleOutput(update.content)) {
+                    markLivePromptVisibleAssistantOutput(chatId)
+                }
+                pushContentBlock(chatId, "assistant", update.content, isThought = false)
+            }
+        }
+        is SessionUpdate.AgentThoughtChunk -> {
+            recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = true, isReplay = isReplay)
+            if (!isReplay) {
+                if (contentBlockHasVisibleOutput(update.content, textType = "thinking")) {
+                    markLivePromptVisibleAssistantOutput(chatId)
+                }
+                pushContentBlock(chatId, "assistant", update.content, isThought = true)
+            }
+        }
+        is SessionUpdate.CurrentModeUpdate -> {
+            if (!isReplay) {
+                pushMode(chatId, update.currentModeId.value)
+            }
+        }
+        is SessionUpdate.ToolCall -> {
+            if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
+            val json = try { Json.encodeToJsonElement(update).jsonObject } catch (_: Exception) { JsonObject(emptyMap()) }
+            handleToolCall(chatId, sessionId, adapterName, update.toolCallId.value, json, isUpdate = false, isReplay)
+        }
+        is SessionUpdate.ToolCallUpdate -> {
+            if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
+            val json = try { Json.encodeToJsonElement(update).jsonObject } catch (_: Exception) { JsonObject(emptyMap()) }
+            handleToolCall(chatId, sessionId, adapterName, update.toolCallId.value, json, isUpdate = true, isReplay)
+        }
+        else -> {
+            val usage = extractUsageUpdate(update, meta)
+            if (usage != null) {
+                recordUsageUpdate(chatId, sessionId, adapterName, usage.first, usage.second, isReplay)
+            } else if (isPlanUpdate(update, meta)) {
+                buildStoredPlanChunk(update, meta)?.let { recordStoredEvent(chatId, sessionId, adapterName, it, isReplay) }
                 if (!isReplay) {
-                    if (contentBlockHasVisibleOutput(update.content)) {
+                    if (extractPlanEntries(update, meta)?.isNotEmpty() == true) {
                         markLivePromptVisibleAssistantOutput(chatId)
                     }
-                    pushContentBlock(chatId, "assistant", update.content, isThought = false)
-                }
-            }
-            is SessionUpdate.AgentThoughtChunk -> {
-                recordContentBlock(chatId, sessionId, adapterName, "assistant", update.content, isThought = true, isReplay = isReplay)
-                if (!isReplay) {
-                    if (contentBlockHasVisibleOutput(update.content, textType = "thinking")) {
-                        markLivePromptVisibleAssistantOutput(chatId)
-                    }
-                    pushContentBlock(chatId, "assistant", update.content, isThought = true)
-                }
-            }
-            is SessionUpdate.CurrentModeUpdate -> {
-                if (!isReplay) {
-                    pushMode(chatId, update.currentModeId.value)
-                }
-            }
-            is SessionUpdate.ToolCall -> {
-                if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
-                val json = try { Json.encodeToJsonElement(update).jsonObject } catch (_: Exception) { JsonObject(emptyMap()) }
-                handleToolCall(chatId, sessionId, adapterName, update.toolCallId.value, json, isUpdate = false, isReplay)
-            }
-            is SessionUpdate.ToolCallUpdate -> {
-                if (!isReplay) ensureChangesStateForLiveDiffs(chatId, update.content)
-                val json = try { Json.encodeToJsonElement(update).jsonObject } catch (_: Exception) { JsonObject(emptyMap()) }
-                handleToolCall(chatId, sessionId, adapterName, update.toolCallId.value, json, isUpdate = true, isReplay)
-            }
-            else -> {
-                val usage = extractUsageUpdate(update, meta)
-                if (usage != null) {
-                    recordUsageUpdate(chatId, sessionId, adapterName, usage.first, usage.second, isReplay)
-                } else if (isPlanUpdate(update, meta)) {
-                    buildStoredPlanChunk(update, meta)?.let { recordStoredEvent(chatId, sessionId, adapterName, it, isReplay) }
-                    if (!isReplay) {
-                        if (extractPlanEntries(update, meta)?.isNotEmpty() == true) {
-                            markLivePromptVisibleAssistantOutput(chatId)
-                        }
-                        pushPlanChunk(chatId, update, meta)
-                    }
+                    pushPlanChunk(chatId, update, meta)
                 }
             }
         }

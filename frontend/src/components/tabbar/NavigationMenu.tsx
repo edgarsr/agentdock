@@ -31,8 +31,8 @@ export function NavigationMenu({
   return (
     <div
       ref={menuListRef}
-      className="absolute top-full right-0 mt-1 w-[250px] max-w-[calc(100vw-1rem)] max-h-[calc(100vh-4rem)] overflow-y-auto whitespace-nowrap bg-background-secondary
-        border border-border rounded-[8px] py-1.5 z-50 text-ide-small"
+      className="absolute top-full right-0 mt-1 min-w-[170px] max-w-[250px] max-h-[calc(100vh-4rem)] overflow-y-auto
+        whitespace-nowrap bg-background-secondary border border-border rounded-[8px] py-1.5 z-50 text-ide-small"
       role="menu"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {

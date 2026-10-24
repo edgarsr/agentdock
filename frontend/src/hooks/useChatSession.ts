@@ -11,7 +11,8 @@ import {
   RichContentBlock
 } from '../types/chat';
 import {ACPBridge} from '../utils/bridge';
-import {buildReplayMessages} from '../utils/replay';
+import {buildLivePromptMessages, buildReplayMessages} from '../utils/replay';
+import {ChatWorkspaceState, uiWorkspace} from '../utils/uiWorkspace';
 import {lastAssistantMessageHasMeta} from './chatSession/messageProcessing';
 import {
   nextMessageId,
@@ -32,21 +33,22 @@ import {
 import {useAgentRuntimeOptions} from './chatSession/useAgentRuntimeOptions';
 import {useAvailableCommands} from './chatSession/useAvailableCommands';
 import {useBufferedMessageChunks} from './chatSession/useBufferedMessageChunks';
-import {usePromptQueue} from './chatSession/usePromptQueue';
+import {asQueuedPrompt, usePromptQueue} from './chatSession/usePromptQueue';
 import {QueuePromptDraft} from './chatSession/promptQueueTypes';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
-const APPROVAL_MODE_STORAGE_KEY = 'chat-approval-mode';
 // The backend always reports a terminal status for a session start within its own
 // start timeout, so a deferred prompt that outlives it will never be sent.
 const PENDING_PROMPT_READY_TIMEOUT_MS = 375_000;
 
 function loadApprovalMode(): ApprovalMode {
-  return localStorage.getItem(APPROVAL_MODE_STORAGE_KEY) === 'auto' ? 'auto' : 'ask';
+  return ACPBridge.getGlobalSettingsSnapshot()?.settings?.approvalMode === 'auto' ? 'auto' : 'ask';
 }
 
+// The chats already open keep their own mode; the saved one is what new chats start in.
 function saveApprovalMode(mode: ApprovalMode) {
-  localStorage.setItem(APPROVAL_MODE_STORAGE_KEY, mode);
+  const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
+  if (settings) ACPBridge.saveGlobalSettings({ ...settings, approvalMode: mode });
 }
 
 // ACP marks every permission option with a kind. `allow_once` is the only one that grants a
@@ -72,6 +74,8 @@ export interface UseChatSessionOptions {
   metadataTitleOverride?: string;
   inheritedAdapterNames?: string[];
   forkBase?: ForkConversationBase;
+  /** Reopened from the saved workspace: the backend sends the conversation instead of it being loaded. */
+  restored?: boolean;
   onHandoffConsumed?: (handoffId: string) => void;
   onUserMessageSent?: () => void;
 }
@@ -86,24 +90,29 @@ export function useChatSession({
   metadataTitleOverride,
   inheritedAdapterNames = EMPTY_ADAPTER_NAMES,
   forkBase,
+  restored = false,
   onHandoffConsumed,
   onUserMessageSent,
 }: UseChatSessionOptions) {
+  // What the chat had in the page it was taken from; the conversation itself comes from the backend.
+  const [restoredState] = useState(() => (restored ? uiWorkspace.restoredChatState(conversationId) : undefined));
   const [historyMessages, setHistoryMessages] = useState<Message[]>(initialMessages);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState<number>();
+  const [inputValue, setInputValue] = useState(restoredState?.inputValue ?? '');
+  const [scheduleEnabled, setScheduleEnabled] = useState(restoredState?.scheduleEnabled ?? false);
+  const [scheduledAt, setScheduledAt] = useState<number | undefined>(restoredState?.scheduledAt);
   const [scheduleDraftRevision, setScheduleDraftRevision] = useState(0);
   const [queueError, setQueueError] = useState('');
-  const [composerLoadRevision, setComposerLoadRevision] = useState(0);
+  const [composerLoadRevision, setComposerLoadRevision] = useState(
+    restoredState?.inputValue || restoredState?.attachments.length ? 1 : 0
+  );
   const [status, setStatus] = useState<string>('not started');
   const [isSending, setIsSending] = useState(false);
-  const [isHistoryReplaying, setIsHistoryReplaying] = useState(!!historySession);
+  const [isHistoryReplaying, setIsHistoryReplaying] = useState(!!historySession || restored);
   const [permissionQueue, setPermissionQueue] = useState<PermissionRequest[]>([]);
-  const [approvalMode, setApprovalModeState] = useState<ApprovalMode>(loadApprovalMode);
+  const [approvalMode, setApprovalModeState] = useState<ApprovalMode>(() => restoredState?.approvalMode ?? loadApprovalMode());
   const permissionRequest = permissionQueue[0] ?? null;
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>(restoredState?.attachments ?? []);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
   const selectedAgentId = initialAgentId || '';
@@ -118,12 +127,14 @@ export function useChatSession({
     }
   }, [conversationId]);
 
-  const pendingPromptRef = useRef<QueuePromptDraft | null>(null);
+  /** The prompt held until the agent starts; [blocks] carry the handoff context the draft does not. */
+  const pendingPromptRef = useRef<{ draft: QueuePromptDraft; blocks: RichContentBlock[] } | null>(null);
   const isQueuedPromptRef = useRef(false);
   const pendingHandoffRef = useRef<PendingHandoffContext | null>(null);
   const consumedHandoffIdRef = useRef<string | null>(null);
   const resetSessionAfterInitialCancelRef = useRef(false);
-  const historyLoadRequestedRef = useRef<string | null>(null);
+  // A restored chat is attached instead: the backend already runs or has stored its conversation.
+  const historyLoadRequestedRef = useRef<string | null>(restored ? historySession?.conversationId ?? null : null);
   const startTimeRef = useRef<number | null>(null);
   const historyLoadTimerRef = useRef<number | null>(null);
   const lastMetadataFingerprintRef = useRef<string>('');
@@ -217,6 +228,13 @@ export function useChatSession({
       handleSessionConfigOptions(event.detail.payload, isQueuedPromptRef.current);
     }
   }), [conversationId, handleSessionConfigOptions]);
+
+  // Only on mount: afterwards the chat follows the backend's events.
+  useEffect(() => {
+    if (!restored) return;
+    if (restoredState) restoreConfigValues(restoredState.configValues);
+    ACPBridge.attachChat(conversationId, historySession?.projectPath);
+  }, []);
 
   const adapterDisplayName = resolvedSelectedAgent?.name || '';
   const agentOptions = useMemo(
@@ -360,7 +378,7 @@ export function useChatSession({
       ACPBridge.startAgent(
         conversationId,
         selectedAgentId,
-        pendingPromptRef.current?.configValues ?? configValues
+        pendingPromptRef.current?.draft.configValues ?? configValues
       ).catch((error) => {
         console.warn('[useChatSession] Failed to start agent:', error);
         const message = error instanceof Error ? error.message : String(error);
@@ -420,6 +438,22 @@ export function useChatSession({
       setIsHistoryReplaying(false);
     });
 
+    // Replaces what the chat showed: events the backend sent before the snapshot are part of it.
+    const unsubChatAttached = ACPBridge.onChatAttached((e) => {
+      const payload = e.detail.payload;
+      if (payload.chatId !== conversationId) return;
+      clearBufferedChunks();
+      if (payload.data) setHistoryMessages(buildReplayMessages(payload.data));
+      const livePrompt = payload.livePrompt?.prompt;
+      setLiveMessages(livePrompt ? buildLivePromptMessages(livePrompt) : []);
+      startTimeRef.current = livePrompt?.assistantMeta?.promptStartedAtMillis ?? null;
+      setIsSending(!!livePrompt || payload.status === 'prompting');
+      if (payload.status) setStatus(payload.status);
+      if (payload.sessionId) setAcpSessionId(payload.sessionId);
+      setPermissionQueue(payload.permissions);
+      setIsHistoryReplaying(false);
+    });
+
     const unsubStatus = ACPBridge.onStatus((e) => {
       if (e.detail.chatId !== conversationId) return;
       const s = e.detail.status;
@@ -449,16 +483,16 @@ export function useChatSession({
       }
 
       if (s === 'ready' && pendingPromptRef.current) {
-        const prompt = pendingPromptRef.current;
+        const { draft: prompt, blocks } = pendingPromptRef.current;
         pendingPromptRef.current = null;
 
         setIsSending(true);
-        
+
         // Assistant message is already added in handleSend, we just need to trigger the actual send
         const forkBaseToPersist = forkBaseRef.current;
         ACPBridge.sendPrompt(
           conversationId,
-          JSON.stringify(prompt.blocks),
+          JSON.stringify(blocks),
           forkBaseToPersist,
           prompt.agentId,
           prompt.configValues
@@ -495,12 +529,14 @@ export function useChatSession({
           return;
         }
       }
-      setPermissionQueue((prev) => [...prev, req]);
+      // A request sent just after a chat's snapshot may be in it already.
+      setPermissionQueue((prev) => (prev.some((queued) => queued.requestId === req.requestId) ? prev : [...prev, req]));
     });
 
     return () => {
       unsubContent();
       unsubConversationReplayLoaded();
+      unsubChatAttached();
       unsubStatus();
       unsubSessionId();
       unsubMode();
@@ -644,7 +680,7 @@ export function useChatSession({
 
     if (status !== 'ready') {
       // Defer the active prompt until the agent finishes starting.
-      pendingPromptRef.current = { ...prompt, blocks: outgoingBlocks };
+      pendingPromptRef.current = { draft: prompt, blocks: outgoingBlocks };
       if (status === 'not started' || status === 'error') {
         if (!restartSessionForPendingPrompt()) {
           failActivePromptLocally('The agent is not available and the session could not be restarted, so the message was not sent.');
@@ -720,7 +756,27 @@ export function useChatSession({
     canPreempt: canPreemptQueuedPrompts,
     onDrain: handleDrainQueuedPrompt,
     onPreempt: preemptActivePromptForQueue,
+    initialItems: restoredState?.queuedPrompts,
   });
+
+  const workspaceStateRef = useRef<ChatWorkspaceState>();
+  workspaceStateRef.current = {
+    inputValue,
+    attachments,
+    scheduleEnabled,
+    scheduledAt,
+    approvalMode,
+    configValues,
+    queuedPrompts,
+  };
+  useEffect(() => uiWorkspace.registerChat(conversationId, () => {
+    const state = workspaceStateRef.current!;
+    const pending = pendingPromptRef.current;
+    // The agent has not received the held prompt, so the UI that continues the chat sends it.
+    return pending ? { ...state, queuedPrompts: [asQueuedPrompt(pending.draft), ...state.queuedPrompts] } : state;
+  }), [conversationId]);
+  useEffect(uiWorkspace.changed, [inputValue, attachments, scheduleEnabled, scheduledAt, approvalMode, configValues]);
+  useEffect(uiWorkspace.saveSoon, [queuedPrompts, isSending]);
 
   const editQueuedPrompt = useCallback((id: string) => {
     const prompt = takeQueuedPrompt(id);

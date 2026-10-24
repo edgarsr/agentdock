@@ -14,6 +14,7 @@ import {
   SessionMetadataUpdatePayload,
   ToolCallEvent,
 } from '../types/chat';
+import { browserMicrophone } from './browserMicrophone';
 import { extractToolCallDiffEntries, ToolCallRawInputCache } from './toolCallUtils';
 import { McpServerConfig } from '../types/mcp';
 import { CustomAcpConfig } from '../types/customAcp';
@@ -29,6 +30,7 @@ import {
   AvailableCommandsEvent,
   BridgeOperationResultEvent,
   ChangesStateEvent,
+  ChatAttachedEvent,
   ContentChunkEvent,
   ConversationReplayLoadedEvent,
   ConversationTranscriptSavedEvent,
@@ -300,6 +302,10 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.CONVERSATION_REPLAY_LOADED, { detail: { payload } }));
     };
 
+    window.__onChatAttached = (payload) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.CHAT_ATTACHED, { detail: { payload } }));
+    };
+
     window.__onMcpServers = (servers) => {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.MCP_SERVERS, { detail: { servers } }));
     };
@@ -470,6 +476,11 @@ export const ACPBridge = {
     window.__loadHistoryConversation?.(conversationId, projectPath, historyConversationId);
   },
 
+  /** Asks for the chat as the backend knows it, for a UI taking it over; the answer is [onChatAttached]. */
+  attachChat: (chatId: string, projectPath = '') => {
+    window.__attachChat?.(chatId, projectPath);
+  },
+
   deleteHistoryConversations: (projectPath: string, conversationIds: string[]) => {
     if (!window.__deleteHistoryConversations) return;
     window.dispatchEvent(new CustomEvent(EVENT_NAMES.HISTORY_DELETE_REQUEST, { detail: { conversationIds } }));
@@ -564,6 +575,8 @@ export const ACPBridge = {
   onConversationTranscriptSaved: (callback: (e: CustomEvent<ConversationTranscriptSavedEvent>) => void) => onBridgeEvent(EVENT_NAMES.CONVERSATION_TRANSCRIPT_SAVED, callback),
 
   onConversationReplayLoaded: (callback: (e: CustomEvent<ConversationReplayLoadedEvent>) => void) => onBridgeEvent(EVENT_NAMES.CONVERSATION_REPLAY_LOADED, callback),
+
+  onChatAttached: (callback: (e: CustomEvent<ChatAttachedEvent>) => void) => onBridgeEvent(EVENT_NAMES.CHAT_ATTACHED, callback),
 
   /** Starts a file search and returns its request ID, which the result carries. */
   searchFiles: (query: string): string => {
@@ -701,18 +714,22 @@ export const ACPBridge = {
 
   onAudioTranscriptionResult: (callback: (e: CustomEvent<AudioTranscriptionResultEvent>) => void) => onBridgeEvent(EVENT_NAMES.AUDIO_TRANSCRIPTION_RESULT, callback),
 
+  // A web browser records with the microphone of the device showing the page, and the IDE transcribes the recording.
   startAudioRecording: (ownerId: string) => {
-    window.__startAudioRecording?.(ownerId);
+    if (window.__AGENT_DOCK_CLIENT === 'browser') void browserMicrophone.start(ownerId);
+    else window.__startAudioRecording?.(ownerId);
   },
 
-  stopAudioRecording: (requestId: string, ownerId: string): Promise<AudioTranscriptionResultPayload> => {
+  stopAudioRecording: async (requestId: string, ownerId: string): Promise<AudioTranscriptionResultPayload> => {
     if (typeof window.__stopAudioRecording !== 'function') {
-      return Promise.reject(new Error('Audio recording bridge is not available.'));
+      throw new Error('Audio recording bridge is not available.');
     }
+    const audio = window.__AGENT_DOCK_CLIENT === 'browser' ? await browserMicrophone.stop(ownerId) : undefined;
+    if (audio === null) return { requestId, success: false, cancelled: true };
     return awaitBridgeResponse(
       ACPBridge.onAudioTranscriptionResult,
       requestId,
-      () => window.__stopAudioRecording?.(JSON.stringify({ requestId, ownerId })),
+      () => window.__stopAudioRecording?.(JSON.stringify({ requestId, ownerId, audio })),
       {
         timeoutMs: 30_000,
         timeoutMessage: 'Audio transcription timed out.',
@@ -730,6 +747,7 @@ export const ACPBridge = {
   },
 
   cancelAudioRecording: (ownerId: string) => {
+    browserMicrophone.cancel(ownerId);
     window.__cancelAudioRecording?.(ownerId);
   },
 

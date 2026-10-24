@@ -1,100 +1,137 @@
 package agentdock.bridge.frontend
 
+import agentdock.IdeTheme
 import agentdock.acp.AcpAudioPlayer
 import agentdock.acp.ideTerminalBridge
 import agentdock.rpc.TerminalCapability
 import agentdock.rpc.TerminalLaunchRequest
 import agentdock.rpc.UiMessage
 import agentdock.ui.AgentDockUiHost
+import agentdock.utils.jsCallback
+import agentdock.utils.jsStringLiteral
 import com.intellij.ide.BrowserUtil
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefBrowserBase
-import com.intellij.ui.jcef.JBCefJSQuery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.awt.Cursor
-import java.awt.event.HierarchyEvent
-import java.awt.event.HierarchyListener
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+/** A page that can show the UI: [JcefUi] or [WebUi]. Only one of a project's pages shows it at a time. */
+internal interface UiSink {
+    /** Runs a script in the page; the page may be gone, in which case it is dropped. */
+    fun eval(js: String)
+
+    /** Loads the page again, so its ready handshake reconstructs the state. */
+    fun reload()
+
+    /** Another page took the UI: this one shows that and offers to take it back. */
+    fun supersede()
+
+    /** Answers the commands that concern this page itself; returns `true` when it did. */
+    fun handleLocally(name: String, payload: String): Boolean = false
+}
 
 /**
  * The client half of the bridge.
  *
- * All of the plugin's JavaScript enters the IDE through the single query created here: the page
- * calls `window.__agentDockInvoke(name, payload)`, this decides whether the client answers the
- * command itself or the backend does, and messages coming the other way are applied to the browser,
- * the settings cache or the status bar widget.
+ * All of the plugin's JavaScript enters the IDE here: the page calls
+ * `window.__agentDockInvoke(name, payload)`, its [UiSink] passes the call to [dispatch], and this
+ * decides whether the client answers the command itself or the backend does. Messages coming the
+ * other way are applied to the page showing the UI, the settings cache or the status bar widget.
  */
 internal class FrontendBridge(
     private val project: Project,
-    private val browser: JBCefBrowser,
     private val scope: CoroutineScope,
-    private val reloadUi: () -> Unit,
 ) : Disposable {
 
     private val commands = FrontendCommands()
-    private val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
     private val audio = AcpAudioPlayer(scope)
     private val audioInput = AudioInputBridge(commands, ::eval, scope)
     private val audioOutput = AudioOutputBridge(commands, ::eval, scope)
     private val terminal = project.ideTerminalBridge()
-    private val connection = BridgeConnection(project, scope, ::apply) {
-        ApplicationManager.getApplication().invokeLater({
-            if (!browser.isDisposed) reloadUi()
-        }, ModalityState.any())
-    }
-    /** Hiding the tool window or switching away from the editor tab hides the browser component. */
-    private val visibilityListener = HierarchyListener { event ->
-        if ((event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong()) != 0L) pushUiVisibility()
-    }
+    private val connection = BridgeConnection(project, scope, ::apply) { sink?.reload() }
+    /** The page showing the UI. */
+    @Volatile
+    private var sink: UiSink? = null
+    /**
+     * The page's open chats, drafts and queued prompts, which only the page knows. Kept in memory
+     * here, so a reloaded page gets them back while the backend restores the conversations.
+     */
+    @Volatile
+    private var uiWorkspace = ""
 
     fun install() {
         installLocalCommands()
-        browser.component.addHierarchyListener(visibilityListener)
         audioInput.install()
         audioOutput.install()
-
-        query.addHandler { raw ->
-            dispatch(raw)
-            JBCefJSQuery.Response("ok")
-        }
-
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(LafManagerListener.TOPIC, LafManagerListener {
+            eval(IdeTheme.generateCssUpdateScript())
+            eval(jsCallback("__onThemeChanged"))
+            val theme = (if (IdeTheme.isDarkTheme()) "dark" else "light").jsStringLiteral()
+            eval(jsCallback("__agentDockInvoke", "'themeChanged'", theme))
+        })
         connection.open()
     }
 
-    /** Injected before [BridgeScripts.bridgeApi], which is written against this function. */
-    fun invokeApiScript(): String = """
-        window.__agentDockInvoke = function(name, payload) {
-            try { ${query.inject("JSON.stringify({ n: name, p: payload })")} } catch (e) { }
-        };
-    """.trimIndent()
+    /** Set by "Open in browser" until a browser page takes the UI. */
+    private var browserExpected = false
 
-    fun eval(js: String) {
-        if (browser.isDisposed) return
-        ApplicationManager.getApplication().invokeLater({
-            if (!browser.isDisposed) {
-                browser.cefBrowser.executeJavaScript(js, browser.cefBrowser.url ?: "", 0)
-            }
-        }, ModalityState.any())
+    /**
+     * Makes [next] the page showing the UI, or none; the page that showed it until now is superseded.
+     * With [toBrowser], the browser page that connects next gets it.
+     */
+    fun attach(next: UiSink?, toBrowser: Boolean = false) {
+        val previous = synchronized(this) {
+            browserExpected = toBrowser
+            sink.also { sink = next }
+        }
+        if (previous != null && previous !== next) previous.supersede()
     }
 
-    private fun dispatch(raw: String?) {
-        val request = raw?.takeIf { it.isNotBlank() } ?: return
-        val parsed = runCatching { Json.parseToJsonElement(request).jsonObject }.getOrNull() ?: return
-        val name = parsed["n"]?.jsonPrimitive?.content ?: return
-        val payload = parsed["p"]?.jsonPrimitive?.content.orEmpty()
+    /**
+     * Lets [next] show the UI unless another page does; returns whether it shows it. A browser page
+     * gets it only after "Open in browser", so after an IDE restart the UI stays in the IDE.
+     */
+    @Synchronized
+    fun claim(next: UiSink): Boolean {
+        if (sink == null && (next !is WebUi || browserExpected)) {
+            sink = next
+            browserExpected = false
+        }
+        return sink === next
+    }
 
-        if (commands.handleLocally(name, payload)) return
+    fun isActive(page: UiSink): Boolean = sink === page
+
+    val shownInBrowser: Boolean get() = sink is WebUi
+
+    /** Returns `false` when no page shows the UI. */
+    fun eval(js: String): Boolean {
+        val sink = sink ?: return false
+        sink.eval(js)
+        return true
+    }
+
+    fun dispatch(from: UiSink, raw: String?) {
+        val request = raw?.takeIf { it.isNotBlank() } ?: return
+        dispatch(from, runCatching { Json.parseToJsonElement(request) }.getOrNull() ?: return)
+    }
+
+    /** Handles a `{n, p}` command sent by the page [from]; only the page showing the UI reaches the rest of the IDE. */
+    fun dispatch(from: UiSink, request: JsonElement) {
+        val parsed = request as? JsonObject ?: return
+        val name = (parsed["n"] as? JsonPrimitive)?.content ?: return
+        val payload = (parsed["p"] as? JsonPrimitive)?.content.orEmpty()
+
+        if (from.handleLocally(name, payload) || from !== sink || commands.handleLocally(name, payload)) return
         connection.invokeCommand(name, payload)
     }
 
@@ -122,18 +159,6 @@ internal class FrontendBridge(
     }
 
     private fun installLocalCommands() {
-        commands.register("cursor") { cursorType ->
-            ApplicationManager.getApplication().invokeLater({
-                if (!browser.isDisposed) {
-                    browser.cefBrowser.uiComponent.cursor = Cursor.getPredefinedCursor(awtCursor(cursorType))
-                }
-            }, ModalityState.any())
-        }
-
-        commands.register("repaint") {
-            ApplicationManager.getApplication().invokeLater({ forceBrowserRepaint() }, ModalityState.any())
-        }
-
         commands.register("playSound") { sound ->
             when (sound) {
                 "responseComplete" -> audio.playResponseCompleteSound()
@@ -143,29 +168,19 @@ internal class FrontendBridge(
         }
 
         commands.register("openUrl", ::openUrl)
-        commands.register("readUiZoom") { pushUiZoom() }
-        commands.register("readUiVisibility") {
-            ApplicationManager.getApplication().invokeLater({ pushUiVisibility() }, ModalityState.any())
+
+        commands.register("saveUiWorkspace") { json -> uiWorkspace = json }
+        commands.register("loadUiWorkspace") {
+            eval(jsCallback("__onUiWorkspace", uiWorkspace.jsStringLiteral()))
         }
+
+        commands.register("readBrowserAddress") { AgentDockWebServer.getInstance().pushAddress(project) }
 
         commands.register("setAttentionBadge") { level ->
             ApplicationManager.getApplication().invokeLater({
                 if (!project.isDisposed) AgentDockUiHost.getInstance(project).setAttention(level)
             }, ModalityState.any())
         }
-    }
-
-    private fun pushUiVisibility() {
-        if (browser.isDisposed) return
-        eval("window.dispatchEvent(new CustomEvent('agent-dock-ui-visibility',{detail:${browser.component.isShowing}}));")
-    }
-
-    private fun pushUiZoom() {
-        ApplicationManager.getApplication().invokeLater({
-            if (browser.isDisposed) return@invokeLater
-            val percent = kotlin.math.round(browser.zoomLevel * 100.0).toInt().coerceIn(25, 500)
-            eval("window.dispatchEvent(new CustomEvent('agent-dock-ui-zoom',{detail:$percent}));")
-        }, ModalityState.any())
     }
 
     fun openUrl(url: String) {
@@ -175,41 +190,12 @@ internal class FrontendBridge(
         }, ModalityState.any())
     }
 
-    private fun forceBrowserRepaint() {
-        val component = browser.component
-        component.invalidate()
-        component.revalidate()
-        component.repaint()
-
-        component.parent?.let { parent ->
-            parent.invalidate()
-            parent.revalidate()
-            parent.repaint()
-        }
-    }
-
-    private fun awtCursor(cursorType: String): Int = when (cursorType) {
-        "pointer", "grab", "grabbing", "zoom-in" -> Cursor.HAND_CURSOR
-        "text" -> Cursor.TEXT_CURSOR
-        "move", "all-scroll" -> Cursor.MOVE_CURSOR
-        "wait", "progress" -> Cursor.WAIT_CURSOR
-        "crosshair" -> Cursor.CROSSHAIR_CURSOR
-        "n-resize", "ns-resize", "row-resize" -> Cursor.N_RESIZE_CURSOR
-        "s-resize" -> Cursor.S_RESIZE_CURSOR
-        "e-resize", "ew-resize", "col-resize" -> Cursor.E_RESIZE_CURSOR
-        "w-resize" -> Cursor.W_RESIZE_CURSOR
-        "ne-resize", "nesw-resize" -> Cursor.NE_RESIZE_CURSOR
-        "nw-resize", "nwse-resize" -> Cursor.NW_RESIZE_CURSOR
-        "se-resize" -> Cursor.SE_RESIZE_CURSOR
-        "sw-resize" -> Cursor.SW_RESIZE_CURSOR
-        else -> Cursor.DEFAULT_CURSOR
-    }
-
     override fun dispose() {
-        browser.component.removeHierarchyListener(visibilityListener)
+        // The web browser page of a closed project says the IDE is not reachable.
+        (sink as? WebUi)?.close()
+        sink = null
         audioInput.dispose()
         audioOutput.dispose()
         Disposer.dispose(connection)
-        Disposer.dispose(query)
     }
 }

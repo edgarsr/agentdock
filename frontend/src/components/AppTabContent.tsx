@@ -48,6 +48,7 @@ export function AppTabContent({
         metadataTitleOverride={tab.metadataTitleOverride}
         inheritedAdapterNames={tab.inheritedAdapterNames}
         forkBase={tab.forkBase}
+        restored={tab.restored}
         availableAgents={runnableAgents}
         promptNavigationHoverOnly={promptNavigationHoverOnly}
         isActive={isActive}

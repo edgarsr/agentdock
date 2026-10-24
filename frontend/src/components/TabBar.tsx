@@ -9,7 +9,7 @@ import {
   TabUiFlags,
   isAgentRunnable,
 } from '../types/chat';
-import { UseSidebarButton } from './LayoutControls';
+import { touchIconButtonClassName, UseSidebarButton } from './LayoutControls';
 import { TabItem } from './tabbar/TabItem';
 import { NavigationMenu } from './tabbar/NavigationMenu';
 import { focusMenuItem } from './tabbar/menuFocus';
@@ -18,7 +18,7 @@ import { Tooltip } from './chat/shared/Tooltip';
 
 /** New chat and menu buttons; the focus ring is drawn outside, so the buttons need a gap between them. */
 const controlClassName = (keyboardFocused: boolean) => `flex h-[24px] w-[24px] items-center justify-center rounded
-  bg-background hover:bg-hover hover:text-foreground transition-colors focus:outline-none
+  bg-background hover:bg-hover hover:text-foreground transition-colors focus:outline-none ${touchIconButtonClassName}
   ${keyboardFocused ? 'shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]' : ''}`;
 
 export interface TabBarProps {
@@ -132,7 +132,8 @@ export default function TabBar({
   };
 
   return (
-    <div className="relative z-30 flex h-[40px] bg-background border-t border-b
+    // On touch screens taller, with larger buttons and icons, which fingers hit more easily.
+    <div className="relative z-30 flex h-[40px] touch:h-12 bg-background border-t border-b
       border-[var(--ide-Borders-ContrastBorderColor)] select-none shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
       {onUseSidebar ? <UseSidebarButton position={sidebarPosition} onClick={onUseSidebar} /> : null}
       {/* Tabs List */}
@@ -176,7 +177,7 @@ export default function TabBar({
       </div>
 
       {/* Controls: new chat and navigation */}
-      <div className="flex shrink-0 items-center bg-background pl-1 pr-2 gap-1 z-10 shadow-[-10px_0_10px_-5px_var(--background)]">
+      <div className="flex shrink-0 items-center bg-background pl-1 pr-2 gap-1 touch:gap-2 z-10 shadow-[-10px_0_10px_-5px_var(--background)]">
         {/* New Tab (matches default agent) */}
         {!noRunnableAgents ? (
           <Tooltip variant="minimal" placement="bottom" content="New chat" className="flex">

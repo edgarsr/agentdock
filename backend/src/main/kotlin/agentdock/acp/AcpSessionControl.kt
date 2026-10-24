@@ -18,7 +18,7 @@ private val SESSION_CLOSE_TIMEOUT = 3.seconds
 
 internal fun AcpClientService.respondToPermissionRequest(requestId: String, decision: String) {
     for (context in sessions.values) {
-        val deferred = context.pendingRequests.remove(requestId)
+        val deferred = context.pendingRequests.remove(requestId)?.response
         if (deferred != null) {
             val response = if (decision == "deny") {
                 RequestPermissionResponse(RequestPermissionOutcome.Cancelled)

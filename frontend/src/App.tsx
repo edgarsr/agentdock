@@ -12,14 +12,29 @@ import ConfirmationModal from './components/ConfirmationModal';
 import { useAppController } from './hooks/app/useAppController';
 import { useAppLayout } from './hooks/app/useAppLayout';
 import { useAppShortcuts } from './hooks/useShortcuts';
+import { useSidebarLayout } from './hooks/useSidebarLayout';
 import { ACPBridge } from './utils/bridge';
-import { conversationKeyOf } from './types/chat';
 import type { GlobalSettings } from './types/chat';
 
 const SIDEBAR_ANIMATION_MS = 200;
-/** From this content width `app-wide:` widens side padding and the chat prompt navigation. */
+/** From this content width `app-wide:` widens side padding. */
 const WIDE_CONTENT_MIN_WIDTH_PX = 720;
 const SETTINGS_RETRY_MS = 2000;
+
+/** Earlier versions kept these two in localStorage, which a browser UI does not share with JCEF; they move to the settings once. */
+function migrateLocalStorageSettings(settings: GlobalSettings | undefined) {
+  const approvalMode = localStorage.getItem('chat-approval-mode');
+  const sendMode = localStorage.getItem('chat-send-mode');
+  if (!settings || (approvalMode === null && sendMode === null)) return;
+  localStorage.removeItem('chat-approval-mode');
+  localStorage.removeItem('chat-send-mode');
+  if (approvalMode !== 'auto' && sendMode !== 'ctrl-enter') return;
+  ACPBridge.saveGlobalSettings({
+    ...settings,
+    ...(approvalMode === 'auto' ? { approvalMode: 'auto' as const } : {}),
+    ...(sendMode === 'ctrl-enter' ? { sendMode: 'ctrl-enter' as const } : {}),
+  });
+}
 
 function App() {
   const { isWide, isIslandsTheme, viewportWidth } = useAppLayout();
@@ -27,6 +42,9 @@ function App() {
   const compactSections = viewportWidth < 700;
   const [openInEditor, setOpenInEditor] = useState(
     () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.openInEditor ?? true
+  );
+  const [browserAccessEnabled, setBrowserAccessEnabled] = useState(
+    () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.browserAccessEnabled ?? true
   );
   const [promptNavigationHoverOnly, setPromptNavigationHoverOnly] = useState(
     () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.promptNavigationHoverOnly ?? true
@@ -37,9 +55,7 @@ function App() {
   const [systemInstructionsEnabled, setSystemInstructionsEnabled] = useState(
     () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.systemInstructionsEnabled ?? false
   );
-  const [sidebarEnabled, setSidebarEnabled] = useState(
-    () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.sidebarEnabled ?? true
-  );
+  const [sidebarEnabled, setSidebarEnabled] = useSidebarLayout();
   const [sidebarPosition, setSidebarPosition] = useState<GlobalSettings['sidebarPosition']>(
     () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.sidebarPosition === 'right' ? 'right' : 'left'
   );
@@ -72,25 +88,18 @@ function App() {
     if (settingsLoaded && !isWide) setSidebarVisibility(true);
   }, [isWide]);
 
-  const appContentRef = useRef<HTMLDivElement>(null);
-  const [contentWide, setContentWide] = useState(false);
-  useLayoutEffect(() => {
-    const el = appContentRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(() => setContentWide(el.clientWidth >= WIDE_CONTENT_MIN_WIDTH_PX));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [settingsLoaded]);
+  // The tab bar chosen in the settings; turning the sidebar on again shows it.
+  useEffect(() => {
+    if (!sidebarEnabled) setSidebarHidden(false);
+  }, [sidebarEnabled]);
 
   useEffect(() => {
     const applyGlobalSettings = (payload: { settings?: Partial<GlobalSettings> } | undefined) => {
       setOpenInEditor(payload?.settings?.openInEditor ?? true);
+      setBrowserAccessEnabled(payload?.settings?.browserAccessEnabled ?? true);
       setPromptNavigationHoverOnly(payload?.settings?.promptNavigationHoverOnly ?? true);
       setUserMessageDetailsHoverOnly(payload?.settings?.userMessageDetailsHoverOnly ?? false);
       setSystemInstructionsEnabled(payload?.settings?.systemInstructionsEnabled ?? false);
-      const nextSidebarEnabled = payload?.settings?.sidebarEnabled ?? true;
-      setSidebarEnabled(nextSidebarEnabled);
-      if (!nextSidebarEnabled) setSidebarHidden(false);
       setSidebarPosition(payload?.settings?.sidebarPosition === 'right' ? 'right' : 'left');
       const contentMaxWidthPx = payload?.settings?.contentMaxWidthPx ?? 760;
       document.documentElement.style.setProperty('--app-content-max-width', contentMaxWidthPx ? `${contentMaxWidthPx}px` : 'none');
@@ -101,6 +110,7 @@ function App() {
     let retryTimer: number | undefined;
     const cleanup = ACPBridge.onGlobalSettings((e) => {
       window.clearInterval(retryTimer);
+      migrateLocalStorageSettings(e.detail?.payload?.settings);
       applyGlobalSettings(e.detail?.payload);
     });
 
@@ -124,6 +134,7 @@ function App() {
   }, []);
 
   const {
+    workspaceLoaded,
     chats,
     tabs,
     activeTabId,
@@ -143,6 +154,7 @@ function App() {
     pendingAgentName,
     pendingHandoffsByTab,
     handleSelectTab,
+    handleShowHome,
     handleReorderTabs,
     handleCloseTab,
     handleCloseAllChats,
@@ -168,6 +180,16 @@ function App() {
     handleContinueInCurrentConversation,
     handleCancelAgentSwitch,
   } = useAppController();
+
+  const appContentRef = useRef<HTMLDivElement>(null);
+  const [contentWide, setContentWide] = useState(false);
+  useLayoutEffect(() => {
+    const el = appContentRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setContentWide(el.clientWidth >= WIDE_CONTENT_MIN_WIDTH_PX));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [settingsLoaded, workspaceLoaded]);
   // Listed apart: the archive lists the archived conversations, the history and the empty state the others.
   const [unarchivedHistory, archivedHistory] = useMemo(() => [
     historyList.filter((item) => !item.archived),
@@ -226,12 +248,8 @@ function App() {
   });
 
   function setSidebarLayoutEnabled(enabled: boolean) {
-    const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
     setSidebarEnabled(enabled);
     setSidebarHidden(false);
-    if (settings && settings.sidebarEnabled !== enabled) {
-      ACPBridge.saveGlobalSettings({ ...settings, sidebarEnabled: enabled });
-    }
   }
 
   const toggleOpenInEditor = () => {
@@ -251,7 +269,7 @@ function App() {
     }
   };
 
-  if (!settingsLoaded) return <div className="h-full bg-background" />;
+  if (!settingsLoaded || !workspaceLoaded) return <div className="h-full bg-background" />;
 
   return (
     <div
@@ -269,9 +287,11 @@ function App() {
           newTabAgentId={defaultNewTabAgentId}
           onWidthChange={setSidebarWidth}
           onHide={() => setSidebarVisibility(true)}
+          onShowHome={handleShowHome}
           onUseTabBar={() => setSidebarLayoutEnabled(false)}
           openInEditor={openInEditor}
           onToggleOpenInEditor={toggleOpenInEditor}
+          browserAccessEnabled={browserAccessEnabled}
           onTogglePosition={toggleSidebarPosition}
         />
       ) : <TabBar {...navigationProps} />}
@@ -303,7 +323,7 @@ function App() {
               tab={tab}
               isActive={isTabActive}
               runnableAgents={runnableAgents}
-              promptNavigationHoverOnly={promptNavigationHoverOnly || !contentWide}
+              promptNavigationHoverOnly={promptNavigationHoverOnly}
               pendingHandoff={pendingHandoffsByTab[tab.id]}
               onUserMessageSent={() => handleUserMessageSent(tab.id)}
               onAssistantActivity={() => handleAssistantActivity(tab.id)}
@@ -327,10 +347,8 @@ function App() {
             onStartWithAgent={handleNewTab}
             onOpenManagement={() => openSection('management')}
             agents={availableAgents}
-            // In the history order, pinned ones first; open chats are left out.
-            recentChats={unarchivedHistory
-              .filter((item) => !tabs.some((tab) => conversationKeyOf(tab) === item.conversationId))
-              .slice(0, 5)}
+            // In the history order, pinned ones first.
+            recentChats={unarchivedHistory.slice(0, 5)}
             historyCount={unarchivedHistory.length}
             onOpenChat={handleOpenHistory}
             onOpenHistory={() => openSection('history')}

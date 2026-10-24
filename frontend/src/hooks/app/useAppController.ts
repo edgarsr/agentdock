@@ -9,6 +9,7 @@ import {
   isAgentRunnable,
 } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
+import { uiWorkspace } from '../../utils/uiWorkspace';
 import { useAvailableAgents } from '../useAvailableAgents';
 import { useHistoryConversationIndex } from '../useHistoryConversationIndex';
 import { useHistoryList } from '../useHistoryList';
@@ -89,6 +90,7 @@ export function useAppController() {
   const [pendingCloseTabIds, setPendingCloseTabIds] = useState<string[] | null>(null);
   const [pendingHandoffsByTab, setPendingHandoffsByTab] = useState<Record<string, PendingHandoffContext>>({});
   const pendingConversationContinuationsRef = useRef<Record<string, PendingConversationContinuation>>({});
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
 
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
@@ -114,6 +116,26 @@ export function useAppController() {
     handleProcessingChange,
     handleQueuedChange,
   } = useAppTabUiState(activeTabId, activeTabIdRef);
+
+  // A reloaded page, or one taking the UI over, continues with the chats the previous page had.
+  useEffect(() => {
+    let active = true;
+    uiWorkspace.load().then((workspace) => {
+      if (!active) return;
+      if (workspace) {
+        setChats(workspace.chats.map((chat) => (chat.closed ? chat : { ...chat, restored: true })));
+        workspace.chats.forEach((chat) => { if (!chat.closed) initTabUi(chat.id); });
+        setActiveTabId(workspace.activeTabId || '');
+        setPendingHandoffsByTab(workspace.pendingHandoffsByTab || {});
+      }
+      setWorkspaceLoaded(true);
+    });
+    return () => { active = false; };
+  }, [initTabUi]);
+
+  useEffect(() => {
+    if (workspaceLoaded) uiWorkspace.setApp({ chats, activeTabId, pendingHandoffsByTab });
+  }, [workspaceLoaded, chats, activeTabId, pendingHandoffsByTab]);
 
   const cleanupTabUi = useCallback((id: string) => {
     cleanupTabUiState(id);
@@ -557,6 +579,7 @@ export function useAppController() {
   }, [clearTabUnread]);
 
   return {
+    workspaceLoaded,
     chats,
     tabs,
     activeTabId,
@@ -576,6 +599,8 @@ export function useAppController() {
     pendingAgentName,
     pendingHandoffsByTab,
     handleSelectTab,
+    /** Shows the start page; the open chats stay open. */
+    handleShowHome: () => activateChat(''),
     handleReorderTabs,
     handleCloseTab,
     handleCloseAllChats,

@@ -55,7 +55,7 @@ export function TabItem({
       : 'text-foreground bg-active after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[3px] after:bg-[var(--ide-Button-default-focusColor)]'
     : '';
   const tabRadiusClassName = isIslandsTheme ? 'rounded-[6px]' : 'rounded-[4px]';
-  const tabHeightClassName = isIslandsTheme ? 'h-[32px] self-center' : 'h-full';
+  const tabHeightClassName = isIslandsTheme ? 'h-[32px] touch:h-10 self-center' : 'h-full';
   const buttonPaddingClassName = isIslandsTheme
     ? 'pl-[calc(0.25rem+5px)] pr-1'
     : 'px-1';
@@ -151,12 +151,14 @@ export function TabItem({
           e.stopPropagation();
           onCloseTab(tab.id);
         }}
+        // On touch screens a full-height target; with no hover to reveal it, only the active tab's can be hit.
         className={`relative z-10 ${closeButtonClassName} shrink-0 rounded-sm opacity-0 cursor-pointer
           focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]
-          ${isActive ? 'opacity-100' : 'group-hover:opacity-100 group-focus-within:opacity-100'}
+          touch:m-0 touch:flex touch:h-full touch:w-8 touch:items-center touch:justify-center
+          ${isActive ? 'opacity-100' : 'group-hover:opacity-100 group-focus-within:opacity-100 touch:invisible'}
         `}
       >
-        <X size={12} aria-hidden="true" />
+        <X size={12} aria-hidden="true" className="touch:h-4 touch:w-4" />
       </button>
     </div>
   );

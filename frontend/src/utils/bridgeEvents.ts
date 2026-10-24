@@ -5,6 +5,7 @@ import {
   AudioTranscriptionResultPayload,
   AvailableCommand,
   ChangesState,
+  ChatAttachedPayload,
   ContentChunk,
   BridgeOperationResultPayload,
   ConversationReplayLoadedPayload,
@@ -43,6 +44,7 @@ export interface ToolCallBridgeEvent { chatId: string; payload: ToolCallEvent; }
 export interface ConversationTranscriptSavedEvent { payload: ConversationTranscriptSavedPayload; }
 export interface BridgeOperationResultEvent { payload: BridgeOperationResultPayload; }
 export interface ConversationReplayLoadedEvent { payload: ConversationReplayLoadedPayload; }
+export interface ChatAttachedEvent { payload: ChatAttachedPayload; }
 export interface FileChangeStatsEvent { payload: FileChangeStatsResultPayload; }
 export interface FilesResultEvent { payload: FileSearchResultPayload; }
 export interface McpServersEvent { servers: McpServerConfig[]; }
@@ -90,6 +92,7 @@ export const EVENT_NAMES = {
   TOOL_CALL_UPDATE: 'acp-tool-call-update',
   CONVERSATION_TRANSCRIPT_SAVED: 'conversation-transcript-saved',
   CONVERSATION_REPLAY_LOADED: 'conversation-replay-loaded',
+  CHAT_ATTACHED: 'chat-attached',
   AUDIO_TRANSCRIPTION_FEATURE: 'audio-transcription-feature',
   AUDIO_TRANSCRIPTION_RESULT: 'audio-transcription-result',
   AUDIO_RECORDING_STATE: 'audio-recording-state',

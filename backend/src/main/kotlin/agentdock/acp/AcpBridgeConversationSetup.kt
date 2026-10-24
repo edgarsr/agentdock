@@ -72,10 +72,12 @@ private fun AcpBridge.completeCancelledPromptWhenAgentSettles(chatId: String, ca
             withTimeoutOrNull(CANCELLED_PROMPT_RESPONSE_TIMEOUT) { cancelledJob.join() } != null
 
         if (promptSettled) {
-            flushLivePromptCapture(chatId)?.let {
-                pushPromptDoneChunk(chatId, it, outcome = "cancelled")
+            withChatDelivery(chatId) {
+                flushLivePromptCapture(chatId)?.let {
+                    pushPromptDoneChunk(chatId, it, outcome = "cancelled")
+                }
+                pushStatus(chatId, "ready")
             }
-            pushStatus(chatId, "ready")
         } else {
             service.markChatSessionBroken(chatId)
             promptJobs.remove(chatId, cancelledJob)
@@ -88,7 +90,7 @@ private fun AcpBridge.completeCancelledPromptWhenAgentSettles(chatId: String, ca
 }
 
 /** Shows [message] in the chat and ends the live prompt with an error. */
-private fun AcpBridge.failLivePrompt(chatId: String, message: String, captureId: String? = null) {
+private fun AcpBridge.failLivePrompt(chatId: String, message: String, captureId: String? = null) = withChatDelivery(chatId) {
     pushContentChunk(chatId, "assistant", "text", text = message)
     appendLivePromptTextEvent(chatId, message, captureId)
     flushLivePromptCapture(chatId, captureId)?.let {
@@ -193,7 +195,7 @@ internal fun AcpBridge.installConversationQueries() {
                     pushStatus(chatId, "prompting")
                     service.prompt(chatId, blocks).collect { event ->
                         when (event) {
-                            is AcpEvent.PromptDone -> {
+                            is AcpEvent.PromptDone -> withChatDelivery(chatId) {
                                 if (captureId != null && livePromptCaptures[chatId]?.captureId == captureId) {
                                     service.sessionId(chatId)?.let { awaitingBackgroundOutput[chatId] = it }
                                 }
@@ -271,8 +273,10 @@ internal fun AcpBridge.installConversationQueries() {
                     withTimeout(CANCEL_REQUEST_TIMEOUT) {
                         service.cancel(chatId)
                     }
-                    pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n")
-                    appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
+                    withChatDelivery(chatId) {
+                        pushContentChunk(chatId, "assistant", "text", text = "\n\n[Cancelled]\n\n")
+                        appendLivePromptTextEvent(chatId, "\n\n[Cancelled]\n\n")
+                    }
                     pushBridgeOperationResult(parsed.requestId, chatId, "cancel_prompt", ok = true)
                     completeCancelledPromptWhenAgentSettles(chatId, cancelledJob)
                 } catch (e: Exception) {
@@ -321,4 +325,6 @@ internal suspend fun AcpBridge.stopConversation(chatId: String, awaitPrompt: Boo
     historyReplayCaptures.remove(chatId)
     forgetToolCallKeys(chatId)
     lastStatusByChatId.remove(chatId)
+    historyRevisions.remove(chatId)
+    chatDeliveryLocks.remove(chatId)
 }

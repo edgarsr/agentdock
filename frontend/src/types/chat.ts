@@ -217,7 +217,7 @@ export interface DropdownOption {
   subOptions?: DropdownOption[];
 }
 
-export type AttentionLevel = 'warning' | 'processing' | 'unread' | '';
+export type AttentionLevel = 'warning' | 'unread' | '';
 
 export interface TabUiFlags {
   unread: boolean;
@@ -245,6 +245,8 @@ export interface ChatTab {
   forkBase?: ForkConversationBase;
   /** A pinned conversation listed among the chats without being open. */
   closed?: boolean;
+  /** Reopened from the saved workspace: the backend sends the conversation, nothing is loaded again. */
+  restored?: boolean;
 }
 
 /** The conversation a chat continues, the key of its history entry. */
@@ -367,6 +369,17 @@ export interface ConversationReplayData {
 export interface ConversationReplayLoadedPayload {
   chatId: string;
   data: ConversationReplayData;
+}
+
+/** A chat as the backend knows it, sent to a UI taking it over; its later events follow as usual. */
+export interface ChatAttachedPayload {
+  chatId: string;
+  data?: ConversationReplayData | null;
+  /** The prompt the agent is still answering, stored like a finished one. */
+  livePrompt?: { sessionId: string; adapterName: string; prompt: ReplayPromptEntry } | null;
+  status?: string | null;
+  sessionId?: string | null;
+  permissions: PermissionRequest[];
 }
 
 
@@ -573,12 +586,17 @@ export interface GlobalSettings {
   systemInstructionsEnabled: boolean;
   quotaWidgetEnabled: boolean;
   openInEditor: boolean;
+  browserAccessEnabled: boolean;
+  browserAccessPort: number;
+  // At least 4 characters; null until the backend generates one.
+  browserAccessCode: string | null;
   promptNavigationHoverOnly: boolean;
   userMessageDetailsHoverOnly: boolean;
-  sidebarEnabled: boolean;
   sidebarPosition: 'left' | 'right';
   historyGroupsExpanded: boolean;
   rememberModelAndEffort: boolean;
+  approvalMode: ApprovalMode;
+  sendMode: 'enter' | 'ctrl-enter';
   shortcuts: ShortcutSettings;
 }
 
@@ -631,6 +649,7 @@ declare global {
     __renameHistoryGroup?: (payload: { projectPath: string; group: string; newGroup: string }) => void;
     __searchHistoryConversations?: (payload: { projectPath: string; conversationIds: string[]; query: string }) => void;
     __loadHistoryConversation?: (conversationId: string, projectPath: string, historyConversationId: string) => void;
+    __attachChat?: (chatId: string, projectPath: string) => void;
     __loginAgent?: (adapterId: string, methodId: string) => void;
     __logoutAgent?: (adapterId: string) => void;
     __cancelAgentAuth?: (adapterId: string) => void;
@@ -655,6 +674,8 @@ declare global {
     __readUiVisibility?: () => void;
     /** Answered with an `agent-dock-ui-zoom` event carrying the current UI zoom. */
     __readUiZoom?: () => void;
+    /** Answered with an `agent-dock-browser-address` event carrying the page's web server address, empty while it does not run. */
+    __readBrowserAddress?: () => void;
     /** Mirrors the open chats' dot on the plugin icon: `warning`, `unread`, or empty for none. */
     __setAttentionBadge?: (level: AttentionLevel) => void;
 
@@ -673,6 +694,7 @@ declare global {
     __onHistoryDeleteResult?: (result: HistoryDeleteResultPayload) => void;
     __onHistorySearchResult?: (result: HistorySearchResultPayload) => void;
     __onConversationReplayLoaded?: (payload: ConversationReplayLoadedPayload) => void;
+    __onChatAttached?: (payload: ChatAttachedPayload) => void;
     __onAttachmentsAdded?: (chatId: string, files: ChatAttachment[]) => void;
     __onConversationTranscriptSaved?: (payload: ConversationTranscriptSavedPayload) => void;
     __onBridgeOperationResult?: (payload: BridgeOperationResultPayload) => void;
@@ -724,8 +746,24 @@ declare global {
     __loadGlobalSettings?: () => void;
     __saveGlobalSettings?: (payload: string) => void;
     __onGlobalSettings?: (payload: GlobalSettingsPayload) => void;
+    // Answered by the client itself, which keeps the workspace while the page is reloaded.
+    __loadUiWorkspace?: () => void;
+    __saveUiWorkspace?: (json: string) => void;
+    __onUiWorkspace?: (json: string) => void;
     __onAdapterDeleted?: (adapterId: string) => void;
     __settingsBridgeReady?: boolean;
+    // The kind of page showing the UI, set by BridgeScripts.kt.
+    __AGENT_DOCK_CLIENT?: 'jcef' | 'browser';
+    // Set with an `agent-dock-elsewhere` event when another page shows the UI.
+    __agentDockElsewhere?: boolean;
+    // Set with an `agent-dock-disconnected` event when a browser page loses the IDE.
+    __agentDockDisconnected?: boolean;
+    // Defined by JcefUi.kt and, in a web browser, by BridgeScripts.browserBridge.
+    __takeOverUi?: () => void;
+    // Loads the page again, which restores the UI. Defined like `__takeOverUi`.
+    __reloadUi?: () => void;
+    // JCEF only.
+    __openInBrowser?: () => void;
     // Injected into the HTML by AssetLoader.kt.
     __pluginVersion?: string;
   }

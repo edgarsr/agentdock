@@ -59,6 +59,9 @@ class AcpBridge(
     /** Adapters being refreshed; true while their runtime checks are still being started. */
     internal val refreshingAdapters = ConcurrentHashMap<String, Boolean>()
     internal val livePromptCaptures = ConcurrentHashMap<String, LivePromptCapture>()
+    /** Bumped each time a finished prompt reaches a chat's stored conversation; see [attachChat]. */
+    internal val historyRevisions = ConcurrentHashMap<String, Long>()
+    internal val chatDeliveryLocks = ConcurrentHashMap<String, Any>()
     internal val lateHistoryEventQueues = ConcurrentHashMap<String, Channel<LateHistoryEvent>>()
     internal val historyReplayCaptures = ConcurrentHashMap<String, HistoryReplayCapture>()
     internal val historyLoadMutexes = ConcurrentHashMap<String, HistoryLoadMutexEntry>()
@@ -87,6 +90,16 @@ class AcpBridge(
     }
 
     internal fun runOnEdt(action: () -> Unit) = ApplicationManager.getApplication().invokeLater(action)
+
+    /**
+     * Records and sends one of a chat's events, or ends its prompt, as one step relative to
+     * [attachChat]: a UI taking the chat over then receives each event either in its snapshot or
+     * after it, never twice and never not at all. Apart from storing a finished prompt, only
+     * in-memory work runs inside: the session updates of all chats of an adapter pass through one
+     * queue, which a waiting update holds up.
+     */
+    internal inline fun <T> withChatDelivery(chatId: String, action: () -> T): T =
+        synchronized(chatDeliveryLocks.computeIfAbsent(chatId) { Any() }) { action() }
 
     internal fun dispatchContentChunkJson(json: String) {
         if (!host.isAttached) return

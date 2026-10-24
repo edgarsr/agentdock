@@ -53,7 +53,14 @@ object AssetLoader {
 
             val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId("agentdock"))?.version.orEmpty()
 
+            // The web browser tab's icon, in the colour the IDE shows the tool window icon in.
+            val icon = readBinaryResourceAsBase64(
+                resourceClass,
+                if (IdeTheme.isDarkTheme()) "/icons/agent_dock_toolwindow_dark.svg" else "/icons/agent_dock_toolwindow.svg",
+            )
+
             val injection = """
+                <link rel="icon" href="data:image/svg+xml;base64,$icon">
                 <style>
                 $fontFaceCss
                 $cssContent

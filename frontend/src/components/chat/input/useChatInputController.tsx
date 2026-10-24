@@ -71,9 +71,17 @@ export function useChatInputController({
     openFile(filePath, line);
   }, []);
 
-  const [sendMode, setSendMode] = useState<'enter' | 'ctrl-enter'>(() => {
-    return (localStorage.getItem('chat-send-mode') as 'enter' | 'ctrl-enter') || 'enter';
-  });
+  const [sendMode, setSendModeState] = useState<'enter' | 'ctrl-enter'>(
+    () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.sendMode === 'ctrl-enter' ? 'ctrl-enter' : 'enter'
+  );
+  useEffect(() => ACPBridge.onGlobalSettings((e) => {
+    setSendModeState(e.detail?.payload?.settings?.sendMode === 'ctrl-enter' ? 'ctrl-enter' : 'enter');
+  }), []);
+  const setSendMode = useCallback((mode: 'enter' | 'ctrl-enter') => {
+    setSendModeState(mode);
+    const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
+    if (settings) ACPBridge.saveGlobalSettings({ ...settings, sendMode: mode });
+  }, []);
 
   const agentSlashItems = useMemo(
     () => buildAgentSlashItems(availableCommands),
