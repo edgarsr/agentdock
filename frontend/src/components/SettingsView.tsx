@@ -11,7 +11,7 @@ import { isMac, ShortcutAction } from '../hooks/useShortcuts';
 import { useSidebarLayout } from '../hooks/useSidebarLayout';
 import { ACPBridge } from '../utils/bridge';
 import { AudioTranscriptionSettingsView } from './audio/AudioTranscriptionSettingsView';
-import { normalizeAudioTranscriptionProvider } from './audio/audioTranscription';
+import { normalizeAudioTranscriptionProvider, normalizeRecordingLimitSeconds } from './audio/audioTranscription';
 import { AudioOutputSettingsView } from './audio/AudioOutputSettingsView';
 import { normalizeAudioOutputSettings } from './audio/speechOutput';
 import { GitCommitGenerationSettings } from './settings/GitCommitGenerationSettings';
@@ -98,6 +98,7 @@ function normalizeGlobalSettings(payload: Partial<GlobalSettingsPayload> | undef
       audioTranscription: {
         provider: normalizeAudioTranscriptionProvider(payload?.settings?.audioTranscription?.provider),
         language: payload?.settings?.audioTranscription?.language ?? 'auto',
+        recordingLimitSeconds: normalizeRecordingLimitSeconds(payload?.settings?.audioTranscription?.recordingLimitSeconds),
         providers: payload?.settings?.audioTranscription?.providers ?? {}
       },
       audioOutput: normalizeAudioOutputSettings(payload?.settings?.audioOutput),

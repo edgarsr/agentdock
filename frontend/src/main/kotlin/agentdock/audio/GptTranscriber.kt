@@ -71,7 +71,7 @@ object GptTranscriber : AudioTranscriptionService {
         val boundary = "AgentDock-${System.nanoTime()}"
         val body = multipartBody(inputFile, boundary, settings.language)
         val request = HttpRequest.newBuilder(URI.create(TRANSCRIPTIONS_URL))
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(60))
             .header("Authorization", "Bearer $key")
             .header("Accept", "application/json")
             .header("Content-Type", "multipart/form-data; boundary=$boundary")

@@ -1,6 +1,6 @@
 import { AudioOutputSettings } from '../../types/chat';
 import { DropdownSelect } from '../ui/DropdownSelect';
-import { SettingsCheckbox, SettingsField } from '../settings/SettingsLayout';
+import { SettingsCheckbox } from '../settings/SettingsLayout';
 import { AUDIO_OUTPUT_NONE, SYSTEM_VOICES, speechProviders, useSystemVoices } from './speechOutput';
 
 interface AudioOutputSettingsViewProps {
@@ -43,33 +43,18 @@ export function AudioOutputSettingsView({ settings, onSettingsChange, onSettings
       ariaLabel='Enable voice output'
     >
       {enabled && (
-        <>
-          <SettingsField label='Speech engine' colon>
-            <DropdownSelect
-              value={settings.provider}
-              onChange={(provider) => save({ ...settings, provider })}
-              options={providerOptions}
-              className='max-w-full'
-            />
-          </SettingsField>
+        <div className='grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-2 gap-y-4'>
+          <span className='text-foreground'>Speech engine:</span>
+          <DropdownSelect
+            value={settings.provider}
+            onChange={(provider) => save({ ...settings, provider })}
+            options={providerOptions}
+            className='max-w-full justify-self-start'
+          />
 
           {activeProvider?.apiKeyLabel && (
-            <SettingsField
-              label={activeProvider.apiKeyLabel}
-              colon
-              description={activeProvider.apiKeyUrl ? (
-                <span className='inline-block pt-1'>
-                  <button
-                    type='button'
-                    onClick={() => window.__openUrl?.(activeProvider.apiKeyUrl!)}
-                    className='text-link hover:underline'
-                  >
-                    Create an API key
-                  </button>
-                  {activeProvider.pricingDescription && ` · ${activeProvider.pricingDescription}`}
-                </span>
-              ) : undefined}
-            >
+            <>
+              <span className='text-foreground'>{activeProvider.apiKeyLabel}:</span>
               <input
                 type='password'
                 value={providerSettings.apiKey}
@@ -80,20 +65,33 @@ export function AudioOutputSettingsView({ settings, onSettingsChange, onSettings
                 aria-label={activeProvider.apiKeyLabel}
                 className='w-60 max-w-full rounded-[3px]'
               />
-            </SettingsField>
+              {activeProvider.apiKeyUrl && (
+                <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
+                  <button
+                    type='button'
+                    onClick={() => window.__openUrl?.(activeProvider.apiKeyUrl!)}
+                    className='text-link hover:underline'
+                  >
+                    Create an API key
+                  </button>
+                  {activeProvider.pricingDescription && ` · ${activeProvider.pricingDescription}`}
+                </div>
+              )}
+            </>
           )}
 
           {voiceOptions.length > 0 && (
-            <SettingsField label='Voice' colon>
+            <>
+              <span className='text-foreground'>Voice:</span>
               <DropdownSelect
                 value={providerSettings.voice}
                 onChange={(voice) => save(withProviderSettings({ voice }))}
                 options={voiceOptions}
-                className='max-w-full'
+                className='max-w-full justify-self-start'
               />
-            </SettingsField>
+            </>
           )}
-        </>
+        </div>
       )}
     </SettingsCheckbox>
   );

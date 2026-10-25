@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioRecordingStatePayload } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
+import { normalizeRecordingLimitSeconds } from './audioTranscription';
 
 interface AudioInputControllerProps {
   conversationId: string;
   insertTranscript: (text: string) => void;
 }
-
-// AudioCaptureManager has a slightly longer limit of its own, for when the UI cannot stop the recording.
-const MAX_RECORDING_MS = 2 * 60 * 1000;
-const RECORDING_LIMIT_MARKER = '[Recording stopped: 2-minute limit reached.]';
 
 function formatAudioError(error: unknown): string {
   const message = error instanceof Error ? error.message.trim() : String(error ?? '').trim();
@@ -25,6 +22,7 @@ export function useAudioInputController({
   const requestCounterRef = useRef(0);
   const activeRequestRef = useRef<string | null>(null);
   const cancellationRequestedRef = useRef<string | null>(null);
+  const recordingLimitSecondsRef = useRef(120);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
@@ -74,7 +72,9 @@ export function useAudioInputController({
           cancellationRequestedRef.current !== requestId
         ) {
           const text = result.text || '';
-          insertTranscriptRef.current(limitReached ? `${text} ${RECORDING_LIMIT_MARKER}` : text);
+          insertTranscriptRef.current(limitReached
+            ? `${text} [Recording stopped: ${recordingLimitSecondsRef.current}-second limit reached.]`
+            : text);
         }
       } catch (error) {
         console.error('[ChatInput] Voice transcription failed:', error);
@@ -98,7 +98,9 @@ export function useAudioInputController({
     }
 
     try {
-      ACPBridge.startAudioRecording(ownerId);
+      const limit = normalizeRecordingLimitSeconds(ACPBridge.getGlobalSettingsSnapshot()?.settings?.audioTranscription?.recordingLimitSeconds);
+      recordingLimitSecondsRef.current = limit;
+      ACPBridge.startAudioRecording(ownerId, limit);
       setIsRecording(true);
     } catch (error) {
       console.error('[ChatInput] Unable to start audio capture:', error);
@@ -109,7 +111,7 @@ export function useAudioInputController({
   // Stop at the limit the same way as a click, so the recording is transcribed instead of lost.
   useEffect(() => {
     if (!isRecording || isTranscribing) return;
-    const timer = setTimeout(() => void handleVoiceInput(true), MAX_RECORDING_MS);
+    const timer = setTimeout(() => void handleVoiceInput(true), recordingLimitSecondsRef.current * 1000);
     return () => clearTimeout(timer);
   }, [isRecording, isTranscribing, handleVoiceInput]);
 

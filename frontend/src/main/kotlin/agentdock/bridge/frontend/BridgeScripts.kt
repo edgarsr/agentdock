@@ -118,7 +118,7 @@ internal object BridgeScripts {
             window.__installAudioTranscriptionFeature = function(payload) { invoke('installAudioTranscriptionFeature', payload || ''); };
             window.__cancelAudioTranscriptionFeatureInstall = function(payload) { invoke('cancelAudioTranscriptionFeatureInstall', payload || ''); };
             window.__uninstallAudioTranscriptionFeature = function(payload) { invoke('uninstallAudioTranscriptionFeature', payload || ''); };
-            window.__startAudioRecording = function(ownerId) { invoke('startAudioRecording', ownerId || ''); };
+            window.__startAudioRecording = function(payload) { invoke('startAudioRecording', payload); };
             window.__stopAudioRecording = function(payload) { invoke('stopAudioRecording', payload); };
             window.__cancelAudioTranscription = function(payload) { invoke('cancelAudioTranscription', payload); };
             window.__cancelAudioRecording = function(ownerId) { invoke('cancelAudioRecording', ownerId || ''); };

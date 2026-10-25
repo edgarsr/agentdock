@@ -3,11 +3,13 @@ import { AudioTranscriptionSettings } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
 import { Button } from '../ui/Button';
 import { DropdownSelect } from '../ui/DropdownSelect';
-import { SettingsCheckbox, SettingsField } from '../settings/SettingsLayout';
+import { SettingsCheckbox } from '../settings/SettingsLayout';
 import ConfirmationModal from '../ConfirmationModal';
 import {
   AUDIO_TRANSCRIPTION_NONE,
+  MAX_RECORDING_LIMIT_SECONDS,
   normalizeAudioTranscriptionProvider,
+  normalizeRecordingLimitSeconds,
   transcriptionLanguageOptions,
   transcriptionProviders,
   transcriptionProviderOptions,
@@ -118,65 +120,83 @@ export function AudioTranscriptionSettingsView({
       >
         {enabled && (
           <>
-            <SettingsField label='Transcription engine' colon>
+            <div className='grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-2 gap-y-4'>
+              <span className='text-foreground'>Transcription engine:</span>
               <DropdownSelect
                 value={settings.provider}
                 onChange={handleProviderChange}
                 options={transcriptionProviderOptions}
                 disabled={activeFeature.installing || pendingUninstall}
-                className='max-w-full'
+                className='max-w-full justify-self-start'
               />
-            </SettingsField>
 
-            {apiKeyLabel && (
-              <SettingsField
-                label={apiKeyLabel}
-                colon
-                description={activeProvider?.apiKeyUrl ? (
-                  <span className='inline-block pt-1'>
-                    <button
-                      type='button'
-                      onClick={() => window.__openUrl?.(activeProvider.apiKeyUrl!)}
-                      className='text-link hover:underline'
-                    >
-                      Create an API key
-                    </button>
-                    {activeProvider.pricingDescription && ` · ${activeProvider.pricingDescription}`}
-                  </span>
-                ) : undefined}
-              >
-                <input
-                  type='password'
-                  value={providerSettings.apiKey}
-                  onChange={(event) => handleApiKeyChange(event.target.value)}
-                  onBlur={handleApiKeyBlur}
-                  placeholder={activeProvider?.apiKeyPlaceholder}
-                  autoComplete='off'
-                  aria-label={apiKeyLabel}
-                  className='w-60 max-w-full rounded-[3px]'
-                />
-              </SettingsField>
-            )}
+              {apiKeyLabel && (
+                <>
+                  <span className='text-foreground'>{apiKeyLabel}:</span>
+                  <input
+                    type='password'
+                    value={providerSettings.apiKey}
+                    onChange={(event) => handleApiKeyChange(event.target.value)}
+                    onBlur={handleApiKeyBlur}
+                    placeholder={activeProvider?.apiKeyPlaceholder}
+                    autoComplete='off'
+                    aria-label={apiKeyLabel}
+                    className='w-60 max-w-full rounded-[3px]'
+                  />
+                  {activeProvider?.apiKeyUrl && (
+                    <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
+                      <button
+                        type='button'
+                        onClick={() => window.__openUrl?.(activeProvider.apiKeyUrl!)}
+                        className='text-link hover:underline'
+                      >
+                        Create an API key
+                      </button>
+                      {activeProvider.pricingDescription && ` · ${activeProvider.pricingDescription}`}
+                    </div>
+                  )}
+                </>
+              )}
 
-            <SettingsField
-              label='Language'
-              colon
-              description={
-                activeFeature.installable && activeFeature.installed && activeFeature.installPath ? (
-                  <span className='break-all'>
-                    Installed at <span className='font-mono'>{activeFeature.installPath}</span>
-                  </span>
-                ) : undefined
-              }
-            >
+              <span className='text-foreground'>Language:</span>
               <DropdownSelect
                 value={settings.language}
                 onChange={handleLanguageChange}
                 options={transcriptionLanguageOptions}
                 disabled={!activeFeature.installed}
-                className='max-w-full'
+                className='max-w-full justify-self-start'
               />
-            </SettingsField>
+              {activeFeature.installable && activeFeature.installed && activeFeature.installPath && (
+                <div className='col-span-2 -mt-3 break-all text-ide-small text-foreground-secondary'>
+                  Installed at <span className='font-mono'>{activeFeature.installPath}</span>
+                </div>
+              )}
+
+              <span className='text-foreground'>Recording limit (s):</span>
+              <input
+                type='text'
+                inputMode='numeric'
+                pattern='[1-9][0-9]*'
+                value={settings.recordingLimitSeconds ?? ''}
+                onChange={(event) => {
+                  const input = event.currentTarget;
+                  if (!input.validity.valid || Number(input.value) > MAX_RECORDING_LIMIT_SECONDS) return;
+                  onSettingsChange({
+                    ...settings,
+                    recordingLimitSeconds: input.value === '' ? null : Number(input.value),
+                  });
+                }}
+                onBlur={() => onSettingsSave({
+                  ...settings,
+                  recordingLimitSeconds: normalizeRecordingLimitSeconds(settings.recordingLimitSeconds),
+                })}
+                aria-label='Recording limit in seconds'
+                className='w-16 max-w-full rounded-[3px]'
+              />
+              <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
+                Maximum: 600 s (10 minutes).
+              </div>
+            </div>
 
             {activeFeature.installable && activeFeature.supported && (
               <div className='flex gap-2'>

@@ -35,6 +35,12 @@ data class AudioTranscriptionResultPayload(
 )
 
 @Serializable
+data class StartRecordingRequest(
+    val ownerId: String,
+    val recordingLimitSeconds: Int
+)
+
+@Serializable
 data class StopRecordingRequest(
     val requestId: String,
     val ownerId: String = "",
@@ -53,6 +59,8 @@ data class AudioRecordingStatePayload(
 data class AudioTranscriptionSettings(
     val provider: String = AudioTranscriptionProviders.NONE,
     val language: String = "auto",
+    /** Null is accepted from older settings and normalized to the default. */
+    val recordingLimitSeconds: Int? = 120,
     val providers: Map<String, AudioTranscriptionProviderSettings> = emptyMap()
 )
 

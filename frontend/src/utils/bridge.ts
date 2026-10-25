@@ -715,9 +715,9 @@ export const ACPBridge = {
   onAudioTranscriptionResult: (callback: (e: CustomEvent<AudioTranscriptionResultEvent>) => void) => onBridgeEvent(EVENT_NAMES.AUDIO_TRANSCRIPTION_RESULT, callback),
 
   // A web browser records with the microphone of the device showing the page, and the IDE transcribes the recording.
-  startAudioRecording: (ownerId: string) => {
+  startAudioRecording: (ownerId: string, recordingLimitSeconds: number) => {
     if (window.__AGENT_DOCK_CLIENT === 'browser') void browserMicrophone.start(ownerId);
-    else window.__startAudioRecording?.(ownerId);
+    else window.__startAudioRecording?.(JSON.stringify({ ownerId, recordingLimitSeconds }));
   },
 
   stopAudioRecording: async (requestId: string, ownerId: string): Promise<AudioTranscriptionResultPayload> => {
@@ -731,7 +731,7 @@ export const ACPBridge = {
       requestId,
       () => window.__stopAudioRecording?.(JSON.stringify({ requestId, ownerId, audio })),
       {
-        timeoutMs: 30_000,
+        timeoutMs: 60_000,
         timeoutMessage: 'Audio transcription timed out.',
         failure: (payload) => (payload.cancelled || payload.success ? undefined : payload.error || 'Audio transcription failed'),
         onTimeout: () => {

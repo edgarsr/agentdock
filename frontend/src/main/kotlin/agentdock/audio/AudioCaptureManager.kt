@@ -15,8 +15,8 @@ import javax.sound.sampled.DataLine
 import javax.sound.sampled.TargetDataLine
 
 object AudioCaptureManager {
-    // A safety net only: the UI stops and transcribes at two minutes, so this fires only when it cannot.
-    private const val MAX_RECORDING_DURATION_MS = (2 * 60 + 15) * 1000L
+    // The UI stops and transcribes at the configured limit; this is a fallback when it cannot.
+    private const val AUTO_STOP_GRACE_MS = 15_000L
     private const val STALE_SESSION_AGE_MS = 10 * 60 * 1000L
     private const val WRITER_WAIT_TIMEOUT_MS = 2_000L
     private const val WRITER_INTERRUPT_GRACE_MS = 500L
@@ -51,8 +51,9 @@ object AudioCaptureManager {
     }
 
     @Synchronized
-    fun startRecording(ownerId: String, onStopped: ((String) -> Unit)? = null): File {
+    fun startRecording(ownerId: String, limitSeconds: Int, onStopped: ((String) -> Unit)? = null): File {
         require(ownerId.isNotBlank()) { "Audio recording owner is missing." }
+        require(limitSeconds in 1..600) { "Audio recording limit must be between 1 and 600 seconds." }
         check(!recording) { "Audio recording is already active." }
         check(pendingWriterCleanupPath == null) { "Audio recording is still stopping." }
 
@@ -97,7 +98,7 @@ object AudioCaptureManager {
                     override fun run() {
                         autoStopRecording(ownerId, outputFile, onStopped)
                     }
-                }, MAX_RECORDING_DURATION_MS)
+                }, limitSeconds * 1000L + AUTO_STOP_GRACE_MS)
             }
 
             return outputFile

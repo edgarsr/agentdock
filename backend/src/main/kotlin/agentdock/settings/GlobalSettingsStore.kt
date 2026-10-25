@@ -107,6 +107,7 @@ object GlobalSettingsStore {
         settings.copy(
             provider = normalizeProvider(settings.provider),
             language = normalizeLanguage(settings.language),
+            recordingLimitSeconds = settings.recordingLimitSeconds?.takeIf { it > 0 }?.coerceAtMost(600) ?: 120,
             providers = settings.providers.mapValues { (_, provider) ->
                 provider.copy(apiKey = normalizeApiKey(provider.apiKey))
             }

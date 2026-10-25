@@ -542,6 +542,8 @@ export interface AudioTranscriptionProviderSettings {
 export interface AudioTranscriptionSettings {
   provider: string;
   language: string;
+  /** Null is a temporary empty input; saved values are 1–600 seconds. */
+  recordingLimitSeconds: number | null;
   providers: Record<string, AudioTranscriptionProviderSettings>;
 }
 
@@ -740,7 +742,7 @@ declare global {
     __uninstallAudioTranscriptionFeature?: (payload?: string) => void;
     __onAudioTranscriptionFeature?: (state: AudioTranscriptionFeatureState) => void;
     __onAudioTranscriptionResult?: (payload: AudioTranscriptionResultPayload) => void;
-    __startAudioRecording?: (ownerId: string) => void;
+    __startAudioRecording?: (payload: string) => void;
     __stopAudioRecording?: (payload: string) => void;
     __cancelAudioTranscription?: (payload: string) => void;
     __cancelAudioRecording?: (ownerId: string) => void;

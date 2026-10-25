@@ -27,7 +27,7 @@ object GeminiTranscriber : AudioTranscriptionService {
     private const val API_BASE = "https://generativelanguage.googleapis.com/v1beta"
     private const val UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files"
     private const val TRANSCRIPTION_URL = "$API_BASE/models/$MODEL:generateContent"
-    private const val REQUEST_TIMEOUT_SECONDS = 30L
+    private const val REQUEST_TIMEOUT_SECONDS = 60L
 
     private val httpClient by lazy {
         HttpClient.newBuilder()

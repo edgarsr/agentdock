@@ -4,6 +4,13 @@ export const AUDIO_TRANSCRIPTION_NONE = 'none';
 export const GPT_TRANSCRIBER = 'gpt-transcriber';
 export const GEMINI_TRANSCRIBER = 'gemini-transcriber';
 export const WHISPER = 'whisper-transcription';
+export const MAX_RECORDING_LIMIT_SECONDS = 600;
+
+export function normalizeRecordingLimitSeconds(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? Math.min(value, MAX_RECORDING_LIMIT_SECONDS)
+    : 120;
+}
 
 export interface TranscriptionProviderDefinition {
   value: string;

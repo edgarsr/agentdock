@@ -8,6 +8,7 @@ import agentdock.settings.AudioTranscriptionFeatureState
 import agentdock.settings.AudioTranscriptionProviders
 import agentdock.settings.AudioTranscriptionResultPayload
 import agentdock.settings.AudioTranscriptionSettings
+import agentdock.settings.StartRecordingRequest
 import agentdock.settings.StopRecordingRequest
 import agentdock.utils.jsCallback
 import agentdock.utils.jsStringLiteral
@@ -113,7 +114,10 @@ internal class AudioInputBridge(
         }
 
         commands.register("startAudioRecording") { payload ->
-            val ownerId = payload.trim()
+            val request = runCatching {
+                json.decodeFromString<StartRecordingRequest>(payload)
+            }.getOrNull() ?: return@register
+            val ownerId = request.ownerId.trim()
             if (disposed || ownerId.isBlank()) return@register
             if (recordingStartJobs.containsKey(ownerId) ||
                 recordingOwners.contains(ownerId) ||
@@ -139,7 +143,7 @@ internal class AudioInputBridge(
                     }
 
                     currentCoroutineContext().ensureActive()
-                    AudioCaptureManager.startRecording(ownerId) { message ->
+                    AudioCaptureManager.startRecording(ownerId, request.recordingLimitSeconds) { message ->
                         recordingOwners.remove(ownerId)
                         pushRecordingState(
                             AudioRecordingStatePayload(
