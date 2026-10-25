@@ -168,7 +168,7 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
       });
     }
   } else if (chunk.type === 'image' || chunk.type === 'audio' || chunk.type === 'video'
-      || chunk.type === 'file' || chunk.type === 'code_ref') {
+      || chunk.type === 'file' || chunk.type === 'code_ref' || chunk.type === 'quote') {
     blocks.push(...buildBlocks(chunk));
   } else if (chunk.type === 'tool_call') {
     handleToolCall(blocks, lastBlock, chunk);
@@ -220,6 +220,8 @@ function buildBlocks(chunk: ContentChunk): RichContentBlock[] {
         startLine: chunk.startLine,
         endLine: chunk.endLine,
       } as any];
+    case 'quote':
+      return [{ type: 'quote', quote: chunk.quote || '' }];
     case 'tool_call':
     case 'tool_call_update': {
       const entry = buildToolCallEntry(chunk);

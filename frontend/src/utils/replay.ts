@@ -137,6 +137,8 @@ function userChunkFromBlock(block: ReplayContentBlock): ContentChunk | null {
         startLine: block.startLine,
         endLine: block.endLine,
       };
+    case 'quote':
+      return block.quote ? { ...baseChunk('user'), type: 'quote', quote: block.quote } : null;
     default: {
       const text = stripTransferredContextForDisplay(block.text || '', 'user', true);
       if (!text.trim()) return null;

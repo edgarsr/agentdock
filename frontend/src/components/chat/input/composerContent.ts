@@ -6,8 +6,8 @@ import {
   LexicalEditor,
 } from 'lexical';
 import type { ChatAttachment } from '../../../types/chat';
-import { $createCodeReferenceNode } from './CodeReferenceNode';
 import { $createImageNode } from './ImageNode';
+import { $createReferenceNode, type ReferenceKind } from './ReferenceNode';
 
 export function restoreComposerContent(
   editor: LexicalEditor,
@@ -20,7 +20,7 @@ export function restoreComposerContent(
   editor.update(() => {
     const root = $getRoot();
     const paragraph = $createParagraphNode();
-    const placeholderRegex = /\[(image|code-ref)-([a-z0-9-]+)]/g;
+    const placeholderRegex = /\[(image|code-ref|quote)-([a-z0-9-]+)]/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
@@ -37,14 +37,8 @@ export function restoreComposerContent(
 
       if (match[1] === 'image' && attachment?.mimeType.startsWith('image/')) {
         paragraph.append($createImageNode(attachment.id));
-      } else if (match[1] === 'code-ref' && attachment?.path) {
-        paragraph.append($createCodeReferenceNode(
-          attachment.id,
-          attachment.path,
-          attachment.name,
-          attachment.startLine,
-          attachment.endLine
-        ));
+      } else if (match[1] !== 'image' && attachment) {
+        paragraph.append($createReferenceNode(attachment.id, match[1] as ReferenceKind));
       } else {
         appendText(match[0]);
       }

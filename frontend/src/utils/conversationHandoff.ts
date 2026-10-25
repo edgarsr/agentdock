@@ -4,6 +4,7 @@ import type {
   RichContentBlock,
   ToolCallBlock,
 } from '../types/chat';
+import { quotePromptText } from './promptQuote';
 
 export interface ConversationHandoffOptions {
   maxEstimatedTokens?: number;
@@ -214,6 +215,8 @@ function normalizeUserBlock(block: RichContentBlock): string[] {
       return [block.text || ''];
     case 'code_ref':
       return [codeReferenceText(block.path, block.startLine, block.endLine)];
+    case 'quote':
+      return [quotePromptText(block.quote)];
     case 'file':
       return [attachmentLabel('Attached file', block.path || block.name)];
     case 'image':

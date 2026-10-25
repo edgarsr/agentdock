@@ -72,6 +72,8 @@ function isPromptBlock(value: unknown): boolean {
       return typeof block.name === 'string' && typeof block.mimeType === 'string'
         && (block.data === undefined || typeof block.data === 'string')
         && (block.path === undefined || typeof block.path === 'string');
+    case 'quote':
+      return typeof block.quote === 'string';
     case 'code_ref':
       return typeof block.path === 'string' && typeof block.name === 'string'
         && (block.startLine === undefined || typeof block.startLine === 'number')

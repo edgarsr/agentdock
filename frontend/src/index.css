@@ -110,7 +110,7 @@
     margin: calc(var(--ide-paragraph-spacing) * 0.3) 0;
   }
 
-  .user-message-bubble .code-refrence-chip {
+  .user-message-bubble .reference-chip {
     margin: 1px;
     top: -1px;
   }

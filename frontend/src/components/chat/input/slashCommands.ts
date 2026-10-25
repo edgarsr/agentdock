@@ -30,7 +30,7 @@ export function buildPromptLibrarySlashItems(prompts: PromptLibraryItem[]): Slas
       return {
         id: prompt.id,
         name: name.replace(/^\/+/, ''),
-        description: prompt.prompt.trim().replace(/\[image-[a-z0-9-]+]/g, '[image]').replace(/\[code-ref-[a-z0-9-]+]/g, '[file]') || prompt.attachments?.[0]?.name || '',
+        description: prompt.prompt.trim().replace(/\[image-[a-z0-9-]+]/g, '[image]').replace(/\[code-ref-[a-z0-9-]+]/g, '[file]').replace(/\[quote-[a-z0-9-]+]/g, '[quote]') || prompt.attachments?.[0]?.name || '',
         insertText: prompt.prompt,
         displayPrefix: name.startsWith('/') ? '/' : '',
         attachments: prompt.attachments ?? [],

@@ -25,7 +25,8 @@ data class PromptAttachment(
     val isInline: Boolean? = null,
     val attachmentType: String? = null,
     val startLine: Int? = null,
-    val endLine: Int? = null
+    val endLine: Int? = null,
+    val quote: String? = null
 )
 
 private val json = Json {

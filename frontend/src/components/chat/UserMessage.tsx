@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, memo } from 'react';
 import { Message, RichContentBlock, TextBlock, ImageBlock, FileBlock, CodeReferenceBlock } from '../../types/chat';
 import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { AttachmentItem } from './shared/AttachmentItem';
-import { CodeReferenceChip } from './shared/CodeReferenceChip';
+import { CodeReferenceChip, QuoteChip } from './shared/ReferenceChip';
 import { Tooltip } from './shared/Tooltip';
 import { openFile } from '../../utils/openFile';
 import { copyPrompt } from '../../utils/promptClipboard';
@@ -156,6 +156,9 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber, onElemen
                   showTooltip={false}
                 />
               );
+            }
+            if (block.type === 'quote') {
+              return <QuoteChip key={idx} quote={block.quote} />;
             }
             return (
               <span className="cursor-text" key={idx} data-search-text={block.type === 'text' || undefined}>

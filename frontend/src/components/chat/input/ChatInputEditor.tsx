@@ -9,13 +9,13 @@ import { $getRoot, LexicalEditor } from 'lexical';
 import { ChatAttachment } from '../../../types/chat';
 import { ChatInputActionsContext } from './ChatInputActionsContext';
 import { ImageNode } from './ImageNode';
-import { CodeReferenceNode } from './CodeReferenceNode';
+import { ReferenceNode } from './ReferenceNode';
 import {
   AttachmentsSyncPlugin,
   AutoHeightPlugin,
   ClickToFocusPlugin,
   ClearEditorPlugin,
-  ExternalCodeReferencePlugin,
+  ExternalReferencePlugin,
   InlineAttachmentBackspacePlugin,
   KeyboardPlugin,
   LoadComposerDraftPlugin,
@@ -69,7 +69,7 @@ export function ChatInputEditor({
 }: ChatInputEditorProps) {
   const initialConfig = useMemo(() => ({
     namespace: `ChatInput-${conversationId}`,
-    nodes: [ImageNode, CodeReferenceNode],
+    nodes: [ImageNode, ReferenceNode],
     theme: { paragraph: 'm-0', text: { base: 'text-foreground' } },
     onError: (error: Error) => console.error(error),
   }), [conversationId, composerRevision]);
@@ -110,7 +110,7 @@ export function ChatInputEditor({
           <KeyboardPlugin onSend={onSend} sendMode={sendMode} disabled={isSlashMenuOpen} />
           <PlainTextFormattingGuardPlugin />
           <InlineAttachmentBackspacePlugin />
-          <ExternalCodeReferencePlugin
+          <ExternalReferencePlugin
             isActive={isActive}
             attachments={attachments}
             onAttachmentsChange={onAttachmentsChange}

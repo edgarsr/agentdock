@@ -5,7 +5,7 @@ export function buildPromptBlocks(inputValue: string, attachments: ChatAttachmen
   let currentText = inputValue;
 
   const usedAttachmentIds = new Set<string>();
-  const placeholderRegex = /\[(image|code-ref)-([a-z0-9-]+)\]/g;
+  const placeholderRegex = /\[(image|code-ref|quote)-([a-z0-9-]+)\]/g;
   let lastIndex = 0;
   let match;
 
@@ -29,6 +29,8 @@ export function buildPromptBlocks(inputValue: string, attachments: ChatAttachmen
           endLine: att.endLine,
           isInline: true,
         });
+      } else if (att.attachmentType === 'quote' && att.quote) {
+        blocks.push({ type: 'quote', quote: att.quote });
       } else {
         blocks.push({ type: 'text', text: match[0] });
       }
@@ -43,7 +45,7 @@ export function buildPromptBlocks(inputValue: string, attachments: ChatAttachmen
   if (remainingText) blocks.push({ type: 'text', text: remainingText });
 
   attachments.forEach(att => {
-    if (!usedAttachmentIds.has(att.id) && att.attachmentType !== 'code_ref') {
+    if (!usedAttachmentIds.has(att.id) && att.attachmentType !== 'code_ref' && att.attachmentType !== 'quote') {
       if (att.mimeType.startsWith('image/') && att.data) {
         blocks.push({ type: 'image', data: att.data, mimeType: att.mimeType, isInline: false });
       } else if (att.mimeType.startsWith('video/') && att.data) {

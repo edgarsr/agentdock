@@ -22,9 +22,10 @@ export interface ChatAttachment {
   data?: string;
   path?: string;
   isInline?: boolean;
-  attachmentType?: 'file' | 'code_ref';
+  attachmentType?: 'file' | 'code_ref' | 'quote';
   startLine?: number;
   endLine?: number;
+  quote?: string;
 }
 
 export interface TextBlock { type: 'text'; text: string; }
@@ -41,6 +42,8 @@ export interface CodeReferenceBlock {
   endLine?: number;
   isInline?: boolean;
 }
+/** Text the user selected in an assistant response and quoted in the prompt. */
+export interface QuoteBlock { type: 'quote'; quote: string; }
 
 export interface ToolCallEntry {
   toolCallId: string;
@@ -64,7 +67,7 @@ export interface PlanEntry {
 
 export interface PlanBlock { type: 'plan'; entries: PlanEntry[]; isReplay?: boolean; }
 
-export type RichContentBlock = TextBlock | ImageBlock | AudioBlock | VideoBlock | FileBlock | CodeReferenceBlock | ExploringBlock | ToolCallBlock | PlanBlock;
+export type RichContentBlock = TextBlock | ImageBlock | AudioBlock | VideoBlock | FileBlock | CodeReferenceBlock | QuoteBlock | ExploringBlock | ToolCallBlock | PlanBlock;
 
 export interface MessageConfigOption {
   id: string;
@@ -293,8 +296,9 @@ export interface HistorySessionMeta {
 export interface ContentChunk {
   chatId: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'code_ref' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
+  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'code_ref' | 'quote' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
   text?: string;
+  quote?: string;
   data?: string;
   path?: string;
   name?: string;
@@ -324,6 +328,7 @@ export interface ReplayContentBlock {
   role?: 'user' | 'assistant';
   type?: string;
   text?: string;
+  quote?: string;
   data?: string;
   path?: string;
   name?: string;

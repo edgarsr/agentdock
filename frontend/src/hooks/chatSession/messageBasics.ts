@@ -1,5 +1,6 @@
 import { Message } from '../../types/chat';
 import { buildConversationHandoffPromptPrefix } from '../../utils/conversationHandoff';
+import { quotePromptText } from '../../utils/promptQuote';
 
 let messageCounter = 0;
 
@@ -18,6 +19,7 @@ export function plainTextFromBlocks(blocks: any[], imagePlaceholder = ''): strin
   return blocks.map((block) => {
     if (block.type === 'text') return block.text || '';
     if (block.type === 'code_ref') return codeReferenceText(block.path, block.startLine, block.endLine);
+    if (block.type === 'quote') return block.quote || '';
     if (block.type === 'image') return imagePlaceholder;
     return '';
   }).join('');
@@ -40,6 +42,9 @@ export function normalizeOutgoingBlocks(blocks: any[]): any[] {
     if (block.type === 'code_ref') {
       return typeof block.path === 'string' && block.path.length > 0;
     }
+    if (block.type === 'quote') {
+      return typeof block.quote === 'string' && block.quote.trim().length > 0;
+    }
     return true;
   }).map((block) => {
     if (block.type === 'code_ref') {
@@ -47,6 +52,10 @@ export function normalizeOutgoingBlocks(blocks: any[]): any[] {
         ...block,
         text: codeReferenceText(block.path, block.startLine, block.endLine),
       };
+    }
+    // The backend sends the text of a block it has no own conversion for.
+    if (block.type === 'quote') {
+      return { ...block, text: quotePromptText(block.quote) };
     }
     return block;
   });

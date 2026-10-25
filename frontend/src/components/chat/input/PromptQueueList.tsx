@@ -16,6 +16,7 @@ interface PromptQueueListProps {
 }
 
 function attachmentPlaceholder(attachment: ChatAttachment): string {
+  if (attachment.attachmentType === 'quote') return '[quote]';
   if (attachment.mimeType.startsWith('image/')) return '[image]';
   if (attachment.mimeType.startsWith('audio/')) return '[audio]';
   if (attachment.mimeType.startsWith('video/')) return '[video]';
@@ -31,7 +32,7 @@ function attachmentPlaceholder(attachment: ChatAttachment): string {
 function promptPreview(item: QueuedPrompt): string {
   const attachmentsById = new Map(item.attachments.map((attachment) => [attachment.id, attachment]));
   const usedAttachmentIds = new Set<string>();
-  const placeholderRegex = /\[(image|code-ref)-([a-z0-9-]+)]/g;
+  const placeholderRegex = /\[(image|code-ref|quote)-([a-z0-9-]+)]/g;
 
   const inlinePreview = item.composerText.replace(placeholderRegex, (placeholder, _type, id: string) => {
     const attachment = attachmentsById.get(id);

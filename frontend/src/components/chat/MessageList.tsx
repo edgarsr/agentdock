@@ -7,6 +7,7 @@ import { ChatLoadingIndicator } from './ChatLoadingIndicator';
 import { Tooltip } from './shared/Tooltip';
 import { Button } from '../ui/Button';
 import { useChatSearch } from './ChatSearch';
+import { QuoteSelectionButton } from './QuoteSelectionButton';
 
 const BOTTOM_PIN_THRESHOLD_PX = 10;
 const READ_ACK_THRESHOLD_PX = 48;
@@ -19,7 +20,8 @@ function promptPreview(message: Message): string {
   if (blocks?.length) {
     text = '';
     for (const block of blocks) {
-      const part = block.type === 'text' ? block.text : block.type === 'image' ? ' [image] ' : '';
+      const part = block.type === 'text' ? block.text : block.type === 'quote' ? ` "${block.quote}" `
+        : block.type === 'image' ? ' [image] ' : '';
       text += part.slice(0, 161 - text.length);
       if (text.length > 160) break;
     }
@@ -168,6 +170,9 @@ function MessageList({
       }
       if (block.type === 'code_ref') {
         return 50;
+      }
+      if (block.type === 'quote') {
+        return block.quote.length;
       }
       if (block.type === 'text') {
         return (block as any).text?.length || 0;
@@ -622,7 +627,7 @@ function MessageList({
 
         {visibleMessages.length === 0 && !isSending && !isHistoryReplaying && agentIconPath && (
           <div className="pointer-events-none absolute inset-x-0 top-[35%] flex -translate-y-1/2 justify-center">
-            <img src={agentIconPath}
+            <img alt="Agent" src={agentIconPath}
               className="w-14 h-14 opacity-60 select-none pointer-events-none"
             />
           </div>
@@ -637,6 +642,7 @@ function MessageList({
         {footer && <div ref={footerSpacerRef} aria-hidden="true" className="shrink-0" />}
       </div>
     </div>
+    {isActive && <QuoteSelectionButton containerRef={containerRef} />}
     {footer && (
       <div ref={footerRef} onWheel={handleFooterWheel} onClick={handleFooterClick}
         className="absolute bottom-0 left-0 right-0 z-50 bg-background px-4 pt-1 app-wide:px-6">

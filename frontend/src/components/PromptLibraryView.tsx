@@ -121,7 +121,7 @@ export function PromptLibraryView() {
           <SectionListRow
             key={prompt.id}
             name={prompt.name}
-            description={truncatePreview(prompt.prompt.replace(/\[image-[a-z0-9-]+]/g, '[image]').replace(/\[code-ref-[a-z0-9-]+]/g, '[file]')) || prompt.attachments?.[0]?.name}
+            description={truncatePreview(prompt.prompt.replace(/\[image-[a-z0-9-]+]/g, '[image]').replace(/\[code-ref-[a-z0-9-]+]/g, '[file]').replace(/\[quote-[a-z0-9-]+]/g, '[quote]')) || prompt.attachments?.[0]?.name}
             onEdit={() => openEdit(prompt)}
             onDelete={() => setDeleteTarget(prompt)}
           />
