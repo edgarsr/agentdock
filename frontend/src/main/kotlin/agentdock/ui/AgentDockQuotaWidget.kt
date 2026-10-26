@@ -30,14 +30,14 @@ class AgentDockQuotaWidgetFactory : StatusBarWidgetFactory {
     override fun getId(): String = "AgentDockQuotaWidget"
     override fun getDisplayName(): String = "AgentDock Quota"
     override fun isAvailable(project: Project): Boolean = FrontendSettings.current.quotaWidgetEnabled
-    override fun createWidget(project: Project): StatusBarWidget = AgentDockQuotaWidget(project)
+    override fun createWidget(project: Project): StatusBarWidget = AgentDockQuotaWidget()
     override fun disposeWidget(widget: StatusBarWidget) {
         widget.dispose()
     }
     override fun canBeEnabledOn(statusBar: StatusBar): Boolean = true
 }
 
-class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
+class AgentDockQuotaWidget : CustomStatusBarWidget {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var statusBar: StatusBar? = null
     private var isHovered = false
@@ -93,7 +93,7 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
 
     init {
         panel.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) { showPopup(e) }
+            override fun mouseClicked(e: MouseEvent) { showQuotaPopup() }
             override fun mouseEntered(e: MouseEvent) { isHovered = true; panel.repaint() }
             override fun mouseExited(e: MouseEvent) { isHovered = false; panel.repaint() }
         })
@@ -153,10 +153,6 @@ class AgentDockQuotaWidget(project: Project) : CustomStatusBarWidget {
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun showPopup(e: MouseEvent) {
-        showQuotaPopup()
     }
 
     private fun showQuotaPopup() {

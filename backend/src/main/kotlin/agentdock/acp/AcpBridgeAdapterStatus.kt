@@ -1,19 +1,14 @@
 package agentdock.acp
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import agentdock.bridge.ClientTheme
 import agentdock.utils.jsCallback
 import agentdock.utils.jsStringLiteral
+import com.agentclientprotocol.model.AuthMethod
 import com.intellij.openapi.diagnostic.Logger
+import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
-import com.agentclientprotocol.model.AuthMethod
 
 private const val RUNTIME_CHECK_MAX_ATTEMPTS = 3
 private val RUNTIME_CHECK_RETRY_DELAY = 1.seconds
@@ -27,7 +22,7 @@ private suspend fun runRuntimeCheckWithRetries(check: suspend (attempt: Int) -> 
     return false
 }
 
-private fun <K> AcpBridge.launchRuntimeCheck(
+private fun <K : Any> AcpBridge.launchRuntimeCheck(
     jobs: ConcurrentHashMap<K, Job>,
     key: K,
     check: suspend () -> Unit

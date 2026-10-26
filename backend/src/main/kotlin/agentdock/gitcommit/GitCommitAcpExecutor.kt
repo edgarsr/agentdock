@@ -9,7 +9,6 @@ import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.PermissionOption
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
-import com.agentclientprotocol.model.SessionId
 import com.agentclientprotocol.model.SessionUpdate
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +29,6 @@ import agentdock.acp.findReasoningEffortOption
 import agentdock.acp.resolveModelToApply
 import agentdock.acp.serializeContentBlock
 import agentdock.history.AgentDockHistoryService
-import com.agentclientprotocol.annotations.UnstableApi
-import com.agentclientprotocol.model.AcpCreatedSessionResponse
 import kotlin.time.Duration.Companion.minutes
 
 internal class GitCommitAcpExecutor(
@@ -42,7 +39,6 @@ internal class GitCommitAcpExecutor(
         private val GENERATION_TIMEOUT = 2.minutes
     }
 
-    @OptIn(UnstableApi::class)
     suspend fun generateMessage(
         config: GitCommitGenerationConfig,
         prompt: String,
@@ -57,7 +53,7 @@ internal class GitCommitAcpExecutor(
         val client = sharedProcess.client ?: error("ACP client is not initialized for ${adapterInfo.id}")
         val cwd = project.basePath ?: System.getProperty("user.dir")
         val runtimeMetadata = acpService.adapterRuntimeMetadata(adapterInfo.id)
-        val selectedModelId = acpService.resolveModelToApply(
+        val selectedModelId = resolveModelToApply(
             config.modelId,
             runtimeMetadata?.availableModels ?: emptyList(),
             runtimeMetadata?.currentModelId
@@ -68,25 +64,20 @@ internal class GitCommitAcpExecutor(
         var session: ClientSession? = null
         val commitChatId = "git-commit:${UUID.randomUUID()}"
         try {
-            val factory = object : ClientOperationsFactory {
-                override suspend fun createClientOperations(
-                    sessionId: SessionId,
-                    sessionResponse: AcpCreatedSessionResponse
-                ): ClientSessionOperations {
-                    ephemeralSessionId = sessionId.value
-                    acpService.bindLiveSessionOwner(commitChatId, sessionId.value)
-                    return object : ClientSessionOperations {
-                        override suspend fun requestPermissions(
-                            toolCall: SessionUpdate.ToolCallUpdate,
-                            permissions: List<PermissionOption>,
-                            _meta: JsonElement?
-                        ): RequestPermissionResponse {
-                            toolCall.title?.takeIf { it.isNotBlank() }?.let(blockedPermissionTitles::add)
-                            return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
-                        }
+            val factory = ClientOperationsFactory { sessionId, _ ->
+                ephemeralSessionId = sessionId.value
+                acpService.bindLiveSessionOwner(commitChatId, sessionId.value)
+                object : ClientSessionOperations {
+                    override suspend fun requestPermissions(
+                        toolCall: SessionUpdate.ToolCallUpdate,
+                        permissions: List<PermissionOption>,
+                        _meta: JsonElement?
+                    ): RequestPermissionResponse {
+                        toolCall.title?.takeIf { it.isNotBlank() }?.let(blockedPermissionTitles::add)
+                        return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
+                    }
 
-                        override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
-                        }
+                    override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {
                     }
                 }
             }

@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { SlashMenuLayout } from './slashCommands';
 import { FileIcon } from '../shared/FileIcon';
 

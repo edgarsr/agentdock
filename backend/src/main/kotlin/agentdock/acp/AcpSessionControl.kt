@@ -51,7 +51,7 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
     synchronized(context.observedToolCallIds) { context.observedToolCallIds.clear() }
     val promptGeneration = context.promptGeneration.incrementAndGet()
     context.ignoreUpdatesUntilPrompt = false
-    var stopReason: String? = null
+    var promptResponseReceived = false
     val activeAdapterName = context.activeAdapterNameRef.get()
     if (!activeAdapterName.isNullOrBlank()) {
         AcpAgentPreferencesStore.rememberAgent(activeAdapterName)
@@ -78,15 +78,15 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
                         context.deliverSessionUpdate(event.update, false, null)
                     }
                 }
-                is Event.PromptResponseEvent -> stopReason = event.response.stopReason.toString()
+                is Event.PromptResponseEvent -> promptResponseReceived = true
             }
         }
         val isCurrentPrompt = context.promptGeneration.get() == promptGeneration && !context.ignoreUpdatesUntilPrompt
         if (isCurrentPrompt && !activeAdapterName.isNullOrBlank()) {
             awaitPendingSessionUpdates(activeAdapterName)
         }
-        if (isCurrentPrompt) {
-            stopReason?.let { emit(AcpEvent.PromptDone(it)) }
+        if (isCurrentPrompt && promptResponseReceived) {
+            emit(AcpEvent.PromptDone)
         }
     } catch (e: Exception) {
         if (e is CancellationException) throw e

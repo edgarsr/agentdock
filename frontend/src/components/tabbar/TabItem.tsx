@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { X } from 'lucide-react';
 import { AgentOption, ChatTab } from '../../types/chat';
 import { Tooltip } from '../chat/shared/Tooltip';

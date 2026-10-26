@@ -214,15 +214,6 @@ object AgentDockHistoryService {
         return HistoryReplayStore.copyPromptPrefix(source, base.promptCount)
     }
 
-    fun deleteConversationReplay(projectPath: String?, conversationId: String?): Boolean {
-        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
-        val cleanConversationId = runCatching {
-            HistoryStorage.requireSafeConversationId(conversationId.orEmpty())
-        }.getOrElse { return false }
-        if (cleanProjectPath.isBlank() || cleanConversationId.isBlank()) return false
-        return HistoryReplayStore.deleteConversationReplay(cleanProjectPath, cleanConversationId)
-    }
-
     fun appendSessionToConversation(
         projectPath: String?,
         previousSessionId: String,

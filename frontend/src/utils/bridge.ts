@@ -261,8 +261,6 @@ export const ACPBridge = {
             }
           }
         }
-      } else if (payload.category === 'INTERNAL') {
-        if (isDev) console.log('[ACP INTERNAL]', payload.json);
       }
     };
 

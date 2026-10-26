@@ -214,7 +214,7 @@ internal fun toShellCommand(
             if (environment.isEmpty()) invocation else buildString {
                 append("& { ")
                 environment.forEach { (key, value) ->
-                    append("\$env:")
+                    append($$"$env:")
                     append(key)
                     append(" = ")
                     append(quotePowerShellArg(value))

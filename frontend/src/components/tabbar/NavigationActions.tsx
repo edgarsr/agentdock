@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { SectionType, SettingsSectionType } from '../../types/chat';
 import {
   AppearanceTabIcon,

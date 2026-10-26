@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { openFile } from '../../../utils/openFile';
 
 interface Attachment {
@@ -38,7 +39,7 @@ export function AttachmentItem({ att, onRemove, onImageClick }: AttachmentItemPr
       >
         <div className="flex-shrink-0 w-3 h-3 flex items-center justify-center overflow-hidden">
           {isImage ? (
-            <img src={`data:${att.mimeType};base64,${att.data}`} className="w-full h-full object-cover rounded-[1px]"/>
+            <img src={`data:${att.mimeType};base64,${att.data}`} alt="" className="w-full h-full object-cover rounded-[1px]"/>
           ) : (
             <FileIcon mimeType={att.mimeType}/>
           )}

@@ -42,10 +42,10 @@ internal fun conversationWasContinuedElsewhere(
 
     var controlFound = false
     var lastFound = false
-    for (session in cached.sessions) {
-        for (prompt in session.prompts) {
+    for ((_, _, prompts) in cached.sessions) {
+        for ((_, events) in prompts) {
             val text = normalize(
-                prompt.events.asSequence()
+                events.asSequence()
                     .filter { (it["role"] as? JsonPrimitive)?.content == "assistant" }
                     .filter { (it["type"] as? JsonPrimitive)?.content == "text" }
                     .mapNotNull { (it["text"] as? JsonPrimitive)?.content }
@@ -56,5 +56,5 @@ internal fun conversationWasContinuedElsewhere(
             if (controlFound && lastFound) return false
         }
     }
-    return controlFound && !lastFound
+    return controlFound
 }

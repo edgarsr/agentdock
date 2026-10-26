@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-@OptIn(UnstableApi::class)
 internal suspend fun AcpClientService.listHistorySessions(
     adapterInfo: AcpAdapterConfig.AdapterInfo,
     projectPath: String,
@@ -95,7 +94,6 @@ private suspend fun AcpClientService.acpSessionList(
     }
 }
 
-@OptIn(UnstableApi::class)
 internal suspend fun AcpClientService.deleteHistorySession(adapterName: String, sessionId: String): Boolean {
     val sharedProc = activeProcesses[adapterName]?.takeIf { it.isHealthy() } ?: return false
     if (!sharedProc.sessionDeleteAvailable) return false
@@ -103,15 +101,12 @@ internal suspend fun AcpClientService.deleteHistorySession(adapterName: String, 
     return protocol.deleteAcpSession(sessionId)
 }
 
-@OptIn(UnstableApi::class)
 internal suspend fun Protocol.deleteAcpSession(sessionId: String): Boolean =
     sendSessionLifecycleRequest("session/delete", sessionId)
 
-@OptIn(UnstableApi::class)
 internal suspend fun Protocol.closeAcpSession(sessionId: String): Boolean =
     sendSessionLifecycleRequest("session/close", sessionId)
 
-@OptIn(UnstableApi::class)
 private suspend fun Protocol.sendSessionLifecycleRequest(method: String, sessionId: String): Boolean = try {
     sendRequestRaw(
         MethodName(method),

@@ -37,9 +37,7 @@ internal class AcpAudioPlayer(private val scope: CoroutineScope) {
             }
             try {
                 val resourceStream = AcpAudioPlayer::class.java.getResourceAsStream(resourcePath)
-                if (resourceStream == null) {
-                    return@launch
-                }
+                    ?: return@launch
                 BufferedInputStream(resourceStream).use { bufferedStream ->
                     AudioSystem.getAudioInputStream(bufferedStream).use { sourceStream ->
                         val sourceFormat = sourceStream.format
@@ -72,7 +70,7 @@ internal class AcpAudioPlayer(private val scope: CoroutineScope) {
                         }
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
     }

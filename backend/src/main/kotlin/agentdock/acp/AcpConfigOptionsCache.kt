@@ -3,8 +3,6 @@ package agentdock.acp
 import agentdock.utils.atomicWriteText
 import com.intellij.openapi.diagnostic.Logger
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.time.Instant
@@ -96,7 +94,7 @@ internal object AcpConfigOptionsCache {
         val cached = cache.adapters[adapterInfo.id] ?: return null
         if (cached.adapterVersion != adapterVersion) return null
         val age = Instant.now().toEpochMilli() - cached.refreshedAtMillis
-        if (age < 0L || age > CONFIG_OPTIONS_CACHE_MAX_AGE_MILLIS) return null
+        if (age !in 0L..CONFIG_OPTIONS_CACHE_MAX_AGE_MILLIS) return null
         return cached
     }
 

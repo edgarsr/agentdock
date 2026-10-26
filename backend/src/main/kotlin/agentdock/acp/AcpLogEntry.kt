@@ -11,5 +11,5 @@ data class AcpLogEntry(
     val timestampMillis: Long = System.currentTimeMillis()
 ) {
     enum class Direction { SENT, RECEIVED }
-    enum class Category { PROTOCOL, INTERNAL, STDERR }
+    enum class Category { PROTOCOL, STDERR }
 }

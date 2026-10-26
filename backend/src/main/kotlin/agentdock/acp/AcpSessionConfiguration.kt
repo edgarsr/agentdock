@@ -6,7 +6,7 @@ internal fun AcpClientService.updateMetadataFromConfigOptionResponse(
     adapterName: String,
     response: JsonObject,
     context: AcpClientService.AgentContext
-): Unit {
+) {
     val adapterInfo = AcpAdapterPaths.getAdapterInfo(adapterName)
     updateSessionRuntimeMetadata(
         adapterInfo,

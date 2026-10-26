@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useContext } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { 
@@ -17,7 +18,7 @@ export type SerializedImageNode = Spread<
   SerializedLexicalNode
 >;
 
-export class ImageNode extends DecoratorNode<JSX.Element> {
+export class ImageNode extends DecoratorNode<React.JSX.Element> {
   __id: string;
 
   static getType(): string { return 'image'; }
@@ -46,7 +47,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
 
   getTextContent(): string { return `[image-${this.__id}]`; }
 
-  decorate(_editor: LexicalEditor, _config: EditorConfig): JSX.Element {
+  decorate(_editor: LexicalEditor, _config: EditorConfig): React.JSX.Element {
     return <ImageComponent id={this.__id} nodeKey={this.__key} />;
   }
 }
@@ -103,7 +104,7 @@ function ImageComponent({ id, nodeKey }: { id: string; nodeKey: NodeKey }) {
       >
         {att ? (
           <div className="w-3 h-3 rounded-sm overflow-hidden flex-shrink-0">
-            <img src={`data:${att.mimeType};base64,${att.data}`} className="w-full h-full object-cover"/>
+            <img src={`data:${att.mimeType};base64,${att.data}`} alt={att.name} className="w-full h-full object-cover"/>
           </div>
         ) : (
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"

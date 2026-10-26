@@ -69,7 +69,7 @@ internal object AcpCopilotAuthenticationRpc {
         }
         val errorReader = Thread {
             runCatching {
-                process.errorStream.bufferedReader().useLines { lines -> lines.forEach { } }
+                process.errorStream.bufferedReader().useLines { lines -> lines.forEach { _ -> } }
             }
         }.apply {
             isDaemon = true
@@ -103,8 +103,8 @@ internal object AcpCopilotAuthenticationRpc {
             params: JsonObject? = buildJsonObject {}
         ): JsonObject? {
             val id = nextId++
-            AcpCopilotAuthenticationRpc.sendRequest(process, id, method, params)
-            return AcpCopilotAuthenticationRpc.awaitResult(responses, id, deadline)
+            sendRequest(process, id, method, params)
+            return awaitResult(responses, id, deadline)
         }
     }
 

@@ -1,12 +1,7 @@
 package agentdock.acp
 
+import agentdock.history.*
 import com.agentclientprotocol.model.ContentBlock
-import kotlinx.serialization.json.*
-import agentdock.history.ConversationPromptReplayEntry
-import agentdock.history.ConversationReplayData
-import agentdock.history.ConversationSessionReplayEntry
-import agentdock.history.AgentDockHistoryService
-import agentdock.history.HistoryReplayStore
 
 internal fun AcpBridge.startHistoryReplayCapture(
     chatId: String,
@@ -99,7 +94,7 @@ private fun getOrCreateReplayUserPrompt(
     }
 }
 
-internal fun AcpBridge.getOrCreateReplaySession(
+internal fun getOrCreateReplaySession(
     capture: HistoryReplayCapture,
     sessionId: String,
     adapterName: String
@@ -113,10 +108,5 @@ internal fun AcpBridge.getOrCreateReplaySession(
     }
 }
 
-internal fun AcpBridge.getOrCreateReplayPrompt(session: ReplaySessionCapture): ReplayPromptCapture {
-    val current = session.prompts.lastOrNull()
-    if (current == null) {
-        return ReplayPromptCapture().also { session.prompts.add(it) }
-    }
-    return current
-}
+internal fun getOrCreateReplayPrompt(session: ReplaySessionCapture): ReplayPromptCapture =
+    session.prompts.lastOrNull() ?: ReplayPromptCapture().also { session.prompts.add(it) }

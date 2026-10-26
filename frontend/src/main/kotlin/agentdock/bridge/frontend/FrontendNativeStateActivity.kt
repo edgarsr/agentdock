@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 package agentdock.bridge.frontend
 
 import agentdock.acp.AcpAudioPlayer
@@ -23,7 +21,7 @@ import kotlinx.coroutines.launch
 @Service(Service.Level.PROJECT)
 class FrontendNativeStateService(
     private val project: Project,
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
 ) {
     private val audio = AcpAudioPlayer(scope)
 

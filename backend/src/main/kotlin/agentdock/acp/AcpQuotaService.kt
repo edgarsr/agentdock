@@ -193,7 +193,7 @@ class AcpQuotaService : Disposable {
                     }
                     secondaryPct?.let {
                         val label = if ((secondarySecs ?: 0.0) >= 24.0 * 60 * 60) "7d" else "5h"
-                        val finalLabel = if (details.any { it.startsWith(label) }) {
+                        val finalLabel = if (details.any { detail -> detail.startsWith(label) }) {
                             if (label == "5h") "7d" else "5h"
                         } else label
                         details.add("$finalLabel: $it%")

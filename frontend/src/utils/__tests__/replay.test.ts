@@ -330,7 +330,7 @@ describe('replay rendering rules', () => {
         content: [{ type: 'diff', path, oldText, newText }],
       }),
     });
-    const data: ConversationReplayData = {
+    const data = {
       sessions: [
         {
           sessionId: 'session-1',
@@ -346,7 +346,7 @@ describe('replay rendering rules', () => {
           prompts: [{ events: [edit('edit-1', 'a.ts', 'a2', 'a3')] }],
         },
       ],
-    };
+    } satisfies ConversationReplayData;
     const events = buildReplayToolCallEvents(data);
     const reorderedEvents = buildReplayToolCallEvents({
       sessions: [data.sessions[1], data.sessions[0]],

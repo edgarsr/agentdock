@@ -16,7 +16,6 @@ import kotlin.time.Duration.Companion.seconds
 
 private val PROBE_SESSION_OPERATION_TIMEOUT = 3.seconds
 
-@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     protocol: Protocol,
     adapterInfo: AcpAdapterConfig.AdapterInfo,

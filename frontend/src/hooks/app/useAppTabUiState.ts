@@ -16,7 +16,7 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
 
   useEffect(() => {
     const onVisibility = (event: Event) => {
-      const visible = (event as CustomEvent<boolean>).detail !== false;
+      const visible = (event as CustomEvent<boolean>).detail;
       uiVisibleRef.current = visible;
       setUiVisible(visible);
     };

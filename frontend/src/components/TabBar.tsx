@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, SquarePen } from 'lucide-react';
 import {

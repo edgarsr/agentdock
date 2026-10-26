@@ -53,9 +53,9 @@ internal class WebUi : UiSink {
                 // The frames queued meanwhile go out in one write.
                 batch.add(own.poll(HEARTBEAT_SECONDS, TimeUnit.SECONDS) ?: HEARTBEAT)
                 own.drainTo(batch)
-                val end = batch.indexOfFirst { it === SUPERSEDED || it === CLOSED }
+                val end = batch.indexOfFirst { it == SUPERSEDED || it == CLOSED }
                 if (end >= 0) {
-                    val elsewhere = if (batch[end] === SUPERSEDED) listOf(frame("elsewhere", "")) else emptyList()
+                    val elsewhere = if (batch[end] == SUPERSEDED) listOf(frame("elsewhere", "")) else emptyList()
                     write(out, (batch.subList(0, end) + elsewhere).joinToString(""))
                     return
                 }

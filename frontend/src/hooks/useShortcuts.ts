@@ -4,6 +4,7 @@ import { ACPBridge } from '../utils/bridge';
 
 export type ShortcutAction = Exclude<keyof ShortcutSettings, 'tabNumbers'>;
 
+//noinspection JSDeprecatedSymbols
 export const isMac = /mac/i.test(navigator.platform);
 
 const shortcutSettings = () => ACPBridge.getGlobalSettingsSnapshot()?.settings?.shortcuts;
@@ -14,11 +15,13 @@ const isCommandKey = (event: KeyboardEvent) => event.ctrlKey !== event.metaKey &
 // The key code is the one the IDE forwards the shortcut by, so it matches on any keyboard layout.
 export function isShortcut(event: KeyboardEvent, action: ShortcutAction): boolean {
   const letter = shortcutSettings()?.[action];
+  //noinspection JSDeprecatedSymbols
   return Boolean(letter) && isCommandKey(event) && event.keyCode === letter!.charCodeAt(0);
 }
 
 // The chat number of Ctrl/Cmd+1…9 while those shortcuts are on.
 export function chatNumberShortcut(event: KeyboardEvent): number | null {
+  //noinspection JSDeprecatedSymbols
   const number = event.keyCode - 48;
   return shortcutSettings()?.tabNumbers && isCommandKey(event) && number >= 1 && number <= 9 ? number : null;
 }

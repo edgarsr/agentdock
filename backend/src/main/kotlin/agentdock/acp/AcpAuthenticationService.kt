@@ -17,7 +17,6 @@ internal object AcpAuthenticationService {
     private val AUTH_STATUS_POLL_INTERVAL = 1.seconds
     private val LOGOUT_TIMEOUT = 15.seconds
 
-    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
     suspend fun login(
         adapterId: String,
         methodId: String,

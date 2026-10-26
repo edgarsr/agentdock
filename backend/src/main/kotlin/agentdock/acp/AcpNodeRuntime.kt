@@ -88,7 +88,7 @@ internal object AcpNodeRuntimeResolver {
     private fun resolveSystem(): AcpNodeRuntime? {
 
         val candidates = buildList {
-            add(emptyList<File>())
+            add(emptyList())
             nvmdBinDir()?.takeIf { it.isDirectory }?.let { add(listOf(it)) }
         }
 
@@ -264,7 +264,7 @@ internal object AcpNodeRuntimeResolver {
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                "\$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '${archive.absolutePath}' -DestinationPath '${targetDir.absolutePath}' -Force"
+                $$"$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '$${archive.absolutePath}' -DestinationPath '$${targetDir.absolutePath}' -Force"
             )
         } else {
             ProcessBuilder("tar", "-xJf", archive.absolutePath, "-C", targetDir.absolutePath)

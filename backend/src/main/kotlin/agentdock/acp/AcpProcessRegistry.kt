@@ -130,6 +130,7 @@ internal class AcpProcessRegistryStore(
         if (liveOwners.isNotEmpty()) return@withRegistryLock
 
         val roots = (listOfNotNull(current) + deadOwners)
+            .asSequence()
             .flatMap { owner ->
                 owner.adapterRoots.map(AdapterRoot::root) +
                     owner.processes.filter { it.customStartedAt == null }.map(OwnedProcess::adapterRoot)
@@ -138,6 +139,7 @@ internal class AcpProcessRegistryStore(
             .map(::normalizeRoot)
             .filter { it.isNotBlank() }
             .distinct()
+            .toList()
         stopProcessesUsingRoots(roots)
         rootsDir.listFiles().orEmpty().forEach { it.delete() }
     }

@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useLayoutEffect, useRef, memo, useState, useMemo, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { Message, RichContentBlock, ExploringBlock, PlanBlock, AgentOption } from '../../types/chat';

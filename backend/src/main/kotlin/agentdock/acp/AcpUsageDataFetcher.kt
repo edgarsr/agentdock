@@ -24,7 +24,7 @@ internal object AcpUsageDataFetcher {
     private val MIN_USAGE_REQUEST_INTERVAL = 10.seconds
     private val ANTIGRAVITY_MIN_USAGE_REQUEST_INTERVAL = 60.seconds
     /** Age up to which cached data is good enough when the user opens a view showing it. */
-    val VIEW_MAX_AGE = 5.minutes
+    val VIEW_MAX_AGE = 2.minutes
     private data class UsageCacheEntry(val attemptedAtNanos: Long, val value: String)
 
     private val usageCache = ConcurrentHashMap<String, UsageCacheEntry>()
@@ -69,7 +69,7 @@ internal object AcpUsageDataFetcher {
     private fun fetchClaudeUsageDataUncached(): String {
         val accessToken = try {
             readTargetFile("~/.claude/.credentials.json")
-                ?.let { Json.parseToJsonElement(it).jsonObject.get("claudeAiOauth")?.jsonObject?.get("accessToken")?.jsonPrimitive?.content }
+                ?.let { Json.parseToJsonElement(it).jsonObject["claudeAiOauth"]?.jsonObject?.get("accessToken")?.jsonPrimitive?.content }
         } catch (_: Exception) { null }
 
         if (accessToken == null) return """{"authType":"api_key"}"""
@@ -237,7 +237,7 @@ internal object AcpUsageDataFetcher {
             }
         }.apply { isDaemon = true; start() }
         val errThread = Thread {
-            runCatching { process.errorStream.bufferedReader().useLines { lines -> lines.forEach { } } }
+            runCatching { process.errorStream.bufferedReader().useLines { lines -> lines.forEach { _ -> } } }
         }.apply { isDaemon = true; start() }
 
         return try {

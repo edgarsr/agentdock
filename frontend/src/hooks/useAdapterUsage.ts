@@ -1,7 +1,7 @@
 import {createContext, createElement, ReactNode, useContext, useEffect, useRef, useState} from 'react';
 import {ACPBridge} from '../utils/bridge';
 
-const PROMPT_USAGE_REFRESH_MS = 60000;
+const PROMPT_USAGE_REFRESH_MS = 30000;
 
 type UsageLifecycleContextValue =
   | {
@@ -83,9 +83,10 @@ export function useAdapterUsage(adapterId: string) {
     if (enabled) ACPBridge.fetchAdapterUsage(adapterId, true);
   }, [adapterId, enabled]);
 
-  // A prompt uses up quota, so its adapter is refreshed while it runs and once it ends.
+  // A prompt uses up quota, so its adapter is refreshed when it starts, while it runs and once it ends.
   useEffect(() => {
     if (!isSending) return;
+    ACPBridge.fetchAdapterUsage(adapterId);
     const intervalId = window.setInterval(() => ACPBridge.fetchAdapterUsage(adapterId), PROMPT_USAGE_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [adapterId, isSending]);

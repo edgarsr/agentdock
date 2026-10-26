@@ -14,10 +14,6 @@ version = providers.gradleProperty("pluginVersion").get()
 subprojects {
     group = rootProject.group
     version = rootProject.version
-    apply(plugin = "org.jetbrains.intellij.platform.module")
-    apply(plugin = "org.jetbrains.kotlin.jvm")
-    apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
-    apply(plugin = "rpc")
 }
 
 repositories {
@@ -89,21 +85,25 @@ intellijPlatform {
 val devMode = providers.gradleProperty("devMode").map { it.toBoolean() }.getOrElse(false)
 
 val generateBuildConfig by tasks.registering {
+    description = "Generates the BuildConfig object with the dev mode flag and plugin version."
     val outputDir = layout.buildDirectory.dir("generated/buildConfig")
     val isDev = devMode
+    val pluginVersion = project.version.toString()
     inputs.property("devMode", isDev)
+    inputs.property("pluginVersion", pluginVersion)
     outputs.dir(outputDir)
     doLast {
         val file = outputDir.get().asFile.resolve("agentdock/BuildConfig.kt")
         file.parentFile.mkdirs()
         // Public rather than internal: both the frontend and the backend content module read it.
-        file.writeText("package agentdock\n\nobject BuildConfig {\n    const val IS_DEV: Boolean = $isDev\n}\n")
+        file.writeText("package agentdock\n\nobject BuildConfig {\n    const val IS_DEV: Boolean = $isDev\n    const val PLUGIN_VERSION: String = \"$pluginVersion\"\n}\n")
     }
 }
 
 val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
 
 val npmBuild by tasks.registering(Exec::class) {
+    description = "Builds the React UI into src/main/resources/webview."
     workingDir = file("frontend")
     commandLine(npm, "run", "build")
 

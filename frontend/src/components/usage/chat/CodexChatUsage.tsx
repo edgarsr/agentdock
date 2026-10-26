@@ -24,11 +24,7 @@ export function CodexChatUsage() {
           typeof secondary.used_percent === 'number' &&
           typeof secondary.reset_after_seconds === 'number' &&
           hasDisplayableQuotaResetAfterSeconds(secondary.reset_after_seconds);
-        if (!hasPrimary && !hasSecondary) {
-          hasData = false;
-        } else {
-          hasData = true;
-        }
+        hasData = !(!hasPrimary && !hasSecondary);
 
         let percent = hasPrimary ? primary.used_percent : 0;
 

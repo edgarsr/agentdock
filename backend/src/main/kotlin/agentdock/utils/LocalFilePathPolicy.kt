@@ -33,8 +33,7 @@ object LocalFilePathPolicy {
     }
 
     fun isRestorableLocalPath(filePath: String): Boolean {
-        if (filePath.isBlank()) return false
-        return runCatching { File(filePath).canonicalPath.isNotBlank() }.getOrDefault(false)
+        return filePath.isNotBlank() && runCatching { File(filePath).canonicalPath.isNotBlank() }.getOrDefault(false)
     }
 
     fun isInsideProject(projectBase: String, filePath: String): Boolean {

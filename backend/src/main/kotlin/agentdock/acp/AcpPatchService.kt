@@ -141,8 +141,7 @@ object AcpPatchService {
             append("^")
             var index = 0
             while (index < normalized.length) {
-                val current = normalized[index]
-                when (current) {
+                when (val current = normalized[index]) {
                     '*' -> {
                         val isDoubleStar = index + 1 < normalized.length && normalized[index + 1] == '*'
                         if (isDoubleStar) {

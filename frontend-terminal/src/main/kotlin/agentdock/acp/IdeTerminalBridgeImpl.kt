@@ -6,6 +6,7 @@ import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import org.jetbrains.plugins.terminal.TerminalProjectOptionsProvider
 
 internal class IdeTerminalBridgeImpl(private val project: Project) : IdeTerminalBridge {
+    @Suppress("UnstableApiUsage")
     override fun open(request: TerminalLaunchRequest) {
         val tab = TerminalToolWindowTabsManager.getInstance(project)
             .createTabBuilder()

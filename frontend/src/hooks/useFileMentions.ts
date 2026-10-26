@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LexicalEditor, $getSelection, $isRangeSelection, $isTextNode } from 'lexical';
 import { calculateSlashMenuLayout, computeViewportTopInset, SlashMenuLayout } from '../components/chat/input/slashCommands';

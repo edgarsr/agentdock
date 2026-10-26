@@ -17,7 +17,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -136,9 +135,8 @@ internal class AudioOutputBridge(
             audio.close(failure)
         }
 
-        val line = AudioSystem.getSourceDataLine(PCM_FORMAT)
-        playback.line = line
-        try {
+        AudioSystem.getSourceDataLine(PCM_FORMAT).use { line ->
+            playback.line = line
             currentCoroutineContext().ensureActive()
             line.open(PCM_FORMAT)
             line.start()
@@ -152,8 +150,6 @@ internal class AudioOutputBridge(
                 line.write(data, 0, frames)
             }
             line.drain()
-        } finally {
-            line.close()
         }
     }
 

@@ -1,7 +1,6 @@
 package agentdock.acp
 
 import com.agentclientprotocol.client.ClientOperationsFactory
-import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.AcpCreatedSessionResponse
 import com.agentclientprotocol.model.SessionConfigOption
@@ -70,16 +69,11 @@ internal suspend fun AcpClientService.startAgent(
                 val cwd = project.basePath ?: System.getProperty("user.dir")
 
                 var createdSessionMetadata: AcpClientService.AdapterRuntimeMetadata? = null
-                val factory = object : ClientOperationsFactory {
-                    override suspend fun createClientOperations(
-                        sessionId: SessionId,
-                        sessionResponse: AcpCreatedSessionResponse
-                    ): ClientSessionOperations {
-                        createdSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
-                        context.sessionIdRef.compareAndSet(null, sessionId.value)
-                        bindLiveSessionOwner(chatId, sessionId.value)
-                        return createSharedSessionOperations(sessionId.value)
-                    }
+                val factory = ClientOperationsFactory { sessionId, sessionResponse ->
+                    createdSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
+                    context.sessionIdRef.compareAndSet(null, sessionId.value)
+                    bindLiveSessionOwner(chatId, sessionId.value)
+                    createSharedSessionOperations(sessionId.value)
                 }
 
                 val params = SessionCreationParameters(cwd = cwd, mcpServers = buildMcpServers())
@@ -248,19 +242,14 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
     val cwd = project.basePath ?: System.getProperty("user.dir")
 
     var loadedSessionMetadata: AcpClientService.AdapterRuntimeMetadata? = null
-    val factory = object : ClientOperationsFactory {
-        override suspend fun createClientOperations(
-            sessionId: SessionId,
-            sessionResponse: AcpCreatedSessionResponse
-        ): ClientSessionOperations {
-            loadedSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
-            context.sessionIdRef.set(sessionId.value)
-            bindLiveSessionOwner(context.chatId, sessionId.value)
-            if (deliverReplay) {
-                replayOwnerBySessionId[sessionId.value] = context.chatId
-            }
-            return createSharedSessionOperations(sessionId.value)
+    val factory = ClientOperationsFactory { sessionId, sessionResponse ->
+        loadedSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
+        context.sessionIdRef.set(sessionId.value)
+        bindLiveSessionOwner(context.chatId, sessionId.value)
+        if (deliverReplay) {
+            replayOwnerBySessionId[sessionId.value] = context.chatId
         }
+        createSharedSessionOperations(sessionId.value)
     }
 
     val params = SessionCreationParameters(cwd = cwd, mcpServers = buildMcpServers())
@@ -295,7 +284,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
 }
 
 @Suppress("OPT_IN_USAGE")
-private suspend fun AcpClientService.createOrResumeSession(
+private suspend fun createOrResumeSession(
     client: com.agentclientprotocol.client.Client,
     params: SessionCreationParameters,
     factory: ClientOperationsFactory,

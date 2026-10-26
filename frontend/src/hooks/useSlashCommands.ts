@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LexicalEditor } from 'lexical';
 import type { ChatAttachment } from '../types/chat';

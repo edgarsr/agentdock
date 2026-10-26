@@ -172,7 +172,7 @@ internal object GitCommitPromptBuilder {
 
         return buildString {
             appendLine("New file content excerpt:")
-            append(buffer, 0, minOf(length, MAX_NEW_FILE_CHARS))
+            appendRange(buffer, 0, minOf(length, MAX_NEW_FILE_CHARS))
             if (length > MAX_NEW_FILE_CHARS) {
                 appendLine()
                 append("...[truncated]")

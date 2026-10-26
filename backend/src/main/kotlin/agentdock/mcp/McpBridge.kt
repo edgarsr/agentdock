@@ -1,18 +1,13 @@
 package agentdock.mcp
 
 import agentdock.bridge.BridgeHost
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.job
-import kotlinx.coroutines.launch
+import agentdock.utils.jsCallback
+import agentdock.utils.jsStringLiteral
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import agentdock.utils.jsCallback
-import agentdock.utils.jsStringLiteral
 
 private val json = Json { ignoreUnknownKeys = true }
 

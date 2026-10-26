@@ -195,7 +195,7 @@ internal fun AcpBridge.installConversationQueries() {
                     pushStatus(chatId, "prompting")
                     service.prompt(chatId, blocks).collect { event ->
                         when (event) {
-                            is AcpEvent.PromptDone -> withChatDelivery(chatId) {
+                            AcpEvent.PromptDone -> withChatDelivery(chatId) {
                                 if (captureId != null && livePromptCaptures[chatId]?.captureId == captureId) {
                                     service.sessionId(chatId)?.let { awaitingBackgroundOutput[chatId] = it }
                                 }

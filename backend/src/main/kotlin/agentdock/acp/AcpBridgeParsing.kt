@@ -114,7 +114,7 @@ internal fun parseBlocksPayload(payload: String): ParsedBlocksPayload {
     // The UI sends content blocks as a JSON array inside the text field.
     val structured = textValue.takeIf { it.startsWith("[") && it.endsWith("]") }?.let { text ->
         runCatching {
-            val rawBlocks = Json.parseToJsonElement(text).jsonArray.mapNotNull { it as? JsonObject }
+            val rawBlocks = Json.parseToJsonElement(text).jsonArray.filterIsInstance<JsonObject>()
             parseContentBlocks(JsonArray(rawBlocks)) to rawBlocks
         }.getOrNull()
     }?.takeIf { (blocks, _) -> blocks.isNotEmpty() }
@@ -161,8 +161,7 @@ internal fun parseCancelPayload(payload: String): ParsedCancelPayload {
 internal fun parseContentBlocks(blocksElement: JsonElement): List<ContentBlock> {
     return blocksElement.jsonArray.map { blockEl ->
         val blockObj = blockEl.jsonObject
-        val type = blockObj["type"]?.jsonPrimitive?.content
-        when (type) {
+        when (val type = blockObj["type"]?.jsonPrimitive?.content) {
             "image" -> {
                 val data = blockObj["data"]?.jsonPrimitive?.content ?: ""
                 val mimeType = blockObj["mimeType"]?.jsonPrimitive?.content ?: "image/png"

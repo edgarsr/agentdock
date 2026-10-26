@@ -88,7 +88,7 @@ internal object AcpLoginStatus {
 internal fun parseClaudeCodeLoginStatus(output: String): Boolean? {
     val jsonStart = output.indexOf('{')
     val jsonEnd = output.lastIndexOf('}')
-    if (jsonStart < 0 || jsonEnd < jsonStart) return null
+    if (jsonStart !in 0..jsonEnd) return null
 
     return runCatching {
         Json.parseToJsonElement(output.substring(jsonStart, jsonEnd + 1))

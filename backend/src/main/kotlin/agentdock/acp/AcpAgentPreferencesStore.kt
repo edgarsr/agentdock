@@ -1,7 +1,6 @@
 package agentdock.acp
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import agentdock.utils.atomicWriteText
 import java.io.File
@@ -44,8 +43,6 @@ object AcpAgentPreferencesStore {
         val stored = readStoredState()
         if (stored.valid && stored.state == normalized) stored.state else writeState(normalized)
     }
-
-    fun lastAgentId(): String? = load().lastAgentId.takeIf { it.isNotBlank() }
 
     fun rememberAgent(adapterId: String) {
         val trimmedAdapterId = adapterId.trim()

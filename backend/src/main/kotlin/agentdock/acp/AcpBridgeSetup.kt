@@ -262,24 +262,24 @@ private fun convertBrokenOtherPatchToolCallJson(parsed: JsonObject): JsonObject 
 
     flush()
     val diffs = mutableListOf<PatchDiff>()
-    for (file in files) {
-        when (file.mode) {
+    for ((filePath, fileMode, fileHunks) in files) {
+        when (fileMode) {
             "add" -> {
-                val newText = file.hunks.joinToString("\n") { it.newText }
+                val newText = fileHunks.joinToString("\n") { it.newText }
                 if (newText.isNotEmpty()) {
-                    diffs += PatchDiff(path = file.path, oldText = null, newText = newText)
+                    diffs += PatchDiff(path = filePath, oldText = null, newText = newText)
                 }
             }
             "delete" -> {
-                val oldText = file.hunks.joinToString("\n") { it.oldText }
+                val oldText = fileHunks.joinToString("\n") { it.oldText }
                 if (oldText.isNotEmpty()) {
-                    diffs += PatchDiff(path = file.path, oldText = oldText, newText = "")
+                    diffs += PatchDiff(path = filePath, oldText = oldText, newText = "")
                 }
             }
             else -> {
-                file.hunks.forEach { hunk ->
+                fileHunks.forEach { hunk ->
                     if (hunk.oldText != hunk.newText) {
-                        diffs += PatchDiff(path = file.path, oldText = hunk.oldText, newText = hunk.newText)
+                        diffs += PatchDiff(path = filePath, oldText = hunk.oldText, newText = hunk.newText)
                     }
                 }
             }

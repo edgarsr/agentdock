@@ -79,8 +79,7 @@ private fun isWindowsLikePath(path: String): Boolean {
 internal fun historyComparablePath(path: String?): String {
     val value = path?.trim().orEmpty()
     if (value.isEmpty()) return ""
-    val withoutExtendedPrefix = stripWindowsExtendedPathPrefix(value)
-    val comparable = withoutExtendedPrefix
+    val comparable = stripWindowsExtendedPathPrefix(value)
     val normalized = if (isWindowsLikePath(comparable)) {
         comparable.replace("/", "\\")
     } else {
@@ -147,8 +146,7 @@ private fun buildHistoryGlobRegex(glob: String): Regex {
     val sb = StringBuilder("^")
     var i = 0
     while (i < glob.length) {
-        val c = glob[i]
-        when (c) {
+        when (val c = glob[i]) {
             '*' -> {
                 if (i + 1 < glob.length && glob[i + 1] == '*') {
                     sb.append(".*")

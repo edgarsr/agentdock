@@ -5,7 +5,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 sealed class AcpEvent {
-    data class PromptDone(val stopReason: String) : AcpEvent()
+    data object PromptDone : AcpEvent()
     data class Error(val message: String) : AcpEvent()
 }
 

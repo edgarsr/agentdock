@@ -103,7 +103,7 @@ private fun AcpClientService.triggerBackgroundHistorySyncIfInitializationsSettle
     }
 }
 
-internal fun AcpClientService.resolveModelToApply(
+internal fun resolveModelToApply(
     pref: String?,
     available: List<AcpAdapterConfig.ModelInfo>,
     default: String?

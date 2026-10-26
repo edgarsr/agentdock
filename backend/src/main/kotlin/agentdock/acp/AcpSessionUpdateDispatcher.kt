@@ -143,7 +143,7 @@ private fun AcpClientService.updateRuntimeMetadataFromConfigOptionsNotification(
     }
 }
 
-internal fun AcpClientService.extractAvailableCommands(
+internal fun extractAvailableCommands(
     params: kotlinx.serialization.json.JsonElement?
 ): List<AvailableCommandPayload>? {
     val paramsObject = params as? JsonObject ?: return null

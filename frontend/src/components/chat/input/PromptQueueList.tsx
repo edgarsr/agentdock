@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { KeyboardEvent, useRef, useState } from 'react';
 import { ChevronRight, Clock, GripVertical, ListOrdered, Pencil, SendHorizontal, Trash2 } from 'lucide-react';
 import { formatScheduledTime } from './scheduledTime';

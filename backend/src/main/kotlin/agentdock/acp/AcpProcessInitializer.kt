@@ -38,7 +38,6 @@ private val CONFIG_OPTIONS_FETCH_TIMEOUT = 120.seconds
  * caller's initialization; the timeout starts only after this caller acquires
  * the process mutex.
  */
-@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 internal suspend fun AcpClientService.startAndInitializeSharedProcess(
     sharedProcess: AcpClientService.SharedProcess,
     adapterInfo: AcpAdapterConfig.AdapterInfo,
@@ -65,7 +64,6 @@ internal suspend fun AcpClientService.startAndInitializeSharedProcess(
     }
 }
 
-@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 private suspend fun AcpClientService.initializeSharedProcessWithinBudget(
     sharedProcess: AcpClientService.SharedProcess,
     adapterInfo: AcpAdapterConfig.AdapterInfo

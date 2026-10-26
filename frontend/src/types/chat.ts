@@ -10,7 +10,7 @@ export interface ToolCallDiffEntry {
 export interface AcpLogEntryPayload {
   adapterId: string;
   direction: 'SENT' | 'RECEIVED';
-  category: 'PROTOCOL' | 'INTERNAL' | 'STDERR';
+  category: 'PROTOCOL' | 'STDERR';
   json: string;
   timestamp: number;
 }

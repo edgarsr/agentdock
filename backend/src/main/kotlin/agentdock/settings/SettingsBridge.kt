@@ -1,18 +1,17 @@
 package agentdock.settings
 
+import agentdock.acp.AcpQuotaService
 import agentdock.bridge.BridgeHost
+import agentdock.utils.jsCallback
+import agentdock.utils.jsStringLiteral
 import com.intellij.openapi.project.ProjectManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import agentdock.acp.AcpQuotaService
-import agentdock.utils.jsCallback
-import agentdock.utils.jsStringLiteral
 
 class SettingsBridge(
     private val host: BridgeHost,

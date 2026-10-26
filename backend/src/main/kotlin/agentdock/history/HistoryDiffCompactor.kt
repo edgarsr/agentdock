@@ -51,8 +51,7 @@ internal object HistoryDiffCompactor {
     private fun isDiffLikePayload(element: kotlinx.serialization.json.JsonElement): Boolean {
         val diff = element as? JsonObject ?: return false
         val type = diff["type"]?.jsonPrimitive?.contentOrNull
-        if (type == "diff") return true
-        return diff["path"] != null && diff["newText"] != null
+        return type == "diff" || (diff["path"] != null && diff["newText"] != null)
     }
 
     private fun compactStoredDiff(diff: JsonObject): JsonObject {

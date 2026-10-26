@@ -4,10 +4,10 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import {
   $createLineBreakNode,
   $createTextNode,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
   $isElementNode,
-  $nodesOfType,
   $isRangeSelection,
   $isTextNode,
   COMMAND_PRIORITY_HIGH,
@@ -17,7 +17,8 @@ import {
   KEY_ENTER_COMMAND,
   PASTE_COMMAND,
   LexicalEditor,
-  LexicalNode
+  LexicalNode,
+  type MutationListener
 } from 'lexical';
 import { $createImageNode, ImageNode } from './ImageNode';
 import { ReferenceNode, $createReferenceNode, $isReferenceNode, type ReferenceKind } from './ReferenceNode';
@@ -32,29 +33,36 @@ export function AttachmentsSyncPlugin({ attachments, onAttachmentsChange }: {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    const syncRemovedAttachments = () => {
-      editor.read(() => {
-        const existingIds = new Set([
-          ...$nodesOfType(ImageNode).map((node) => node.__id),
-          ...$nodesOfType(ReferenceNode).map((node) => node.__id),
-        ]);
-        const filtered = attachments.filter((attachment) => !attachment.isInline || existingIds.has(attachment.id));
-        if (filtered.length !== attachments.length) {
-          onAttachmentsChange(filtered);
+    const attachmentIdsByKey = new Map<string, string>();
+    let hasRemovals = false;
+    const trackNodes: MutationListener = (mutations) => {
+      editor.getEditorState().read(() => {
+        for (const [key, mutation] of mutations) {
+          if (mutation === 'destroyed') {
+            attachmentIdsByKey.delete(key);
+            hasRemovals = true;
+          } else {
+            const node = $getNodeByKey<ImageNode | ReferenceNode>(key);
+            if (node) attachmentIdsByKey.set(key, node.__id);
+          }
         }
       });
     };
 
     const unregister = [ImageNode, ReferenceNode].map((nodeClass) =>
-      editor.registerMutationListener(nodeClass, (mutations) => {
-        for (const [, mutation] of mutations) {
-          if (mutation === 'destroyed') {
-            syncRemovedAttachments();
-            break;
-          }
-        }
-      })
+      editor.registerMutationListener(nodeClass, trackNodes, { skipInitialization: false })
     );
+
+    // Both node types must be tracked before reconciling a commit that replaces attachments.
+    unregister.push(editor.registerUpdateListener(() => {
+      if (!hasRemovals) return;
+      hasRemovals = false;
+      const existingIds = new Set(attachmentIdsByKey.values());
+      const filtered = attachments.filter((attachment) => !attachment.isInline || existingIds.has(attachment.id));
+      if (filtered.length !== attachments.length) {
+        onAttachmentsChange(filtered);
+      }
+    }));
 
     return () => unregister.forEach((stop) => stop());
   }, [editor, attachments, onAttachmentsChange]);
@@ -466,7 +474,7 @@ export function AutoHeightPlugin({
   return null;
 }
 
-export function ClickToFocusPlugin({ containerRef }: { containerRef: React.RefObject<HTMLDivElement> }) {
+export function ClickToFocusPlugin({ containerRef }: { containerRef: RefObject<HTMLDivElement> }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { SlashCommandItem, SlashMenuLayout } from './slashCommands';
 import PopupMenu from './PopupMenu';
 

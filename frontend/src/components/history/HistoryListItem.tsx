@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useState } from 'react';
 import { EllipsisVertical, Pencil, Pin, SquareTerminal, Trash2 } from 'lucide-react';
 import { ACPBridge } from '../../utils/bridge';

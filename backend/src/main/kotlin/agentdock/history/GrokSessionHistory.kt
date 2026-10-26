@@ -25,8 +25,7 @@ internal object GrokSessionHistory {
     }
 
     fun grokCliSessionDelete(adapterId: String, projectPath: String, sessionId: String): Boolean {
-        if (!sessionIdPattern.matches(sessionId)) return false
-        return runCatching {
+        return sessionIdPattern.matches(sessionId) && runCatching {
             runAgentHistoryCliCommand(
                 adapterId = adapterId,
                 projectPath = projectPath,

@@ -97,14 +97,14 @@ private fun AcpBridge.enqueueLateHistoryEvent(
     val queue = lateHistoryEventQueues.computeIfAbsent(chatId) {
         Channel<LateHistoryEvent>(Channel.UNLIMITED).also { created ->
             scope.launch(Dispatchers.IO) {
-                for (lateEvent in created) {
+                for ((eventSessionId, eventAdapterName, storedEvent) in created) {
                     runCatching {
                         AgentDockHistoryService.updateLastConversationPromptEvents(
                             service.project.basePath,
                             chatId,
-                            lateEvent.sessionId,
-                            lateEvent.adapterName
-                        ) { events -> upsertStoredToolEvent(events, lateEvent.event) }
+                            eventSessionId,
+                            eventAdapterName
+                        ) { events -> upsertStoredToolEvent(events, storedEvent) }
                     }
                 }
             }
@@ -113,7 +113,7 @@ private fun AcpBridge.enqueueLateHistoryEvent(
     queue.trySend(LateHistoryEvent(sessionId, adapterName, event))
 }
 
-internal fun AcpBridge.upsertStoredToolEvent(events: MutableList<JsonObject>, event: JsonObject) {
+internal fun upsertStoredToolEvent(events: MutableList<JsonObject>, event: JsonObject) {
     val merged = mergeStoredToolEvent(events, event)
     if (merged == null) {
         events.add(event)
@@ -134,7 +134,7 @@ internal fun AcpBridge.upsertStoredToolEvent(events: MutableList<JsonObject>, ev
     }
 }
 
-private fun AcpBridge.mergeStoredToolEvent(events: List<JsonObject>, event: JsonObject): JsonObject? {
+private fun mergeStoredToolEvent(events: List<JsonObject>, event: JsonObject): JsonObject? {
     val role = event["role"]?.jsonPrimitive?.contentOrNull
     if (role != "assistant") return null
 
@@ -409,7 +409,7 @@ private fun mergeJsonObjects(base: JsonObject?, patch: JsonObject): JsonObject {
     }
 }
 
-internal fun AcpBridge.storedReplayPromptBlockFromContentBlock(content: ContentBlock): JsonObject? {
+internal fun storedReplayPromptBlockFromContentBlock(content: ContentBlock): JsonObject? {
     val serialized = serializeContentBlock(content) ?: return null
     if (serialized.type != "text") {
         return buildJsonObject {
@@ -470,7 +470,7 @@ private fun isValidReplayBase64(data: String): Boolean {
     return true
 }
 
-internal fun AcpBridge.sanitizeReplayUserText(text: String): String? {
+internal fun sanitizeReplayUserText(text: String): String? {
     var sanitized = text
     replayIgnoredUserCommandRegexes.forEach { regex ->
         sanitized = sanitized.replace(regex, "")
@@ -478,7 +478,7 @@ internal fun AcpBridge.sanitizeReplayUserText(text: String): String? {
     return sanitized.takeUnless { it.isBlank() }
 }
 
-internal fun AcpBridge.storedEventFromContentBlock(role: String, content: ContentBlock, isThought: Boolean): JsonObject? {
+internal fun storedEventFromContentBlock(role: String, content: ContentBlock, isThought: Boolean): JsonObject? {
     val serialized = serializeContentBlock(content, if (isThought) "thinking" else "text") ?: return null
     return buildStoredContentChunk(
         role = role,
@@ -489,7 +489,7 @@ internal fun AcpBridge.storedEventFromContentBlock(role: String, content: Conten
     )
 }
 
-internal fun AcpBridge.buildStoredContentChunk(
+internal fun buildStoredContentChunk(
     role: String,
     type: String,
     text: String? = null,
@@ -541,7 +541,7 @@ internal fun AcpBridge.buildAssistantMetadata(
     )
 }
 
-internal fun AcpBridge.buildStoredToolCallChunk(raw: JsonObject): JsonObject {
+internal fun buildStoredToolCallChunk(raw: JsonObject): JsonObject {
     return buildJsonObject {
         put("role", "assistant")
         put("type", "tool_call")
@@ -553,7 +553,7 @@ internal fun AcpBridge.buildStoredToolCallChunk(raw: JsonObject): JsonObject {
     }
 }
 
-internal fun AcpBridge.buildStoredToolCallUpdateChunk(toolCallId: String, raw: JsonObject, fullOutput: Boolean): JsonObject {
+internal fun buildStoredToolCallUpdateChunk(toolCallId: String, raw: JsonObject, fullOutput: Boolean): JsonObject {
     return buildJsonObject {
         put("role", "assistant")
         put("type", "tool_call_update")
@@ -562,7 +562,7 @@ internal fun AcpBridge.buildStoredToolCallUpdateChunk(toolCallId: String, raw: J
     }
 }
 
-internal fun AcpBridge.storedToolRawJson(raw: JsonObject, fullOutput: Boolean = false): String {
+internal fun storedToolRawJson(raw: JsonObject, fullOutput: Boolean = false): String {
     val compacted = compactToolRawJson(raw, fullOutput)
     val compactedRawJson = compacted.toString()
     return if (shouldPreserveToolRawJson(compacted)) {
@@ -581,9 +581,7 @@ private fun shouldPreserveToolRawJson(parsed: JsonObject?): Boolean {
     if (content != null && content.any(::isDiffLikePayload)) return true
 
     val diffs = parsed["diffs"]?.jsonArray
-    if (diffs != null && diffs.any(::isDiffLikePayload)) return true
-
-    return false
+    return diffs != null && diffs.any(::isDiffLikePayload)
 }
 
 // Edits need full diffs for undo, and subagent reports are read in full.
@@ -642,17 +640,16 @@ private fun extractToolContentText(item: JsonElement): String? {
 private fun isDiffLikePayload(element: JsonElement): Boolean {
     val obj = element as? JsonObject ?: return false
     val type = (obj["type"] as? JsonPrimitive)?.contentOrNull
-    if (type == "diff") return true
-    return obj["path"] != null && obj["newText"] != null
+    return type == "diff" || (obj["path"] != null && obj["newText"] != null)
 }
 
-internal fun AcpBridge.buildStoredPlanChunk(plan: SessionUpdate, meta: JsonElement?): JsonObject? {
+internal fun buildStoredPlanChunk(plan: SessionUpdate, meta: JsonElement?): JsonObject? {
     val entries = extractPlanEntries(plan, meta) ?: return null
     if (entries.isEmpty()) return null
     return buildStoredPlanChunk(entries)
 }
 
-internal fun AcpBridge.buildStoredPlanChunk(entries: JsonArray): JsonObject {
+internal fun buildStoredPlanChunk(entries: JsonArray): JsonObject {
     return buildJsonObject {
         put("role", "assistant")
         put("type", "plan")

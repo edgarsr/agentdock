@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useContext } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
@@ -17,7 +18,7 @@ export type ReferenceKind = 'code-ref' | 'quote';
 export type SerializedReferenceNode = Spread<{ id: string; kind: ReferenceKind }, SerializedLexicalNode>;
 
 /** A code reference or a quote; its attachment holds the content. */
-export class ReferenceNode extends DecoratorNode<JSX.Element> {
+export class ReferenceNode extends DecoratorNode<React.JSX.Element> {
   __id: string;
   __kind: ReferenceKind;
 
@@ -52,7 +53,7 @@ export class ReferenceNode extends DecoratorNode<JSX.Element> {
     return `[${this.__kind}-${this.__id}]`;
   }
 
-  decorate(): JSX.Element {
+  decorate(): React.JSX.Element {
     return <ReferenceComponent id={this.__id} nodeKey={this.__key} />;
   }
 }

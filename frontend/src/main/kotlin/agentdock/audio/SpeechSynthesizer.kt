@@ -14,16 +14,16 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 
-/**
- * Provider boundary for reading responses aloud. Implementations block until [text] is synthesized
- * and hand the audio to [onAudio] as it streams in: 24 kHz, 16-bit signed little-endian mono PCM.
- */
 interface SpeechSynthesizer {
+    /**
+     * Provider boundary for reading responses aloud. Implementations block until [text] is synthesized
+     * and hand the audio to [onAudio] as it streams in: 24 kHz, 16-bit signed little-endian mono PCM.
+     */
     fun synthesize(text: String, settings: AudioOutputProviderSettings, onAudio: (ByteArray) -> Unit)
 }
 
 object SpeechSynthesizers {
-    private val synthesizers = mapOf<String, () -> SpeechSynthesizer>(
+    private val synthesizers = mapOf(
         AudioOutputProviders.GPT_SPEECH to { GptSpeech },
         AudioOutputProviders.GEMINI_SPEECH to { GeminiSpeech },
     )

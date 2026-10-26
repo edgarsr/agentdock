@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { AgentOption } from '../types/chat';
 import { ACPBridge } from '../utils/bridge';
@@ -299,7 +300,7 @@ export function AgentManagementView({
                     {agent.custom ? (
                       <Bot className="h-8 w-8 text-foreground-secondary opacity-75" strokeWidth={1.5} />
                     ) : (
-                      <img src={agent.iconPath} className="h-8 w-8 object-contain opacity-75" />
+                      <img src={agent.iconPath} alt="" className="h-8 w-8 object-contain opacity-75" />
                     )}
                   </div>
 

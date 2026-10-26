@@ -63,7 +63,7 @@ internal object SessionListDeleteSupport {
             "kilo" -> runCatching {
                 runAgentHistoryCliCommand("kilo", projectPath, listOf("session", "delete", sessionId))
             }.isSuccess
-            else -> if (isAcpSessionDeleteAvailable(adapterName)) deleteAcpSession(adapterName, sessionId) else false
+            else -> isAcpSessionDeleteAvailable(adapterName) && deleteAcpSession(adapterName, sessionId)
         }
     }
 

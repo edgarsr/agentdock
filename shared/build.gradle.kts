@@ -1,3 +1,10 @@
+plugins {
+    id("org.jetbrains.intellij.platform.module")
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("rpc")
+}
+
 dependencies {
     // RPC serializers must use the IntelliJ Platform's serialization runtime. Bundling another
     // copy here would give platform RPC and this content module different KSerializer identities.

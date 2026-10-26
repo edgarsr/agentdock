@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { FileMentionItem } from '../../../hooks/useFileMentions';
 import { SlashMenuLayout } from './slashCommands';
 import PopupMenu from './PopupMenu';

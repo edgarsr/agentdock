@@ -76,8 +76,7 @@ internal fun AcpBridge.ensureLivePromptNoResponseFallback(
     expectedCaptureId: String? = null
 ): Boolean {
     val capture = livePromptCaptures[chatId] ?: return false
-    if (expectedCaptureId != null && capture.captureId != expectedCaptureId) return false
-    return synchronized(capture) {
+    return (expectedCaptureId == null || capture.captureId == expectedCaptureId) && synchronized(capture) {
         if (capture.closed) return false
         if (capture.hasVisibleAssistantOutput) return false
         capture.events.add(buildStoredContentChunk("assistant", "text", text = fallbackText))

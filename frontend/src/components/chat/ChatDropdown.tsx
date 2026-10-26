@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { KeyboardEvent, RefObject, useState, useRef, useEffect } from 'react';
 import { DropdownOption } from '../../types/chat';
 import { Tooltip } from './shared/Tooltip';

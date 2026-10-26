@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 package agentdock.ui
 
 import com.intellij.openapi.fileEditor.FileEditor

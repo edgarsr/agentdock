@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useState, memo } from 'react';
 import { Check, Undo2, FileDiff, ChevronRight } from 'lucide-react';
 import { FileChangeSummary } from '../../types/chat';

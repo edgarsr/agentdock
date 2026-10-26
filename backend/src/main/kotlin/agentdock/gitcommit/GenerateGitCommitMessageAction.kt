@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 package agentdock.gitcommit
 
 import agentdock.acp.AcpClientService
@@ -39,11 +37,11 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         val commitContext = resolveCommitContext(e)
         val commitMessageTarget = commitContext.commitMessageTarget
         if (commitMessageTarget == null) {
-            showWarning(project, "Git Commit Generation", "Unable to access the commit message field.")
+            showWarning(project, "Unable to access the commit message field.")
             return
         }
         if (commitContext.changes.isEmpty() && commitContext.unversionedFiles.isEmpty()) {
-            showWarning(project, "Git Commit Generation", "Select changes or unversioned files in the commit view first.")
+            showWarning(project, "Select changes or unversioned files in the commit view first.")
             return
         }
 
@@ -136,9 +134,9 @@ class GenerateGitCommitMessageAction : AnAction(), DumbAware {
         )
     }
 
-    private fun showWarning(project: com.intellij.openapi.project.Project, title: String, message: String) {
+    private fun showWarning(project: com.intellij.openapi.project.Project, message: String) {
         ApplicationManager.getApplication().invokeLater {
-            Messages.showWarningDialog(project, message, title)
+            Messages.showWarningDialog(project, message, "Git Commit Generation")
         }
     }
 
