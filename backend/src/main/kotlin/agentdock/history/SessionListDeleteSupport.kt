@@ -6,7 +6,6 @@ import agentdock.acp.AcpClientService
 import agentdock.acp.deleteHistorySession
 import agentdock.acp.canDeleteHistorySession
 import com.intellij.openapi.project.ProjectManager
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.UUID
 
@@ -45,7 +44,7 @@ internal object SessionListDeleteSupport {
         }
     }
 
-    fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
+    suspend fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
         when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
             "acp" -> return deleteAcpSession(adapterName, sessionId)
             "antigravitySessionDelete" -> return deleteAntigravitySession(sessionId)
@@ -101,13 +100,13 @@ internal object SessionListDeleteSupport {
         }
     }
 
-    private fun deleteAcpSession(adapterName: String, sessionId: String): Boolean {
+    private suspend fun deleteAcpSession(adapterName: String, sessionId: String): Boolean {
         val service = ProjectManager.getInstance().openProjects
             .asSequence()
             .map(AcpClientService::getInstance)
             .firstOrNull { it.isAdapterReady(adapterName) && it.canDeleteHistorySession(adapterName) }
             ?: return false
-        return runBlocking { service.deleteHistorySession(adapterName, sessionId) }
+        return service.deleteHistorySession(adapterName, sessionId)
     }
 
     private fun isAcpSessionDeleteAvailable(adapterName: String): Boolean =

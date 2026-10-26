@@ -17,10 +17,10 @@ import java.time.Duration
 import java.util.concurrent.ExecutionException
 
 /**
- * Small file-based demo client for OpenAI's GPT Transcribe API.
+ * Transcribes a recorded audio file with OpenAI's GPT Transcribe API.
  *
- * The key is read from the client-side settings snapshot so the demo can be configured entirely
- * from Agent Dock settings.
+ * The API key is read from the client-side settings snapshot, so it is set in the Agent Dock
+ * settings.
  */
 object GptTranscriber : AudioTranscriptionService {
     private const val FEATURE_ID = AudioTranscriptionProviders.GPT_TRANSCRIBER

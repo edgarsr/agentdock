@@ -4,6 +4,7 @@ import { Wrench } from 'lucide-react';
 import { parseToolStatus, safeParseJson } from '../../../utils/toolCallUtils';
 import { isInlineImageText, toolCallPrompt } from '../../../utils/toolCallImages';
 import { MarkdownMessage } from '../MarkdownMessage';
+import { useShownImages } from '../useShownImages';
 import { sanitizeMarkdownHtml } from '../../../utils/sanitizeHtml';
 import { ExpandableActivity } from './ExpandableActivity';
 
@@ -64,9 +65,10 @@ export const OtherActivity: React.FC<Props> = ({ entry, isActivePrompt = false }
     }
     return bodyIsMarkdown ? bodyText : null;
   }, [formattedJsonBody, bodyIsMarkdown, bodyText]);
+  const [shownImages, handleShowImage] = useShownImages();
   const sanitizedHtmlBody = useMemo(() => (
-    markdownBody ? null : sanitizeMarkdownHtml(bodyText)
-  ), [markdownBody, bodyText]);
+    markdownBody ? null : sanitizeMarkdownHtml(bodyText, shownImages)
+  ), [markdownBody, bodyText, shownImages]);
 
   const argsText = skillArgs !== undefined
     ? (typeof skillArgs === 'string' ? skillArgs.trim() : JSON.stringify(skillArgs, null, 2))
@@ -87,7 +89,8 @@ export const OtherActivity: React.FC<Props> = ({ entry, isActivePrompt = false }
           {bodyText ? (
             markdownBody
               ? <MarkdownMessage content={markdownBody} enableCodeCopy={false} />
-              : <div className="text-sm font-mono whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: sanitizedHtmlBody || '' }} />
+              : <div className="text-sm font-mono whitespace-pre-wrap break-words" onClick={handleShowImage}
+                  dangerouslySetInnerHTML={{ __html: sanitizedHtmlBody || '' }} />
           ) : (
             emptyNotice ? <span className="opacity-40 italic">{emptyNotice}</span> : null
           )}

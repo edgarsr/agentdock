@@ -92,8 +92,7 @@ class AcpClientService private constructor(val project: Project) {
         /**
          * Project disposal runs on the EDT, and stopping agent processes must never hold the IDE
          * window open. The work is handed to a plain thread that JVM shutdown waits for, so the
-         * kill is still guaranteed to be issued - see "Files written on the user's disk" in
-         * AGENTS.md.
+         * kill is still guaranteed to be issued
          */
         private fun cleanupInBackground(service: AcpClientService, project: Project) {
             instances.remove(project)

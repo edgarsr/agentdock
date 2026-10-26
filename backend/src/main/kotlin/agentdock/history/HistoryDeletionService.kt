@@ -123,7 +123,7 @@ internal object HistoryDeletionService {
         return deletedArtifacts
     }
 
-    private fun deleteSessionArtifacts(projectPath: String, session: HistorySessionIndexEntry): Boolean {
+    private suspend fun deleteSessionArtifacts(projectPath: String, session: HistorySessionIndexEntry): Boolean {
         if (runCatching { AcpAdapterConfig.getAdapterInfo(session.adapterName) }.isFailure) {
             return true
         }
@@ -151,10 +151,6 @@ internal object HistoryDeletionService {
             }
             .distinct()
 
-        return if (adapterLabels.size == 1) {
-            "Failed to delete conversation data."
-        } else {
-            "Failed to delete one or more conversation data."
-        }
+        return "Failed to delete the ${adapterLabels.joinToString(", ")} session data."
     }
 }

@@ -6,6 +6,7 @@ import { markedHighlight } from 'marked-highlight';
 import hljs from '../../utils/highlight';
 import { sanitizeMarkdownHtml } from '../../utils/sanitizeHtml';
 import { Tooltip } from './shared/Tooltip';
+import { useShownImages } from './useShownImages';
 import '../../styles/markdown.css';
 
 // Configure marked with highlight.js integration
@@ -30,7 +31,8 @@ interface MarkdownMessageProps {
   searchable?: boolean;
 }
 
-export function markdownHtml(content: string): string {
+/** [shownImages] are the images from other hosts that the user chose to show. */
+export function markdownHtml(content: string, shownImages?: ReadonlySet<string>): string {
   try {
     let processed = content;
     const codeBlockMatches = processed.match(/```/g);
@@ -39,10 +41,10 @@ export function markdownHtml(content: string): string {
     }
     processed = rewriteWindowsMarkdownImageHrefs(processed);
     const parsed = marked.parse(processed);
-    return sanitizeMarkdownHtml(typeof parsed === 'string' ? parsed : '');
+    return sanitizeMarkdownHtml(typeof parsed === 'string' ? parsed : '', shownImages);
   } catch (e) {
     console.error('[MarkdownMessage] Parse error:', e);
-    return sanitizeMarkdownHtml(content);
+    return sanitizeMarkdownHtml(content, shownImages);
   }
 }
 
@@ -58,11 +60,12 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, enabl
   const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copySlots, setCopySlots] = useState<HTMLElement[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [shownImages, handleShowImage] = useShownImages();
 
   const html = useMemo(() => {
-    const sanitizedHtml = markdownHtml(content);
+    const sanitizedHtml = markdownHtml(content, shownImages);
     return enableCodeCopy ? decorateCodeBlocks(sanitizedHtml) : sanitizedHtml;
-  }, [content, enableCodeCopy]);
+  }, [content, enableCodeCopy, shownImages]);
 
   useEffect(() => {
     if (!enableCodeCopy) {
@@ -108,6 +111,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, enabl
         ref={containerRef}
         className="markdown-body"
         data-search-text={searchable || undefined}
+        onClick={handleShowImage}
         dangerouslySetInnerHTML={{ __html: html as string }}
       />
       {enableCodeCopy && copySlots.map((slot, index) => createPortal(

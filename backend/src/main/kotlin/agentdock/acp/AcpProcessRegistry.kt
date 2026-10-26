@@ -37,7 +37,6 @@ internal object AcpProcessRegistry {
     )
 
     // The registry is best-effort housekeeping: a failure here must never reach the UI or stop the
-    // caller, and nothing is logged - see "Failure handling" in AGENTS.md.
     private fun runQuietly(action: () -> Unit) {
         runCatching(action)
     }
@@ -168,7 +167,6 @@ internal class AcpProcessRegistryStore(
     private fun readOwnerStateLocked(file: File): OwnerState? {
         if (!file.isFile) return null
         // A truncated or unreadable owner file (crash mid-write, full disk) is treated as absent
-        // instead of failing the whole registry operation - see "Failure handling" in AGENTS.md.
         val json = runCatching { Json.parseToJsonElement(file.readText()).jsonObject }.getOrNull() ?: return null
         val ownerId = json["ownerId"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
         val ownerPid = json["ownerPid"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return null

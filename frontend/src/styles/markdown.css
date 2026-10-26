@@ -74,6 +74,16 @@
 }
 
 /* Markdown content rendering */
+/* Out of .markdown-body, as tool output in HTML shows these buttons too (sanitizeMarkdownHtml). */
+.markdown-remote-image {
+    @apply inline-flex items-center rounded-[4px] border border-border px-2 py-1 text-foreground-secondary
+        transition-colors hover:bg-hover hover:text-foreground;
+
+    &::before {
+        content: attr(data-label);
+    }
+}
+
 .markdown-body {
     @apply my-4 text-inherit break-words;
 

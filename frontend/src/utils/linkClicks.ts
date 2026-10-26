@@ -10,7 +10,8 @@ export function installLinkClickHandler() {
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     const anchor = target?.closest('a');
-    if (!anchor) return;
+    // The button of a held image shows it instead (MarkdownMessage), even in a link.
+    if (!anchor || target?.closest('[data-remote-image-src]')) return;
 
     const rawHref = anchor.getAttribute('href')?.trim();
     if (!rawHref) return;

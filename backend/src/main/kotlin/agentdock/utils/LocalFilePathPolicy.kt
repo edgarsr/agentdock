@@ -48,17 +48,16 @@ object LocalFilePathPolicy {
     }
 
     private fun resolvePathText(project: Project, filePath: String): String {
-        val normalizedFilePath = filePath
-        val base = project.basePath ?: return normalizedFilePath
-        val inputFile = File(normalizedFilePath)
+        val base = project.basePath ?: return filePath
+        val inputFile = File(filePath)
         return if (inputFile.isAbsolute) {
-            runCatching { inputFile.canonicalPath }.getOrDefault(normalizedFilePath)
+            runCatching { inputFile.canonicalPath }.getOrDefault(filePath)
         } else {
             val baseFile = File(base)
             runCatching {
-                File(baseFile, normalizedFilePath.replace('\\', '/')).canonicalPath
+                File(baseFile, filePath.replace('\\', '/')).canonicalPath
             }.getOrElse {
-                File(baseFile, normalizedFilePath).absolutePath
+                File(baseFile, filePath).absolutePath
             }
         }
     }

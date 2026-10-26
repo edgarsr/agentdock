@@ -3,7 +3,6 @@ package agentdock.acp
 import agentdock.rpc.TerminalCapability
 import agentdock.rpc.TerminalLaunchRequest
 import com.intellij.openapi.project.Project
-import kotlinx.coroutines.runBlocking
 import agentdock.history.AgentDockHistoryService
 import java.io.File
 
@@ -57,11 +56,9 @@ internal class AcpBridgeCli(
         )
     }
 
-    fun openHistoryConversationCliInTerminal(projectPath: String, conversationId: String) {
-        val latestSession = runBlocking {
-            AgentDockHistoryService.getConversationSessions(projectPath, conversationId)
-                .maxByOrNull { it.updatedAt }
-        } ?: return
+    suspend fun openHistoryConversationCliInTerminal(projectPath: String, conversationId: String) {
+        val latestSession = AgentDockHistoryService.getConversationSessions(projectPath, conversationId)
+            .maxByOrNull { it.updatedAt } ?: return
 
         val adapterInfo = runCatching { AcpAdapterConfig.getAdapterInfo(latestSession.adapterName) }.getOrNull() ?: return
         val resumeArgs = adapterInfo.cli?.resumeArgs.orEmpty()
