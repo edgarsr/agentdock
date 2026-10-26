@@ -34,6 +34,7 @@ Any other ACP-compatible agent can be added through the custom configuration opt
 - View live token quota and context usage in the chat input.
 - Use voice input with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.
 - Continue chats in the IDE terminal.
+- Use the plugin from a web browser, including remotely via Tailscale.
 - Find, reopen, rename, group, and archive saved chats, or delete them individually or in bulk.
 - Switch agents within a chat while preserving context.
 - Fork chats from any point.
@@ -57,4 +58,4 @@ Any other ACP-compatible agent can be added through the custom configuration opt
 
 ## Screenshot
 
-![Agent Dock chat interface](docs/images/agent-dock-chat.png)
+![Agent Dock chat interface](docs/images/chat.png)

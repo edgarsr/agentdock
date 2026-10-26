@@ -34,6 +34,7 @@
             <li>View live token quota and context usage in the chat input.</li>
             <li>Use voice input with GPT Transcriber, Gemini 3.5 Transcribe, or local Whisper.</li>
             <li>Continue chats in the IDE terminal.</li>
+            <li>Use the plugin from a web browser, including remotely via Tailscale.</li>
             <li>Find, reopen, rename, group, and archive saved chats, or delete them individually or in bulk.</li>
             <li>Switch agents within a chat while preserving context.</li>
             <li>Fork chats from any point.</li>
@@ -53,15 +54,8 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added search in open chats.</li>
-            <li>Added full-text search in chat history.</li>
-            <li>Added a read-aloud option for chat messages.</li>
-            <li>Added configurable keyboard shortcuts.</li>
-            <li>Added grouping for chat history entries.</li>
-            <li>Added chat archiving.</li>
-            <li>Reorganized plugin settings.</li>
-            <li>Added new message and status indicators to the plugin's IDE icon.</li>
-            <li>Added an option to remember effort levels per model and models per mode within a chat.</li>
+            <li>Added access to the plugin from a web browser, including remote access via Tailscale.</li>
+            <li>Optimized code.</li>
             <li>Minor bug fixes and UI refinements.</li>
         </ul>
     ]]></change-notes>
