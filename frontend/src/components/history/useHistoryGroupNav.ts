@@ -43,9 +43,8 @@ export function useHistoryGroupNav(
       selected: historyGroup,
       expanded,
       onToggleExpanded: () => {
-        const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
         setExpanded(!expanded);
-        if (settings) ACPBridge.saveGlobalSettings({ ...settings, historyGroupsExpanded: !expanded });
+        ACPBridge.saveGlobalSettings({ historyGroupsExpanded: !expanded });
       },
       onSelect: (group) => {
         setSelected(group);

@@ -30,7 +30,6 @@ function migrateLocalStorageSettings(settings: GlobalSettings | undefined) {
   localStorage.removeItem('chat-send-mode');
   if (approvalMode !== 'auto' && sendMode !== 'ctrl-enter') return;
   ACPBridge.saveGlobalSettings({
-    ...settings,
     ...(approvalMode === 'auto' ? { approvalMode: 'auto' as const } : {}),
     ...(sendMode === 'ctrl-enter' ? { sendMode: 'ctrl-enter' as const } : {}),
   });
@@ -255,7 +254,7 @@ function App() {
   const toggleOpenInEditor = () => {
     const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
     if (settings) {
-      ACPBridge.saveGlobalSettings({ ...settings, openInEditor: !settings.openInEditor });
+      ACPBridge.saveGlobalSettings({ openInEditor: !settings.openInEditor });
     }
   };
 
@@ -263,7 +262,6 @@ function App() {
     const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
     if (settings) {
       ACPBridge.saveGlobalSettings({
-        ...settings,
         sidebarPosition: settings.sidebarPosition === 'right' ? 'left' : 'right',
       });
     }

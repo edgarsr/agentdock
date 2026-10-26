@@ -769,8 +769,9 @@ export const ACPBridge = {
 
   getGlobalSettingsSnapshot: () => latestGlobalSettings,
 
-  saveGlobalSettings: (settings: GlobalSettingsPayload['settings']) => {
-    window.__saveGlobalSettings?.(JSON.stringify(settings));
+  /** Saves only the given fields; the backend keeps the saved value of every other one. */
+  saveGlobalSettings: (changes: Partial<GlobalSettingsPayload['settings']>) => {
+    window.__saveGlobalSettings?.(JSON.stringify(changes));
   },
 
   onGlobalSettings: (callback: (e: CustomEvent<GlobalSettingsEvent>) => void) => onBridgeEvent(EVENT_NAMES.GLOBAL_SETTINGS, callback),

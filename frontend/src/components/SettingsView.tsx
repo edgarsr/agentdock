@@ -144,13 +144,16 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
   const [shortcutError, setShortcutError] = useState<{ action: ShortcutAction; message: string } | null>(null);
   const liveZoomRef = useRef<number | null>(null);
   const persistLiveZoomRef = useRef(false);
+  /** Fields edited in the form but not saved yet, such as a port being typed. */
+  const unsavedEditsRef = useRef<Partial<GlobalSettingsPayload['settings']>>({});
 
+  // Settings saved from another chat or project arrive here too, and keep what is being typed.
   useEffect(() => ACPBridge.onGlobalSettings((e) => {
     const normalized = normalizeGlobalSettings(e.detail?.payload);
     if (liveZoomRef.current != null) {
       normalized.settings.uiZoomPercent = liveZoomRef.current;
     }
-    setGlobalSettings(normalized);
+    setGlobalSettings({ ...normalized, settings: { ...normalized.settings, ...unsavedEditsRef.current } });
   }), []);
 
   // Git commit message generation offers the installed agents.
@@ -193,11 +196,10 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
       if (!Number.isFinite(percent)) return;
       liveZoomRef.current = percent;
       setGlobalSettings((prev) => {
-        const next = { ...prev.settings, uiZoomPercent: percent };
         if (persistLiveZoomRef.current) {
-          ACPBridge.saveGlobalSettings(next);
+          ACPBridge.saveGlobalSettings({ uiZoomPercent: percent });
         }
-        return { ...prev, settings: next };
+        return { ...prev, settings: { ...prev.settings, uiZoomPercent: percent } };
       });
     };
     window.addEventListener('agent-dock-ui-zoom', onUiZoom);
@@ -240,14 +242,17 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
     };
   }, [section]);
 
+  /** Saves [patch] together with the fields edited before it. */
   const updateGlobalSettings = (patch: Partial<GlobalSettingsPayload['settings']>) => {
-    const next = { ...globalSettings.settings, ...patch };
-    setGlobalSettings((prev) => ({ ...prev, settings: next }));
-    ACPBridge.saveGlobalSettings(next);
+    const changes = { ...unsavedEditsRef.current, ...patch };
+    unsavedEditsRef.current = {};
+    setGlobalSettings((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
+    if (Object.keys(changes).length > 0) ACPBridge.saveGlobalSettings(changes);
   };
 
   /** Updates the form without saving, e.g. while an API key is being typed. */
   const editGlobalSettings = (patch: Partial<GlobalSettingsPayload['settings']>) => {
+    unsavedEditsRef.current = { ...unsavedEditsRef.current, ...patch };
     setGlobalSettings((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   };
 

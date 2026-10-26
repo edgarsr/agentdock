@@ -47,8 +47,7 @@ function loadApprovalMode(): ApprovalMode {
 
 // The chats already open keep their own mode; the saved one is what new chats start in.
 function saveApprovalMode(mode: ApprovalMode) {
-  const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
-  if (settings) ACPBridge.saveGlobalSettings({ ...settings, approvalMode: mode });
+  ACPBridge.saveGlobalSettings({ approvalMode: mode });
 }
 
 // ACP marks every permission option with a kind. `allow_once` is the only one that grants a

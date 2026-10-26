@@ -79,8 +79,7 @@ export function useChatInputController({
   }), []);
   const setSendMode = useCallback((mode: 'enter' | 'ctrl-enter') => {
     setSendModeState(mode);
-    const settings = ACPBridge.getGlobalSettingsSnapshot()?.settings;
-    if (settings) ACPBridge.saveGlobalSettings({ ...settings, sendMode: mode });
+    ACPBridge.saveGlobalSettings({ sendMode: mode });
   }, []);
 
   const agentSlashItems = useMemo(

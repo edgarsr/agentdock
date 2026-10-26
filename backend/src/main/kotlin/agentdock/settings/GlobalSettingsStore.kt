@@ -1,8 +1,10 @@
 package agentdock.settings
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import agentdock.acp.AcpAdapterPaths
@@ -26,20 +28,29 @@ object GlobalSettingsStore {
 
     private fun settingsFile(): File = File(AcpAdapterPaths.getBaseRuntimeDir(), "settings.json")
 
-    fun load(): GlobalSettings = withStoreLock {
+    fun load(): GlobalSettings = withStoreLock { loadLocked() }
+
+    private fun loadLocked(): GlobalSettings {
         val file = settingsFile()
         if (!file.isFile) {
-            return@withStoreLock saveLocked(GlobalSettings())
+            return saveLocked(GlobalSettings())
         }
 
         val loaded = decodeSettings(file)
         gitCommitGenerationEnabled = loaded.gitCommitGeneration.enabled
         // Saved at once, so every load gives the same generated code; an empty one from earlier versions is replaced.
-        if (validAccessCode(loaded.browserAccessCode) == null) saveLocked(loaded) else loaded
+        return if (validAccessCode(loaded.browserAccessCode) == null) saveLocked(loaded) else loaded
     }
 
-    fun save(settings: GlobalSettings): GlobalSettings = withStoreLock {
-        saveLocked(settings)
+    /**
+     * Saves the top-level fields of [patch] over the saved settings and keeps the others, so a page
+     * with an older copy of the settings changes only what it set. Returns `null`, saving nothing,
+     * when the result does not decode.
+     */
+    fun update(patch: JsonObject): GlobalSettings? = withStoreLock {
+        val merged = JsonObject(json.encodeToJsonElement(loadLocked()).jsonObject + patch)
+        val updated = runCatching { json.decodeFromJsonElement<GlobalSettings>(merged) }.getOrNull()
+        updated?.let(::saveLocked)
     }
 
     private fun saveLocked(settings: GlobalSettings): GlobalSettings {
