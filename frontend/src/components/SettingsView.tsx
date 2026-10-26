@@ -379,40 +379,41 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                 ariaLabel='Enable browser access'
               >
                 {globalSettings.settings.browserAccessEnabled && (
-                  <>
-                    <SettingsField label='Port' colon description='If it is in use, the next free port is used automatically'>
-                      <input
-                        type='text'
-                        inputMode='numeric'
-                        value={globalSettings.settings.browserAccessPort || ''}
-                        onChange={(event) => editGlobalSettings({
-                          browserAccessPort: Number(event.target.value.replace(/\D/g, '').slice(0, 5))
-                        })}
-                        onBlur={() => updateGlobalSettings({})}
-                        aria-label='Web server port'
-                        className='w-20 rounded-[3px]'
-                      />
-                    </SettingsField>
-                    <SettingsField
-                      label='Access Key'
-                      colon
-                      description='Needed once per browser, then kept in a cookie'
-                    >
-                      <input
-                        type='text'
-                        value={globalSettings.settings.browserAccessCode ?? ''}
-                        onChange={(event) => editGlobalSettings({
-                          browserAccessCode: event.target.value.replace(/[^A-Za-z0-9_-]/g, '')
-                        })}
-                        onBlur={() => updateGlobalSettings({})}
-                        autoComplete='off'
-                        spellCheck={false}
-                        aria-label='Access key'
-                        className='w-44 max-w-full rounded-[3px]'
-                      />
-                    </SettingsField>
+                  <div className='grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-2 gap-y-4'>
+                    <span className='text-foreground'>Port:</span>
+                    <input
+                      type='text'
+                      inputMode='numeric'
+                      value={globalSettings.settings.browserAccessPort || ''}
+                      onChange={(event) => editGlobalSettings({
+                        browserAccessPort: Number(event.target.value.replace(/\D/g, '').slice(0, 5))
+                      })}
+                      onBlur={() => updateGlobalSettings({})}
+                      aria-label='Web server port'
+                      className='w-20 max-w-full rounded-[3px]'
+                    />
+                    <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
+                      If it is in use, the next free port is used automatically
+                    </div>
+                    <span className='text-foreground'>Access Key:</span>
+                    <input
+                      type='text'
+                      value={globalSettings.settings.browserAccessCode ?? ''}
+                      onChange={(event) => editGlobalSettings({
+                        browserAccessCode: event.target.value.replace(/[^A-Za-z0-9_-]/g, '')
+                      })}
+                      onBlur={() => updateGlobalSettings({})}
+                      autoComplete='off'
+                      spellCheck={false}
+                      aria-label='Access key'
+                      className='w-44 max-w-full rounded-[3px]'
+                    />
+                    <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
+                      Needed once per browser, then kept in a cookie
+                    </div>
                     {browserAddress && (
-                      <SettingsField label='Address' colon>
+                      <>
+                        <span className='text-foreground'>Address:</span>
                         <span className='flex min-w-0 items-center gap-1'>
                           {/* A web browser showing the UI is already there, and its "localhost" may be another device. */}
                           {window.__AGENT_DOCK_CLIENT === 'browser' ? (
@@ -435,9 +436,9 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                             </button>
                           </Tooltip>
                         </span>
-                      </SettingsField>
+                      </>
                     )}
-                  </>
+                  </div>
                 )}
               </SettingsCheckbox>
 

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
 import { Quote } from 'lucide-react';
 
 interface QuoteSelection {
@@ -61,7 +60,8 @@ export function QuoteSelectionButton({ containerRef }: { containerRef: RefObject
     setSelection(null);
   };
 
-  return createPortal(
+  // Rendered inside the chat tab, so app windows such as the settings stay above it.
+  return (
     <button
       ref={buttonRef}
       type="button"
@@ -74,7 +74,6 @@ export function QuoteSelectionButton({ containerRef }: { containerRef: RefObject
     >
       <Quote size={12} aria-hidden="true" />
       Quote
-    </button>,
-    document.body
+    </button>
   );
 }
