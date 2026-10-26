@@ -24,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.agentclientprotocol:acp:0.30.1") {
+    implementation("com.agentclientprotocol:acp:0.34.0") {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-bom")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
@@ -84,7 +84,7 @@ intellijPlatform {
 
 val devMode = providers.gradleProperty("devMode").map { it.toBoolean() }.getOrElse(false)
 
-val generateBuildConfig by tasks.registering {
+tasks.register("generateBuildConfig") {
     description = "Generates the BuildConfig object with the dev mode flag and plugin version."
     val outputDir = layout.buildDirectory.dir("generated/buildConfig")
     val isDev = devMode
@@ -102,7 +102,7 @@ val generateBuildConfig by tasks.registering {
 
 val npm = if (org.gradle.internal.os.OperatingSystem.current().isWindows) "npm.cmd" else "npm"
 
-val npmBuild by tasks.registering(Exec::class) {
+tasks.register<Exec>("npmBuild") {
     description = "Builds the React UI into src/main/resources/webview."
     workingDir = file("frontend")
     commandLine(npm, "run", "build")
