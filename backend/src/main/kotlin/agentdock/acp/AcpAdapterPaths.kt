@@ -64,6 +64,29 @@ object AcpAdapterPaths {
         return deleteAdapterRuntime(File(getDependenciesDir(), adapterInfo.id), adapterInfo.id)
     }
 
+    /** Where an install is made, so the installed adapter keeps working until the new one is complete. */
+    internal fun getInstallStagingDir(adapterName: String? = null): File =
+        File(getDependenciesDir(), "${getAdapterInfo(adapterName).id}.installing")
+
+    /**
+     * Puts the runtime in [installedDir] in place of the adapter's current one. The current one is
+     * moved aside first and put back if the move fails, so a failure leaves it as it was.
+     */
+    internal fun replaceAdapterRuntime(adapterName: String?, installedDir: File): Boolean {
+        val adapterInfo = getAdapterInfo(adapterName)
+        val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
+        val previousDir = File(getDependenciesDir(), "${adapterInfo.id}.previous")
+        AcpProcessUtils.stopProcessesUsingAdapterRoot(adapterInfo.id)
+        if (previousDir.exists() && !previousDir.deleteRecursively()) return false
+        if (runtimeDir.exists() && !runtimeDir.renameTo(previousDir)) return false
+        if (!installedDir.renameTo(runtimeDir)) {
+            previousDir.renameTo(runtimeDir)
+            return false
+        }
+        previousDir.deleteRecursively()
+        return true
+    }
+
     fun applyPatches(
         adapterRoot: File,
         adapterInfo: AcpAdapterConfig.AdapterInfo,

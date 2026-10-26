@@ -11,7 +11,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import java.io.File
 import kotlin.time.Duration
 internal fun AcpBridge.installServiceCallbacks() {
     service.callbackOwner = this
@@ -314,7 +313,8 @@ private class AdapterInstallTarget(val adapterInfo: AcpAdapterConfig.AdapterInfo
 
 /**
  * Runs the install job of [adapterId] unless one is already running. [prepare] stops the adapter and
- * returns what to install, or null to skip; the adapter files are replaced only after it returns.
+ * returns what to install, or null to skip. The install is made beside the adapter files, which are
+ * replaced only once it succeeds, so a failed or cancelled one keeps the installed version.
  */
 private fun AcpBridge.launchAdapterInstall(
     adapterId: String,
@@ -324,12 +324,11 @@ private fun AcpBridge.launchAdapterInstall(
     val cancellation = AcpAdapterInstallCancellation()
     adapterInstallCancellations[adapterId] = cancellation
     val job = scope.launch(Dispatchers.IO) {
-        var replacingRuntime = false
         try {
             val target = prepare(cancellation) ?: return@launch
-            replacingRuntime = true
-            val success = AcpAdapterPaths.installAdapterRuntime(
-                targetDir = File(AcpAdapterPaths.getDependenciesDir(), target.adapterInfo.id),
+            val stagingDir = AcpAdapterPaths.getInstallStagingDir(adapterId)
+            val installed = AcpAdapterPaths.installAdapterRuntime(
+                targetDir = stagingDir,
                 adapterInfo = target.adapterInfo,
                 statusCallback = { status ->
                     downloadStatuses[adapterId] = status
@@ -338,6 +337,10 @@ private fun AcpBridge.launchAdapterInstall(
                 versionOverride = target.versionOverride,
                 cancellation = cancellation
             )
+            cancellation.throwIfCancelled()
+            val success = installed && AcpAdapterPaths.replaceAdapterRuntime(adapterId, stagingDir).also { replaced ->
+                if (!replaced) downloadStatuses[adapterId] = "Error: Unable to replace the old adapter files"
+            }
 
             if (success) {
                 downloadStatuses.remove(adapterId)
@@ -354,13 +357,11 @@ private fun AcpBridge.launchAdapterInstall(
             }
         } catch (_: CancellationException) {
             downloadStatuses.remove(adapterId)
-            if (replacingRuntime) {
-                runCatching { AcpAdapterPaths.deleteAdapter(adapterId) }
-            }
             resetDownloadProbeState(adapterId)
         } catch (e: Exception) {
             downloadStatuses[adapterId] = "Error: ${e.message}"
         } finally {
+            runCatching { AcpAdapterPaths.getInstallStagingDir(adapterId).deleteRecursively() }
             adapterInstallJobs.remove(adapterId)
             adapterInstallCancellations.remove(adapterId)
             // Checks the files again, as a cancellation leaves the installed state unknown.
@@ -474,10 +475,6 @@ internal fun AcpBridge.installAdapterQueries() {
 
                 service.stopSharedProcess(adapterId)
                 AcpConfigOptionsCache.remove(adapterId)
-                val deleted = AcpAdapterPaths.deleteAdapter(adapterId)
-                if (!deleted) {
-                    throw IllegalStateException("Unable to remove old adapter files")
-                }
                 AdapterInstallTarget(adapterInfo, versionOverride = latestVersion)
             }
         }
