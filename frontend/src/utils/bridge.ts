@@ -18,6 +18,7 @@ import { browserMicrophone } from './browserMicrophone';
 import { extractToolCallDiffEntries, ToolCallRawInputCache } from './toolCallUtils';
 import { McpServerConfig } from '../types/mcp';
 import { CustomAcpConfig } from '../types/customAcp';
+import { ElicitationAction, ElicitationContent, ElicitationRequest } from '../types/elicitation';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
 import {
@@ -35,6 +36,7 @@ import {
   ConversationReplayLoadedEvent,
   ConversationTranscriptSavedEvent,
   EVENT_NAMES,
+  ElicitationRequestsEvent,
   FileChangeStatsEvent,
   FilesResultEvent,
   GlobalSettingsEvent,
@@ -229,6 +231,10 @@ export const ACPBridge = {
       window.dispatchEvent(new CustomEvent(EVENT_NAMES.PERMISSION, { detail: { request } }));
     };
 
+    window.__onElicitationRequests = (chatId, requests) => {
+      window.dispatchEvent(new CustomEvent(EVENT_NAMES.ELICITATIONS, { detail: { chatId, requests } }));
+    };
+
     window.__onAcpLog = (payload) => {
       const isDev = !!(window as any).__IS_DEV;
       let parsed: unknown = payload.json;
@@ -394,6 +400,16 @@ export const ACPBridge = {
   },
 
   onPermissionRequest: (callback: (e: CustomEvent<PermissionRequestEvent>) => void) => onBridgeEvent(EVENT_NAMES.PERMISSION, callback),
+
+  onElicitationRequests: (callback: (e: CustomEvent<ElicitationRequestsEvent>) => void) =>
+    onBridgeEvent(EVENT_NAMES.ELICITATIONS, callback),
+
+  respondToElicitation: (request: ElicitationRequest, action: ElicitationAction, content?: ElicitationContent) => {
+    if (!window.__respondElicitation) return Promise.reject(new Error('Question response bridge is not available.'));
+    return awaitBridgeOperation('respond_elicitation', (requestId) => {
+      window.__respondElicitation?.(request.chatId, request.requestId, action, content, requestId);
+    });
+  },
 
   /** Lists the adapters; with an id, restarts that adapter's status checks. */
   requestAdapters: (adapterIdToRefresh?: string) => {

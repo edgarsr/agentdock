@@ -175,7 +175,7 @@ function MessageList({
       if (block.type === 'quote') {
         return block.quote.length;
       }
-      if (block.type === 'text') {
+      if (block.type === 'text' || block.type === 'elicitation_answer') {
         return (block as any).text?.length || 0;
       }
       // Fixed weight per tool call: their collapsed rows mount the raw JSON, results and diffs only on expand

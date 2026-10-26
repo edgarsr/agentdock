@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from './ui/Button';
 import { Checkbox } from './ui/Checkbox';
+import { Radio } from './ui/Radio';
 import { DropdownSelect } from './ui/DropdownSelect';
 import { MenuButton } from './ui/MenuButton';
 import { SplitButton } from './ui/SplitButton';
@@ -12,6 +13,11 @@ export function DesignSystemView() {
     const [reloadInPreview, setReloadInPreview] = useState('on-save');
     const [mercurialEnabled, setMercurialEnabled] = useState(false);
     const [themeEnabled, setThemeEnabled] = useState(true);
+    const [passwordStorage, setPasswordStorage] = useState('forget');
+    const passwordOptions = [
+        { value: 'keepass', label: 'Save in KeePass' },
+        { value: 'forget', label: 'Forget after restart' },
+    ];
     const reloadOptions = [
         { value: 'disabled', label: 'Disabled' },
         { value: 'on-save', label: 'On Save' },
@@ -155,6 +161,26 @@ export function DesignSystemView() {
                         checked={themeEnabled}
                         onCheckedChange={setThemeEnabled}
                     />
+                </div>
+            </section>
+            <section className="space-y-4">
+                <h3 className="text-sm font-bold text-foreground-secondary">RADIO BUTTONS</h3>
+                <div className="space-y-5 rounded-[10px] border border-border bg-background px-5 py-5">
+                    <fieldset className="space-y-2">
+                        <legend className="mb-2">Passwords:</legend>
+                        {passwordOptions.map((option) => <label key={option.value} className="flex cursor-pointer items-center gap-2">
+                            <Radio name="design-passwords" value={option.value} checked={passwordStorage === option.value}
+                                onCheckedChange={() => setPasswordStorage(option.value)} />
+                            {option.label}
+                        </label>)}
+                    </fieldset>
+                    <fieldset disabled className="space-y-2 text-foreground-secondary">
+                        <legend className="mb-2">Disabled:</legend>
+                        {passwordOptions.map((option) => <label key={option.value} className="flex items-center gap-2">
+                            <Radio name="design-passwords-disabled" value={option.value} checked={option.value === 'forget'} />
+                            {option.label}
+                        </label>)}
+                    </fieldset>
                 </div>
             </section>
             </div>

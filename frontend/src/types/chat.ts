@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { ElicitationAction, ElicitationContent, ElicitationRequest } from './elicitation';
 
 export interface ToolCallDiffEntry {
   type: 'diff';
@@ -29,6 +30,9 @@ export interface ChatAttachment {
 }
 
 export interface TextBlock { type: 'text'; text: string; }
+/** A user's form reply within an existing prompt, rather than a new prompt. */
+export interface ElicitationAnswer { question: string; answer: string; }
+export interface ElicitationAnswerBlock { type: 'elicitation_answer'; text: string; answers?: ElicitationAnswer[]; }
 export interface ImageBlock { type: 'image'; data: string; mimeType: string; isInline?: boolean; }
 export interface AudioBlock { type: 'audio'; data: string; mimeType: string; isInline?: boolean; }
 export interface VideoBlock { type: 'video'; data: string; mimeType: string; name?: string; path?: string; isInline?: boolean; }
@@ -67,7 +71,7 @@ export interface PlanEntry {
 
 export interface PlanBlock { type: 'plan'; entries: PlanEntry[]; isReplay?: boolean; }
 
-export type RichContentBlock = TextBlock | ImageBlock | AudioBlock | VideoBlock | FileBlock | CodeReferenceBlock | QuoteBlock | ExploringBlock | ToolCallBlock | PlanBlock;
+export type RichContentBlock = TextBlock | ElicitationAnswerBlock | ImageBlock | AudioBlock | VideoBlock | FileBlock | CodeReferenceBlock | QuoteBlock | ExploringBlock | ToolCallBlock | PlanBlock;
 
 export interface MessageConfigOption {
   id: string;
@@ -296,8 +300,9 @@ export interface HistorySessionMeta {
 export interface ContentChunk {
   chatId: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'code_ref' | 'quote' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
+  type: 'text' | 'elicitation_answer' | 'thinking' | 'image' | 'audio' | 'video' | 'file' | 'code_ref' | 'quote' | 'tool_call' | 'tool_call_update' | 'plan' | 'prompt_done';
   text?: string;
+  answers?: ElicitationAnswer[];
   quote?: string;
   data?: string;
   path?: string;
@@ -328,6 +333,7 @@ export interface ReplayContentBlock {
   role?: 'user' | 'assistant';
   type?: string;
   text?: string;
+  answers?: ElicitationAnswer[];
   quote?: string;
   data?: string;
   path?: string;
@@ -385,6 +391,7 @@ export interface ChatAttachedPayload {
   status?: string | null;
   sessionId?: string | null;
   permissions: PermissionRequest[];
+  elicitations: ElicitationRequest[];
 }
 
 
@@ -506,7 +513,7 @@ export interface ConversationTranscriptSavedPayload {
 export interface BridgeOperationResultPayload {
   requestId: string;
   chatId: string;
-  operation: 'start_agent' | 'send_prompt' | 'cancel_prompt';
+  operation: 'start_agent' | 'send_prompt' | 'cancel_prompt' | 'respond_elicitation';
   ok: boolean;
   error?: string;
 }
@@ -636,6 +643,13 @@ declare global {
     ) => void;
     __notifyReady?: () => void;
     __respondPermission?: (requestId: string, decision: string) => void;
+    __respondElicitation?: (
+      chatId: string,
+      elicitationId: string,
+      action: ElicitationAction,
+      content: ElicitationContent | undefined,
+      requestId: string
+    ) => void;
     __cancelPrompt?: (conversationId: string, requestId?: string) => void;
     __stopAgent?: (conversationId: string) => void;
     __downloadAgent?: (adapterId: string) => void;
@@ -697,6 +711,7 @@ declare global {
     __onMode?: (chatId: string, modeId: string) => void;
     __onSessionConfigOptions?: (payload: SessionConfigOptionsPayload) => void;
     __onPermissionRequest?: (request: PermissionRequest) => void;
+    __onElicitationRequests?: (chatId: string, requests: ElicitationRequest[]) => void;
     __onHistoryList?: (list: HistorySessionMeta[]) => void;
     __onHistoryDeleteResult?: (result: HistoryDeleteResultPayload) => void;
     __onHistorySearchResult?: (result: HistorySearchResultPayload) => void;

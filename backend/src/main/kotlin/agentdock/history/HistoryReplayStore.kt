@@ -47,7 +47,8 @@ internal object HistoryReplayStore {
         val messages = data.sessions.flatMap { session ->
             session.prompts.flatMap { prompt -> prompt.blocks + prompt.events }
         }.mapNotNull { block ->
-            if ((block["type"] as? JsonPrimitive)?.content != "text") return@mapNotNull null
+            val type = (block["type"] as? JsonPrimitive)?.content
+            if (type != "text" && type != "elicitation_answer") return@mapNotNull null
             (block["text"] as? JsonPrimitive)?.content?.replace(whitespace, " ")?.trim()?.ifEmpty { null }
         }
         file.atomicWriteText(messages.joinToString("\n"))

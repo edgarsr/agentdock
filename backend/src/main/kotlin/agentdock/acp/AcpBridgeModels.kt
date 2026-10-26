@@ -173,7 +173,8 @@ internal data class ChatAttachedPayload(
     val livePrompt: LivePromptPayload? = null,
     val status: String? = null,
     val sessionId: String? = null,
-    val permissions: List<JsonObject> = emptyList()
+    val permissions: List<JsonObject> = emptyList(),
+    val elicitations: List<ElicitationRequestPayload> = emptyList()
 )
 
 internal val adapterJson = Json { encodeDefaults = true }

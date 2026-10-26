@@ -35,6 +35,7 @@ import {useAvailableCommands} from './chatSession/useAvailableCommands';
 import {useBufferedMessageChunks} from './chatSession/useBufferedMessageChunks';
 import {asQueuedPrompt, usePromptQueue} from './chatSession/usePromptQueue';
 import {QueuePromptDraft} from './chatSession/promptQueueTypes';
+import {useElicitationRequests} from './chatSession/useElicitationRequests';
 
 const EMPTY_ADAPTER_NAMES: string[] = [];
 // The backend always reports a terminal status for a session start within its own
@@ -111,6 +112,7 @@ export function useChatSession({
   const [permissionQueue, setPermissionQueue] = useState<PermissionRequest[]>([]);
   const [approvalMode, setApprovalModeState] = useState<ApprovalMode>(() => restoredState?.approvalMode ?? loadApprovalMode());
   const permissionRequest = permissionQueue[0] ?? null;
+  const elicitationRequest = useElicitationRequests(conversationId);
   const [attachments, setAttachments] = useState<ChatAttachment[]>(restoredState?.attachments ?? []);
   const [acpSessionId, setAcpSessionId] = useState<string>('');
   const messages = useMemo(() => [...historyMessages, ...liveMessages], [historyMessages, liveMessages]);
@@ -714,6 +716,7 @@ export function useChatSession({
     || ((status === 'not started' || status === 'error') && !!selectedAgent?.downloaded))
     && !isSending
     && !isHistoryReplaying
+    && !elicitationRequest
     && !pendingPromptRef.current;
 
   const canPreemptQueuedPrompts = status === 'prompting'
@@ -918,6 +921,7 @@ export function useChatSession({
     approvalMode,
     setApprovalMode,
     permissionRequest,
+    elicitationRequest,
     handleSend,
     handleStop,
     handlePermissionDecision,

@@ -374,7 +374,7 @@ export default function ChatDropdown({
                   const hasUniqueDescription = option.description && option.description !== option.label && !option.subOptions;
 
                   return hasUniqueDescription ? (
-                    <Tooltip variant="default" content={option.description} className="w-full flex" delay={300}>
+                    <Tooltip variant="default" content={option.description} className="w-full flex" contentClassName="!text-xs" delay={300}>
                       {btn}
                     </Tooltip>
                   ) : (<div className="w-full flex">{btn}</div>);
@@ -415,7 +415,7 @@ export default function ChatDropdown({
                   const hasUniqueDescription = sub.description && sub.description !== sub.label;
 
                   return hasUniqueDescription ? (
-                    <Tooltip key={sub.id} variant="default" content={sub.description} className="w-full flex" delay={300}>
+                    <Tooltip key={sub.id} variant="default" content={sub.description} className="w-full flex" contentClassName="!text-xs" delay={300}>
                       {btn}
                     </Tooltip>
                   ) : (

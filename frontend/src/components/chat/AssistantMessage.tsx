@@ -53,13 +53,15 @@ function isWorkBlock(block: RichContentBlock | undefined): block is ExploringBlo
     || (block?.type === 'tool_call' && ['edit', 'delete', 'move'].includes(block.entry.kind ?? ''));
 }
 
-// Markdown sources of the main text in render order, which the chat search covers.
-export function assistantMessageTexts(message: Message): string[] {
-  if (message.contentBlocks?.length) return message.contentBlocks.filter(isTextBlock).map((block) => block.text);
+// Searchable text in render order; form replies are plain text rather than assistant markdown.
+export function assistantMessageTexts(message: Message, markdownText: (source: string, index: number) => string): string[] {
+  if (message.contentBlocks?.length) return message.contentBlocks
+    .filter((block) => block.type === 'text' || block.type === 'elicitation_answer')
+    .map((block, index) => block.type === 'elicitation_answer' ? block.text : markdownText((block as TextBlock).text, index));
   if (message.blocks?.length) {
-    return message.blocks.filter((block) => !(block.type === 'image' && block.data)).map((block) => (block as any).text || '');
+    return message.blocks.filter((block) => !(block.type === 'image' && block.data)).map((block, index) => markdownText((block as any).text || '', index));
   }
-  return message.content ? [message.content] : [];
+  return message.content ? [markdownText(message.content, 0)] : [];
 }
 
 function groupAssistantBlocks(blocks: RichContentBlock[]) {

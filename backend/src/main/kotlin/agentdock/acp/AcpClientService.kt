@@ -144,6 +144,14 @@ class AcpClientService private constructor(val project: Project) {
     }
 
     @Volatile
+    internal var elicitationRequestsChangedHandler: ((String, Boolean) -> Unit)? = null
+
+    /** [handler] receives the chat whose pending questions changed, and whether one was added. */
+    internal fun setOnElicitationRequestsChanged(handler: (String, Boolean) -> Unit) {
+        elicitationRequestsChangedHandler = handler
+    }
+
+    @Volatile
     internal var sessionUpdateHandler: ((String, SessionUpdate, Boolean, JsonElement?) -> Unit)? = null
 
     fun setOnSessionUpdate(handler: (String, SessionUpdate, Boolean, JsonElement?) -> Unit) {
@@ -184,6 +192,7 @@ class AcpClientService private constructor(val project: Project) {
         callbackOwner = null
         logCallback = null
         permissionRequestHandler = null
+        elicitationRequestsChangedHandler = null
         sessionUpdateHandler = null
         availableCommandsHandler = null
         adapterInitializationStateHandler = null
@@ -403,6 +412,7 @@ class AcpClientService private constructor(val project: Project) {
 
         /** Kept with the request, so a UI taking the chat over can show the ones still waiting. */
         val pendingRequests = ConcurrentHashMap<String, PendingPermission>()
+        val pendingElicitations = linkedMapOf<String, PendingElicitation>()
         val observedToolCallIds = mutableSetOf<String>()
 
         fun deliverSessionUpdate(update: SessionUpdate, isReplay: Boolean, meta: JsonElement?, isPermission: Boolean = false) {
@@ -453,6 +463,7 @@ class AcpClientService private constructor(val project: Project) {
             ignoreUpdatesUntilPrompt = false
             allowReplayDelivery = true
             cancelPendingPermissions()
+            cancelPendingElicitations()
         }
 
         fun cancelPendingPermissions() {
@@ -460,6 +471,15 @@ class AcpClientService private constructor(val project: Project) {
             pendingRequests.keys.forEach { requestId ->
                 pendingRequests.remove(requestId)?.response?.complete(RequestPermissionResponse(RequestPermissionOutcome.Cancelled))
             }
+        }
+
+        @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+        fun cancelPendingElicitations() {
+            val pending = synchronized(pendingElicitations) {
+                pendingElicitations.values.toList().also { pendingElicitations.clear() }
+            }
+            pending.forEach { it.response.complete(CreateElicitationResponse(ElicitationAction.Cancel)) }
+            if (pending.isNotEmpty()) elicitationRequestsChangedHandler?.invoke(chatId, false)
         }
     }
 
@@ -471,6 +491,10 @@ class AcpClientService private constructor(val project: Project) {
     private inner class SharedSessionOperations(
         val sessionId: String
     ) : ClientSessionOperations {
+        @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+        override suspend fun createElicitation(request: CreateElicitationRequest): CreateElicitationResponse =
+            this@AcpClientService.createElicitation(sessionId, request)
+
         override suspend fun requestPermissions(
             toolCall: SessionUpdate.ToolCallUpdate,
             permissions: List<PermissionOption>,

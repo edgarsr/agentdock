@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { Message, PermissionRequest } from '../../../types/chat';
+import type { Message } from '../../../types/chat';
 import { ACPBridge } from '../../../utils/bridge';
 
 interface UseChatSessionNotificationsOptions {
   messages: Message[];
   isSending: boolean;
   isHistoryReplaying: boolean;
-  permissionRequest: PermissionRequest | null;
+  hasPendingRequest: boolean;
   conversationId: string;
   acpSessionId: string;
   adapterName: string;
@@ -21,7 +21,7 @@ export function useChatSessionNotifications({
   messages,
   isSending,
   isHistoryReplaying,
-  permissionRequest,
+  hasPendingRequest,
   conversationId,
   acpSessionId,
   adapterName,
@@ -54,7 +54,7 @@ export function useChatSessionNotifications({
     if (!hasFinalText) return;
 
     const assistantKey = `${last.id}:${last.content?.length || 0}`;
-    if (permissionRequest) {
+    if (hasPendingRequest) {
       pendingAssistantActivityRef.current = true;
       lastNotifiedAssistantKeyRef.current = assistantKey;
       return;
@@ -63,10 +63,10 @@ export function useChatSessionNotifications({
     if (lastNotifiedAssistantKeyRef.current === assistantKey) return;
     lastNotifiedAssistantKeyRef.current = assistantKey;
     onAssistantActivity?.();
-  }, [isSending, isHistoryReplaying, messages, onAssistantActivity, permissionRequest]);
+  }, [isSending, isHistoryReplaying, messages, onAssistantActivity, hasPendingRequest]);
 
   useEffect(() => {
-    if (permissionRequest || !pendingAssistantActivityRef.current || isSending || isHistoryReplaying || messages.length === 0) return;
+    if (hasPendingRequest || !pendingAssistantActivityRef.current || isSending || isHistoryReplaying || messages.length === 0) return;
 
     const last = messages[messages.length - 1];
     if (last.role !== 'assistant') {
@@ -82,7 +82,7 @@ export function useChatSessionNotifications({
 
     pendingAssistantActivityRef.current = false;
     onAssistantActivity?.();
-  }, [permissionRequest, isSending, isHistoryReplaying, messages, onAssistantActivity]);
+  }, [hasPendingRequest, isSending, isHistoryReplaying, messages, onAssistantActivity]);
 
   useEffect(() => {
     return ACPBridge.onAssistantActivity((event) => {
@@ -97,8 +97,8 @@ export function useChatSessionNotifications({
   }, [isSending, onProcessingChange]);
 
   useEffect(() => {
-    onPermissionRequestChange?.(!!permissionRequest);
-  }, [permissionRequest, onPermissionRequestChange]);
+    onPermissionRequestChange?.(hasPendingRequest);
+  }, [hasPendingRequest, onPermissionRequestChange]);
 
   useEffect(() => {
     permissionRequestChangeRef.current = onPermissionRequestChange;

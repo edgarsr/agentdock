@@ -18,6 +18,13 @@ internal fun AcpBridge.installServiceCallbacks() {
         service.setOnLogEntry { pushLogEntry(it) }
     }
     service.setOnPermissionRequest { pushPermissionRequest(it) }
+    service.setOnElicitationRequestsChanged { chatId, newRequest ->
+        // Read the latest state under the same delivery lock as attachChat, including on removal.
+        withChatDelivery(chatId) {
+            pushElicitationRequests(chatId)
+            if (newRequest) host.eval(jsCallback("__agentDockPlaySound", "'permissionRequest'"))
+        }
+    }
     service.setOnAvailableCommands { adapterId, commands ->
         pushAvailableCommands(adapterId, commands)
     }

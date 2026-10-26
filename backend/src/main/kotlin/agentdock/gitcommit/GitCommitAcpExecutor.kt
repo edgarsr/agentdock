@@ -6,6 +6,9 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.ContentBlock
+import com.agentclientprotocol.model.CreateElicitationRequest
+import com.agentclientprotocol.model.CreateElicitationResponse
+import com.agentclientprotocol.model.ElicitationAction
 import com.agentclientprotocol.model.PermissionOption
 import com.agentclientprotocol.model.RequestPermissionOutcome
 import com.agentclientprotocol.model.RequestPermissionResponse
@@ -68,6 +71,10 @@ internal class GitCommitAcpExecutor(
                 ephemeralSessionId = sessionId.value
                 acpService.bindLiveSessionOwner(commitChatId, sessionId.value)
                 object : ClientSessionOperations {
+                    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+                    override suspend fun createElicitation(request: CreateElicitationRequest): CreateElicitationResponse =
+                        CreateElicitationResponse(ElicitationAction.Cancel)
+
                     override suspend fun requestPermissions(
                         toolCall: SessionUpdate.ToolCallUpdate,
                         permissions: List<PermissionOption>,

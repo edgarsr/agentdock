@@ -199,7 +199,7 @@ internal fun extractPlanEntries(plan: SessionUpdate, meta: JsonElement?): JsonAr
 internal fun AcpBridge.pushPlanChunk(chatId: String, plan: SessionUpdate, meta: JsonElement? = null) {
     val entries = try {
         extractPlanEntries(plan, meta)
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 
@@ -299,6 +299,11 @@ internal fun AcpBridge.pushPermissionRequest(request: PermissionRequest) {
     val payload = permissionRequestJson(request).toString().jsStringLiteral()
     host.eval(jsCallback("__onPermissionRequest", "JSON.parse($payload)"))
     host.eval(jsCallback("__agentDockPlaySound", "'permissionRequest'"))
+}
+
+internal fun AcpBridge.pushElicitationRequests(chatId: String) {
+    val requests = adapterJson.encodeToString(service.pendingElicitationRequests(chatId)).jsStringLiteral()
+    host.eval(jsCallback("__onElicitationRequests", chatId.jsStringLiteral(), "JSON.parse($requests)"))
 }
 
 internal fun AcpBridge.pushUndoResult(chatId: String, result: agentdock.changes.UndoResult) {

@@ -91,7 +91,7 @@ export function useChatSearch({ messages, isActive, containerRef, hiddenCount, r
     messages.forEach((message, messageIndex) => {
       const texts = message.role === 'user'
         ? userMessageTexts(message)
-        : assistantMessageTexts(message).map((source, i) => markdownText(`${message.id}:${i}`, source));
+        : assistantMessageTexts(message, (source, i) => markdownText(`${message.id}:${i}`, source));
       let ordinal = 0;
       for (const text of texts) {
         const count = text.match(pattern)?.length ?? 0;

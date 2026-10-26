@@ -51,6 +51,9 @@ internal object BridgeScripts {
             window.__respondPermission = function(requestId, decision) {
                 invoke('respondPermission', JSON.stringify({ requestId: requestId, decision: decision }));
             };
+            window.__respondElicitation = function(chatId, elicitationId, action, content, requestId) {
+                invoke('respondElicitation', JSON.stringify({ requestId: requestId, chatId: chatId, elicitationId: elicitationId, action: action, content: content }));
+            };
             window.__loadHistoryConversation = function(chatId, projectPath, conversationId) {
                 invoke('loadConversation', JSON.stringify({ chatId: chatId, projectPath: (projectPath || ''), conversationId: (conversationId || '') }));
             };

@@ -20,12 +20,7 @@ internal fun AcpClientService.respondToPermissionRequest(requestId: String, deci
     for (context in sessions.values) {
         val deferred = context.pendingRequests.remove(requestId)?.response
         if (deferred != null) {
-            val response = if (decision == "deny") {
-                RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
-            } else {
-                RequestPermissionResponse(RequestPermissionOutcome.Selected(PermissionOptionId(decision)))
-            }
-            deferred.complete(response)
+            deferred.complete(RequestPermissionResponse(RequestPermissionOutcome.Selected(PermissionOptionId(decision))))
             return
         }
     }
@@ -102,11 +97,15 @@ internal fun AcpClientService.prompt(chatId: String, blocks: List<ContentBlock>)
 
 internal suspend fun AcpClientService.cancel(chatId: String) {
     val context = sessions[chatId] ?: return
-    context.lifecycleMutex.withLock { context.session }?.let { session ->
-        context.ignoreUpdatesUntilPrompt = true
-        session.cancel()
+    try {
+        context.lifecycleMutex.withLock { context.session }?.let { session ->
+            context.ignoreUpdatesUntilPrompt = true
+            session.cancel()
+        }
+    } finally {
+        context.cancelPendingPermissions()
+        context.cancelPendingElicitations()
     }
-    context.cancelPendingPermissions()
 }
 
 internal suspend fun AcpClientService.stopAgent(chatId: String) {
@@ -115,6 +114,7 @@ internal suspend fun AcpClientService.stopAgent(chatId: String) {
         try {
             context.ignoreUpdatesUntilPrompt = true
             context.cancelPendingPermissions()
+            context.cancelPendingElicitations()
             try {
                 context.session?.cancel()
             } catch (error: CancellationException) {

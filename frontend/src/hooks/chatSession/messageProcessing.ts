@@ -168,7 +168,8 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
       });
     }
   } else if (chunk.type === 'image' || chunk.type === 'audio' || chunk.type === 'video'
-      || chunk.type === 'file' || chunk.type === 'code_ref' || chunk.type === 'quote') {
+      || chunk.type === 'file' || chunk.type === 'code_ref' || chunk.type === 'quote' || chunk.type === 'elicitation_answer') {
+    if (chunk.type === 'elicitation_answer') closeStreamingExploring(blocks);
     blocks.push(...buildBlocks(chunk));
   } else if (chunk.type === 'tool_call') {
     handleToolCall(blocks, lastBlock, chunk);
@@ -186,6 +187,8 @@ function applyOneChunk(messages: Message[], chunk: ContentChunk): Message[] {
 
 function buildBlocks(chunk: ContentChunk): RichContentBlock[] {
   switch (chunk.type) {
+    case 'elicitation_answer':
+      return [{ type: 'elicitation_answer', text: chunk.text || '', answers: chunk.answers }];
     case 'thinking':
       return [{
         type: 'exploring',

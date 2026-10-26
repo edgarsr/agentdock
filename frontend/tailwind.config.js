@@ -26,6 +26,7 @@ export default {
           foreground: 'var(--ide-List-selectionForeground)',
         },
         border: 'var(--ide-Borders-color)',
+        'radio-border': 'color-mix(in srgb, var(--ide-Label-foreground), transparent 70%)',
         input: 'var(--ide-background-secondary)',
         editor: {
           bg: 'var(--ide-editor-bg)',

@@ -17,7 +17,7 @@ function codeReferenceText(path: string, startLine?: number, endLine?: number): 
 
 export function plainTextFromBlocks(blocks: any[], imagePlaceholder = ''): string {
   return blocks.map((block) => {
-    if (block.type === 'text') return block.text || '';
+    if (block.type === 'text' || block.type === 'elicitation_answer') return block.text || '';
     if (block.type === 'code_ref') return codeReferenceText(block.path, block.startLine, block.endLine);
     if (block.type === 'quote') return block.quote || '';
     if (block.type === 'image') return imagePlaceholder;

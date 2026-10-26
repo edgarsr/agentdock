@@ -308,6 +308,26 @@ internal fun AcpBridge.installConversationQueries() {
         }
     }
 
+    host.register("respondElicitation") { payload ->
+        val response = runCatching { adapterJson.decodeFromString<ElicitationResponsePayload>(payload) }.getOrNull()
+        if (response != null) {
+            scope.launch(Dispatchers.Default) {
+                val error = withChatDelivery(response.chatId) {
+                    service.respondToElicitation(response) { request, content ->
+                        val event = buildElicitationAnswerEvent(request, content)
+                        recordStoredEvent(
+                            response.chatId, service.sessionId(response.chatId).orEmpty(),
+                            service.activeAdapterName(response.chatId).orEmpty(),
+                            event, isReplay = false
+                        )
+                        dispatchContentChunkJson(JsonObject(event + ("chatId" to JsonPrimitive(response.chatId))).toString())
+                    }
+                }
+                pushBridgeOperationResult(response.requestId, response.chatId, "respond_elicitation", error == null, error)
+            }
+        }
+    }
+
     installConversationHistoryQueries()
 }
 

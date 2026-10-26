@@ -120,7 +120,8 @@ private fun AcpBridge.attachChat(chatId: String, projectPath: String) {
                 status = lastStatusByChatId[chatId]
                     ?: service.status(chatId).takeUnless { it == AcpClientService.Status.NotStarted }?.name?.lowercase(),
                 sessionId = service.sessionId(chatId),
-                permissions = service.pendingPermissionRequests(chatId).map(::permissionRequestJson)
+                permissions = service.pendingPermissionRequests(chatId).map(::permissionRequestJson),
+                elicitations = service.pendingElicitationRequests(chatId)
             )
             val payloadJs = "JSON.parse(${adapterJson.encodeToString(payload).jsStringLiteral()})"
             host.eval(jsCallback("__onChatAttached", "Object.assign($payloadJs, { data: $storedJs })"))

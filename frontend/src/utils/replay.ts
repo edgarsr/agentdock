@@ -18,6 +18,7 @@ import {
 
 const ASSISTANT_EVENT_TYPES = new Set([
   'text',
+  'elicitation_answer',
   'thinking',
   'image',
   'audio',
@@ -85,6 +86,7 @@ function replayAssistantChunks(prompt: ReplayPromptEntry, promptKey: string): Co
       ...baseChunk('assistant'),
       type: type as ContentChunk['type'],
       text: event.text,
+      answers: event.answers,
       data: event.data,
       path: event.path,
       name: event.name,

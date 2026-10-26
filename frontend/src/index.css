@@ -129,7 +129,7 @@
 
 /* Keep outside @layer so Chromium opts into a classic 8px gutter instead of overlay. */
 *::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
   height: 6px;
 }
 
@@ -152,7 +152,7 @@
 }
 
 html.ide-theme-islands *::-webkit-scrollbar {
-  width: 9px;
+  width: 8px;
   height: 8px;
 }
 

@@ -4,6 +4,10 @@ import agentdock.BuildConfig
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.model.ClientCapabilities
+import com.agentclientprotocol.model.CreateElicitationResponse
+import com.agentclientprotocol.model.ElicitationAction
+import com.agentclientprotocol.model.ElicitationCapabilities
+import com.agentclientprotocol.model.ElicitationFormCapabilities
 import com.agentclientprotocol.model.PROTOCOL_VERSION_V1
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.transport.StdioTransport
@@ -201,7 +205,10 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
         )
         val protocol = Protocol(protocolScope, transport)
         sharedProcess.protocol = protocol
-        val client = Client(protocol)
+        val client = Client(protocol, globalElicitationHandler = {
+            // A request outside a chat has no UI owner; do not leave the agent waiting for one.
+            CreateElicitationResponse(ElicitationAction.Cancel)
+        })
         sharedProcess.client = client
         protocol.start()
 
@@ -216,6 +223,7 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
                 ClientInfo(
                     PROTOCOL_VERSION_V1,
                     ClientCapabilities(
+                        elicitation = ElicitationCapabilities(form = ElicitationFormCapabilities()),
                         _meta = buildJsonObject {
                             put("terminal-auth", JsonPrimitive(true))
                             adapterInfo.clientCapabilitiesMeta.forEach { (key, value) ->

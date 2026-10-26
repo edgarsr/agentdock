@@ -26,6 +26,7 @@ import { McpServerConfig, McpStatusUpdate } from '../types/mcp';
 import { PromptLibraryItem } from '../types/promptLibrary';
 import { SystemInstruction } from '../types/systemInstructions';
 import { CustomAcpConfig, CustomAcpStatusUpdate } from '../types/customAcp';
+import { ElicitationRequest } from '../types/elicitation';
 export interface ContentChunkEvent { chunk: ContentChunk; }
 export interface StatusEvent { chatId: string; status: string; }
 export interface AssistantActivityEvent { chatId: string; }
@@ -34,6 +35,7 @@ export interface ModeEvent { chatId: string; modeId: string; }
 export interface SessionConfigOptionsEvent { payload: SessionConfigOptionsPayload; }
 export interface AdaptersEvent { adapters: AgentOption[]; }
 export interface PermissionRequestEvent { request: PermissionRequest; }
+export interface ElicitationRequestsEvent { chatId: string; requests: ElicitationRequest[]; }
 export interface AvailableCommandsEvent { adapterId: string; commands: AvailableCommand[]; }
 export interface HistoryListEvent { list: HistorySessionMeta[]; }
 export interface HistoryDeleteResultEvent { result: HistoryDeleteResultPayload; }
@@ -78,6 +80,7 @@ export const EVENT_NAMES = {
   AVAILABLE_COMMANDS: 'acp-available-commands',
   USAGE_DATA: 'acp-usage-data',
   PERMISSION: 'acp-permission',
+  ELICITATIONS: 'acp-elicitations',
   HISTORY_LIST: 'history-list',
   HISTORY_DELETE_RESULT: 'history-delete-result',
   HISTORY_DELETE_REQUEST: 'history-delete-request',

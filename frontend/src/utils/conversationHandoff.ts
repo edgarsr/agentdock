@@ -234,6 +234,8 @@ function normalizeUserBlock(block: RichContentBlock): string[] {
 
 function normalizeAssistantBlock(block: RichContentBlock): string[] {
   switch (block.type) {
+    case 'elicitation_answer':
+      return [`[User answer]\n${block.text}\n[/User answer]`];
     case 'text':
       return [block.text || ''];
     case 'plan':
