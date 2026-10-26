@@ -33,7 +33,9 @@ import java.util.zip.GZIPOutputStream
  * Runs while "Browser Access" is on in the settings, which also give the port and the access key,
  * so a browser can open the UI before the IDE does. It listens on 127.0.0.1
  * only. A page address brings the access key in `?k=` once; after that every request has to carry
- * it in a cookie, which other web pages in the browser cannot send along.
+ * it in a cookie, which other web pages in the browser cannot send along. Wrong codes are limited
+ * to [MAX_FAILURES] an hour: guessing a 4-character code of letters, digits, `-` and `_` then takes
+ * about 96 years on average, one of digits only about 3 weeks.
  */
 @Service(Service.Level.APP)
 internal class AgentDockWebServer : Disposable {
@@ -45,6 +47,11 @@ internal class AgentDockWebServer : Disposable {
     private var executor: ExecutorService? = null
     /** Keyed by project and page ID. */
     private val pages = ConcurrentHashMap<String, WebUi>()
+
+    /** Wrong codes given since [windowStart]; past [MAX_FAILURES] no code is accepted until the hour ends. */
+    private val attempts = Any()
+    private var failures = 0
+    private var windowStart = 0L
 
     private val settingsListener: (GlobalSettings, GlobalSettings) -> Unit = { _, _ -> update() }
 
@@ -95,6 +102,8 @@ internal class AgentDockWebServer : Disposable {
             try {
                 handle(exchange)
             } catch (_: Exception) {
+                // A malformed request, such as a bad `%` in the address, gets an answer instead of a dropped connection.
+                if (exchange.responseCode == -1) runCatching { respond(exchange, 400) }
             } finally {
                 exchange.close()
             }
@@ -116,6 +125,8 @@ internal class AgentDockWebServer : Disposable {
         this.server = null
         executor = null
         startedWith = null
+        // Turning "Browser Access" off and on, or a new code, lifts a limit the user reached.
+        synchronized(attempts) { failures = 0 }
         ProjectManager.getInstance().openProjects.forEach(::pushAddress)
         val projectHashes = pages.keys.map { it.substringBefore('/') }.toSet()
         pages.clear()
@@ -147,8 +158,10 @@ internal class AgentDockWebServer : Disposable {
         val cookieName = "agentDock${exchange.localAddress.port}"
         val cookies = exchange.requestHeaders["Cookie"].orEmpty().flatMap { it.split(';') }
             .associate { it.trim().substringBefore('=') to it.trim().substringAfter('=') }
-        val viaAddress = isPage && isCode(query["k"].orEmpty(), code)
-        if (!viaAddress && !isCode(cookies[cookieName].orEmpty(), code)) return respond(exchange, 403)
+        val viaAddress = isPage && accepts(query["k"], code)
+        if (!viaAddress && !accepts(cookies[cookieName], code)) {
+            return if (attemptsExhausted()) respond(exchange, 429, TOO_MANY_FAILURES) else respond(exchange, 403)
+        }
         // A page keeps the code in a cookie for 400 days from its last load, and its address loses the code.
         if (isPage) exchange.responseHeaders.set("Set-Cookie", "$cookieName=$code; Path=/; Max-Age=34560000; HttpOnly; SameSite=Lax")
         if (viaAddress) {
@@ -198,6 +211,26 @@ internal class AgentDockWebServer : Disposable {
         return if (end < 0) html else html.substring(0, end) + bridge + html.substring(end)
     }
 
+    /** A missing code is not counted: a page that has the cookie loads without `?k=`. */
+    private fun accepts(given: String?, code: String): Boolean {
+        if (given.isNullOrEmpty()) return false
+        synchronized(attempts) {
+            if (attemptsExhausted()) return false
+            if (isCode(given, code)) return true
+            val now = System.currentTimeMillis()
+            if (now - windowStart >= ATTEMPT_WINDOW_MS) {
+                windowStart = now
+                failures = 0
+            }
+            failures++
+            return false
+        }
+    }
+
+    private fun attemptsExhausted(): Boolean = synchronized(attempts) {
+        failures >= MAX_FAILURES && System.currentTimeMillis() - windowStart < ATTEMPT_WINDOW_MS
+    }
+
     private fun isCode(given: String, code: String): Boolean = MessageDigest.isEqual(given.toByteArray(), code.toByteArray())
 
     /**
@@ -244,6 +277,11 @@ internal class AgentDockWebServer : Disposable {
 
     companion object {
         private const val PORT_COUNT = 20
+        /** Above what typos and the pages left open with an old code usually cause; the 429 page says how to lift it. */
+        private const val MAX_FAILURES = 10
+        private const val ATTEMPT_WINDOW_MS = 60 * 60 * 1000L
+        private const val TOO_MANY_FAILURES =
+            "Too many wrong access codes. Try again within an hour, or turn Browser Access off and on in the Agent Dock settings."
         private const val HTML = "text/html; charset=utf-8"
         private val PAGE_PATH = Regex("/(.+)/(\\w*)")
 

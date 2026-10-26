@@ -82,7 +82,13 @@ object GlobalSettingsStore {
         return normalized
     }
 
-    /** At least 4 letters, digits, `-` or `_`, which are safe in an address and a cookie as they are. */
+    /**
+     * At least 4 letters, digits, `-` or `_`, which are safe in an address and a cookie as they are.
+     *
+     * The generated code has 96 random bits, so the chance of guessing it is too small to matter. A
+     * shorter code is the user's own choice, easier to type on a phone. The web server limits wrong
+     * codes to 10 an hour, which makes guessing slow enough that it needs no Host check.
+     */
     private fun validAccessCode(code: String?): String? =
         code?.takeIf { it.length >= 4 && it.all { c -> c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "-_" } }
 
