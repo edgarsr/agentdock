@@ -54,6 +54,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>Added support for asynchronous questions.</li>
             <li>Added access to the plugin from a web browser, including remote access via Tailscale.</li>
             <li>Optimized code.</li>
             <li>Minor bug fixes and UI refinements.</li>
