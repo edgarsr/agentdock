@@ -1,13 +1,8 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { focusMenuItem, moveMenuFocus } from '../tabbar/menuFocus';
-import {
-  PANEL_GAP_PX,
-  popupMenuItemClassName,
-  popupMenuPanelClassName,
-  visibleRect,
-  WINDOW_EDGE_PX,
-} from './PopupMenu';
+import { PANEL_GAP_PX, popupMenuItemClassName, popupMenuPanelClassName, WINDOW_EDGE_PX } from './PopupMenu';
 
 interface PopupSubmenuProps {
   label: string;
@@ -53,34 +48,36 @@ export function PopupSubmenu({ label, icon, value, compact, children }: PopupSub
       const target = event.target as Element;
       if (target.closest('[role="menuitem"]') && !rootRef.current?.contains(target)) setOpen(false);
     };
+    // Fixed in the window, so it would part from an inline menu scrolling along with its list.
+    const closeOnScroll = (event: Event) => {
+      if (!panelRef.current?.contains(event.target as Node)) setOpen(false);
+    };
     menu?.addEventListener('pointerover', closeOnOtherItem);
-    return () => menu?.removeEventListener('pointerover', closeOnOtherItem);
+    window.addEventListener('scroll', closeOnScroll, true);
+    return () => {
+      menu?.removeEventListener('pointerover', closeOnOtherItem);
+      window.removeEventListener('scroll', closeOnScroll, true);
+    };
   }, [open]);
 
   // As in `PopupMenu`: rendered transparent first, measured, then placed, its first item level with the item. It is
-  // placed in the menu's panel, so it moves along with an inline menu, and kept inside what clips the menu.
+  // portaled, so neither the menu's list nor the dialog around it clips it; only the plugin window bounds it.
   useLayoutEffect(() => {
     const item = itemRef.current?.getBoundingClientRect();
-    const menuElement = itemRef.current?.closest<HTMLElement>('[role="menu"]');
+    const menu = itemRef.current?.closest<HTMLElement>('[role="menu"]')?.getBoundingClientRect();
     const panel = panelRef.current;
-    if (!open || !item || !menuElement || !panel) {
+    if (!open || !item || !menu || !panel) {
       setPosition(null);
       return;
     }
-    const menu = menuElement.getBoundingClientRect();
-    const visible = visibleRect(menuElement);
     const right = menu.right + PANEL_GAP_PX;
     // The panel's border, padding and the item's margin.
     const firstItemOffset = 5;
-    const top = Math.max(
-      visible.top,
-      Math.min(item.top - firstItemOffset, visible.bottom - WINDOW_EDGE_PX - panel.offsetHeight)
-    );
-    const left = right + panel.offsetWidth <= visible.right - WINDOW_EDGE_PX
+    const top = Math.max(0, Math.min(item.top - firstItemOffset, window.innerHeight - WINDOW_EDGE_PX - panel.offsetHeight));
+    const left = right + panel.offsetWidth <= window.innerWidth - WINDOW_EDGE_PX
       ? right
-      : Math.max(visible.left, menu.left - PANEL_GAP_PX - panel.offsetWidth);
-    // Relative to the menu panel's padding box.
-    setPosition({ top: top - menu.top - menuElement.clientTop, left: left - menu.left - menuElement.clientLeft });
+      : Math.max(0, menu.left - PANEL_GAP_PX - panel.offsetWidth);
+    setPosition({ top, left });
     if (focusFirstRef.current) {
       focusFirstRef.current = false;
       focusMenuItem(panel, 0);
@@ -121,8 +118,8 @@ export function PopupSubmenu({ label, icon, value, compact, children }: PopupSub
           <ChevronRight size={12} aria-hidden="true" />
         </span>
       </button>
-      {/* Nested in the menu's panel, so presses in it count as inside the menu; only it marks chosen items. */}
-      {open ? (
+      {/* Presses in it count as inside the menu through the React tree; only it marks chosen items. */}
+      {open ? createPortal(
         <div
           ref={panelRef}
           role="menu"
@@ -138,10 +135,11 @@ export function PopupSubmenu({ label, icon, value, compact, children }: PopupSub
             event.stopPropagation();
           }}
           style={position ?? { top: 0, left: 0, opacity: 0 }}
-          className={`group/menu absolute ${popupMenuPanelClassName}`}
+          className={`group/menu fixed ${popupMenuPanelClassName}`}
         >
           {children}
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

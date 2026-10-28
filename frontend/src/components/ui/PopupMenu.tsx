@@ -103,6 +103,8 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom', inlin
   const panelRef = useRef<HTMLDivElement>(null);
   /** Item to focus once the panel opens; -1 is the last. */
   const focusItemRef = useRef<number | null>(null);
+  /** The last press in the menu's React tree, so also in its portaled panel and submenus. */
+  const pressInsideRef = useRef<Event | null>(null);
   const [position, setPosition] = useState<CSSProperties | null>(null);
 
   // The panel is first rendered transparent (still focusable) at the top left, measured, then placed.
@@ -145,8 +147,7 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom', inlin
       focusItemRef.current = null;
     }
     const closeOutside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) setOpen(false);
+      if (pressInsideRef.current !== event) setOpen(false);
     };
     window.addEventListener('pointerdown', closeOutside);
     return () => window.removeEventListener('pointerdown', closeOutside);
@@ -156,7 +157,7 @@ export function PopupMenu({ renderTrigger, children, placement = 'bottom', inlin
   const portal = (panel: ReactNode) => inline ? panel : createPortal(panel, document.body);
 
   return (
-    <div ref={rootRef} className="relative flex min-w-0">
+    <div ref={rootRef} className="relative flex min-w-0" onPointerDown={(event) => { pressInsideRef.current = event.nativeEvent; }}>
       {renderTrigger({
         ref: triggerRef,
         'aria-haspopup': 'menu',

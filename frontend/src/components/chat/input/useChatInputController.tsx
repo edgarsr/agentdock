@@ -160,6 +160,7 @@ export function useChatInputController({
     selectedAgentId,
     availableCommands: slashItems,
     inputRootRef,
+    editorContainerRef,
     menuRef: slashMenuRef,
     lexicalEditorRef,
     onInputChange,
@@ -176,6 +177,7 @@ export function useChatInputController({
     handleKeyDownCapture: handleFileMentionsKeyDownCapture,
   } = useFileMentions({
     inputRootRef,
+    editorContainerRef,
     menuRef: fileMenuRef,
     lexicalEditorRef,
   });

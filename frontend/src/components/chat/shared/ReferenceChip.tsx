@@ -132,7 +132,7 @@ export function QuoteChip({ quote, onRemove }: { quote: string; onRemove?: (e: R
       labelClassName="max-w-[8rem]"
       removeLabel="Remove quote"
       tooltip={<div className="line-clamp-[12] whitespace-pre-wrap">{quote}</div>}
-      tooltipClassName="!max-w-[min(300px,calc(100vw-16px))] !text-xs"
+      tooltipClassName="!text-xs"
       onRemove={onRemove}
     />
   );

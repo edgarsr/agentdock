@@ -14,12 +14,15 @@ export interface FileMentionItem {
 
 interface UseFileMentionsOptions {
   inputRootRef: React.RefObject<HTMLDivElement>;
+  /** The text field; a click elsewhere, also on the input's controls, closes the menu. */
+  editorContainerRef: React.RefObject<HTMLDivElement>;
   menuRef: React.RefObject<HTMLDivElement>;
   lexicalEditorRef: React.RefObject<LexicalEditor | null>;
 }
 
 export function useFileMentions({
   inputRootRef,
+  editorContainerRef,
   menuRef,
   lexicalEditorRef,
 }: UseFileMentionsOptions) {
@@ -152,7 +155,7 @@ export function useFileMentions({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (menuRef.current?.contains(target)) return;
-      if (inputRootRef.current?.contains(target)) return;
+      if (editorContainerRef.current?.contains(target)) return;
       close();
     };
 
@@ -164,7 +167,7 @@ export function useFileMentions({
       window.removeEventListener('scroll', recalculate, true);
       window.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [files.length, inputRootRef, isOpen, menuRef, close]);
+  }, [files.length, inputRootRef, editorContainerRef, isOpen, menuRef, close]);
 
   useEffect(() => {
     setHighlightedIndex(0);

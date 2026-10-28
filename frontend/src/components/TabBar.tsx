@@ -139,7 +139,7 @@ export default function TabBar({
       {onUseSidebar ? <UseSidebarButton position={sidebarPosition} onClick={onUseSidebar} /> : null}
       {/* Tabs List */}
       <div ref={tabsListRef} role="tablist"
-        className={`flex min-w-0 flex-1 overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:h-1.5 ${isIslandsTheme ? '' : 'pl-2'}`}
+        className={`flex min-w-0 flex-1 overflow-x-auto scroll-smooth [@media(pointer:fine)]:[&::-webkit-scrollbar]:h-1.5 ${isIslandsTheme ? '' : 'pl-2'}`}
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;

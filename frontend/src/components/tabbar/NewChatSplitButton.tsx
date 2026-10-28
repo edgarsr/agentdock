@@ -93,7 +93,6 @@ export function NewChatSplitButton({
         </Tooltip>
       </div>
       <div
-        aria-hidden={!agentsExpanded}
         {...(!agentsExpanded ? { inert: '' } : {})}
         className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${agentsExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
       >

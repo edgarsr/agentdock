@@ -173,7 +173,7 @@ internal class AgentDockWebServer : Disposable {
         val (name, action) = match?.destructured ?: return respond(exchange, 404)
         val project = ProjectManager.getInstance().openProjects.firstOrNull { pathName(it) == name || hashedPathName(it) == name }
             ?: return respond(exchange, 404)
-        if (action.isEmpty()) return respond(exchange, 200, page(), HTML)
+        if (action.isEmpty()) return respond(exchange, 200, page(project), HTML)
 
         val bridge = AgentDockUiHost.getInstance(project).bridge()
         val key = "${project.locationHash}/${query["c"] ?: return respond(exchange, 400)}"
@@ -203,9 +203,10 @@ internal class AgentDockWebServer : Disposable {
         }
     }
 
-    /** The inlined script contains `</body>` too, so the bridge goes before the last one. */
-    private fun page(): String {
+    /** Titled with the project's name. The inlined script contains `</body>` too, so the bridge goes before the last one. */
+    private fun page(project: Project): String {
         val html = AssetLoader.loadAndInlineAssets(javaClass)
+            .replaceFirst("<title>Agent Dock</title>", "<title>${StringUtil.escapeXmlEntities(project.name)}</title>")
         val end = html.lastIndexOf("</body>")
         val bridge = "<script>window.addEventListener('load', function() {\n${BridgeScripts.browserBridge()}\n});</script>"
         return if (end < 0) html else html.substring(0, end) + bridge + html.substring(end)

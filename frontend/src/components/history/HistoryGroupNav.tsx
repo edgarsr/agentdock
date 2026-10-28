@@ -71,7 +71,6 @@ export function HistoryGroupNav({
         </Tooltip>
       </div>
       <div
-        aria-hidden={!expanded}
         {...(!expanded ? { inert: '' } : {})}
         className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
       >

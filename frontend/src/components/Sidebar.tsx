@@ -114,7 +114,6 @@ export function Sidebar({
   return (
     <aside
       ref={containerRef}
-      aria-hidden={hidden}
       {...(hidden ? { inert: '' } : {})}
       style={{ width: overlay || hidden ? '0px' : `${effectiveWidth}px` }}
       className={`relative z-40 h-full min-h-0 shrink-0 ${animateVisibility ? 'transition-[width] duration-200 ease-in-out' : ''} ${

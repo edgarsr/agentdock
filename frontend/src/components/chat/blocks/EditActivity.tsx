@@ -71,7 +71,7 @@ const DiffView: React.FC<{ lines: DiffLine[]; filePath: string }> = ({ lines, fi
   }, [lines, filePath]);
 
   return (
-    <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto [&::-webkit-scrollbar]:!h-[7px]">
+    <div tabIndex={-1} className="bg-editor-bg max-h-[400px] overflow-auto [@media(pointer:fine)]:[&::-webkit-scrollbar]:!h-[7px]">
       <div className="syntax-highlighted font-mono text-ide-small py-2 min-w-max inline-block w-full">
         {lines.map((line, i) => (
           <React.Fragment key={i}>

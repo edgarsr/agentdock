@@ -18,6 +18,8 @@ interface UseSlashCommandsOptions {
   selectedAgentId: string;
   availableCommands: SlashCommandItem[];
   inputRootRef: React.RefObject<HTMLDivElement>;
+  /** The text field; a click elsewhere, also on the input's controls, closes the menu. */
+  editorContainerRef: React.RefObject<HTMLDivElement>;
   menuRef: React.RefObject<HTMLDivElement>;
   lexicalEditorRef: React.RefObject<LexicalEditor | null>;
   onInputChange: (value: string) => void;
@@ -29,6 +31,7 @@ export function useSlashCommands({
   selectedAgentId,
   availableCommands,
   inputRootRef,
+  editorContainerRef,
   menuRef,
   lexicalEditorRef,
   onInputChange,
@@ -122,7 +125,7 @@ export function useSlashCommands({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (menuRef.current?.contains(target)) return;
-      if (inputRootRef.current?.contains(target)) return;
+      if (editorContainerRef.current?.contains(target)) return;
       close();
     };
 
@@ -134,7 +137,7 @@ export function useSlashCommands({
       window.removeEventListener('scroll', recalculate, true);
       window.removeEventListener('mousedown', handlePointerDown);
     };
-  }, [close, commands.length, inputRootRef, isOpen, menuRef, updateLayout]);
+  }, [close, commands.length, inputRootRef, editorContainerRef, isOpen, menuRef, updateLayout]);
 
   const handleKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isOpen || commands.length === 0) return;

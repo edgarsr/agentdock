@@ -147,7 +147,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
               'bg-background-secondary text-foreground rounded-md',
               variant === 'minimal'
                 ? 'max-w-[min(1000px,calc(100vw-16px))] overflow-hidden px-2 py-1 text-xs whitespace-nowrap text-ellipsis'
-                : 'max-w-[calc(100vw-16px)] max-w-[300px] p-3 pt-2 text-ide-small whitespace-normal break-words',
+                : 'max-w-[min(300px,calc(100vw-16px))] p-3 pt-2 text-ide-small whitespace-normal break-words',
               contentClassName
             )}
           >

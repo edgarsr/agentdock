@@ -549,7 +549,7 @@ function MessageList({
                 key={message.id}
                 placement="right"
                 content={<PromptTooltip message={message} number={index + 1} />}
-                contentClassName="max-w-[min(280px,calc(100vw-48px))]"
+                contentClassName="!max-w-[min(280px,calc(100vw-48px))]"
                 className="!w-full"
               >
                 <button
@@ -646,10 +646,13 @@ function MessageList({
     {isActive && <QuoteSelectionButton containerRef={containerRef} />}
     {footer && (
       <div ref={footerRef} onWheel={handleFooterWheel} onClick={handleFooterClick}
-        className="absolute bottom-0 left-0 right-0 z-50 bg-background px-4 pt-1 app-wide:px-6">
-        <div aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-full h-8 bg-gradient-to-b from-transparent to-background" />
-        <div className="relative mx-auto flex w-full max-w-app-content flex-col">
+        className="pointer-events-none absolute bottom-0 left-0 right-0 z-50 px-4 pt-1 app-wide:px-6">
+        <div className="pointer-events-auto relative mx-auto flex w-full max-w-app-content flex-col">
+          {/* Covers the input and content slightly wider than it, leaving the list's overlay scrollbar at the edge
+            visible. */}
+          <div aria-hidden="true" className="pointer-events-none absolute -inset-x-1.5 -top-1 bottom-0 -z-10 bg-background">
+            <div className="absolute inset-x-0 bottom-full h-8 bg-gradient-to-b from-transparent to-background" />
+          </div>
           {search.bar}
           {footer}
         </div>

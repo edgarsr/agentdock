@@ -127,43 +127,46 @@
   }
 }
 
-/* Keep outside @layer so Chromium opts into a classic 8px gutter instead of overlay. */
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+/* Keep outside @layer so Chromium opts into a classic 8px gutter instead of overlay.
+   Touch screens keep the browser's own overlay indicator. */
+@media (pointer: fine) {
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-*::-webkit-scrollbar-thumb {
-  background-color: var(--ide-scrollbar-color);
-  opacity: 0.8;
-  border-radius: 0;
-}
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--ide-scrollbar-color);
+    opacity: 0.8;
+    border-radius: 0;
+  }
 
-*::-webkit-scrollbar-thumb:hover {
-  opacity: 1;
-}
+  *::-webkit-scrollbar-thumb:hover {
+    opacity: 1;
+  }
 
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 
-html.ide-theme-islands *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+  html.ide-theme-islands *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-html.ide-theme-islands *::-webkit-scrollbar-thumb {
-  background-clip: content-box;
-  border: 1px solid transparent;
-  border-radius: 999px;
-}
+  html.ide-theme-islands *::-webkit-scrollbar-thumb {
+    background-clip: content-box;
+    border: 1px solid transparent;
+    border-radius: 999px;
+  }
 
-html.ide-theme-islands *::-webkit-scrollbar-track:vertical {
-  margin-bottom: 2px;
+  html.ide-theme-islands *::-webkit-scrollbar-track:vertical {
+    margin-bottom: 2px;
+  }
 }
 
 @keyframes tooltip-in {

@@ -147,6 +147,16 @@ export function HistoryListItem({
         </div>
 
         <div className="flex shrink-0 items-center self-stretch relative ml-2" onClick={(e) => e.stopPropagation()}>
+          {item.pinned ? (
+            <SectionRowButton
+              label="Unpin chat"
+              onClick={() => ACPBridge.updateHistoryConversations(item.projectPath, [conversationId], { pinned: false })}
+              className="mr-1"
+            >
+              <Pin className="h-3.5 w-3.5 rotate-45" fill="currentColor" />
+            </SectionRowButton>
+          ) : null}
+
           <PopupMenu
             inline
             renderTrigger={(trigger) => (
@@ -183,16 +193,6 @@ export function HistoryListItem({
               }] : []),
             ], true)}
           </PopupMenu>
-
-          {item.pinned ? (
-            <SectionRowButton
-              label="Unpin chat"
-              onClick={() => ACPBridge.updateHistoryConversations(item.projectPath, [conversationId], { pinned: false })}
-              className="mr-1"
-            >
-              <Pin className="h-3.5 w-3.5 rotate-45" fill="currentColor" />
-            </SectionRowButton>
-          ) : null}
 
           {isSelecting ? (
             <Checkbox
