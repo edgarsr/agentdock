@@ -9,6 +9,7 @@ import {ACPBridge} from '../../../utils/bridge';
 import {openFile} from '../../../utils/openFile';
 import {useSlashCommands} from '../../../hooks/useSlashCommands';
 import {applySlashCommandToEditor, buildAgentSlashItems, buildPromptLibrarySlashItems,} from './slashCommands';
+import {$composerText} from './composerContent';
 import {useFileMentions} from '../../../hooks/useFileMentions';
 import {isShortcut, useKeyDown} from '../../../hooks/useShortcuts';
 import {ImageNode} from './ImageNode';
@@ -207,14 +208,14 @@ export function useChatInputController({
     let nextText = normalizedText;
     editor.update(() => {
       const root = $getRoot();
-      const existingText = root.getTextContent();
+      const existingText = $composerText();
       const prefix = existingText.trim().length > 0 && !existingText.endsWith(' ') && !existingText.endsWith('\n') ? ' ' : '';
       root.selectEnd();
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
         selection.insertText(`${prefix}${normalizedText}`);
       }
-      nextText = root.getTextContent();
+      nextText = $composerText();
     });
     onInputChange(nextText);
   }, [inputValue, onInputChange]);

@@ -5,9 +5,13 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { $getRoot, LexicalEditor } from 'lexical';
+import { ListPlugin } from '@lexical/react/LexicalListPlugin';
+import { ListItemNode, ListNode } from '@lexical/list';
+import { LexicalEditor } from 'lexical';
 import { ChatAttachment } from '../../../types/chat';
+import { listClassName } from '../shared/markdownLists';
 import { ChatInputActionsContext } from './ChatInputActionsContext';
+import { $composerText } from './composerContent';
 import { ImageNode } from './ImageNode';
 import { ReferenceNode } from './ReferenceNode';
 import {
@@ -18,6 +22,7 @@ import {
   ExternalReferencePlugin,
   InlineAttachmentBackspacePlugin,
   KeyboardPlugin,
+  ListEditingPlugin,
   LoadComposerDraftPlugin,
   PasteLogPlugin,
   PlainTextFormattingGuardPlugin,
@@ -69,8 +74,13 @@ export function ChatInputEditor({
 }: ChatInputEditorProps) {
   const initialConfig = useMemo(() => ({
     namespace: `ChatInput-${conversationId}`,
-    nodes: [ImageNode, ReferenceNode],
-    theme: { paragraph: 'm-0', text: { base: 'text-foreground' } },
+    nodes: [ImageNode, ReferenceNode, ListNode, ListItemNode],
+    theme: {
+      paragraph: 'm-0',
+      text: { base: 'text-foreground' },
+      // The item that holds a nested list has no marker of its own.
+      list: { ul: listClassName(false), ol: listClassName(true), nested: { listitem: 'list-none' } },
+    },
     onError: (error: Error) => console.error(error),
   }), [conversationId, composerRevision]);
 
@@ -82,7 +92,7 @@ export function ChatInputEditor({
       <ChatInputActionsContext.Provider value={{ onImageClick, onOpenFile, attachments }}>
         <LexicalComposer key={`chat-input-${conversationId}-${composerRevision}`} initialConfig={initialConfig}>
           <RichTextPlugin contentEditable={
-              <ContentEditable className="outline-none p-3 text-foreground" spellCheck={false}/>
+              <ContentEditable className="outline-none p-3 text-foreground [&>:last-child]:mb-0" spellCheck={false}/>
             }
             placeholder={
               <div className="absolute top-3 left-3 text-foreground-secondary pointer-events-none">
@@ -92,10 +102,12 @@ export function ChatInputEditor({
             ErrorBoundary={LexicalErrorBoundary}
           />
           <HistoryPlugin />
+          <ListPlugin />
+          <ListEditingPlugin attachments={attachments} />
           {onEditorReady && <RegisterEditorPlugin onReady={onEditorReady} />}
           <OnChangePlugin onChange={(editorState) => {
             editorState.read(() => {
-              const text = $getRoot().getTextContent();
+              const text = $composerText();
               if (text !== inputValue) onInputChange(text);
             });
           }} />

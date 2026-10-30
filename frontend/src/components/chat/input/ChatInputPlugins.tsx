@@ -8,23 +8,28 @@ import {
   $getRoot,
   $getSelection,
   $isElementNode,
+  $isLineBreakNode,
+  $isParagraphNode,
   $isRangeSelection,
   $isTextNode,
   COMMAND_PRIORITY_HIGH,
   KEY_BACKSPACE_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
   FORMAT_TEXT_COMMAND,
+  INSERT_PARAGRAPH_COMMAND,
   KEY_ENTER_COMMAND,
+  KEY_TAB_COMMAND,
   PASTE_COMMAND,
   LexicalEditor,
-  LexicalNode,
   type MutationListener
 } from 'lexical';
+import { $isListItemNode, $isListNode } from '@lexical/list';
 import { $createImageNode, ImageNode } from './ImageNode';
 import { ReferenceNode, $createReferenceNode, $isReferenceNode, type ReferenceKind } from './ReferenceNode';
 import { ChatAttachment, RichContentBlock } from '../../../types/chat';
 import { pastedPrompt, PROMPT_MIME } from '../../../utils/promptClipboard';
-import { restoreComposerContent } from './composerContent';
+import { markdownFromHtmlLists, TYPED_LIST_MARKER } from '../shared/markdownLists';
+import { $applyTypedListMarker, $insertComposerText, $selectedListItem, restoreComposerContent } from './composerContent';
 
 export function AttachmentsSyncPlugin({ attachments, onAttachmentsChange }: {
   attachments: ChatAttachment[],
@@ -71,23 +76,20 @@ export function AttachmentsSyncPlugin({ attachments, onAttachmentsChange }: {
 }
 
 function insertPrompt(editor: LexicalEditor, blocks: RichContentBlock[], attachments: ChatAttachment[], onAttachmentsChange: (items: ChatAttachment[]) => void) {
-  const nodes: Array<() => LexicalNode> = [];
+  let text = '';
   const added: ChatAttachment[] = [];
 
   for (const block of blocks) {
     if (block.type === 'text') {
-      block.text.split('\n').forEach((part, index) => {
-        if (index > 0) nodes.push(() => $createLineBreakNode());
-        if (part) nodes.push(() => $createTextNode(part));
-      });
+      text += block.text;
     } else if (block.type === 'code_ref') {
       const id = crypto.randomUUID();
       added.push({ id, name: block.name, path: block.path, mimeType: 'application/x-code-reference', attachmentType: 'code_ref', isInline: true, startLine: block.startLine, endLine: block.endLine });
-      nodes.push(() => $createReferenceNode(id, 'code-ref'));
+      text += `[code-ref-${id}]`;
     } else if (block.type === 'quote') {
       const id = crypto.randomUUID();
       added.push(quoteAttachment(id, block.quote));
-      nodes.push(() => $createReferenceNode(id, 'quote'));
+      text += `[quote-${id}]`;
     } else if (block.type === 'image' || block.type === 'audio' || block.type === 'video' || block.type === 'file') {
       const id = crypto.randomUUID();
       const isInline = block.type === 'image' && block.isInline !== false;
@@ -99,21 +101,13 @@ function insertPrompt(editor: LexicalEditor, blocks: RichContentBlock[], attachm
         path: block.type === 'file' || block.type === 'video' ? block.path : undefined,
         isInline,
       });
-      if (isInline) nodes.push(() => $createImageNode(id));
+      if (isInline) text += `[image-${id}]`;
     }
   }
 
-  if (added.length > 0) onAttachmentsChange([...attachments, ...added]);
-  if (nodes.length > 0) {
-    editor.update(() => {
-      let selection = $getSelection();
-      if (!$isRangeSelection(selection)) {
-        $getRoot().selectEnd();
-        selection = $getSelection();
-      }
-      if ($isRangeSelection(selection)) selection.insertNodes(nodes.map((create) => create()));
-    });
-  }
+  const next = [...attachments, ...added];
+  if (added.length > 0) onAttachmentsChange(next);
+  if (text) editor.update(() => $insertComposerText(text, next));
 }
 
 export function PasteLogPlugin({ attachments, onAttachmentsChange }: {
@@ -163,21 +157,12 @@ export function PasteLogPlugin({ attachments, onAttachmentsChange }: {
           return true;
         }
 
-        const normalizedText = plainText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        // Copied lists, such as those of chat messages, keep their markers and nesting only in the HTML.
+        const text = markdownFromHtmlLists(event.clipboardData?.getData('text/html') || '')
+          ?? plainText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
         event.preventDefault();
-        editor.update(() => {
-          const selection = $getSelection();
-          if ($isRangeSelection(selection)) {
-            selection.insertText(normalizedText);
-            return;
-          }
-          $getRoot().selectEnd();
-          const nextSelection = $getSelection();
-          if ($isRangeSelection(nextSelection)) {
-            nextSelection.insertText(normalizedText);
-          }
-        });
+        editor.update(() => $insertComposerText(text, attachmentsRef.current));
         return true;
       },
       COMMAND_PRIORITY_HIGH
@@ -203,10 +188,16 @@ export function KeyboardPlugin({
       KEY_ENTER_COMMAND,
       (event: KeyboardEvent) => {
         if (disabled) return false;
+        // The key that starts a new line starts a new item in a list; on an empty item it ends the list.
+        const newListItem = () => {
+          event.preventDefault();
+          return editor.dispatchCommand(INSERT_PARAGRAPH_COMMAND, undefined);
+        };
         if (!onSend) {
           if (event.isComposing) return false;
           const selection = $getSelection();
           if (!$isRangeSelection(selection)) return false;
+          if ($selectedListItem()) return newListItem();
           event.preventDefault();
           selection.insertNodes([$createLineBreakNode()]);
           return true;
@@ -216,6 +207,7 @@ export function KeyboardPlugin({
             onSend();
             return true;
           }
+          if (event.shiftKey && !event.isComposing && $selectedListItem()) return newListItem();
         } else {
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault();
@@ -241,6 +233,75 @@ export function PlainTextFormattingGuardPlugin() {
       () => true,
       COMMAND_PRIORITY_CRITICAL
     );
+  }, [editor]);
+
+  return null;
+}
+
+const LIST_MARKER_TAG = 'list-marker';
+
+/** Turns a list marker typed at the start of a line into a list, and nests list items with Tab and Shift+Tab. */
+export function ListEditingPlugin({ attachments }: { attachments: ChatAttachment[] }) {
+  const [editor] = useLexicalComposerContext();
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+
+  useEffect(() => {
+    const stopMarkers = editor.registerUpdateListener(({ editorState, dirtyLeaves, tags }) => {
+      // A marker that stays text, as in a code block, must not be handled again.
+      if (tags.has('historic') || tags.has(LIST_MARKER_TAG) || editor.isComposing()) return;
+      const typed = editorState.read(() => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null;
+        const node = selection.anchor.getNode();
+        const parent = node.getParent();
+        if (!$isTextNode(node) || !dirtyLeaves.has(node.getKey())) return null;
+        let line = node.getTextContent().slice(0, selection.anchor.offset);
+        for (let sibling = node.getPreviousSibling(); sibling && !$isLineBreakNode(sibling); sibling = sibling.getPreviousSibling()) {
+          line = sibling.getTextContent() + line;
+        }
+        if (!TYPED_LIST_MARKER.test(line)) return null;
+        if ($isParagraphNode(parent)) return 'paragraph';
+        // A marker typed in the empty first item of a list sets the kind of the list.
+        return $isListItemNode(parent) && !parent.getPreviousSibling() && parent.getTextContent() === line ? 'item' : null;
+      });
+      if (typed === 'paragraph') editor.update(() => $applyTypedListMarker(attachmentsRef.current), { tag: LIST_MARKER_TAG });
+      if (typed === 'item') {
+        editor.update(() => {
+          const item = $selectedListItem();
+          const list = item?.getParent();
+          if (!item || !$isListNode(list)) return;
+          list.setListType(/\d/.test(item.getTextContent()) ? 'number' : 'bullet');
+          item.clear().select();
+        }, { tag: LIST_MARKER_TAG });
+      }
+    });
+    const stopTab = editor.registerCommand(
+      KEY_TAB_COMMAND,
+      (event: KeyboardEvent) => {
+        const item = $selectedListItem();
+        if (!item) return false;
+        event.preventDefault();
+        const indent = item.getIndent();
+        if (event.shiftKey) {
+          if (indent > 0) item.setIndent(indent - 1);
+        } else if (item.getPreviousSibling()) {
+          // An item nests under the item above it; the first item of a list has none.
+          item.setIndent(indent + 1);
+          const list = item.getParent();
+          if ($isListNode(list) && list.getListType() === 'number' && list.getChildrenSize() === 1) {
+            // Sub-items start as bullets.
+            list.setListType('bullet');
+          }
+        }
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+    return () => {
+      stopMarkers();
+      stopTab();
+    };
   }, [editor]);
 
   return null;
@@ -505,7 +566,7 @@ export function ClearEditorPlugin({ inputValue }: { inputValue: string }) {
     if (inputValue === '') {
       editor.update(() => {
         const root = $getRoot();
-        if (root.getTextContent() !== '' || root.getChildrenSize() > 1) {
+        if (root.getTextContent() !== '' || root.getChildrenSize() > 1 || !$isParagraphNode(root.getFirstChild())) {
           root.clear();
         }
       });

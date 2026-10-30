@@ -1,9 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef, memo } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, memo } from 'react';
 import { Message, RichContentBlock, TextBlock, ImageBlock, FileBlock, CodeReferenceBlock } from '../../types/chat';
 import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { AttachmentItem } from './shared/AttachmentItem';
 import { CodeReferenceChip, QuoteChip } from './shared/ReferenceChip';
 import { Tooltip } from './shared/Tooltip';
+import { listClassName, parseMarkdownLists, type MarkdownList, type MarkdownListBlock } from './shared/markdownLists';
 import { openFile } from '../../utils/openFile';
 import { copyPrompt } from '../../utils/promptClipboard';
 
@@ -63,11 +64,34 @@ function splitBlocks(message: Message) {
   return { inline, trailing };
 }
 
+// Stands for the inline block at an index, so that lists hold the chips and images among their text.
+const INLINE_BLOCK = /\uE000(\d+)\uE000/;
+
+function messageLists(message: Message): { blocks: MarkdownListBlock[]; inline: RichContentBlock[] } {
+  const { inline } = splitBlocks(message);
+  const text = inline.length === 0 ? message.content : inline
+    .map((block, index) => block.type === 'text' ? (block as TextBlock).text : `\uE000${index}\uE000`)
+    .join('');
+  return { blocks: parseMarkdownLists(text), inline };
+}
+
+// Text and the indexes of inline blocks, alternately.
+function inlineParts(text: string): string[] {
+  return text.split(INLINE_BLOCK);
+}
+
 // Text in render order, which the chat search covers.
 export function userMessageTexts(message: Message): string[] {
-  const { inline } = splitBlocks(message);
-  if (inline.length === 0) return [message.content];
-  return inline.filter((block): block is TextBlock => block.type === 'text').map((block) => block.text);
+  const texts: string[] = [];
+  const addText = (text: string) => inlineParts(text).forEach((part, index) => {
+    if (index % 2 === 0 && part) texts.push(part);
+  });
+  const addList = (list: MarkdownList) => list.items.forEach((item) => {
+    addText(item.text);
+    item.lists.forEach(addList);
+  });
+  messageLists(message).blocks.forEach((block) => block.type === 'text' ? addText(block.text) : addList(block.list));
+  return texts;
 }
 
 export const UserMessage = memo(({ message, onImageClick, promptNumber, onElementChange, forceExpanded = false }: UserMessageProps) => {
@@ -117,60 +141,73 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber, onElemen
     }
   };
 
-  const { inline, trailing } = splitBlocks(message);
+  const { trailing } = splitBlocks(message);
+  const { blocks, inline } = useMemo(() => messageLists(message), [message.content, message.blocks]);
 
   const handleOpenFile = (path: string, startLine?: number) => {
     openFile(path, startLine ? startLine - 1 : undefined);
   };
 
-  const renderContent = () => {
-    if (inline.length > 0) {
+  const renderInlineBlock = (block: RichContentBlock, key: number) => {
+    if (block.type === 'image' && (block as ImageBlock).data) {
+      const img = block as ImageBlock;
       return (
-        <div className="whitespace-pre-wrap">
-          {inline.map((block, idx) => {
-            if (block.type === 'image' && (block as ImageBlock).data) {
-              const img = block as ImageBlock;
-              return (
-                <AttachmentItem
-                  key={idx}
-                  att={{
-                    id: String(idx),
-                    name: 'Image',
-                    mimeType: img.mimeType,
-                    data: img.data
-                  }}
-                  onImageClick={onImageClick}
-                />
-              );
-            }
-            if (block.type === 'code_ref') {
-              const codeRef = block as CodeReferenceBlock;
-              return (
-                <CodeReferenceChip
-                  key={idx}
-                  fileName={codeRef.name}
-                  path={codeRef.path}
-                  startLine={codeRef.startLine}
-                  endLine={codeRef.endLine}
-                  onClick={() => handleOpenFile(codeRef.path, codeRef.startLine)}
-                  showTooltip={false}
-                />
-              );
-            }
-            if (block.type === 'quote') {
-              return <QuoteChip key={idx} quote={block.quote} />;
-            }
-            return (
-              <span className="cursor-text" key={idx} data-search-text={block.type === 'text' || undefined}>
-                {block.type === 'text' ? (block as TextBlock).text : ''}
-              </span>
-            );
-          })}
-        </div>
+        <AttachmentItem
+          key={key}
+          att={{
+            id: String(key),
+            name: 'Image',
+            mimeType: img.mimeType,
+            data: img.data
+          }}
+          onImageClick={onImageClick}
+        />
       );
     }
-    return <div className="whitespace-pre-wrap" data-search-text>{message.content}</div>;
+    if (block.type === 'code_ref') {
+      const codeRef = block as CodeReferenceBlock;
+      return (
+        <CodeReferenceChip
+          key={key}
+          fileName={codeRef.name}
+          path={codeRef.path}
+          startLine={codeRef.startLine}
+          endLine={codeRef.endLine}
+          onClick={() => handleOpenFile(codeRef.path, codeRef.startLine)}
+          showTooltip={false}
+        />
+      );
+    }
+    if (block.type === 'quote') {
+      return <QuoteChip key={key} quote={block.quote} />;
+    }
+    return null;
   };
+
+  // Each text part is a search text of its own, as userMessageTexts lists them.
+  const renderInline = (text: string) => inlineParts(text).map((part, index) => index % 2 === 1
+    ? inline[Number(part)] && renderInlineBlock(inline[Number(part)], index)
+    : part && <span className="cursor-text" key={index} data-search-text>{part}</span>);
+
+  const renderList = (list: MarkdownList, key: number) => {
+    const items = list.items.map((item, index) => (
+      <li key={index}>
+        {renderInline(item.text)}
+        {item.lists.map(renderList)}
+      </li>
+    ));
+    return list.ordered
+      ? <ol key={key} className={listClassName(true)}>{items}</ol>
+      : <ul key={key} className={listClassName(false)}>{items}</ul>;
+  };
+
+  const renderContent = () => (
+    <div className="whitespace-pre-wrap [&>:last-child]:mb-0">
+      {blocks.map((block, index) => block.type === 'list'
+        ? renderList(block.list, index)
+        : <span key={index}>{renderInline(block.text)}</span>)}
+    </div>
+  );
 
   const renderTrailingAttachments = () => {
     if (trailing.length === 0) return null;
