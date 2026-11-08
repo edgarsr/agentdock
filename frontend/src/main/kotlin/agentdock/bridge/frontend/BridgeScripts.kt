@@ -77,6 +77,7 @@ internal object BridgeScripts {
             window.__searchFiles = function(payload) { invoke('searchFiles', payload); };
             window.__requestFileIcon = function(path) { invoke('iconFile', JSON.stringify({ path: path })); };
             window.__readLocalImage = function(path) { invoke('readLocalImage', JSON.stringify({ path: path })); };
+            window.__readStoredImage = function(image) { invoke('readStoredImage', JSON.stringify({ image: image })); };
             window.__undoFile = function(payload) { invoke('undoFile', payload); };
             window.__undoAllFiles = function(payload) { invoke('undoAllFiles', payload); };
             window.__processFile = function(payload) { invoke('processFile', payload); };

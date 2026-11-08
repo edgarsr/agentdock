@@ -127,7 +127,7 @@ class HistoryBridge(
                             closeFailures.add(
                                 DeleteConversationFailure(
                                     conversationId = conversationId,
-                                    message = "Failed to close conversation before deletion: ${e.message ?: e.toString()}"
+                                    message = "Failed to close chat before deletion: ${e.message ?: e.toString()}"
                                 )
                             )
                             false

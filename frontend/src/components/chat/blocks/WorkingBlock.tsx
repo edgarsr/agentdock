@@ -13,7 +13,7 @@ import { countEditChanges } from '../../../utils/editDiff';
 import { OtherActivity } from './OtherActivity';
 import { ToolOutputImage } from './ToolOutputImage';
 import { safeParseJson } from '../../../utils/toolCallUtils';
-import { extractToolCallImages } from '../../../utils/toolCallImages';
+import { extractToolCallImages, toolCallImageKey } from '../../../utils/toolCallImages';
 import { chatFocusClassName } from '../shared/focusStyles';
 
 interface Props {
@@ -128,7 +128,7 @@ export const WorkingBlock: React.FC<Props> = ({ blocks, isOpen, isActivePrompt =
   const thumbnails = images.length > 0 && (
     <div className="flex flex-wrap gap-2 pt-2">
       {images.map((image, index) => (
-        <ToolOutputImage key={`${index}-${'src' in image ? image.src.slice(0, 32) : image.path}`}
+        <ToolOutputImage key={`${index}-${'src' in image ? image.src.slice(0, 32) : toolCallImageKey(image)}`}
           image={image} onImageClick={onImageClick} />
       ))}
     </div>

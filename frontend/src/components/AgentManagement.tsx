@@ -550,7 +550,7 @@ export function AgentManagementView({
         title="Update Agent"
         message={`Do you want to update ${agents.find(a => a.id === confirmUpdateId)?.name || 'this agent'} to the latest version?${
           confirmUpdateId && hasOpenConversationsForAdapter(confirmUpdateId)
-            ? '\n\nOpen conversations using this agent will be closed, and active prompts will be cancelled.' : ''
+            ? '\n\nOpen chats using this agent will be closed, and active prompts will be cancelled.' : ''
         }`}
         onConfirm={performUpdate}
         onCancel={() => setConfirmUpdateId(null)}

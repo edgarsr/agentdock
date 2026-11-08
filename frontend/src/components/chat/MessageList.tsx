@@ -520,14 +520,14 @@ function MessageList({
       {isHistoryReplaying && messages.length === 0 && status === 'initializing' && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="text-foreground-secondary text-sm">
-            {`Connect to ${agentName || 'agent'}...`}
+            Loading chat...
           </div>
         </div>
       )}
       {showNavigation && (
         <nav
           ref={navigationRef}
-          aria-label="Conversation prompts"
+          aria-label="Chat prompts"
           onScroll={updateNavigationEdges}
           onWheel={markNavigationScrollIntent}
           onTouchMove={markNavigationScrollIntent}

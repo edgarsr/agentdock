@@ -17,6 +17,7 @@ import agentdock.changes.ChangesState
 import agentdock.changes.ChangesStateService
 import agentdock.changes.UndoFileHandler
 import agentdock.changes.UndoOperation
+import agentdock.history.AgentDockHistoryService
 import agentdock.utils.LocalFilePathPolicy
 import agentdock.utils.jsCallback
 import agentdock.utils.jsStringLiteral
@@ -347,6 +348,17 @@ internal fun AcpBridge.installMiscQueries() {
         if (path.isNotBlank()) scope.launch(Dispatchers.IO) {
             val dataUrl = readLocalImageDataUrl(service.project, path).orEmpty()
             host.eval(jsCallback("__onLocalImageResult", buildJsonObject { put("path", path); put("dataUrl", dataUrl) }.toString()))
+        }
+    }
+
+    host.register("readStoredImage") { payload ->
+        val image = runCatching {
+            Json.parseToJsonElement(payload).jsonObject["image"]?.jsonPrimitive?.content
+        }.getOrNull().orEmpty()
+
+        if (image.isNotBlank()) scope.launch(Dispatchers.IO) {
+            val data = AgentDockHistoryService.readStoredImage(service.project.basePath, image).orEmpty()
+            host.eval(jsCallback("__onStoredImageResult", buildJsonObject { put("image", image); put("data", data) }.toString()))
         }
     }
 

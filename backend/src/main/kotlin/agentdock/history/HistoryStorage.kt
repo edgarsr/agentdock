@@ -67,6 +67,14 @@ internal object HistoryStorage {
         return File(ensureProjectConversationsDir(projectPath), "$safeConversationId.search.txt")
     }
 
+    /** The images of the conversation's tool calls, which its data file refers to; see [HistoryImageStore]. */
+    fun conversationImagesDir(projectPath: String, conversationId: String): File {
+        val safeConversationId = requireSafeConversationId(conversationId)
+        return File(ensureProjectConversationsDir(projectPath), "$safeConversationId$CONVERSATION_IMAGES_DIR_SUFFIX")
+    }
+
+    const val CONVERSATION_IMAGES_DIR_SUFFIX = ".images"
+
     internal fun requireSafeConversationId(conversationId: String): String {
         val clean = conversationId.trim()
         require(conversationIdPattern.matches(clean)) {

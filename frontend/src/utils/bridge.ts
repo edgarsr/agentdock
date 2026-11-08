@@ -137,6 +137,8 @@ const fileIconCache = new Map<string, string>();
 const pendingFileIconRequests = new Map<string, Promise<string | null>>();
 // Bumped on theme change so icons resolved against the previous theme are not cached.
 let fileIconEpoch = 0;
+const STORED_IMAGE_REQUEST_TIMEOUT_MS = 15_000;
+const pendingStoredImageRequests = new Map<string, Promise<string | null>>();
 
 export const ACPBridge = {
   initialize: () => {
@@ -361,6 +363,10 @@ export const ACPBridge = {
 
     window.__onFileIconResult = (result) => {
       window.dispatchEvent(new CustomEvent('acp-file-icon-result', { detail: result }));
+    };
+
+    window.__onStoredImageResult = (result) => {
+      window.dispatchEvent(new CustomEvent('acp-stored-image-result', { detail: result }));
     };
 
     window.__onThemeChanged = () => {
@@ -637,6 +643,38 @@ export const ACPBridge = {
     pendingFileIconRequests.set(path, request);
     void request.then(() => {
       if (pendingFileIconRequests.get(path) === request) pendingFileIconRequests.delete(path);
+    });
+    return request;
+  },
+
+  /** The base64 data of a tool call image the history stores apart from the conversation; `null` when it is gone. */
+  requestStoredImage: (image: string): Promise<string | null> => {
+    const pending = pendingStoredImageRequests.get(image);
+    if (pending) return pending;
+
+    const request = new Promise<string | null>((resolve) => {
+      let timeout: number | undefined;
+
+      const finish = (data: string | null) => {
+        window.clearTimeout(timeout);
+        window.removeEventListener('acp-stored-image-result', handler);
+        resolve(data);
+      };
+
+      const handler = (e: Event) => {
+        const detail = (e as CustomEvent).detail as { image: string; data: string };
+        if (detail?.image === image) finish(detail.data || null);
+      };
+
+      window.addEventListener('acp-stored-image-result', handler);
+      timeout = window.setTimeout(() => finish(null), STORED_IMAGE_REQUEST_TIMEOUT_MS);
+      if (typeof window.__readStoredImage === 'function') window.__readStoredImage(image);
+      else finish(null);
+    });
+
+    pendingStoredImageRequests.set(image, request);
+    void request.then(() => {
+      if (pendingStoredImageRequests.get(image) === request) pendingStoredImageRequests.delete(image);
     });
     return request;
   },

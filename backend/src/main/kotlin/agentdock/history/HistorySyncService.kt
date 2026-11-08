@@ -349,16 +349,18 @@ internal object HistorySyncService {
         if (!conversationsDir.exists() || !conversationsDir.isDirectory) return
         val referencedIds = conversations.mapTo(hashSetOf()) { it.id }
         conversationsDir.listFiles()?.forEach { file ->
-            if (!file.isFile) return@forEach
             val name = file.name
             val conversationId = when {
+                file.isDirectory && name.endsWith(HistoryStorage.CONVERSATION_IMAGES_DIR_SUFFIX) ->
+                    name.removeSuffix(HistoryStorage.CONVERSATION_IMAGES_DIR_SUFFIX)
+                !file.isFile -> return@forEach
                 name.endsWith(".json") -> name.removeSuffix(".json")
                 name.endsWith(".transcript.txt") -> name.removeSuffix(".transcript.txt")
                 name.endsWith(".search.txt") -> name.removeSuffix(".search.txt")
                 else -> return@forEach
             }
             if (conversationId !in referencedIds) {
-                runCatching { file.delete() }
+                runCatching { file.deleteRecursively() }
             }
         }
     }

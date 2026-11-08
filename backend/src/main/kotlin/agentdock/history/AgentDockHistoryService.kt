@@ -75,6 +75,34 @@ object AgentDockHistoryService {
         }
     }
 
+    /**
+     * Keeps a conversation loadable: when its data grows beyond [MAX_CONVERSATION_DATA_BYTES], the
+     * older half of its prompts is dropped. Only for a conversation being opened, so that the UI
+     * never shows prompts the data no longer has, which a fork's prompt count would then miscount.
+     */
+    fun trimOversizedConversation(projectPath: String?, conversationId: String) {
+        synchronized(HistoryConversationIndexService) {
+            val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
+            val cleanConversationId = runCatching {
+                HistoryStorage.requireSafeConversationId(conversationId)
+            }.getOrElse { return }
+            if (cleanProjectPath.isBlank()) return
+            val file = HistoryStorage.conversationDataFile(cleanProjectPath, cleanConversationId)
+            if (file.length() <= MAX_CONVERSATION_DATA_BYTES) return
+            val data = HistoryReplayStore.readConversationData(file) ?: return
+            val promptCount = HistoryReplayStore.replayPromptCount(data)
+            if (promptCount <= MIN_TRIMMED_PROMPT_COUNT) return
+            HistoryReplayStore.writeConversationData(
+                cleanProjectPath,
+                cleanConversationId,
+                HistoryReplayStore.dropPromptPrefix(data, promptCount / 2)
+            )
+        }
+    }
+
+    private const val MAX_CONVERSATION_DATA_BYTES = 100L * 1024 * 1024
+    private const val MIN_TRIMMED_PROMPT_COUNT = 4
+
     fun saveConversationReplay(projectPath: String?, conversationId: String, data: ConversationReplayData): Boolean {
         synchronized(HistoryConversationIndexService) {
             val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
@@ -90,6 +118,13 @@ object AgentDockHistoryService {
             )
             return true
         }
+    }
+
+    /** The base64 data of a stored tool call image; see [HistoryImageStore]. */
+    fun readStoredImage(projectPath: String?, ref: String): String? {
+        val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
+        if (cleanProjectPath.isBlank()) return null
+        return runCatching { HistoryImageStore.readImage(cleanProjectPath, ref) }.getOrNull()
     }
 
     fun saveConversationTranscript(projectPath: String?, conversationId: String, transcriptText: String): String? {

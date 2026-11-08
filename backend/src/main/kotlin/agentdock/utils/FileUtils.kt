@@ -16,7 +16,10 @@ fun File.atomicWriteText(
     text: String,
     charset: java.nio.charset.Charset = Charsets.UTF_8,
     forceToDisk: Boolean = false
-) {
+) = atomicWriteBytes(text.toByteArray(charset), forceToDisk)
+
+/** Writes bytes to a file atomically, like [atomicWriteText]. */
+fun File.atomicWriteBytes(bytes: ByteArray, forceToDisk: Boolean = false) {
     val parent = parentFile ?: File(".")
     parent.mkdirs()
     val tempPrefix = name.takeIf { it.length >= 3 } ?: "tmp"
@@ -25,12 +28,12 @@ fun File.atomicWriteText(
     try {
         if (forceToDisk) {
             FileOutputStream(tempPath.toFile()).use { output ->
-                output.write(text.toByteArray(charset))
+                output.write(bytes)
                 output.flush()
                 output.channel.force(true)
             }
         } else {
-            tempPath.toFile().writeText(text, charset)
+            tempPath.toFile().writeBytes(bytes)
         }
         moveWithRetry(tempPath, toPath())
         moved = true

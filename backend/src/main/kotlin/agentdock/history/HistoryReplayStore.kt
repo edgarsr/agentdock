@@ -15,7 +15,10 @@ internal object HistoryReplayStore {
 
     fun writeConversationData(projectPath: String, conversationId: String, data: ConversationReplayData) {
         val file = HistoryStorage.conversationDataFile(projectPath, conversationId)
-        file.atomicWriteText(HistoryStorage.json.encodeToString(data))
+        val (stored, usedImages) = HistoryImageStore.storeImages(projectPath, conversationId, data)
+        file.atomicWriteText(HistoryStorage.json.encodeToString(stored))
+        // After the data, so a failed write leaves the images it still uses.
+        HistoryImageStore.deleteUnusedImages(projectPath, conversationId, usedImages)
         // Otherwise the search rebuilds it, as it is older than the data.
         runCatching { writeSearchText(HistoryStorage.conversationSearchTextFile(projectPath, conversationId), data) }
     }
@@ -81,6 +84,16 @@ internal object HistoryReplayStore {
         return ConversationReplayData(sessions = sessions)
     }
 
+    fun dropPromptPrefix(data: ConversationReplayData, promptCount: Int): ConversationReplayData {
+        var remaining = promptCount
+        val sessions = data.sessions.mapNotNull { session ->
+            val dropped = minOf(remaining, session.prompts.size)
+            remaining -= dropped
+            session.copy(prompts = session.prompts.drop(dropped)).takeIf { it.prompts.isNotEmpty() }
+        }
+        return data.copy(sessions = sessions)
+    }
+
     fun normalizeReplayBlocks(blocks: List<JsonObject>): List<JsonObject> {
         if (blocks.size < 2) return blocks
         val normalized = ArrayList<JsonObject>(blocks.size)
@@ -139,6 +152,7 @@ internal object HistoryReplayStore {
 
     fun deleteConversationReplay(projectPath: String, conversationId: String): Boolean {
         deleteHistoryFileIfExists(HistoryStorage.conversationSearchTextFile(projectPath, conversationId))
+        deleteHistoryDirectoryIfExists(HistoryStorage.conversationImagesDir(projectPath, conversationId))
         return deleteHistoryFileIfExists(HistoryStorage.conversationDataFile(projectPath, conversationId))
     }
 

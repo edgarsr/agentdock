@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { readLocalImage, ToolCallImage } from '../../../utils/toolCallImages';
+import { imageDataSrc, readLocalImage, ToolCallImage, toolCallImageKey } from '../../../utils/toolCallImages';
+import { ACPBridge } from '../../../utils/bridge';
 
 interface Props {
   image: ToolCallImage;
@@ -7,7 +8,7 @@ interface Props {
 }
 
 export function ToolOutputImage({ image, onImageClick }: Props) {
-  const requestKey = 'src' in image ? image.src : image.path;
+  const requestKey = toolCallImageKey(image);
   const [src, setSrc] = useState('src' in image ? image.src : null);
 
   useEffect(() => {
@@ -16,7 +17,10 @@ export function ToolOutputImage({ image, onImageClick }: Props) {
       return;
     }
     let active = true;
-    readLocalImage(image.path).then((url) => {
+    const request = 'path' in image
+      ? readLocalImage(image.path)
+      : ACPBridge.requestStoredImage(image.stored).then((data) => data && imageDataSrc(data, image.mimeType));
+    request.then((url) => {
       if (active) setSrc(url);
     });
     return () => {

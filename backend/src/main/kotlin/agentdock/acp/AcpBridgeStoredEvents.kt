@@ -603,8 +603,28 @@ internal fun hasFullOutputToolKind(raw: JsonObject): Boolean =
 // Long tool output is truncated before it reaches the UI or history, wherever the adapter puts it.
 // Tool input, diffs and inline images stay intact: diffs are needed for undo, and images are shown.
 internal fun compactToolRawJson(parsed: JsonObject, fullOutput: Boolean): JsonObject {
-    if (fullOutput || (parsed["kind"] as? JsonPrimitive)?.contentOrNull in FULL_OUTPUT_TOOL_KINDS) return parsed
-    return JsonObject(parsed.mapValues { (key, value) -> if (key == "rawInput") value else limitToolOutputStrings(value) })
+    val withoutImageCopies = dropImageCopies(parsed)
+    if (fullOutput || (parsed["kind"] as? JsonPrimitive)?.contentOrNull in FULL_OUTPUT_TOOL_KINDS) return withoutImageCopies
+    return JsonObject(withoutImageCopies.mapValues { (key, value) -> if (key == "rawInput") value else limitToolOutputStrings(value) })
+}
+
+// The UI shows a tool call's image objects only from its content. Copies an adapter repeats
+// elsewhere, such as Claude Code's rawOutput and _meta, would only multiply the image data.
+private fun dropImageCopies(raw: JsonObject): JsonObject {
+    val intact = setOf("content", "rawInput")
+    return JsonObject(
+        raw.filter { (key, value) -> key in intact || !isImageObject(value) }
+            .mapValues { (key, value) -> if (key in intact) value else withoutImageObjects(value) }
+    )
+}
+
+private fun isImageObject(element: JsonElement): Boolean =
+    element is JsonObject && (element["type"] as? JsonPrimitive)?.contentOrNull == "image"
+
+private fun withoutImageObjects(element: JsonElement): JsonElement = when (element) {
+    is JsonObject -> JsonObject(element.filterValues { !isImageObject(it) }.mapValues { (_, value) -> withoutImageObjects(value) })
+    is JsonArray -> JsonArray(element.filterNot(::isImageObject).map(::withoutImageObjects))
+    else -> element
 }
 
 private val INLINE_IMAGE_PREFIXES = listOf("data:image/", "iVBORw", "/9j/")

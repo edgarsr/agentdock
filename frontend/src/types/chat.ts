@@ -736,6 +736,8 @@ declare global {
     __onFileIconResult?: (result: { path: string; icon: string }) => void;
     __readLocalImage?: (path: string) => void;
     __onLocalImageResult?: (result: { path: string; dataUrl: string }) => void;
+    __readStoredImage?: (image: string) => void;
+    __onStoredImageResult?: (result: { image: string; data: string }) => void;
     __onThemeChanged?: () => void;
     __loadMcpServers?: () => void;
     __saveMcpServers?: (json: string) => void;

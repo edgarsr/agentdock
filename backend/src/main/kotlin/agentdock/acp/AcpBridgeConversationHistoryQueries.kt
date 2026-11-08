@@ -173,12 +173,13 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                 try {
                     loadEntry.mutex.withLock {
                         try {
+                            runCatching { AgentDockHistoryService.trimOversizedConversation(projectPath, conversationId) }
                             val storedConversation = AgentDockHistoryService.loadConversationReplay(projectPath, conversationId)
                             if (storedConversation != null) {
                                 pushConversationReplayLoaded(chatId, storedConversation)
 
                                 val lastStoredSession = storedConversation.sessions.lastOrNull()
-                                    ?: throw IllegalStateException("Conversation replay '$conversationId' is empty")
+                                    ?: throw IllegalStateException("Chat replay '$conversationId' is empty")
                                 pushSessionId(chatId, lastStoredSession.sessionId)
 
                                 val probe = ReplayFreshnessProbe()
@@ -212,7 +213,7 @@ internal fun AcpBridge.installConversationHistoryQueries() {
                             } else {
                                 val sessionsChain = AgentDockHistoryService.getConversationSessions(projectPath, conversationId)
                                 if (sessionsChain.isEmpty()) {
-                                    throw IllegalStateException("Conversation '$conversationId' not found")
+                                    throw IllegalStateException("Chat '$conversationId' not found")
                                 }
                                 val lastSession = sessionsChain.last()
                                 importConversationFromAgent(

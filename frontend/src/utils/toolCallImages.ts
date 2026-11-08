@@ -1,17 +1,28 @@
 const IMAGE_PATH = /\.(png|jpe?g|gif|webp|bmp|svg)(?:$|[?#])/i;
 
-export type ToolCallImage = { src: string } | { path: string };
+// `stored` names an image the history keeps apart from the conversation, loaded when it is shown.
+export type ToolCallImage = { src: string } | { path: string } | { stored: string; mimeType?: string };
+
+export function toolCallImageKey(image: ToolCallImage): string {
+  if ('src' in image) return image.src;
+  return 'path' in image ? image.path : image.stored;
+}
+
+export function imageDataSrc(data: string, mimeType?: string): string {
+  return data.startsWith('data:') ? data : `data:${mimeType || 'image/png'};base64,${data}`;
+}
 
 export function extractToolCallImages(json: Record<string, any>): ToolCallImage[] {
   const fromContent: ToolCallImage[] = [];
   if (Array.isArray(json.content)) {
     for (const item of json.content) {
       const inner = item?.type === 'content' ? item.content : item;
-      if (inner?.type !== 'image' || typeof inner.data !== 'string' || !inner.data) continue;
-      const src = inner.data.startsWith('data:')
-        ? inner.data
-        : `data:${inner.mimeType || 'image/png'};base64,${inner.data}`;
-      fromContent.push({ src });
+      if (inner?.type !== 'image') continue;
+      if (typeof inner.data === 'string' && inner.data) {
+        fromContent.push({ src: imageDataSrc(inner.data, inner.mimeType) });
+      } else if (typeof inner.storedImage === 'string' && inner.storedImage) {
+        fromContent.push({ stored: inner.storedImage, mimeType: inner.mimeType });
+      }
     }
   }
   if (fromContent.length > 0) return fromContent;

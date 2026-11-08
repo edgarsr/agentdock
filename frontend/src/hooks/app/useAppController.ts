@@ -55,7 +55,7 @@ interface PendingConversationContinuation {
 
 function forkedTitle(sourceTitle?: string): string {
   const normalized = (sourceTitle || '').trim();
-  if (!normalized || normalized === 'New') return 'Forked conversation';
+  if (!normalized || normalized === 'New') return 'Forked chat';
   const title = normalized.startsWith('Forked:') ? normalized : `Forked: ${normalized}`;
   return title.length <= 80 ? title : `${title.slice(0, 77)}...`;
 }
