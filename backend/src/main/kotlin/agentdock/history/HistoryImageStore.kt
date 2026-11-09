@@ -1,5 +1,6 @@
 package agentdock.history
 
+import agentdock.acp.dropImageCopies
 import agentdock.utils.atomicWriteBytes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -85,8 +86,7 @@ internal object HistoryImageStore {
         val rawJson = (event["toolRawJson"] as? JsonPrimitive)?.contentOrNull ?: return event
         if (!rawJson.contains("\"image\"")) return event
         val raw = runCatching { Json.parseToJsonElement(rawJson) as? JsonObject }.getOrNull() ?: return event
-        val content = raw["content"] as? JsonArray ?: return event
-        val stored = JsonArray(content.map { item ->
+        val content = (raw["content"] as? JsonArray)?.map { item ->
             val block = item as? JsonObject ?: return@map item
             val inner = block["content"] as? JsonObject
             when {
@@ -95,9 +95,11 @@ internal object HistoryImageStore {
                 type(block) == "image" -> storeImage(block)
                 else -> item
             }
-        })
-        if (stored == content) return event
-        return JsonObject(event + ("toolRawJson" to JsonPrimitive(JsonObject(raw + ("content" to stored)).toString())))
+        }
+        // A tool call stored with the copies of its images loses them here.
+        val stored = dropImageCopies(if (content == null) raw else JsonObject(raw + ("content" to JsonArray(content))))
+        if (stored == raw) return event
+        return JsonObject(event + ("toolRawJson" to JsonPrimitive(stored.toString())))
     }
 
     private fun type(block: JsonObject): String? = (block["type"] as? JsonPrimitive)?.contentOrNull

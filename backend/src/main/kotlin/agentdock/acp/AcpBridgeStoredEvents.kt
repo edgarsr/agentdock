@@ -610,7 +610,7 @@ internal fun compactToolRawJson(parsed: JsonObject, fullOutput: Boolean): JsonOb
 
 // The UI shows a tool call's image objects only from its content. Copies an adapter repeats
 // elsewhere, such as Claude Code's rawOutput and _meta, would only multiply the image data.
-private fun dropImageCopies(raw: JsonObject): JsonObject {
+internal fun dropImageCopies(raw: JsonObject): JsonObject {
     val intact = setOf("content", "rawInput")
     return JsonObject(
         raw.filter { (key, value) -> key in intact || !isImageObject(value) }
