@@ -17,6 +17,7 @@ data class SessionMeta(
     val projectPath: String,
     val title: String,
     val filePath: String,
+    val dataFilePath: String? = null,
     val createdAt: Long = Instant.now().toEpochMilli(),
     val updatedAt: Long = Instant.now().toEpochMilli(),
     val deletable: Boolean = true,

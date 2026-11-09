@@ -289,6 +289,7 @@ export interface HistorySessionMeta {
   projectPath: string;
   title: string;
   filePath: string;
+  dataFilePath?: string;
   createdAt: number;
   updatedAt: number;
   deletable?: boolean;

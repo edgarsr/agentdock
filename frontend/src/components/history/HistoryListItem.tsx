@@ -1,18 +1,18 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { EllipsisVertical, Pencil, Pin, SquareTerminal, Trash2 } from 'lucide-react';
+import { EllipsisVertical, Pin } from 'lucide-react';
 import { ACPBridge } from '../../utils/bridge';
 import type { AgentOption, HistorySessionMeta, TabUiFlags } from '../../types/chat';
 import { Checkbox } from '../ui/Checkbox';
 import { PopupMenu, popupMenuActions } from '../ui/PopupMenu';
-import { ChatStatusIndicator, PinIcon } from '../tabbar/OpenChatList';
+import { ChatStatusIndicator } from '../tabbar/OpenChatList';
 import { Tooltip } from '../chat/shared/Tooltip';
 import { SectionRowButton, sectionRowButtonClassName } from '../ui/SectionList';
 import { TabTitleInput } from '../tabbar/TabTitleInput';
 import { getAgentIcon } from '../tabbar/TabIcons';
 import { searchPattern } from '../chat/ChatSearch';
 import { HighlightedText } from './HighlightedText';
-import { archiveAction, moveToGroupAction } from './historyGroups';
+import { conversationMenuActions } from './historyGroups';
 
 function handleHistoryRowKeyDown(
   event: React.KeyboardEvent<HTMLDivElement>,
@@ -78,7 +78,6 @@ export function HistoryListItem({
   const previousAgents = itemAgents.filter((agentId) => agentId !== item.adapterName);
   const mainAgent = agents.find((agent) => agent.id === item.adapterName);
   const canOpenCli = !isOpen && !!mainAgent?.cliResumeAvailable;
-  const canDelete = item.deletable !== false;
   const query = searchQuery.trim();
   const activate = () => onOpenSession(item);
   // Shown until the history list brings the new title, so the old one does not flash back.
@@ -172,26 +171,12 @@ export function HistoryListItem({
               </Tooltip>
             )}
           >
-            {popupMenuActions([
-              { label: 'Rename', icon: <Pencil size={12} aria-hidden="true" />, onClick: () => onEditingChange(true) },
-              ...(item.pinned ? [] : [{
-                label: 'Pin',
-                icon: <PinIcon pinned={false} />,
-                onClick: () => ACPBridge.updateHistoryConversations(item.projectPath, [conversationId], { pinned: true }),
-              }]),
-              moveToGroupAction(item, groups),
-              ...(canOpenCli ? [{
-                label: 'Open in terminal',
-                icon: <SquareTerminal size={12} aria-hidden="true" />,
-                onClick: () => ACPBridge.openHistoryConversationCli(item.projectPath, conversationId),
-              }] : []),
-              archiveAction(item),
-              ...(canDelete ? [{
-                label: 'Delete',
-                icon: <Trash2 size={12} aria-hidden="true" />,
-                onClick: () => onOpenDeleteConfirmation([item]),
-              }] : []),
-            ], true)}
+            {popupMenuActions(conversationMenuActions(item, {
+              groups,
+              canOpenCli,
+              onRename: () => onEditingChange(true),
+              onDelete: () => onOpenDeleteConfirmation([item]),
+            }), true)}
           </PopupMenu>
 
           {isSelecting ? (

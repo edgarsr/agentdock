@@ -8,6 +8,7 @@ import agentdock.acp.canListHistorySessions
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -369,6 +370,9 @@ internal object HistorySyncService {
         projectPath: String,
         conversations: List<HistoryConversationIndexEntry>
     ): List<SessionMeta> {
+        // One listing instead of a file check per conversation.
+        val conversationsDir = HistoryStorage.projectConversationsDir(projectPath)
+        val conversationFileNames = conversationsDir.list().orEmpty().toHashSet()
         return conversations
             .filter { runCatching { HistoryStorage.requireSafeConversationId(it.id) }.isSuccess }
             .mapNotNull { conversation ->
@@ -390,6 +394,8 @@ internal object HistorySyncService {
                     projectPath = projectPath,
                     title = conversation.title.ifBlank { "Untitled" },
                     filePath = latestSession.sourceFilePath.orEmpty(),
+                    dataFilePath = "${conversation.id}.json".takeIf { it in conversationFileNames }
+                        ?.let { File(conversationsDir, it).path },
                     createdAt = latestSession.createdAt,
                     updatedAt = latestSession.updatedAt,
                     deletable = conversation.sessions.all { session ->

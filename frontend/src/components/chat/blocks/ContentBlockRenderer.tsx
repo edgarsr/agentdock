@@ -12,7 +12,7 @@ interface Props {
 export const ContentBlockRenderer: React.FC<Props> = ({ block, onImageClick }) => {
   switch (block.type) {
     case 'elicitation_answer':
-      return <div className="my-4 ml-auto w-fit max-w-full rounded-[12px] bg-[var(--user-message-bg)] px-3 py-2 text-foreground">
+      return <div className="my-4 ml-auto w-fit max-w-full rounded-[12px] bg-[var(--user-message-bg)] px-4 pt-3 pb-4 text-foreground">
         <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]" data-search-text>
           {block.answers?.length ? block.answers.map(({ question, answer }, index) => <React.Fragment key={index}>
             {index > 0 && '\n\n'}<span className="text-foreground-secondary">{question}</span>{'\n'}{answer}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { EllipsisVertical, Pencil, Pin, SquareTerminal, Trash2, X } from 'lucide-react';
+import { EllipsisVertical, Pencil, X } from 'lucide-react';
 import { conversationKeyOf } from '../../types/chat';
 import type { AgentOption, ChatTab, HistorySessionMeta, TabUiFlags } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
@@ -8,10 +8,10 @@ import { focusChatOutput } from '../../hooks/useShortcuts';
 import ConfirmationModal from '../ConfirmationModal';
 import { PopupMenu, popupMenuActions } from '../ui/PopupMenu';
 import { Tooltip } from '../chat/shared/Tooltip';
-import { getTabIcon } from './TabIcons';
+import { getTabIcon, PinIcon } from './TabIcons';
 import { TabTitleInput } from './TabTitleInput';
 import { useTabReordering } from './useTabReordering';
-import { archiveAction, historyGroups, moveToGroupAction } from '../history/historyGroups';
+import { conversationMenuActions, historyGroups } from '../history/historyGroups';
 import { menuRowClassName, rowButtonClassName, rowFocusClassName, RowAction, sidebarRowClassName } from './rows';
 
 export interface OpenChatListProps {
@@ -27,11 +27,6 @@ export interface OpenChatListProps {
   onCloseAllChats: () => void;
   onRenameTab: (tabId: string, title: string) => void;
 }
-
-/** Tilted, filled while pinned. */
-export const PinIcon = ({ pinned }: { pinned: boolean }) => (
-  <Pin size={12} fill={pinned ? 'currentColor' : 'none'} className="rotate-45" aria-hidden="true" />
-);
 
 /**
  * An open chat's permission request, reply in progress, queued prompts or unread reply, the first of them; `className`
@@ -148,7 +143,7 @@ export function OpenChatList({
           // Pinned chats show the pin, the tab bar menu also offers it on unpinned ones.
           const showPinButton = togglePin && (pinned || !sidebar);
           // Resuming in the terminal suits only closed chats.
-          const canOpenCli = tab.closed && agents.some((agent) => agent.id === historyItem?.adapterName && agent.cliResumeAvailable);
+          const canOpenCli = !!tab.closed && agents.some((agent) => agent.id === historyItem?.adapterName && agent.cliResumeAvailable);
           const isActive = tab.id === activeTabId;
 
           return (
@@ -206,28 +201,16 @@ export function OpenChatList({
                         </RowAction>
                       )}
                     >
-                      {popupMenuActions([
-                        { label: 'Rename', icon: <Pencil size={12} aria-hidden="true" />, onClick: () => setRenamingTabId(tab.id) },
-                        ...(togglePin && !pinned
-                          ? [{ label: 'Pin', icon: <PinIcon pinned={false} />, onClick: togglePin }]
-                          : []),
-                        ...(historyItem ? [moveToGroupAction(historyItem, groups)] : []),
-                        ...(historyItem && canOpenCli ? [{
-                          label: 'Open in terminal',
-                          icon: <SquareTerminal size={12} aria-hidden="true" />,
-                          onClick: () => ACPBridge.openHistoryConversationCli(historyItem.projectPath, conversationId),
-                        }] : []),
-                        ...(historyItem ? [archiveAction(historyItem)] : []),
-                        ...(historyItem && historyItem.deletable !== false ? [{
-                          label: 'Delete',
-                          icon: <Trash2 size={12} aria-hidden="true" />,
-                          onClick: () => setPendingDeleteChat({
-                            conversationId,
-                            projectPath: historyItem.projectPath,
-                            open: !tab.closed,
-                          }),
-                        }] : []),
-                      ], true)}
+                      {popupMenuActions(conversationMenuActions(historyItem, {
+                        groups,
+                        canOpenCli,
+                        onRename: () => setRenamingTabId(tab.id),
+                        onDelete: () => historyItem && setPendingDeleteChat({
+                          conversationId,
+                          projectPath: historyItem.projectPath,
+                          open: !tab.closed,
+                        }),
+                      }), true)}
                     </PopupMenu>
                   ) : (
                     <RowAction label={`Rename ${tab.title}`} tooltip="Rename" menu placement={tooltipPlacement}

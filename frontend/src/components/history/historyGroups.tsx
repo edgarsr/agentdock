@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react';
-import { Archive, ArchiveRestore, FolderInput } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Archive, ArchiveRestore, Copy, FolderInput, Pencil, SquareTerminal, Trash2 } from 'lucide-react';
 import type { HistorySessionMeta } from '../../types/chat';
 import { ACPBridge } from '../../utils/bridge';
 import { popupMenuItemClassName } from '../ui/PopupMenu';
+import type { PopupMenuAction } from '../ui/PopupMenu';
+import { PinIcon } from '../tabbar/TabIcons';
 import { PopupSubmenu, PopupSubmenuOption, PopupSubmenuSeparator } from '../ui/PopupSubmenu';
 import { TabTitleInput } from '../tabbar/TabTitleInput';
 
@@ -16,21 +19,50 @@ export function historyGroups(historyList: HistorySessionMeta[]): string[] {
 export const existingGroup = (groups: string[], group: string | null) =>
   groups.length > 0 && (group === '' || groups.includes(group ?? '')) ? group : null;
 
-/** Compact `popupMenuActions` item moving the conversation to a group, a new one or out of them ("Ungrouped"). */
-export function moveToGroupAction(item: HistorySessionMeta, groups: string[]) {
-  return (close: () => void) => (
-    <PopupSubmenu key="move-to-group" label="Move to group" icon={<FolderInput size={12} aria-hidden="true" />} compact>
-      <GroupOptions items={[item]} groups={groups} onMove={close} />
-    </PopupSubmenu>
-  );
+/**
+ * `popupMenuActions` items of a chat's row menu in the history and the sidebar: renaming, and for a conversation
+ * of the history (`item`) pinning, moving to a group, opening in the terminal, copying the path of its stored data (while
+ * there is data), archiving or unarchiving, and deleting.
+ */
+export function conversationMenuActions(item: HistorySessionMeta | undefined, { groups, canOpenCli, onRename, onDelete }: {
+  groups: string[];
+  canOpenCli: boolean;
+  onRename: () => void;
+  onDelete: () => void;
+}): Array<PopupMenuAction | ((close: () => void) => ReactNode)> {
+  const rename = { label: 'Rename', icon: <Pencil size={12} aria-hidden="true" />, onClick: onRename };
+  if (!item) return [rename];
+  const { projectPath, conversationId, dataFilePath } = item;
+  return [
+    rename,
+    ...(item.pinned ? [] : [{
+      label: 'Pin',
+      icon: <PinIcon pinned={false} />,
+      onClick: () => ACPBridge.updateHistoryConversations(projectPath, [conversationId], { pinned: true }),
+    }]),
+    (close: () => void) => (
+      <PopupSubmenu key="move-to-group" label="Move to group" icon={<FolderInput size={12} aria-hidden="true" />} compact>
+        <GroupOptions items={[item]} groups={groups} onMove={close} />
+      </PopupSubmenu>
+    ),
+    ...(canOpenCli ? [{
+      label: 'Open in terminal',
+      icon: <SquareTerminal size={12} aria-hidden="true" />,
+      onClick: () => ACPBridge.openHistoryConversationCli(projectPath, conversationId),
+    }] : []),
+    ...(dataFilePath ? [{
+      label: 'Copy path',
+      icon: <Copy size={12} aria-hidden="true" />,
+      onClick: () => { navigator.clipboard.writeText(dataFilePath).catch(() => {}); },
+    }] : []),
+    {
+      label: item.archived ? 'Unarchive' : 'Archive',
+      icon: item.archived ? <ArchiveRestore size={12} aria-hidden="true" /> : <Archive size={12} aria-hidden="true" />,
+      onClick: () => ACPBridge.updateHistoryConversations(projectPath, [conversationId], { archived: !item.archived }),
+    },
+    ...(item.deletable !== false ? [{ label: 'Delete', icon: <Trash2 size={12} aria-hidden="true" />, onClick: onDelete }] : []),
+  ];
 }
-
-/** `popupMenuActions` item archiving the conversation or unarchiving the archived one. */
-export const archiveAction = (item: HistorySessionMeta) => ({
-  label: item.archived ? 'Unarchive' : 'Archive',
-  icon: item.archived ? <ArchiveRestore size={12} aria-hidden="true" /> : <Archive size={12} aria-hidden="true" />,
-  onClick: () => ACPBridge.updateHistoryConversations(item.projectPath, [item.conversationId], { archived: !item.archived }),
-});
 
 /**
  * Menu items moving the conversations to one of the groups, out of them ("Ungrouped", `''`) or to a new one: "New
