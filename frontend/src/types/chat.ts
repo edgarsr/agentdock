@@ -698,8 +698,11 @@ declare global {
     __readUiZoom?: () => void;
     /** Answered with an `agent-dock-browser-address` event carrying the page's web server address, empty while it does not run. */
     __readBrowserAddress?: () => void;
-    /** Mirrors the open chats' dot on the plugin icon: `warning`, `unread`, or empty for none. */
-    __setAttentionBadge?: (level: AttentionLevel) => void;
+    /**
+     * Mirrors the open chats' state on the plugin icon: a dot for `warning` or `unread`, none for empty, and three
+     * dots while one is `processing`.
+     */
+    __setAttentionBadge?: (level: AttentionLevel, processing: boolean) => void;
 
     // Callbacks (Backend -> Frontend)
     __onAcpLog?: (payload: AcpLogEntryPayload) => void;

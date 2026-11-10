@@ -161,6 +161,7 @@ export default function HistoryPanel({
           <div className="relative flex w-32 max-w-56 grow items-center">
             <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-2 text-foreground-secondary" />
             <input
+              name="history-search"
               ref={searchInputRef}
               type="text"
               value={searchQuery}

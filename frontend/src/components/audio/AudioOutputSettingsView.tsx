@@ -56,6 +56,7 @@ export function AudioOutputSettingsView({ settings, onSettingsChange, onSettings
             <>
               <span className='text-foreground'>{activeProvider.apiKeyLabel}:</span>
               <input
+                name='audio-output-api-key'
                 type='password'
                 value={providerSettings.apiKey}
                 onChange={(event) => onSettingsChange(withProviderSettings({ apiKey: event.target.value }))}

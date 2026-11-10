@@ -51,14 +51,14 @@ object AssetLoader {
 
             val pluginVersion = BuildConfig.PLUGIN_VERSION
 
-            // The web browser tab's icon, in the colour the IDE shows the tool window icon in.
-            val icon = readBinaryResourceAsBase64(
-                resourceClass,
-                if (IdeTheme.isDarkTheme()) "/icons/agent_dock_toolwindow_dark.svg" else "/icons/agent_dock_toolwindow.svg",
-            )
+            // The web browser tab's icon and the one it shows while a chat is processing, in the colour the IDE shows
+            // the tool window icon in.
+            val iconSuffix = if (IdeTheme.isDarkTheme()) "_dark.svg" else ".svg"
+            val icon = readBinaryResourceAsBase64(resourceClass, "/icons/agent_dock_toolwindow$iconSuffix")
+            val processingIcon = readBinaryResourceAsBase64(resourceClass, "/icons/agent_dock_toolwindow_processing$iconSuffix")
 
             val injection = """
-                <link rel="icon" href="data:image/svg+xml;base64,$icon">
+                <link rel="icon" href="data:image/svg+xml;base64,$icon" data-processing="data:image/svg+xml;base64,$processingIcon">
                 <style>
                 $fontFaceCss
                 $cssContent

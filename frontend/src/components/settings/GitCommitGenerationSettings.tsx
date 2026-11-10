@@ -130,6 +130,7 @@ export function GitCommitGenerationSettings({ settings, installedAgents, onChang
           </div>
           <SettingsField label='Custom Instructions (optional)' stacked>
             <textarea
+              name='commit-message-instructions'
               value={localInstructions}
               onChange={(event) => setLocalInstructions(event.target.value)}
               onFocus={() => {

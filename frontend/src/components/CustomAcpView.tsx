@@ -186,6 +186,7 @@ export function CustomAcpView() {
             <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
+                name="custom-agent-label"
                 data-autofocus="true"
                 value={form.name}
                 onChange={event => setForm({ ...form, name: event.target.value })}
@@ -197,6 +198,7 @@ export function CustomAcpView() {
             <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">Executable <span className="text-error" aria-hidden="true">*</span></span>
               <input
+                name="custom-agent-command"
                 value={form.command}
                 onChange={event => setForm({ ...form, command: event.target.value })}
                 placeholder="e.g. opencode"
@@ -207,6 +209,7 @@ export function CustomAcpView() {
             <div className="flex flex-col gap-1">
               <span className="text-foreground-secondary">Arguments</span>
               <textarea
+                name="custom-agent-args"
                 value={form.args}
                 onChange={event => setForm({ ...form, args: event.target.value })}
                 placeholder={'One argument per line, e.g.:\nacp'}
@@ -216,6 +219,7 @@ export function CustomAcpView() {
             <div className="flex flex-col gap-1">
               <span className="text-foreground-secondary">Environment</span>
               <textarea
+                name="custom-agent-env"
                 value={form.env}
                 onChange={event => setForm({ ...form, env: event.target.value })}
                 placeholder={'One KEY=value per line, e.g.:\nAPI_KEY=your-key'}
@@ -225,6 +229,7 @@ export function CustomAcpView() {
             <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">CLI executable</span>
               <input
+                name="custom-agent-cli-command"
                 value={form.cliCommand}
                 onChange={event => setForm({ ...form, cliCommand: event.target.value })}
                 placeholder="e.g. opencode"
@@ -233,6 +238,7 @@ export function CustomAcpView() {
             <div className="flex flex-col gap-1">
               <span className="text-foreground-secondary">CLI arguments</span>
               <textarea
+                name="custom-agent-cli-args"
                 value={form.cliArgs}
                 onChange={event => setForm({ ...form, cliArgs: event.target.value })}
                 placeholder={'One argument per line, e.g.:\n--cli'}
@@ -242,6 +248,7 @@ export function CustomAcpView() {
             <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">CLI resume argument</span>
               <input
+                name="custom-agent-cli-resume-arg"
                 value={form.cliResumeArg}
                 onChange={event => setForm({ ...form, cliResumeArg: event.target.value })}
                 placeholder="e.g. --session"

@@ -54,6 +54,7 @@ export function TabTitleInput({
         {initialTitle}
       </span>
       <input
+        name="tab-title"
         ref={inputRef}
         type="text"
         size={1}

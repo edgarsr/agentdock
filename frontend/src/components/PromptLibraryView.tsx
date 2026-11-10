@@ -150,6 +150,7 @@ export function PromptLibraryView() {
             <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
+                name="prompt-label"
                 data-autofocus="true"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}

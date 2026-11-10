@@ -170,7 +170,8 @@
     }
 
     & table {
-        @apply w-full border-collapse my-4;
+        /* A block that scrolls, so a wide table stays within the chat content. */
+        @apply block w-max max-w-full overflow-x-auto border-collapse my-4;
     }
 
     & th {

@@ -357,6 +357,7 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                     >
                       <Palette size={16} aria-hidden='true' />
                       <input
+                        name='message-background'
                         type='color'
                         aria-label='Custom message background'
                         value={globalSettings.settings.userMessageCustomColor}
@@ -378,7 +379,6 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
             <SettingsSection>
               <SettingsCheckbox
                 title='Serve the Plugin to Web Browsers'
-                description='Served by the IDE; use Tailscale to reach it remotely'
                 checked={globalSettings.settings.browserAccessEnabled}
                 onToggle={() => updateGlobalSettings({ browserAccessEnabled: !globalSettings.settings.browserAccessEnabled })}
                 ariaLabel='Enable browser access'
@@ -387,6 +387,7 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                   <div className='grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-2 gap-y-4'>
                     <span className='text-foreground'>Port:</span>
                     <input
+                      name='web-server-port'
                       type='text'
                       inputMode='numeric'
                       value={globalSettings.settings.browserAccessPort || ''}
@@ -397,11 +398,9 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                       aria-label='Web server port'
                       className='w-20 max-w-full rounded-[3px]'
                     />
-                    <div className='col-span-2 -mt-3 text-ide-small text-foreground-secondary'>
-                      If it is in use, the next free port is used automatically
-                    </div>
                     <span className='text-foreground'>Access Key:</span>
                     <input
+                      name='browser-access-key'
                       type='text'
                       value={globalSettings.settings.browserAccessCode ?? ''}
                       onChange={(event) => editGlobalSettings({
@@ -417,31 +416,28 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                       Needed once per browser, then kept in a cookie
                     </div>
                     {browserAddress && (
-                      <>
-                        <span className='text-foreground'>Address:</span>
-                        <span className='flex min-w-0 items-center gap-1'>
-                          {/* A web browser showing the UI is already there, and its "localhost" may be another device. */}
-                          {window.__AGENT_DOCK_CLIENT === 'browser' ? (
-                            <span className='break-all text-foreground-secondary'>{browserAddress}</span>
-                          ) : (
-                            <button type='button' onClick={openInBrowser} className='break-all text-left text-link hover:underline'>
-                              {browserAddress}
-                            </button>
-                          )}
-                          <Tooltip variant='minimal' content={addressCopied ? 'Copied' : 'Copy'}>
-                            <button
-                              type='button'
-                              onClick={() => navigator.clipboard.writeText(browserAddress).then(() => setAddressCopied(true), () => {})}
-                              onMouseLeave={() => setAddressCopied(false)}
-                              aria-label='Copy address'
-                              className='flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-foreground-secondary
-                                hover:bg-hover hover:text-foreground'
-                            >
-                              {addressCopied ? <Check size={10} aria-hidden='true' /> : <Copy size={10} aria-hidden='true' />}
-                            </button>
-                          </Tooltip>
-                        </span>
-                      </>
+                      <span className='col-span-2 flex min-w-0 items-center gap-1'>
+                        {/* A web browser showing the UI is already there, and its "localhost" may be another device. */}
+                        {window.__AGENT_DOCK_CLIENT === 'browser' ? (
+                          <span className='break-all text-foreground-secondary'>{browserAddress}</span>
+                        ) : (
+                          <button type='button' onClick={openInBrowser} className='break-all text-left text-link hover:underline'>
+                            {browserAddress}
+                          </button>
+                        )}
+                        <Tooltip variant='minimal' content={addressCopied ? 'Copied' : 'Copy'}>
+                          <button
+                            type='button'
+                            onClick={() => navigator.clipboard.writeText(browserAddress).then(() => setAddressCopied(true), () => {})}
+                            onMouseLeave={() => setAddressCopied(false)}
+                            aria-label='Copy address'
+                            className='flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-foreground-secondary
+                              hover:bg-hover hover:text-foreground'
+                          >
+                            {addressCopied ? <Check size={10} aria-hidden='true' /> : <Copy size={10} aria-hidden='true' />}
+                          </button>
+                        </Tooltip>
+                      </span>
                     )}
                   </div>
                 )}
@@ -518,6 +514,7 @@ export function SettingsView({ section }: { section: SettingsSectionType }) {
                     <span className='flex items-center gap-1 text-foreground'>
                       {SHORTCUT_MODIFIER}+
                       <input
+                        name={`shortcut-${action}`}
                         type='text'
                         value={globalSettings.settings.shortcuts[action]}
                         onChange={(event) => {

@@ -154,7 +154,7 @@ export function SectionPopup({ sections, activeSection, compact, sidebarLayout, 
                   section.onClick();
                   focusSection();
                 }}
-                className={`${rowButtonClassName} ${compact ? 'justify-center' : 'pr-4'}`}
+                className={`${rowButtonClassName} ${compact ? 'justify-center' : 'pr-6'}`}
                 aria-label={compact ? section.label : undefined}
                 aria-current={active ? 'page' : undefined}
               >

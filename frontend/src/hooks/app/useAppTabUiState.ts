@@ -165,32 +165,35 @@ export function useAppTabUiState(activeTabId: string, activeTabIdRef: MutableRef
   }, [activeTabId, canUserSeeResponse, uiVisible]);
 
   // The plugin icon shows a dot while any open chat waits for a permission or has an unread reply, in the colour
-  // ChatStatusIndicator gives it.
+  // ChatStatusIndicator gives it, and three dots in place of its `</>` while any open chat is processing.
   const attention = useMemo<AttentionLevel>(() => {
     const flags = Object.values(tabUi);
     if (flags.some((f) => f.warning)) return 'warning';
     if (flags.some((f) => f.unread && !f.processing && !f.queued)) return 'unread';
     return '';
   }, [tabUi]);
+  const processing = useMemo(() => Object.values(tabUi).some((f) => f.processing), [tabUi]);
 
   useEffect(() => {
-    const sendAttention = () => window.__setAttentionBadge?.(attention);
-    // Also sent once the bridge is ready, so a reloaded page clears the dot the previous one left.
+    const sendAttention = () => window.__setAttentionBadge?.(attention, processing);
+    // Also sent once the bridge is ready, so a reloaded page clears the icon the previous one left.
     if (window.__settingsBridgeReady) sendAttention();
     else window.addEventListener('settings-bridge-ready', sendAttention);
     return () => window.removeEventListener('settings-bridge-ready', sendAttention);
-  }, [attention]);
+  }, [attention, processing]);
 
-  // A web browser tab's icon shows the same dot.
+  // A web browser tab's icon shows the same.
   useEffect(() => {
     const color = ATTENTION_COLORS[attention];
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (window.__AGENT_DOCK_CLIENT !== 'browser' || !color || !icon) return;
+    if (window.__AGENT_DOCK_CLIENT !== 'browser' || !(color || processing) || !icon) return;
     const original = icon.href;
-    const svg = atob(original.slice(original.indexOf(',') + 1));
-    icon.href = 'data:image/svg+xml;base64,' + btoa(svg.replace('</svg>', `<circle cx="25" cy="3" r="8" fill="${color}"/></svg>`));
+    const base = processing ? icon.dataset.processing! : original;
+    icon.href = color
+      ? 'data:image/svg+xml;base64,' + btoa(atob(base.slice(base.indexOf(',') + 1)).replace('</svg>', `<circle cx="25" cy="3" r="8" fill="${color}"/></svg>`))
+      : base;
     return () => { icon.href = original; };
-  }, [attention]);
+  }, [attention, processing]);
 
   return {
     tabUi,

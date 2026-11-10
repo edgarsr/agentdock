@@ -134,6 +134,7 @@ export function AudioTranscriptionSettingsView({
                 <>
                   <span className='text-foreground'>{apiKeyLabel}:</span>
                   <input
+                    name='transcription-api-key'
                     type='password'
                     value={providerSettings.apiKey}
                     onChange={(event) => handleApiKeyChange(event.target.value)}
@@ -174,6 +175,7 @@ export function AudioTranscriptionSettingsView({
 
               <span className='text-foreground'>Recording limit (s):</span>
               <input
+                name='recording-limit-seconds'
                 type='text'
                 inputMode='numeric'
                 pattern='[1-9][0-9]*'

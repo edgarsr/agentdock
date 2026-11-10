@@ -291,21 +291,23 @@ export function AgentManagementView({
             const cliAuthTooltip = agent.cliAvailable
               ? CLI_AUTH_TOOLTIP
               : 'IDE terminal is required';
+            const agentIcon = (className: string) => agent.custom ? (
+              <Bot className={`${className} text-foreground-secondary opacity-75`} strokeWidth={1.5} />
+            ) : (
+              <img src={agent.iconPath} alt="" className={`${className} object-contain opacity-75`} />
+            );
 
             return (
               <div key={agent.id} className={`flex group ${!isLast ? 'border-b border-border' : ''}`}>
                 <div className="flex items-start gap-3 w-full py-1 section-medium:flex-wrap section-medium:gap-y-0">
-                  {/* A narrow section leaves the room to the text; the name identifies the agent. */}
+                  {/* A narrow section leaves the room to the text and shows a small icon before the name instead. */}
                   <div className="flex flex-col items-center shrink-0 w-10 min-w-10 py-4 section-medium:hidden">
-                    {agent.custom ? (
-                      <Bot className="h-8 w-8 text-foreground-secondary opacity-75" strokeWidth={1.5} />
-                    ) : (
-                      <img src={agent.iconPath} alt="" className="h-8 w-8 object-contain opacity-75" />
-                    )}
+                    {agentIcon('h-8 w-8')}
                   </div>
 
                   <div className="min-w-0 flex-1 py-4 text-ide-small text-foreground-secondary">
                     <div className="flex items-baseline gap-1.5 mb-1">
+                      {agentIcon('relative top-0.5 hidden h-4 w-4 shrink-0 section-medium:block mr-1')}
                       <div className="font-semibold text-ide-regular text-foreground">{agent.name}</div>
                       {versionLabel && (<span className="text-foreground-secondary">{versionLabel}</span>)}
                     </div>

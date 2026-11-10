@@ -78,6 +78,7 @@ export function ScheduleBar({ scheduledAt, onScheduledAtChange, onClose }: Sched
                 <span aria-hidden="true" className="text-foreground-secondary">{index === 3 ? '\u00a0' : index === 4 ? ':' : '.'}</span>
               )}
               <input
+                name="schedule-segment"
                 ref={(element) => { inputs.current[index] = element; }}
                 type="text"
                 inputMode="numeric"

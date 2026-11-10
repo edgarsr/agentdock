@@ -192,7 +192,7 @@ export function useChatSearch({ messages, isActive, containerRef, hiddenCount, r
         }}
       >
         <Search size={14} className="shrink-0" aria-hidden="true" />
-        <input ref={inputRef} type="text" value={query} placeholder="Search in chat" aria-label="Search in chat"
+        <input name="chat-search" ref={inputRef} type="text" value={query} placeholder="Search in chat" aria-label="Search in chat"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;

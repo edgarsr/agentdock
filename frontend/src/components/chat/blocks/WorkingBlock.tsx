@@ -126,7 +126,7 @@ export const WorkingBlock: React.FC<Props> = ({ blocks, isOpen, isActivePrompt =
     .flatMap((entry) => extractToolCallImages(safeParseJson(entry.rawJson)));
 
   const thumbnails = images.length > 0 && (
-    <div className="flex flex-wrap gap-2 pt-2">
+    <div className="flex flex-wrap items-start gap-2 pt-2">
       {images.map((image, index) => (
         <ToolOutputImage key={`${index}-${'src' in image ? image.src.slice(0, 32) : toolCallImageKey(image)}`}
           image={image} onImageClick={onImageClick} />

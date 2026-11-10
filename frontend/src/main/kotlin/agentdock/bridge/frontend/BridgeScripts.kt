@@ -132,7 +132,7 @@ internal object BridgeScripts {
             ${if (client == "browser") "" else "window.__requestHostRepaint = function(reason) { invoke('repaint', reason || ''); };"}
             window.__readUiVisibility = function() { invoke('readUiVisibility', ''); };
             ${if (client == "browser") "" else "window.__readUiZoom = function() { invoke('readUiZoom', ''); };"}
-            window.__setAttentionBadge = function(level) { invoke('setAttentionBadge', level || ''); };
+            window.__setAttentionBadge = function(level, processing) { invoke('setAttentionBadge', (level || '') + (processing ? ' processing' : '')); };
             window.__readBrowserAddress = function() { invoke('readBrowserAddress', ''); };
             window.__loadUiWorkspace = function() { invoke('loadUiWorkspace', ''); };
             window.__saveUiWorkspace = function(json) { invoke('saveUiWorkspace', json); };

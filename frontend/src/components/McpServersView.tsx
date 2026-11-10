@@ -202,6 +202,7 @@ export function McpServersView() {
             <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
+                name="mcp-server-label"
                 data-autofocus="true"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
@@ -230,6 +231,7 @@ export function McpServersView() {
                 <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
                   <span className="text-foreground-secondary">Command <span className="text-error" aria-hidden="true">*</span></span>
                   <input
+                    name="mcp-server-command"
                     value={form.command}
                     onChange={e => setForm({ ...form, command: e.target.value })}
                     required
@@ -239,6 +241,7 @@ export function McpServersView() {
                 <div className="flex flex-col gap-1">
                   <span className="text-foreground-secondary">Args</span>
                   <textarea
+                    name="mcp-server-args"
                     value={form.args}
                     onChange={e => setForm({ ...form, args: e.target.value })}
                     placeholder={'-y\n@modelcontextprotocol/server-fetch'}
@@ -248,6 +251,7 @@ export function McpServersView() {
                 <div className="flex flex-col gap-1">
                   <span className="text-foreground-secondary">Environment</span>
                   <textarea
+                    name="mcp-server-env"
                     value={form.env}
                     onChange={e => setForm({ ...form, env: e.target.value })}
                     placeholder="API_KEY=your-key"
@@ -260,6 +264,7 @@ export function McpServersView() {
                 <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
                   <span className="text-foreground-secondary">URL <span className="text-error" aria-hidden="true">*</span></span>
                   <input
+                    name="mcp-server-url"
                     value={form.url}
                     onChange={e => setForm({ ...form, url: e.target.value })}
                     required
@@ -269,6 +274,7 @@ export function McpServersView() {
                 <div className="flex flex-col gap-1">
                   <span className="text-foreground-secondary">Headers</span>
                   <textarea
+                    name="mcp-server-headers"
                     value={form.headers}
                     onChange={e => setForm({ ...form, headers: e.target.value })}
                     placeholder="Authorization: Bearer token"

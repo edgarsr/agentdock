@@ -149,6 +149,7 @@ export function SystemInstructionsView() {
             <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 section-medium:grid-cols-1 section-medium:gap-1">
               <span className="text-foreground-secondary">Name <span className="text-error" aria-hidden="true">*</span></span>
               <input
+                name="system-instruction-label"
                 data-autofocus="true"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
@@ -160,6 +161,7 @@ export function SystemInstructionsView() {
             <div className="flex flex-col gap-1">
               <span className="text-foreground-secondary">Instruction <span className="text-error" aria-hidden="true">*</span></span>
               <textarea
+                name="system-instruction-content"
                 value={form.content}
                 onChange={(event) => setForm({ ...form, content: event.target.value })}
                 rows={8}

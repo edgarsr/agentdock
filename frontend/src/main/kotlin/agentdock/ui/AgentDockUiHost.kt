@@ -16,6 +16,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
@@ -71,7 +72,9 @@ class AgentDockUiHost(
 
     private var toolWindow: ToolWindow? = null
     private val badgeIcons = BadgeIconSupplier(AgentDockFileType.getIcon())
-    /** The plugin icon with the open chats' dot, or `null`; the editor tab may read it off the EDT. */
+    private val processingBadgeIcons =
+        BadgeIconSupplier(IconLoader.getIcon("/icons/agent_dock_toolwindow_processing.svg", javaClass))
+    /** The plugin icon showing the open chats' state, or `null`; the editor tab may read it off the EDT. */
     @Volatile
     var attentionIcon: Icon? = null
         private set
@@ -180,14 +183,16 @@ class AgentDockUiHost(
     }
 
     /**
-     * Mirrors the open chats' dot on the tool window button and the editor tab: `warning` while one waits for a
-     * permission, `unread` while one has an unread reply, anything else clears it.
+     * Mirrors the open chats' state on the tool window button and the editor tab: a dot for `warning` while one waits
+     * for a permission and for `unread` while one has an unread reply, none for anything else, and three dots in
+     * place of the icon's `</>` while one is [processing].
      */
-    fun setAttention(level: String) {
+    fun setAttention(level: String, processing: Boolean) {
+        val icons = if (processing) processingBadgeIcons else badgeIcons
         val icon = when (level) {
-            "warning" -> badgeIcons.warningIcon
-            "unread" -> badgeIcons.infoIcon
-            else -> null
+            "warning" -> icons.warningIcon
+            "unread" -> icons.infoIcon
+            else -> icons.originalIcon.takeIf { processing }
         }
         if (icon === attentionIcon) return
         attentionIcon = icon

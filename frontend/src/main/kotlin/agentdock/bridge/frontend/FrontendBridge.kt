@@ -176,9 +176,12 @@ internal class FrontendBridge(
 
         commands.register("readBrowserAddress") { AgentDockWebServer.getInstance().pushAddress(project) }
 
-        commands.register("setAttentionBadge") { level ->
+        commands.register("setAttentionBadge") { payload ->
             ApplicationManager.getApplication().invokeLater({
-                if (!project.isDisposed) AgentDockUiHost.getInstance(project).setAttention(level)
+                if (!project.isDisposed) {
+                    AgentDockUiHost.getInstance(project)
+                        .setAttention(payload.substringBefore(' '), payload.endsWith(" processing"))
+                }
             }, ModalityState.any())
         }
     }
