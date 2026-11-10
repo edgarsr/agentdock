@@ -9,6 +9,7 @@ import { SectionPopup } from './components/SectionPopup';
 import { getNavigationActions } from './components/tabbar/NavigationActions';
 import { useHistoryGroupNav } from './components/history/useHistoryGroupNav';
 import ConfirmationModal from './components/ConfirmationModal';
+import { StartupPlaceholder } from './components/StartupPlaceholder';
 import { useAppController } from './hooks/app/useAppController';
 import { useAppLayout } from './hooks/app/useAppLayout';
 import { useAppShortcuts } from './hooks/useShortcuts';
@@ -17,7 +18,6 @@ import { ACPBridge } from './utils/bridge';
 import type { GlobalSettings } from './types/chat';
 
 const SIDEBAR_ANIMATION_MS = 200;
-/** From this content width `app-wide:` widens side padding. */
 const WIDE_CONTENT_MIN_WIDTH_PX = 720;
 const SETTINGS_RETRY_MS = 2000;
 
@@ -267,7 +267,7 @@ function App() {
     }
   };
 
-  if (!settingsLoaded || !workspaceLoaded) return <div className="h-full bg-background" />;
+  if (!settingsLoaded || !workspaceLoaded) return <StartupPlaceholder />;
 
   return (
     <div
