@@ -12,6 +12,7 @@
         <fileEditorProvider id="agent-dock-ui" implementation="agentdock.ui.AgentDockFileEditorProvider"/>
         <fileIconProvider implementation="agentdock.ui.AgentDockFileIconProvider"/>
         <statusBarWidgetFactory id="AgentDockQuotaWidget" implementation="agentdock.ui.AgentDockQuotaWidgetFactory"/>
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
     </extensions>
 
     <actions>
