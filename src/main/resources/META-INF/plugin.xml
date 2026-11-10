@@ -54,9 +54,8 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added support for asynchronous questions.</li>
-            <li>Added access to the plugin from a web browser, including remote access via Tailscale.</li>
-            <li>Optimized code.</li>
+            <li>Improved loading performance of long chats.</li>
+            <li>Added formatted list creation in the chat input.</li>
             <li>Minor bug fixes and UI refinements.</li>
         </ul>
     ]]></change-notes>
