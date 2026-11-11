@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlin.time.Duration.Companion.seconds
@@ -304,16 +306,39 @@ internal fun AcpClientService.resolveAdapterProcessWorkingDirectory(adapterRoot:
 }
 
 private fun java.io.BufferedReader.asLineFlow() = flow {
+    var initializeResponseSeen = false
     while (true) {
         val line = try {
             readLine()
         } catch (_: java.io.IOException) {
             break
         } ?: break
-        emit(line)
+        val initializeResponse = if (!initializeResponseSeen && line.contains("\"agentCapabilities\"")) {
+            withoutAuthStatusCapability(line)
+        } else {
+            null
+        }
+        if (initializeResponse != null) initializeResponseSeen = true
+        emit(initializeResponse ?: line)
     }
 }.onCompletion {
     runCatching { close() }
+}
+
+/**
+ * Returns the initialize response [line] without `agentCapabilities.auth.status`, or null when
+ * [line] is not an initialize response. The ACP schema advertises that capability as an object
+ * (`{}`), but Kotlin SDK 0.34.0 decodes it as Boolean and then fails the whole response.
+ * The plugin does not use `auth/status`. Remove once the SDK decodes the object.
+ */
+private fun withoutAuthStatusCapability(line: String): String? {
+    val root = runCatching { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject ?: return null
+    val result = root["result"] as? JsonObject ?: return null
+    val capabilities = result["agentCapabilities"] as? JsonObject ?: return null
+    val auth = capabilities["auth"] as? JsonObject
+    if (auth == null || auth["status"] !is JsonObject) return line
+    val patchedCapabilities = JsonObject(capabilities + ("auth" to JsonObject(auth - "status")))
+    return JsonObject(root + ("result" to JsonObject(result + ("agentCapabilities" to patchedCapabilities)))).toString()
 }
 
 private fun java.io.BufferedWriter.asLineWriter(): suspend (String) -> Unit = { line ->
