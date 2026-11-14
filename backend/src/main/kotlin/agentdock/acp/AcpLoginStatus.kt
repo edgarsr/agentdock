@@ -11,7 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Duration.Companion.seconds
 
 internal object AcpLoginStatus {
-    private const val ANTIGRAVITY_METHOD = "antigravityAuthFile"
+    private const val ANTIGRAVITY_METHOD = "antigravityCliModels"
     private const val CLAUDE_CODE_METHOD = "claudeCodeCliAuthStatus"
     private const val CODEX_METHOD = "codexCliLoginStatus"
     private const val CURSOR_METHOD = "cursorCliStatus"
@@ -21,7 +21,7 @@ internal object AcpLoginStatus {
     private const val STATUS_TIMEOUT_SECONDS = 10L
 
     fun resolve(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? = when (adapterInfo.loginStatusMethod) {
-        ANTIGRAVITY_METHOD -> resolveAntigravity()
+        ANTIGRAVITY_METHOD -> runCliStatusCommand(adapterInfo, listOf("models"))?.let(::parseAntigravityLoginStatus)
         CLAUDE_CODE_METHOD -> resolveClaudeCode(adapterInfo)
         CODEX_METHOD -> resolveCodex(adapterInfo)
         CURSOR_METHOD -> resolveCursor(adapterInfo)
@@ -50,13 +50,6 @@ internal object AcpLoginStatus {
     private fun resolveCursor(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? =
         runCliStatusCommand(adapterInfo, listOf("status"))?.let(::parseCursorLoginStatus)
 
-    private fun resolveAntigravity(): Boolean? {
-        val authFile = File(System.getProperty("user.home"), ".gemini/antigravity-acp/acp_token.json")
-        if (!authFile.isFile) return false
-        val content = runCatching { authFile.readText() }.getOrNull() ?: return null
-        return parseAntigravityLoginStatus(content)
-    }
-
     private fun resolveGrokBuild(): Boolean? {
         val authFile = File(System.getProperty("user.home"), ".grok/auth.json")
         if (!authFile.isFile) return false
@@ -70,19 +63,15 @@ internal object AcpLoginStatus {
     private fun runCliStatusCommand(
         adapterInfo: AcpAdapterConfig.AdapterInfo,
         args: List<String>
-    ): String? {
-        val (_, commandParts) = buildAdapterCliCommandParts(
-            adapterId = adapterInfo.id,
-            extraArgs = args
-        ) ?: return null
-        val result = runCatching {
-            AcpExecutionMode.runCommand(
-                command = wrapWindowsBatchCommand(commandParts),
-                timeout = STATUS_TIMEOUT_SECONDS.seconds
-            )
-        }.getOrNull() ?: return null
-        return result.stdout + "\n" + result.stderr
-    }
+    ): String? = runAdapterCliCommand(adapterInfo.id, args, STATUS_TIMEOUT_SECONDS.seconds)
+        ?.let { it.stdout + "\n" + it.stderr }
+}
+
+/** `agy models` lists one model per line as `id<TAB>name`, or asks to sign in; anything else, such as a network error, is unknown. */
+internal fun parseAntigravityLoginStatus(output: String): Boolean? = when {
+    output.contains("Please sign in", ignoreCase = true) -> false
+    output.lineSequence().any { it.trim().contains('\t') } -> true
+    else -> null
 }
 
 internal fun parseClaudeCodeLoginStatus(output: String): Boolean? {
@@ -112,13 +101,6 @@ internal fun parseCursorLoginStatus(output: String): Boolean =
 
 internal fun parseQoderLoginStatus(output: String): Boolean =
     !output.contains("Account: Not logged in", ignoreCase = true)
-
-internal fun parseAntigravityLoginStatus(content: String): Boolean? = runCatching {
-    Json.parseToJsonElement(content).jsonObject["refresh_token"]
-        ?.jsonPrimitive
-        ?.contentOrNull
-        ?.isNotBlank() == true
-}.getOrNull()
 
 internal fun parseGrokBuildLoginStatus(content: String): Boolean? = runCatching {
     Json.parseToJsonElement(content).jsonObject.values.any { authEntry ->

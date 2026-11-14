@@ -27,7 +27,8 @@ private data class RuntimePlatform(
     val libc: String,
     val libcSuffix: String,
     val archToken: String,
-    val artifactArch: String
+    val artifactArch: String,
+    val goArch: String
 )
 
 internal fun resolveInstallAdapterInfo(
@@ -60,14 +61,41 @@ internal fun downloadArchiveDistribution(
     val runtime = detectRuntimePlatform()
     targetDir.mkdirs()
 
-    val rawUrl = adapterInfo.distribution.downloadUrl
-    if (rawUrl == null) {
-        statusCallback?.invoke("Error: Archive distribution for '${adapterInfo.id}' has no downloadUrl configured")
-        return false
+    val downloadUrl = if (adapterInfo.distribution.manifestUrl != null) {
+        val release = AcpAdapterUpdates.latestManifestRelease(adapterInfo)
+        if (release == null) {
+            statusCallback?.invoke("Error: Unable to read the release manifest of ${adapterInfo.name}")
+            return false
+        }
+        // The manifest only offers its latest release, which has changed since the version was resolved.
+        if (release.version.trim() != adapterInfo.distribution.version.trim()) {
+            statusCallback?.invoke("Error: ${adapterInfo.name} ${adapterInfo.distribution.version} is no longer available, please retry")
+            return false
+        }
+        release.url
+    } else {
+        val rawUrl = adapterInfo.distribution.downloadUrl
+        if (rawUrl == null) {
+            statusCallback?.invoke("Error: Archive distribution for '${adapterInfo.id}' has no downloadUrl configured")
+            return false
+        }
+        resolveArchiveDownloadUrl(rawUrl, adapterInfo, runtime)
     }
-    val downloadUrl = resolveArchiveDownloadUrl(rawUrl, adapterInfo, runtime)
-    val archiveExt = if (downloadUrl.lowercase().endsWith(".zip")) "zip" else runtime.archiveExt
-    val tempFile = File(targetDir, "tool-download.$archiveExt")
+    val urlPath = downloadUrl.substringBefore('?').lowercase()
+    val archiveExt = when {
+        urlPath.endsWith(".zip") -> "zip"
+        urlPath.endsWith(".tar.gz") || urlPath.endsWith(".tgz") -> "tar.gz"
+        else -> null
+    }
+    // A download that is not an archive is the launch executable itself.
+    val tempFile = if (archiveExt != null) {
+        File(targetDir, "tool-download.$archiveExt")
+    } else {
+        resolveAdapterLaunchFile(targetDir, adapterInfo) ?: run {
+            statusCallback?.invoke("Error: ${adapterInfo.name} has no executable configured for this platform")
+            return false
+        }
+    }
 
     return try {
         cancellation?.throwIfCancelled()
@@ -98,7 +126,7 @@ internal fun downloadArchiveDistribution(
         if (downloadExitCode != 0) return false
 
         cancellation?.throwIfCancelled()
-        statusCallback?.invoke("Extracting package...")
+        if (archiveExt != null) statusCallback?.invoke("Extracting package...")
         if (archiveExt == "zip") {
             try {
                 extractZipArchive(tempFile, targetDir, cancellation)
@@ -108,7 +136,7 @@ internal fun downloadArchiveDistribution(
                 statusCallback?.invoke("Error: ${e.message}")
                 return false
             }
-        } else {
+        } else if (archiveExt != null) {
             val extractExitCode = runArchiveCommand(
                 ProcessBuilder(
                     "sh",
@@ -142,7 +170,7 @@ internal fun downloadArchiveDistribution(
         statusCallback?.invoke("Error: ${e.message}")
         false
     } finally {
-        tempFile.delete()
+        if (archiveExt != null) tempFile.delete()
     }
 }
 
@@ -198,13 +226,17 @@ private fun detectRuntimePlatform(): RuntimePlatform {
     val targetArch = if (isArm64) "aarch64" else "x86_64"
     val archToken = if (isArm64) "arm64" else "x86_64"
     val artifactArch = if (isArm64) "aarch64" else "amd64"
+    val goArch = if (isArm64) "arm64" else "amd64"
 
     return when {
-        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "", archToken, artifactArch)
-        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "", archToken, artifactArch)
-        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "", archToken, artifactArch)
+        os.contains("win") -> RuntimePlatform("windows", archiveArch, "zip", "$targetArch-pc-windows-msvc", "msvc", "", archToken, artifactArch, goArch)
+        os.contains("mac") -> RuntimePlatform("darwin", archiveArch, "tar.gz", "$targetArch-apple-darwin", "", "", archToken, artifactArch, goArch)
+        else -> RuntimePlatform("linux", archiveArch, "tar.gz", "$targetArch-unknown-linux-gnu", "gnu", "", archToken, artifactArch, goArch)
     }
 }
+
+internal fun resolveDistributionUrl(template: String, adapterInfo: AcpAdapterConfig.AdapterInfo): String =
+    resolveArchiveDownloadUrl(template, adapterInfo, detectRuntimePlatform())
 
 private fun resolveArchiveDownloadUrl(
     template: String,
@@ -216,6 +248,7 @@ private fun resolveArchiveDownloadUrl(
         .replace("{arch}", runtime.archiveArch)
         .replace("{archToken}", runtime.archToken)
         .replace("{artifactArch}", runtime.artifactArch)
+        .replace("{goArch}", runtime.goArch)
         .replace("{osDir}", AcpExecutionMode.hostPlatform())
         .replace("{ext}", runtime.archiveExt)
         .replace("{target}", runtime.target)

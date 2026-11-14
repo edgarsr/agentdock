@@ -7,14 +7,13 @@ import agentdock.acp.deleteHistorySession
 import agentdock.acp.canDeleteHistorySession
 import com.intellij.openapi.project.ProjectManager
 import java.io.File
-import java.util.UUID
 
 internal object SessionListDeleteSupport {
     fun canDeleteSession(adapterName: String): Boolean {
         val method = runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
         return when (method) {
             "acp" -> isAcpSessionDeleteAvailable(adapterName)
-            "antigravitySessionDelete", "grokCliSessionDelete" -> true
+            "grokCliSessionDelete" -> true
             null -> hasDefaultDeleteMethod(adapterName) || isAcpSessionDeleteAvailable(adapterName)
             else -> false
         }
@@ -28,7 +27,7 @@ internal object SessionListDeleteSupport {
         val method = runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
         return when (method) {
             "acp" -> true
-            "antigravitySessionDelete", "grokCliSessionDelete" -> false
+            "grokCliSessionDelete" -> false
             null -> !hasDefaultDeleteMethod(adapterName) && (sessionDeleteAvailable || sessionCloseAvailable)
             else -> false
         }
@@ -47,7 +46,6 @@ internal object SessionListDeleteSupport {
     suspend fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
         when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
             "acp" -> return deleteAcpSession(adapterName, sessionId)
-            "antigravitySessionDelete" -> return deleteAntigravitySession(sessionId)
             "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
             null -> Unit
             else -> return false
@@ -81,23 +79,6 @@ internal object SessionListDeleteSupport {
             parent == File(home, ".cursor/acp-sessions").canonicalFile ||
             parent.parentFile == File(home, ".cursor/chats").canonicalFile
         return isSessionDir && deleteHistoryDirectoryIfExists(sessionDir)
-    }
-
-    private fun deleteAntigravitySession(sessionId: String): Boolean {
-        val cleanSessionId = runCatching { UUID.fromString(sessionId.trim()).toString() }.getOrNull() ?: return false
-        val dataDir = File(System.getProperty("user.home"), ".gemini/antigravity-acp")
-        val conversationsDir = File(dataDir, "conversations")
-        val sessionFiles = listOf(
-            File(conversationsDir, "$cleanSessionId.db-wal"),
-            File(conversationsDir, "$cleanSessionId.db-shm"),
-            File(conversationsDir, "$cleanSessionId.db"),
-            File(dataDir, "brain/$cleanSessionId"),
-            File(conversationsDir, "$cleanSessionId.meta")
-        )
-
-        return sessionFiles.all { file ->
-            if (file.isDirectory) deleteHistoryDirectoryIfExists(file) else deleteHistoryFileIfExists(file)
-        }
     }
 
     private suspend fun deleteAcpSession(adapterName: String, sessionId: String): Boolean {

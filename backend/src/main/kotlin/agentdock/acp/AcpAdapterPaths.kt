@@ -2,6 +2,7 @@ package agentdock.acp
 
 import agentdock.utils.AgentDockPaths
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Adapter runtimes are downloaded at runtime to ~/.agent-dock/dependencies/<adapter-name>/.
@@ -11,6 +12,7 @@ import java.io.File
  */
 object AcpAdapterPaths {
     private const val ADAPTER_NAME_OVERRIDE_PROPERTY = "agentdock.acp.adapter.name"
+    private val unusableRuntimeCleanupStarted = AtomicBoolean(false)
 
     fun getAdapterInfo(adapterName: String? = null): AcpAdapterConfig.AdapterInfo {
         val resolvedName = resolveAdapterName(adapterName)
@@ -57,6 +59,20 @@ object AcpAdapterPaths {
         val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
         return hasInstalledAdapterLaunch(runtimeDir, adapterInfo) &&
             isInstalledVersionSupported(adapterInfo, installedVersionFromRuntimeDir(runtimeDir, adapterInfo))
+    }
+
+    /**
+     * Deletes, once per IDE process, built-in adapter runtimes without their configured launch file, such as one
+     * installed from a distribution that has since changed; they can never be used.
+     */
+    internal fun deleteUnusableRuntimes() {
+        if (!unusableRuntimeCleanupStarted.compareAndSet(false, true)) return
+        AcpAdapterConfig.getAllAdapters().values.filterNot { it.isCustom }.forEach { adapterInfo ->
+            val runtimeDir = File(getDependenciesDir(), adapterInfo.id)
+            if (runtimeDir.isDirectory && !hasInstalledAdapterLaunch(runtimeDir, adapterInfo)) {
+                deleteAdapterRuntime(runtimeDir, adapterInfo.id)
+            }
+        }
     }
 
     internal fun deleteAdapter(adapterName: String? = null): Boolean {

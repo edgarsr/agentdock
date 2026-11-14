@@ -1,6 +1,6 @@
 package agentdock.acp
 
-import com.intellij.util.text.VersionComparatorUtil
+import com.intellij.openapi.project.ProjectManager
 import kotlinx.serialization.json.*
 import java.io.BufferedInputStream
 import java.io.File
@@ -29,7 +29,6 @@ internal object AcpUsageDataFetcher {
 
     private val usageCache = ConcurrentHashMap<String, UsageCacheEntry>()
     private val usageCacheLocks = ConcurrentHashMap<String, Any>()
-    private var antigravityCliVerified = false
 
     fun discardCachedUsage(adapterId: String) {
         val lock = usageCacheLocks.computeIfAbsent(adapterId) { Any() }
@@ -44,6 +43,7 @@ internal object AcpUsageDataFetcher {
      */
     fun fetchUsageData(adapterId: String, maxAge: Duration, onStale: ((String) -> Unit)? = null): String {
         if (runCatching { !AcpAdapterPaths.isDownloaded(adapterId) }.getOrDefault(true)) return ""
+        if (adapterId == "antigravity" && !isAntigravityLoginConfirmed()) return ""
         val minInterval = if (adapterId == "antigravity") ANTIGRAVITY_MIN_USAGE_REQUEST_INTERVAL else MIN_USAGE_REQUEST_INTERVAL
         val lock = usageCacheLocks.computeIfAbsent(adapterId) { Any() }
         return synchronized(lock) {
@@ -141,48 +141,24 @@ internal object AcpUsageDataFetcher {
         }
     }
 
-    private fun fetchAntigravityUsageDataUncached(): String {
-        if (!antigravityCliVerified && !verifyAntigravityCli()) return ""
+    /**
+     * `agy --print` opens a browser sign-in page when the user is not signed in, so usage is requested only after
+     * the plugin's login status check found the user signed in.
+     */
+    private fun isAntigravityLoginConfirmed(): Boolean = ProjectManager.getInstance().openProjects.any { project ->
+        !project.isDisposed && AcpClientService.getInstance(project).loginStatusStates["antigravity"] == true
+    }
 
-        val (adapter, command) = buildAdapterCliCommandParts(
+    private fun fetchAntigravityUsageDataUncached(): String {
+        val result = runAdapterCliCommand(
             adapterId = "antigravity",
-            extraArgs = listOf("--output-format", "json", "--print", "/usage")
-        ) ?: return ""
-        val result = runCatching {
-            AcpExecutionMode.runCommand(
-                command = command,
-                environmentOverrides = adapter.cli?.environment.orEmpty(),
-                timeout = LOCAL_USAGE_TIMEOUT_SECONDS.seconds
-            )
-        }.getOrNull()
+            args = listOf("--output-format", "json", "--print", "/usage"),
+            timeout = LOCAL_USAGE_TIMEOUT_SECONDS.seconds
+        )
         return if (result?.exitCode == 0) {
             normalizeAntigravityUsage(result.stdout)
         } else {
             ""
-        }
-    }
-
-    private fun verifyAntigravityCli(): Boolean {
-        val (adapter, command) = buildAdapterCliCommandParts(
-            adapterId = "antigravity",
-            extraArgs = listOf("--version")
-        ) ?: return false
-        val minimumVersion = adapter.cli?.minimumVersion?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-        val result = runCatching {
-            AcpExecutionMode.runCommand(
-                command = command,
-                environmentOverrides = adapter.cli.environment,
-                timeout = LOCAL_USAGE_TIMEOUT_SECONDS.seconds
-            )
-        }.getOrNull()
-            ?.takeIf { it.exitCode == 0 }
-            ?: return false
-        val version = Regex("""\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b""")
-            .find(result.stdout + "\n" + result.stderr)
-            ?.value
-            ?: return false
-        return (VersionComparatorUtil.compare(version, minimumVersion) >= 0).also {
-            antigravityCliVerified = it
         }
     }
 

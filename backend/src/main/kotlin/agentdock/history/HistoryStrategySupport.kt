@@ -79,7 +79,8 @@ private fun isWindowsLikePath(path: String): Boolean {
 internal fun historyComparablePath(path: String?): String {
     val value = path?.trim().orEmpty()
     if (value.isEmpty()) return ""
-    val comparable = stripWindowsExtendedPathPrefix(value)
+    // Antigravity CLI reports Windows paths with a leading slash, such as `/C:/project`.
+    val comparable = stripWindowsExtendedPathPrefix(value).let { if (Regex("^/[A-Za-z]:/").containsMatchIn(it)) it.drop(1) else it }
     val normalized = if (isWindowsLikePath(comparable)) {
         comparable.replace("/", "\\")
     } else {

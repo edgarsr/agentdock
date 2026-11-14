@@ -3,28 +3,30 @@
   "name": "Google Antigravity",
   "iconPath": "/icons/antigravity.svg",
   "sessionListPosixCwd": true,
-  "sessionDeleteMethod": "antigravitySessionDelete",
+  "restartAfterProbe": true,
   "loginMethod": "acp",
   "logoutMethod": "acp",
-  "loginStatusMethod": "antigravityAuthFile",
+  "loginStatusMethod": "antigravityCliModels",
   "distribution": {
     "type": "archive",
     "version": "latest",
-    "downloadUrl": "https://dl.google.com/agy-extensions/releases/{osDir}/agy-acp-server-{version}-{platform}-{archToken}.zip",
+    "manifestUrl": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/{platform}_{goArch}.json",
     "binaryName": {
-      "win": "agy_acp_server.exe",
-      "unix": "agy_acp_server.par"
+      "win": "agy.exe",
+      "unix": "antigravity"
     }
   },
-  "platformArgs": {
-    "linux": ["--uid="]
+  "args": ["acp"],
+  "environment": {
+    "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
   },
   "cli": {
     "executable": {
-      "win": "agy",
-      "unix": "agy"
+      "win": "agy.exe",
+      "unix": "antigravity"
     },
-    "minimumVersion": "1.1.11",
+    "resumeArgs": ["--conversation", "{sessionId}"],
+    "logFileArg": "--log-file",
     "environment": {
       "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
     }

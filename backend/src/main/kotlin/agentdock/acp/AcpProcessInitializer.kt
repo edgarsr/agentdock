@@ -84,29 +84,33 @@ private suspend fun AcpClientService.initializeSharedProcessWithinBudget(
     )
     val command = buildAdapterLaunchCommand(adapterRoot, adapterInfo)
 
-    var lastError: Exception? = null
-    for (attempt in 1..ACP_INITIALIZE_MAX_ATTEMPTS) {
-        try {
-            initializeFreshProcessAttempt(
-                sharedProcess = sharedProcess,
-                adapterInfo = adapterInfo,
-                adapterRoot = adapterRoot,
-                command = command,
-                attempt = attempt
-            )
-            lastError = null
-            break
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            lastError = error
-            if (attempt == ACP_INITIALIZE_MAX_ATTEMPTS || sharedProcess.retired) break
-            delay(ACP_INITIALIZE_RETRY_DELAY)
+    suspend fun startProcess() {
+        var lastError: Exception? = null
+        for (attempt in 1..ACP_INITIALIZE_MAX_ATTEMPTS) {
+            try {
+                initializeFreshProcessAttempt(
+                    sharedProcess = sharedProcess,
+                    adapterInfo = adapterInfo,
+                    adapterRoot = adapterRoot,
+                    command = command,
+                    attempt = attempt
+                )
+                lastError = null
+                break
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                lastError = error
+                if (attempt == ACP_INITIALIZE_MAX_ATTEMPTS || sharedProcess.retired) break
+                delay(ACP_INITIALIZE_RETRY_DELAY)
+            }
         }
+        if (lastError != null) throw lastError
+        ensureAsyncSessionUpdates(sharedProcess)
     }
-    if (lastError != null) throw lastError
 
-    ensureAsyncSessionUpdates(sharedProcess)
+    startProcess()
     fetchAndStoreRuntimeMetadata(sharedProcess, adapterInfo)
+    if (adapterInfo.restartAfterProbe) startProcess()
     sharedProcess.isInitialized = true
 }
 

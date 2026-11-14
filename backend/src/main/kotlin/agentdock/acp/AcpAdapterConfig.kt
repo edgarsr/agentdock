@@ -48,7 +48,8 @@ object AcpAdapterConfig {
         val entryPath: String? = null,
         val args: List<String> = emptyList(),
         val resumeArgs: List<String> = emptyList(),
-        val minimumVersion: String? = null,
+        /** Option giving the CLI's log file, so commands the plugin runs log to a file it deletes afterwards. */
+        val logFileArg: String? = null,
         val environment: Map<String, String> = emptyMap()
     )
 
@@ -78,6 +79,8 @@ object AcpAdapterConfig {
         val minimumVersion: String? = null,
         val packageName: String? = null,
         val downloadUrl: String? = null,
+        /** Release manifest giving the latest `version` and its download `url`, used instead of [downloadUrl]. */
+        val manifestUrl: String? = null,
         val binaryName: PlatformBinary? = null,
         val extractSubdir: String? = null,
         val updateSource: UpdateSource? = null
@@ -94,6 +97,8 @@ object AcpAdapterConfig {
         val sessionListMethod: String = "acpSessionList",
         val sessionListPosixCwd: Boolean = false,
         val sessionDeleteMethod: String? = null,
+        /** Restarts the agent after the config probe, for agents giving later sessions of a process the probe session's directory. */
+        val restartAfterProbe: Boolean = false,
         val distribution: Distribution,
         val launchPath: String = "",
         val launchBinary: PlatformBinary? = null,

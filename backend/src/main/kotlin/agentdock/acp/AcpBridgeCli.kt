@@ -5,6 +5,7 @@ import agentdock.rpc.TerminalLaunchRequest
 import com.intellij.openapi.project.Project
 import agentdock.history.AgentDockHistoryService
 import java.io.File
+import kotlin.time.Duration
 
 /**
  * Handles CLI/terminal operations for ACP adapters within the IDE.
@@ -93,7 +94,7 @@ internal class AcpBridgeCli(
     ): Pair<AcpAdapterConfig.AdapterInfo, String>? {
         val (adapterInfo, commandParts) = buildAdapterCliCommandParts(adapterId, extraArgs) ?: return null
         val interactiveParts = normalizeInteractiveCommandParts(commandParts, shellFlavor, adapterInfo.isCustom)
-        val command = toShellCommand(interactiveParts, shellFlavor)
+        val command = toShellCommand(interactiveParts, shellFlavor, adapterInfo.cli?.environment.orEmpty())
         return adapterInfo to command
     }
 
@@ -158,6 +159,38 @@ internal fun buildAdapterCliCommandParts(
     commandParts += cli.args
     commandParts += extraArgs
     return adapterInfo to commandParts
+}
+
+private val cliLogsDir: File get() = File(AcpAdapterPaths.getBaseRuntimeDir(), "cli-logs")
+
+/**
+ * Runs the adapter CLI to completion with its configured environment. A CLI with a [AcpAdapterConfig.CliConfig.logFileArg]
+ * logs to a file deleted afterwards, as the plugin runs such commands often.
+ */
+internal fun runAdapterCliCommand(adapterId: String, args: List<String>, timeout: Duration): CommandResult? {
+    val cli = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId).cli }.getOrNull() ?: return null
+    val logFile = if (cli.logFileArg == null) null else {
+        runCatching { cliLogsDir.mkdirs(); File.createTempFile("cli-", ".log", cliLogsDir) }.getOrNull() ?: return null
+    }
+    return try {
+        // Both or neither are present; the option precedes any subcommand in args.
+        val logArgs = listOfNotNull(cli.logFileArg, logFile?.absolutePath)
+        val (_, command) = buildAdapterCliCommandParts(adapterId, logArgs + args) ?: return null
+        runCatching {
+            AcpExecutionMode.runCommand(
+                command = wrapWindowsBatchCommand(command),
+                environmentOverrides = cli.environment,
+                timeout = timeout
+            )
+        }.getOrNull()
+    } finally {
+        logFile?.delete()
+    }
+}
+
+/** Deletes CLI logs an abnormal exit left behind; one still being written is only unlinked or, on Windows, kept. */
+internal fun deleteLeftoverCliLogs() {
+    cliLogsDir.listFiles()?.forEach { it.delete() }
 }
 
 /** Runs a Windows batch-file executable through `cmd.exe /c`; other commands are returned unchanged. */

@@ -513,6 +513,8 @@ internal fun AcpBridge.installAdapterQueries() {
         if (adapterId != null) {
             launchAuthAction(adapterId, null, "Logout failed") {
                 val restartRequired = AcpAuthenticationService.logout(adapterId, service)
+                // Unknown until rechecked, so nothing relies on the signed-in state meanwhile.
+                service.loginStatusStates.remove(adapterId)
                 AcpUsageDataFetcher.discardCachedUsage(adapterId)
                 if (adapterId == "cursor-cli") {
                     AcpQuotaService.getInstance().clearQuotaForAdapter(adapterId)
