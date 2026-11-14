@@ -107,7 +107,13 @@ private fun AcpBridge.buildAdapterPayload(
 
     val dlStatus = downloadStatuses[info.id] ?: ""
     val isDownloading = dlStatus.isNotEmpty() && !dlStatus.startsWith("Error")
-    val exposedLoginMethod = if (info.isCustom && info.cli != null) "cli" else info.loginMethod
+    val loginStatusSupported = AcpLoginStatus.isSupported(info, service)
+    // Without a status the plugin cannot tell when ACP login finished, so the agent's CLI signs in.
+    val exposedLoginMethod = when {
+        info.isCustom && info.cli != null -> "cli"
+        !info.isCustom && loginStatusSupported == false -> null
+        else -> info.loginMethod
+    }
     val usesAcpLogin = exposedLoginMethod == "acp"
     val authMethods = if (usesAcpLogin) {
         service.adapterAuthMethods(info.id).mapNotNull { method ->
@@ -208,7 +214,8 @@ private fun AcpBridge.buildAdapterPayload(
         authenticating = isAuthenticating,
         authenticatingMethodId = authActionMethodIds[info.id].orEmpty(),
         authError = authErrors[info.id].orEmpty(),
-        loginStatusSupported = info.loginStatusMethod != null,
+        // Unknown counts as supported, so no login action shows before the status is known.
+        loginStatusSupported = loginStatusSupported != false,
         loggedIn = service.loginStatusStates[info.id],
         logoutAvailable = logoutAvailable,
         initializing = isInitializing,
@@ -226,7 +233,6 @@ private fun AcpBridge.buildAdapterPayload(
         refreshing = refreshingAdapters.containsKey(info.id),
         downloading = isDownloading,
         downloadStatus = dlStatus,
-        disabledModels = info.disabledModels,
         cliAvailable = cliAvailable,
         cliResumeAvailable = cliResumeAvailable,
         custom = info.isCustom
@@ -275,7 +281,6 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
     info: AcpAdapterConfig.AdapterInfo,
     force: Boolean = false
 ) {
-    if (info.loginStatusMethod == null) return
     val stageForRefresh = refreshingAdapters.containsKey(info.id)
     if (stageForRefresh && completedLoginStatusRefreshes.contains(info.id)) return
     if (!force && service.loginStatusStates.containsKey(info.id)) return
@@ -291,6 +296,8 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
                         service.stopSharedProcess(info.id)
                         service.initializeAdapterInBackground(info.id)
                     }
+                    true
+                } else if (AcpLoginStatus.isSupported(info, service) == false) {
                     true
                 } else {
                     LOG.warn(
@@ -315,7 +322,7 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
 
 internal fun AcpBridge.refreshAdapterLoginStatus(adapterId: String) {
     val info = runCatching { AcpAdapterConfig.getAdapterInfo(adapterId) }.getOrNull()
-    if (info?.loginStatusMethod == null) {
+    if (info == null) {
         pushAdapters()
         return
     }
@@ -356,7 +363,6 @@ internal fun AcpBridge.pushAdapters(
         unique.values.forEach { info ->
             if (!includeRuntimeChecks) return@forEach
             if (adapterIdsToRefresh?.contains(info.id) == false) return@forEach
-            if (info.loginStatusMethod == null) return@forEach
             if (adapters.firstOrNull { it.id == info.id }?.downloaded != true) return@forEach
             ensureLoginStatusCheckStarted(
                 info = info,

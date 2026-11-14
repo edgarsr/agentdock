@@ -250,7 +250,6 @@ internal object HistorySyncService {
             ?: return@coroutineScope AvailableSessionMetaResult(emptyList(), emptySet())
         val service = AcpClientService.getInstance(project)
         val adapters = AcpAdapterConfig.getAllAdapters().values
-            .filter { it.supportsSessionList }
             .filter { adapterInfo ->
                 try {
                     AcpAdapterPaths.isDownloaded(adapterInfo.id)

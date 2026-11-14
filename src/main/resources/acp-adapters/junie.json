@@ -4,8 +4,6 @@
   "iconPath": "/icons/junie.svg",
   "iconPathLight": "/icons/junie-light.svg",
   "iconPathDark": "/icons/junie-dark.svg",
-  "supportsSessionList": true,
-  "sessionDeleteMethod": "acp",
   "distribution": {
     "type": "archive",
     "version": "latest",

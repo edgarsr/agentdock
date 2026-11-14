@@ -4,20 +4,16 @@
   "iconPath": "/icons/kilo.svg",
   "iconPathLight": "/icons/kilo-light.svg",
   "iconPathDark": "/icons/kilo-dark.svg",
+  "sessionDeleteMethod": "kiloCliSessionDelete",
   "distribution": {
     "type": "npm",
-    "packageName": "@kilocode/cli",
-    "version": "latest"
+    "version": "latest",
+    "packageName": "@kilocode/cli"
   },
   "launchBinary": {
     "win": "node_modules/.bin/kilo.cmd",
     "unix": "node_modules/@kilocode/cli/bin/kilo"
   },
-  "disabledModels": [
-    "kilo/google/lyria-",
-    "kilo/google/imagen-",
-    "kilo/google/veo-"
-  ],
   "args": [
     "acp"
   ],

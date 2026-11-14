@@ -60,46 +60,31 @@ internal fun configProbeSessionKey(adapterName: String, sessionId: String): Stri
 }
 
 internal fun runtimeMetadataFromConfigOptionsJson(
-    configOptions: JsonElement?,
-    adapterInfo: AcpAdapterConfig.AdapterInfo
+    configOptions: JsonElement?
 ): AcpClientService.AdapterRuntimeMetadata {
     val options = configOptions as? JsonArray ?: return AcpClientService.AdapterRuntimeMetadata(emptyList())
     val parsed = options.mapNotNull(::parseConfigOption).map { option ->
-        val filteredValues = when {
-            option.matchesCategory("model") -> option.options.filterNot { model ->
-                adapterInfo.disabledModels.any { disabled ->
-                    disabled.isNotBlank() && model.value.contains(disabled)
-                }
-            }
-            option.matchesCategory("mode") -> option.options.filterNot { mode ->
-                adapterInfo.disabledModes.any { it == mode.value }
-            }
-            else -> option.options
-        }
         option.copy(
             currentValue = option.currentValue.takeIf { current ->
-                option.type != "select" || filteredValues.any { it.value == current }
-            }.orEmpty(),
-            options = filteredValues
+                option.type != "select" || option.options.any { it.value == current }
+            }.orEmpty()
         )
     }
     return AcpClientService.AdapterRuntimeMetadata(parsed)
 }
 
 internal fun runtimeMetadataFromSessionResponseJson(
-    response: JsonObject,
-    adapterInfo: AcpAdapterConfig.AdapterInfo
+    response: JsonObject
 ): AcpClientService.AdapterRuntimeMetadata {
-    return runtimeMetadataFromConfigOptionsJson(response["configOptions"], adapterInfo)
+    return runtimeMetadataFromConfigOptionsJson(response["configOptions"])
 }
 
 internal fun runtimeMetadataFromSetConfigOptionResponseJson(
-    response: JsonObject,
-    adapterInfo: AcpAdapterConfig.AdapterInfo
+    response: JsonObject
 ): AcpClientService.AdapterRuntimeMetadata {
     val configOptions = response["configOptions"] as? JsonArray
         ?: throw IllegalStateException("ACP session/set_config_option response did not include configOptions")
-    return runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
+    return runtimeMetadataFromConfigOptionsJson(configOptions)
 }
 
 internal suspend fun Protocol.newSessionRaw(cwd: String): JsonObject {
@@ -153,7 +138,7 @@ internal suspend fun Protocol.collectConfigOptionsCatalog(
                 return@forEach
             }
             onConfigMutated?.invoke()
-            runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo)
+            runtimeMetadataFromSetConfigOptionResponseJson(response)
         }
         optionsByModel[model.value] = metadata.configOptions
     }
@@ -188,7 +173,7 @@ private fun parseConfigOption(element: JsonElement): AcpConfigOption? {
     val id = option["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     val type = option["type"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
     if (id.isEmpty() || type !in setOf("select", "boolean")) return null
-    val values = if (type == "select") flattenSelectOptions(option["options"]) else emptyList()
+    val values = if (type == "select") flattenSelectOptions(option["options"]).distinctBy { it.value } else emptyList()
     if (type == "select" && values.isEmpty()) return null
     val currentValue = option["currentValue"]?.jsonPrimitive?.let { current ->
         if (type == "boolean") current.booleanOrNull?.toString() else current.contentOrNull?.trim()

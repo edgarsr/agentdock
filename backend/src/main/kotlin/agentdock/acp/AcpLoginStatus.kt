@@ -22,12 +22,16 @@ internal object AcpLoginStatus {
     private const val QODER_METHOD = "qoderCliStatus"
     private const val STATUS_TIMEOUT_SECONDS = 10L
 
+    /** Whether [resolve] can tell the status; null until an ACP agent's process has reported its capabilities. */
+    fun isSupported(adapterInfo: AcpAdapterConfig.AdapterInfo, service: AcpClientService): Boolean? =
+        if (adapterInfo.loginStatusMethod == ACP_METHOD) service.authStatusAvailability[adapterInfo.id] else true
+
     /** Blocks for the non-ACP methods; call from an IO context. */
     suspend fun resolve(
         adapterInfo: AcpAdapterConfig.AdapterInfo,
         service: AcpClientService
     ): Boolean? = when (adapterInfo.loginStatusMethod) {
-        ACP_METHOD -> resolveAcp(adapterInfo.id, service)
+        ACP_METHOD -> if (isSupported(adapterInfo, service) == false) null else resolveAcp(adapterInfo.id, service)
         ANTIGRAVITY_METHOD -> runCliStatusCommand(adapterInfo, listOf("models"))?.let(::parseAntigravityLoginStatus)
         CODEX_METHOD -> resolveCodex(adapterInfo)
         CURSOR_METHOD -> resolveCursor(adapterInfo)
@@ -43,6 +47,7 @@ internal object AcpLoginStatus {
      */
     private suspend fun resolveAcp(adapterId: String, service: AcpClientService): Boolean? = try {
         val protocol = AcpAuthenticationService.initializedProcess(adapterId, service).protocol
+            .takeIf { service.authStatusAvailability[adapterId] == true }
         withTimeoutOrNull(STATUS_TIMEOUT_SECONDS.seconds) {
             protocol?.sendRequestRaw(MethodName("auth/status"), JsonObject(emptyMap()))
         }?.let(::parseAcpLoginStatus)

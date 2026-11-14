@@ -7,15 +7,13 @@
     "version": "latest",
     "packageName": "@agentclientprotocol/claude-agent-acp"
   },
-  "disabledModels": [],
-  "disabledModes": [],
-  "sessionDeleteMethod": "acp",
-  "loginMethod": "acp",
-  "logoutMethod": "acp",
-  "loginStatusMethod": "acp",
   "patches": [
     "@patches/claude-code/disable-auto-updater.patch"
   ],
+  "agentVersionConfig": {
+    "args": ["--cli", "--version"],
+    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
+  },
   "cli": {
     "executable": {
       "win": "node.exe",
@@ -29,9 +27,5 @@
       "-r",
       "{sessionId}"
     ]
-  },
-  "agentVersionConfig": {
-    "args": ["--cli", "--version"],
-    "pattern": "(\\d+\\.\\d+[\\d.\\-]*)"
   }
 }

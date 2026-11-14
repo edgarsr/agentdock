@@ -8,81 +8,6 @@ import kotlin.test.assertFailsWith
 
 class AcpRuntimeMetadataTest {
     @Test
-    fun `runtime metadata reads model and mode from session config options json`() {
-        val response = Json.parseToJsonElement(
-            """
-            {
-              "sessionId": "session-1",
-              "configOptions": [
-                {
-                  "id": "model",
-                  "name": "Model",
-                  "category": "model",
-                  "type": "select",
-                  "currentValue": "gpt-5.5",
-                  "options": [
-                    { "value": "gpt-5.5", "name": "GPT-5.5", "description": "Frontier model" },
-                    { "value": "gpt-5.4", "name": "GPT-5.4", "description": "Everyday model" }
-                  ]
-                },
-                {
-                  "id": "mode",
-                  "name": "Session Mode",
-                  "category": "mode",
-                  "type": "select",
-                  "currentValue": "build",
-                  "options": [
-                    { "value": "build", "name": "Build", "description": "Can use tools" },
-                    { "value": "plan", "name": "Plan", "description": "Planning only" }
-                  ]
-                },
-                {
-                  "id": "reasoning_effort",
-                  "name": "Reasoning Effort",
-                  "category": "thought_level",
-                  "type": "select",
-                  "currentValue": "medium",
-                  "options": [
-                    { "value": "low", "name": "Low", "description": "Fast responses" },
-                    { "value": "medium", "name": "Medium", "description": "Balanced" },
-                    { "value": "high", "name": "High", "description": "Deeper reasoning" }
-                  ]
-                },
-                {
-                  "id": "verbosity",
-                  "name": "Verbosity",
-                  "type": "select",
-                  "currentValue": "brief",
-                  "options": [
-                    { "value": "brief", "name": "Brief" },
-                    { "value": "detailed", "name": "Detailed" }
-                  ]
-                },
-                {
-                  "id": "use_tools",
-                  "name": "Use tools",
-                  "type": "boolean",
-                  "currentValue": true
-                }
-              ]
-            }
-            """.trimIndent()
-        ).jsonObject
-
-        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo(disabledModels = listOf("5.4")))
-
-        assertEquals("model", metadata.modelConfigId)
-        assertEquals("gpt-5.5", metadata.currentModelId)
-        assertEquals(listOf("gpt-5.5"), metadata.availableModels.map { it.modelId })
-        assertEquals("build", metadata.currentModeId)
-        assertEquals(listOf("build", "plan"), metadata.availableModes.map { it.id })
-        assertEquals("medium", metadata.currentReasoningEffortId)
-        assertEquals(listOf("low", "medium", "high"), metadata.availableReasoningEfforts.map { it.id })
-        assertEquals("brief", metadata.configOptions.first { it.id == "verbosity" }.currentValue)
-        assertEquals("true", metadata.configOptions.first { it.id == "use_tools" }.currentValue)
-    }
-
-    @Test
     fun `runtime metadata ignores legacy models and modes json`() {
         val response = Json.parseToJsonElement(
             """
@@ -106,7 +31,7 @@ class AcpRuntimeMetadataTest {
             """.trimIndent()
         ).jsonObject
 
-        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo())
+        val metadata = runtimeMetadataFromSessionResponseJson(response)
 
         assertEquals(null, metadata.modelConfigId)
         assertEquals(null, metadata.currentModelId)
@@ -190,8 +115,8 @@ class AcpRuntimeMetadataTest {
             """.trimIndent()
         ).jsonObject
 
-        val initialMetadata = runtimeMetadataFromSessionResponseJson(initialResponse, adapterInfo())
-        val changedMetadata = runtimeMetadataFromConfigOptionsJson(modelChangeResponse["configOptions"], adapterInfo())
+        val initialMetadata = runtimeMetadataFromSessionResponseJson(initialResponse)
+        val changedMetadata = runtimeMetadataFromConfigOptionsJson(modelChangeResponse["configOptions"])
 
         assertEquals(emptyList(), initialMetadata.availableReasoningEfforts)
         assertEquals("openai/gpt-5.4", changedMetadata.currentModelId)
@@ -220,38 +145,9 @@ class AcpRuntimeMetadataTest {
             """.trimIndent()
         ).jsonObject
 
-        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo())
+        val metadata = runtimeMetadataFromSessionResponseJson(response)
 
         assertEquals(emptyList(), metadata.availableReasoningEfforts)
-    }
-
-    @Test
-    fun `runtime metadata clears current model when every model is disabled`() {
-        val response = Json.parseToJsonElement(
-            """
-            {
-              "configOptions": [
-                {
-                  "id": "model",
-                  "category": "model",
-                  "type": "select",
-                  "currentValue": "disabled-model",
-                  "options": [
-                    { "value": "disabled-model", "name": "Disabled model" }
-                  ]
-                }
-              ]
-            }
-            """.trimIndent()
-        ).jsonObject
-
-        val metadata = runtimeMetadataFromSessionResponseJson(
-            response,
-            adapterInfo(disabledModels = listOf("disabled-model"))
-        )
-
-        assertEquals(null, metadata.currentModelId)
-        assertEquals(emptyList(), metadata.availableModels)
     }
 
     @Test
@@ -284,7 +180,7 @@ class AcpRuntimeMetadataTest {
             """.trimIndent()
         ).jsonObject
 
-        val metadata = runtimeMetadataFromSessionResponseJson(response, adapterInfo())
+        val metadata = runtimeMetadataFromSessionResponseJson(response)
 
         assertEquals("medium", metadata.currentReasoningEffortId)
         assertEquals(listOf("medium"), metadata.availableReasoningEfforts.map { it.id })
@@ -319,7 +215,7 @@ class AcpRuntimeMetadataTest {
 
         assertEquals("session-2", sessionId)
         assertEquals("session-2", extractSessionUpdateSessionId(params))
-        val metadata = runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo())
+        val metadata = runtimeMetadataFromConfigOptionsJson(configOptions)
         assertEquals("high", metadata.currentReasoningEffortId)
     }
 
@@ -365,7 +261,7 @@ class AcpRuntimeMetadataTest {
         assertEquals(listOf("model", "mode"), updated.configOptionsByModel["model-a"]?.map { it.id })
         assertEquals(listOf("fast_mode"), updated.configOptionsByModel["model-b"]?.map { it.id })
         assertEquals(listOf("model", "mode"), updated.configOptions.map { it.id })
-        val runtime = updated.toRuntimeMetadata(adapterInfo())
+        val runtime = updated.toRuntimeMetadata()
         // The cached catalog never carries current values; those come from the live
         // session, or from the preferences file when a conversation starts.
         assertEquals(null, runtime.currentModeId)
@@ -396,7 +292,7 @@ class AcpRuntimeMetadataTest {
 
         val existing: CachedAdapterConfigOptions? = null
         val cached = existing.updatedWithSnapshot(adapterInfo(), "1.0.0", metadata, refreshedAtMillis = 100L)
-        val restored = cached.toRuntimeMetadata(adapterInfo())
+        val restored = cached.toRuntimeMetadata()
 
         // The option catalog survives the cache round-trip, but current values are
         // intentionally dropped: they come from the live session, or from the
@@ -413,14 +309,11 @@ class AcpRuntimeMetadataTest {
         val response = Json.parseToJsonElement("{}").jsonObject
 
         assertFailsWith<IllegalStateException> {
-            runtimeMetadataFromSetConfigOptionResponseJson(response, adapterInfo())
+            runtimeMetadataFromSetConfigOptionResponseJson(response)
         }
     }
 
-    private fun adapterInfo(
-        disabledModels: List<String> = emptyList(),
-        disabledModes: List<String> = emptyList()
-    ): AcpAdapterConfig.AdapterInfo {
+    private fun adapterInfo(): AcpAdapterConfig.AdapterInfo {
         return AcpAdapterConfig.AdapterInfo(
             id = "codex",
             name = "Codex",
@@ -428,9 +321,7 @@ class AcpRuntimeMetadataTest {
                 type = AcpAdapterConfig.DistributionType.NPM,
                 version = "latest",
                 packageName = "codex"
-            ),
-            disabledModels = disabledModels,
-            disabledModes = disabledModes
+            )
         )
     }
 }

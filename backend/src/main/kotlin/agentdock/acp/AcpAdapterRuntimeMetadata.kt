@@ -2,7 +2,6 @@ package agentdock.acp
 
 import agentdock.history.AgentDockHistoryService
 import agentdock.history.GrokSessionHistory
-import agentdock.history.SessionListDeleteSupport
 import com.agentclientprotocol.protocol.Protocol
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -31,7 +30,7 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
     configProbeSessionKeys.add(probeSessionKey)
 
     try {
-        val configMetadata = runtimeMetadataFromSessionResponseJson(result, adapterInfo)
+        val configMetadata = runtimeMetadataFromSessionResponseJson(result)
         val cached = protocol.collectConfigOptionsCatalog(
             sessionId = sessionId,
             adapterInfo = adapterInfo,
@@ -41,7 +40,7 @@ internal suspend fun AcpClientService.fetchAdapterRuntimeMetadata(
             onConfigMutated = onConfigMutated
         )
         AcpConfigOptionsCache.write(cached)
-        return cached.toRuntimeMetadata(adapterInfo)
+        return cached.toRuntimeMetadata()
     } finally {
         try {
             withContext(NonCancellable) {
@@ -79,11 +78,6 @@ private suspend fun AcpClientService.cleanupProbeSessions(
     sessionIds.add(currentSessionId)
     val sessionDeleteAvailable = canDeleteHistorySession(adapterInfo.id)
     val sessionCloseAvailable = canCloseHistorySession(adapterInfo.id)
-    val useAcpCleanup = SessionListDeleteSupport.usesAcpProbeSessionCleanup(
-        adapterName = adapterInfo.id,
-        sessionDeleteAvailable = sessionDeleteAvailable,
-        sessionCloseAvailable = sessionCloseAvailable
-    )
 
     sessionIds.forEach { sessionId ->
         try {
@@ -91,7 +85,7 @@ private suspend fun AcpClientService.cleanupProbeSessions(
                 when {
                     adapterInfo.sessionDeleteMethod == "grokCliSessionDelete" ->
                         GrokSessionHistory.grokCliSessionDelete(adapterInfo.id, probeProjectPath, sessionId)
-                    useAcpCleanup -> {
+                    adapterInfo.sessionDeleteMethod == "acp" -> {
                         val deleted = sessionDeleteAvailable && protocol.deleteAcpSession(sessionId)
                         deleted || (sessionCloseAvailable && protocol.closeAcpSession(sessionId))
                     }

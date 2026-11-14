@@ -131,7 +131,7 @@ private fun AcpClientService.updateRuntimeMetadataFromConfigOptionsNotification(
     val targetContext = synchronized(liveOwnerBySessionId) {
         liveOwnerBySessionId[sessionId]?.let { ownerChatId -> sessions[ownerChatId] }
     }
-    val metadata = runtimeMetadataFromConfigOptionsJson(configOptions, adapterInfo)
+    val metadata = runtimeMetadataFromConfigOptionsJson(configOptions)
     if (targetContext != null) {
         updateSessionRuntimeMetadata(
             adapterInfo, metadata, targetContext,

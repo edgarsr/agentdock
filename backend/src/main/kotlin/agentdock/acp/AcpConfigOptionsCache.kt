@@ -157,39 +157,20 @@ private fun List<AcpConfigOption>.withoutCurrentValues(): List<AcpConfigOption> 
     option.copy(currentValue = "")
 }
 
-internal fun CachedAdapterConfigOptions.toRuntimeMetadata(
-    adapterInfo: AcpAdapterConfig.AdapterInfo
-): AcpClientService.AdapterRuntimeMetadata {
-    fun filterOptions(options: List<AcpConfigOption>) = options.map { option ->
-        val values = when {
-            option.matchesCategory("model") -> option.options.filterNot { model ->
-                adapterInfo.disabledModels.any { disabled ->
-                    disabled.isNotBlank() && model.value.contains(disabled)
-                }
-            }
-            option.matchesCategory("mode") -> option.options.filterNot { mode ->
-                adapterInfo.disabledModes.any { it == mode.value }
-            }
-            else -> option.options
-        }
-        option.copy(
-            currentValue = "",
-            options = values
-        )
-    }
-    val filteredOptions = filterOptions(configOptions)
-    val modelOptions = filteredOptions.filter { it.matchesCategory("model") }
-    val modelIds = filteredOptions
-        .firstOrNull { it.matchesCategory("model") }
+internal fun CachedAdapterConfigOptions.toRuntimeMetadata(): AcpClientService.AdapterRuntimeMetadata {
+    val options = configOptions.withoutCurrentValues()
+    val modelOptions = options.filter { it.matchesCategory("model") }
+    val modelIds = modelOptions
+        .firstOrNull()
         ?.options
         .orEmpty()
         .mapTo(mutableSetOf()) { it.value }
     return AcpClientService.AdapterRuntimeMetadata(
-        configOptions = filteredOptions,
+        configOptions = options,
         configOptionsByModel = configOptionsByModel
             .filterKeys(modelIds::contains)
-            .mapValues { (_, options) ->
-                modelOptions + filterOptions(options.filterNot { it.matchesCategory("model") })
+            .mapValues { (_, modelConfigOptions) ->
+                modelOptions + modelConfigOptions.filterNot { it.matchesCategory("model") }.withoutCurrentValues()
             }
     )
 }

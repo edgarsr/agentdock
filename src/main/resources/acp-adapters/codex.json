@@ -13,13 +13,6 @@
     "win": "node_modules\\.bin\\codex-acp.cmd",
     "unix": "node_modules/.bin/codex-acp"
   },
-  "disabledModels": [
-    "-5.3"
-  ],
-  "disabledModes": [],
-  "sessionDeleteMethod": "acp",
-  "loginMethod": "acp",
-  "logoutMethod": "acp",
   "loginStatusMethod": "codexCliLoginStatus",
   "agentVersionConfig": {
     "args": ["--version"],

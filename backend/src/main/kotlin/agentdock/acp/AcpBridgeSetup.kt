@@ -499,7 +499,7 @@ internal fun AcpBridge.installAdapterQueries() {
                         cli.openAgentAuthInTerminal(adapterId, title, args, environment)
                     }
                 )
-                if (AcpAdapterConfig.getAdapterInfo(adapterId).loginStatusMethod != null) {
+                if (AcpLoginStatus.isSupported(AcpAdapterConfig.getAdapterInfo(adapterId), service) == true) {
                     service.loginStatusStates[adapterId] = true
                 }
                 service.stopSharedProcess(adapterId)

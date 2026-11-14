@@ -132,6 +132,13 @@ class AcpQuotaService : Disposable {
 
     private fun roundPercent(value: Double?): Int? = value?.let { Math.round(it).toInt().coerceIn(0, 100) }
 
+    private fun codexWindowLabel(window: JsonObject?): String {
+        val seconds = (window?.get("limit_window_seconds") as? JsonPrimitive)?.doubleOrNull
+            ?.takeIf { it > 0 } ?: return "Limit"
+        val hours = Math.round(seconds / 3600)
+        return if (hours >= 24) "${Math.round(hours / 24.0)}d" else "${maxOf(hours, 1L)}h"
+    }
+
     private fun parseUsageDetail(adapter: AcpAdapterConfig.AdapterInfo, rawJson: String): QuotaDetail? {
         return try {
             val root = jsonParser.parseToJsonElement(rawJson) as? JsonObject
@@ -187,16 +194,11 @@ class AcpQuotaService : Disposable {
                     } else null
 
                     primaryPct?.let {
-                        val label = if ((primarySecs ?: 0.0) >= 24.0 * 60 * 60) "7d" else "5h"
-                        details.add("$label: $it%")
+                        details.add("${codexWindowLabel(primary)}: $it%")
                         percentages["primary_window"] = it
                     }
                     secondaryPct?.let {
-                        val label = if ((secondarySecs ?: 0.0) >= 24.0 * 60 * 60) "7d" else "5h"
-                        val finalLabel = if (details.any { detail -> detail.startsWith(label) }) {
-                            if (label == "5h") "7d" else "5h"
-                        } else label
-                        details.add("$finalLabel: $it%")
+                        details.add("${codexWindowLabel(secondary)}: $it%")
                         percentages["secondary_window"] = it
                     }
 

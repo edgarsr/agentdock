@@ -70,7 +70,7 @@ internal suspend fun AcpClientService.startAgent(
 
                 var createdSessionMetadata: AcpClientService.AdapterRuntimeMetadata? = null
                 val factory = ClientOperationsFactory { sessionId, sessionResponse ->
-                    createdSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
+                    createdSessionMetadata = sessionResponse.runtimeMetadata()
                     context.sessionIdRef.compareAndSet(null, sessionId.value)
                     bindLiveSessionOwner(chatId, sessionId.value)
                     createSharedSessionOperations(sessionId.value)
@@ -165,12 +165,9 @@ internal fun AcpClientService.AgentContext.syncAppliedConfigGeneration() {
     appliedConfigGeneration = sharedProcess?.configGeneration?.get() ?: -1L
 }
 
-private fun AcpCreatedSessionResponse.runtimeMetadata(
-    adapterInfo: AcpAdapterConfig.AdapterInfo
-): AcpClientService.AdapterRuntimeMetadata? = runCatching {
+private fun AcpCreatedSessionResponse.runtimeMetadata(): AcpClientService.AdapterRuntimeMetadata? = runCatching {
     runtimeMetadataFromConfigOptionsJson(
-        Json.encodeToJsonElement(ListSerializer(SessionConfigOption.serializer()), configOptions.orEmpty()),
-        adapterInfo
+        Json.encodeToJsonElement(ListSerializer(SessionConfigOption.serializer()), configOptions.orEmpty())
     )
 }.getOrNull()
 
@@ -243,7 +240,7 @@ internal suspend fun AcpClientService.loadSessionIntoContext(
 
     var loadedSessionMetadata: AcpClientService.AdapterRuntimeMetadata? = null
     val factory = ClientOperationsFactory { sessionId, sessionResponse ->
-        loadedSessionMetadata = sessionResponse.runtimeMetadata(adapterInfo)
+        loadedSessionMetadata = sessionResponse.runtimeMetadata()
         context.sessionIdRef.set(sessionId.value)
         bindLiveSessionOwner(context.chatId, sessionId.value)
         if (deliverReplay) {

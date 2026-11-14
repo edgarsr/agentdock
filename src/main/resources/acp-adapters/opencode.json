@@ -14,7 +14,6 @@
     "win": "node_modules/.bin/opencode.cmd",
     "unix": "node_modules/.bin/opencode"
   },
-  "sessionDeleteMethod": "acp",
   "args": [
     "acp"
   ],
@@ -27,11 +26,5 @@
       "--session",
       "{sessionId}"
     ]
-  },
-  "disabledModels": [
-    "gpt-5.1",
-    "gpt-5.2",
-    "gpt-5.3",
-    "gemini-2.5"
-  ]
+  }
 }

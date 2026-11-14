@@ -4,9 +4,6 @@
   "iconPath": "/icons/antigravity.svg",
   "sessionListPosixCwd": true,
   "restartAfterProbe": true,
-  "loginMethod": "acp",
-  "logoutMethod": "acp",
-  "loginStatusMethod": "antigravityCliModels",
   "distribution": {
     "type": "archive",
     "version": "latest",
@@ -17,9 +14,7 @@
     }
   },
   "args": ["acp"],
-  "environment": {
-    "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
-  },
+  "loginStatusMethod": "antigravityCliModels",
   "cli": {
     "executable": {
       "win": "agy.exe",
@@ -30,5 +25,8 @@
     "environment": {
       "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
     }
+  },
+  "environment": {
+    "AGY_CLI_DISABLE_AUTO_UPDATE": "true"
   }
 }

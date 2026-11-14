@@ -9,6 +9,7 @@ const usageLinkClassName = 'text-link hover:underline focus:outline-none focus-v
 interface CodexWindow {
   used_percent: number;
   reset_after_seconds: number;
+  limit_window_seconds?: number;
 }
 
 interface CodexUsageData {
@@ -46,17 +47,10 @@ function isCodexWindow(value: unknown): value is CodexWindow {
 }
 
 function labelForWindow(window: CodexWindow): string {
-  return window.reset_after_seconds >= 24 * 60 * 60 ? '7 day limit' : '5 hour limit';
-}
-
-function labelsForWindows(primaryWindow: CodexWindow | null, secondaryWindow: CodexWindow | null) {
-  const primaryLabel = primaryWindow ? labelForWindow(primaryWindow) : null;
-  const secondaryBaseLabel = secondaryWindow ? labelForWindow(secondaryWindow) : null;
-  const secondaryLabel = primaryLabel && secondaryBaseLabel === primaryLabel
-    ? (primaryLabel === '5 hour limit' ? '7 day limit' : '5 hour limit')
-    : secondaryBaseLabel;
-
-  return { primaryLabel, secondaryLabel };
+  const seconds = window.limit_window_seconds;
+  if (typeof seconds !== 'number' || seconds <= 0) return 'Limit';
+  const hours = Math.round(seconds / 3600);
+  return hours >= 24 ? `${Math.round(hours / 24)} day limit` : `${Math.max(hours, 1)} hour limit`;
 }
 
 const AGENT_ID = 'codex';
@@ -79,10 +73,9 @@ export function CodexUsage({ stacked = false }: { stacked?: boolean }) {
   const secondaryWindow = isCodexWindow(rawSecondaryWindow) && hasDisplayableQuotaResetAfterSeconds(rawSecondaryWindow.reset_after_seconds)
     ? rawSecondaryWindow
     : null;
-  const { primaryLabel, secondaryLabel } = labelsForWindows(primaryWindow, secondaryWindow);
 
   if (!primaryWindow && !secondaryWindow) {
-    if (!usage?.authType) return null;
+    if (!usage || !usage.authType) return null;
     const url = usage.authType === 'api_key' ? 'https://platform.openai.com/settings/organization/usage' : 'https://chatgpt.com/codex/settings/usage';
     return (
       <div className="text-foreground-secondary">
@@ -95,8 +88,8 @@ export function CodexUsage({ stacked = false }: { stacked?: boolean }) {
     <div className="flex flex-col gap-y-2">
       <span className="whitespace-nowrap text-foreground-secondary">Usage quotas</span>
       <div className={stacked ? 'flex flex-col gap-y-1.5' : 'flex flex-wrap gap-x-8 gap-y-1.5'}>
-        {primaryWindow && primaryLabel && <WindowLine label={primaryLabel} window={primaryWindow} />}
-        {secondaryWindow && secondaryLabel && <WindowLine label={secondaryLabel} window={secondaryWindow} />}
+        {primaryWindow && <WindowLine label={labelForWindow(primaryWindow)} window={primaryWindow} />}
+        {secondaryWindow && <WindowLine label={labelForWindow(secondaryWindow)} window={secondaryWindow} />}
       </div>
     </div>
   );

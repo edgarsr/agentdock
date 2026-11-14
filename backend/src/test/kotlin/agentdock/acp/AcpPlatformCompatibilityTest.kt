@@ -39,7 +39,6 @@ class AcpPlatformCompatibilityTest {
 
         assertEquals("@moonshot-ai/kimi-code", adapter.distribution.packageName)
         assertEquals(listOf("acp"), adapter.args)
-        assertEquals("acpSessionList", adapter.sessionListMethod)
         assertEquals("acp", adapter.sessionDeleteMethod)
         assertEquals(
             listOf("cmd.exe", "/c", File("C:/agent/node_modules/.bin/kimi.cmd").absolutePath, "acp"),
@@ -55,7 +54,6 @@ class AcpPlatformCompatibilityTest {
         assertEquals("@xai-official/grok", adapter.distribution.packageName)
         assertEquals("1.0.4", adapter.distribution.minimumVersion)
         assertEquals(listOf("--no-auto-update", "agent", "stdio"), adapter.args)
-        assertEquals("grokCliSessions", adapter.sessionListMethod)
         assertEquals("grokCliSessionDelete", adapter.sessionDeleteMethod)
         assertEquals("acp", adapter.loginMethod)
         assertEquals("cli", adapter.logoutMethod)

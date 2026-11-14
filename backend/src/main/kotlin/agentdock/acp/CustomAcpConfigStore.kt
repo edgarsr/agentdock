@@ -104,13 +104,10 @@ object CustomAcpConfigStore {
         AcpAdapterConfig.AdapterInfo(
             id = id,
             name = name,
-            supportsSessionList = true,
-            sessionListMethod = "acpSessionList",
             distribution = AcpAdapterConfig.Distribution(
                 type = AcpAdapterConfig.DistributionType.ARCHIVE,
                 version = "external-$signature"
             ),
-            loginMethod = "acp",
             cli = cliConfig,
             customCommand = command,
             environment = env.associate { it.name to it.value },

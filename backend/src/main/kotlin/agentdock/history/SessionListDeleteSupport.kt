@@ -9,28 +9,19 @@ import com.intellij.openapi.project.ProjectManager
 import java.io.File
 
 internal object SessionListDeleteSupport {
-    fun canDeleteSession(adapterName: String): Boolean {
-        val method = runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
-        return when (method) {
-            "acp" -> isAcpSessionDeleteAvailable(adapterName)
-            "grokCliSessionDelete" -> true
-            null -> hasDefaultDeleteMethod(adapterName) || isAcpSessionDeleteAvailable(adapterName)
-            else -> false
-        }
-    }
+    private const val ACP_METHOD = "acp"
+    private const val GROK_CLI_METHOD = "grokCliSessionDelete"
+    private const val COPILOT_SESSION_STATE_METHOD = "copilotSessionStateDelete"
+    private const val CURSOR_SESSION_DIR_METHOD = "cursorSessionDirDelete"
+    private const val KILO_CLI_METHOD = "kiloCliSessionDelete"
 
-    fun usesAcpProbeSessionCleanup(
-        adapterName: String,
-        sessionDeleteAvailable: Boolean,
-        sessionCloseAvailable: Boolean
-    ): Boolean {
-        val method = runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
-        return when (method) {
-            "acp" -> true
-            "grokCliSessionDelete" -> false
-            null -> !hasDefaultDeleteMethod(adapterName) && (sessionDeleteAvailable || sessionCloseAvailable)
-            else -> false
-        }
+    private fun sessionDeleteMethod(adapterName: String): String? =
+        runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()
+
+    fun canDeleteSession(adapterName: String): Boolean = when (sessionDeleteMethod(adapterName)) {
+        ACP_METHOD -> isAcpSessionDeleteAvailable(adapterName)
+        GROK_CLI_METHOD, COPILOT_SESSION_STATE_METHOD, CURSOR_SESSION_DIR_METHOD, KILO_CLI_METHOD -> true
+        else -> false
     }
 
     fun resolveSourceFilePath(projectPath: String, adapterName: String, sessionId: String): String {
@@ -43,32 +34,21 @@ internal object SessionListDeleteSupport {
         }
     }
 
-    suspend fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean {
-        when (runCatching { AcpAdapterConfig.getAdapterInfo(adapterName).sessionDeleteMethod }.getOrNull()) {
-            "acp" -> return deleteAcpSession(adapterName, sessionId)
-            "grokCliSessionDelete" -> return GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
-            null -> Unit
-            else -> return false
-        }
-
-        return when (adapterName) {
+    suspend fun deleteSession(projectPath: String, adapterName: String, sessionId: String, sourceFilePath: String?): Boolean =
+        when (sessionDeleteMethod(adapterName)) {
+            ACP_METHOD -> deleteAcpSession(adapterName, sessionId)
+            GROK_CLI_METHOD -> GrokSessionHistory.grokCliSessionDelete(adapterName, projectPath, sessionId)
             // These sessions are only files, so they are deleted without the agent, and finding none means nothing is left to delete.
-            "cursor-cli", "github-copilot-cli" -> {
+            COPILOT_SESSION_STATE_METHOD, CURSOR_SESSION_DIR_METHOD -> {
                 val path = sourceFilePath?.takeIf { it.isNotBlank() }
                     ?: resolveSourceFilePath(projectPath, adapterName, sessionId)
                 path.isBlank() || deleteFileSessionDirectory(File(path).parentFile)
             }
-            "kilo" -> runCatching {
-                runAgentHistoryCliCommand("kilo", projectPath, listOf("session", "delete", sessionId))
+            KILO_CLI_METHOD -> runCatching {
+                runAgentHistoryCliCommand(adapterName, projectPath, listOf("session", "delete", sessionId))
             }.isSuccess
-            else -> isAcpSessionDeleteAvailable(adapterName) && deleteAcpSession(adapterName, sessionId)
+            else -> false
         }
-    }
-
-    private fun hasDefaultDeleteMethod(adapterName: String): Boolean = when (adapterName) {
-        "cursor-cli", "github-copilot-cli", "kilo" -> true
-        else -> false
-    }
 
     /** Deletes [dir] only where Copilot and Cursor keep one session, so a wrong path never removes anything else. */
     private fun deleteFileSessionDirectory(dir: File?): Boolean {

@@ -5,6 +5,7 @@
   "iconPathLight": "/icons/copilot-light.svg",
   "iconPathDark": "/icons/copilot-dark.svg",
   "sessionListPosixCwd": true,
+  "sessionDeleteMethod": "copilotSessionStateDelete",
   "distribution": {
     "type": "npm",
     "version": "latest",
@@ -16,8 +17,7 @@
     "--acp",
     "--stdio"
   ],
-  "disabledModes": [],
-  "disabledModels": [],
+  "loginMethod": "none",
   "logoutMethod": "copilotRpc",
   "loginStatusMethod": "copilotRpcAuthStatus",
   "cli": {

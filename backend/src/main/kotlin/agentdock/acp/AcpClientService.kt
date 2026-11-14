@@ -309,6 +309,8 @@ class AcpClientService private constructor(val project: Project) {
     internal val adapterInitializationDetails = ConcurrentHashMap<String, String>()
     internal val adapterRuntimeMetadataMap = ConcurrentHashMap<String, AdapterRuntimeMetadata>()
     internal val loginStatusStates = ConcurrentHashMap<String, Boolean>()
+    /** Whether each agent advertised `auth.status` when its process last initialized. */
+    internal val authStatusAvailability = ConcurrentHashMap<String, Boolean>()
     internal val availableCommandsByAdapter = ConcurrentHashMap<String, List<AvailableCommandPayload>>()
     internal val systemInstructionsInjectedSessionIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
     internal val historySyncAfterInitializationInFlight = AtomicBoolean(false)

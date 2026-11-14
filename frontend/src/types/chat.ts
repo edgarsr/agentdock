@@ -171,7 +171,6 @@ export interface AgentOption {
   downloadPath?: string;
   downloading?: boolean;
   downloadStatus?: string;
-  disabledModels?: string[];
   loginMethod?: string | null;
   authMethods?: AgentAuthMethod[];
   authError?: string;

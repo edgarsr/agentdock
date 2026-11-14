@@ -4,12 +4,8 @@
   "iconPath": "/icons/grok-build.svg",
   "iconPathLight": "/icons/grok-build-light.svg",
   "iconPathDark": "/icons/grok-build-dark.svg",
-  "supportsSessionList": true,
-  "sessionListMethod": "grokCliSessions",
+  "sessionListPosixCwd": true,
   "sessionDeleteMethod": "grokCliSessionDelete",
-  "loginMethod": "acp",
-  "logoutMethod": "cli",
-  "loginStatusMethod": "grokBuildAuthFile",
   "distribution": {
     "type": "npm",
     "version": "latest",
@@ -25,6 +21,8 @@
     "agent",
     "stdio"
   ],
+  "logoutMethod": "cli",
+  "loginStatusMethod": "grokBuildAuthFile",
   "agentVersionConfig": {
     "args": [
       "version"

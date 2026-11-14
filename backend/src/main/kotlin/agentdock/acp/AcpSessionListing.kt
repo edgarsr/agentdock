@@ -1,6 +1,5 @@
 package agentdock.acp
 
-import agentdock.history.GrokSessionHistory
 import agentdock.history.SessionMeta
 import agentdock.history.fallbackHistoryTitle
 import agentdock.history.historyComparablePath
@@ -26,25 +25,11 @@ internal suspend fun AcpClientService.listHistorySessions(
         "Adapter '${adapterInfo.id}' did not advertise session/list support"
     }
 
-    return when (adapterInfo.sessionListMethod) {
-        "acpSessionList" -> acpSessionList(
-            adapterInfo,
-            projectPath,
-            allowInitializingProcess,
-            preserveNativeCwd
-        )
-        "grokCliSessions" -> GrokSessionHistory.grokCliSessions(adapterInfo.id, projectPath)
-        else -> throw IllegalStateException(
-            "Unknown session list method '${adapterInfo.sessionListMethod}' for adapter '${adapterInfo.id}'"
-        )
-    }
+    return acpSessionList(adapterInfo, projectPath, allowInitializingProcess, preserveNativeCwd)
 }
 
 internal fun AcpClientService.canListHistorySessions(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean =
-    when (adapterInfo.sessionListMethod) {
-        "acpSessionList" -> activeProcesses[adapterInfo.id]?.sessionListAvailable == true
-        else -> true
-    }
+    activeProcesses[adapterInfo.id]?.sessionListAvailable == true
 
 internal fun AcpClientService.canDeleteHistorySession(adapterName: String): Boolean =
     activeProcesses[adapterName]?.sessionDeleteAvailable == true

@@ -85,7 +85,6 @@ internal data class AdapterPayload(
     val refreshing: Boolean = false,
     val downloading: Boolean,
     val downloadStatus: String,
-    val disabledModels: List<String>,
     val cliAvailable: Boolean,
     val cliResumeAvailable: Boolean,
     val custom: Boolean = false

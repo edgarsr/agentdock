@@ -16,9 +16,6 @@
   "args": [
     "acp"
   ],
-  "sessionDeleteMethod": "acp",
-  "disabledModels": [],
-  "disabledModes": [],
   "agentVersionConfig": {
     "args": [
       "--version"

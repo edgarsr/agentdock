@@ -4,19 +4,16 @@
   "iconPath": "/icons/cursor.svg",
   "iconPathLight": "/icons/cursor-light.svg",
   "iconPathDark": "/icons/cursor-dark.svg",
-  "supportsSessionList": true,
-  "loginMethod": "acp",
-  "logoutMethod": "cli",
-  "loginStatusMethod": "cursorCliStatus",
+  "sessionDeleteMethod": "cursorSessionDirDelete",
   "distribution": {
     "type": "archive",
     "version": "latest",
     "downloadUrl": "https://downloads.cursor.com/lab/{version}/{platform}/{arch}/agent-cli-package.{ext}",
-    "extractSubdir": "dist-package",
     "binaryName": {
       "win": "cursor-agent.cmd",
       "unix": "cursor-agent"
-    }
+    },
+    "extractSubdir": "dist-package"
   },
   "clientCapabilitiesMeta": {
     "parameterizedModelPicker": true
@@ -24,19 +21,12 @@
   "args": [
     "acp"
   ],
+  "logoutMethod": "cli",
+  "loginStatusMethod": "cursorCliStatus",
   "cli": {
     "executable": {
       "win": "cursor-agent.cmd",
       "unix": "./cursor-agent"
     }
-  },
-  "disabledModels": [
-    "composer-1",
-    "gemini-2",
-    "gpt-5.1",
-    "gpt-5.2",
-    "claude-opus-4-5",
-    "claude-sonnet-4-5"
-  ],
-  "disabledModes": []
+  }
 }

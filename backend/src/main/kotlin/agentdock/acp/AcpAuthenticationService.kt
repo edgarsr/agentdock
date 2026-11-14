@@ -68,7 +68,7 @@ internal object AcpAuthenticationService {
     }
 
     private suspend fun waitForLogin(adapterInfo: AcpAdapterConfig.AdapterInfo, service: AcpClientService) {
-        check(adapterInfo.loginStatusMethod != null) {
+        check(AcpLoginStatus.isSupported(adapterInfo, service) == true) {
             "Authentication status is not configured for '${adapterInfo.id}'"
         }
         val authenticated = withTimeoutOrNull(AUTH_TIMEOUT) {
@@ -111,7 +111,6 @@ internal object AcpAuthenticationService {
                 AcpCopilotAuthenticationRpc.logout(adapterId)
                 true
             }
-            null -> throw IllegalStateException("Logout is not configured for '$adapterId'")
             else -> throw IllegalStateException(
                 "Unsupported logout method '${adapterInfo.logoutMethod}' for '$adapterId'"
             )

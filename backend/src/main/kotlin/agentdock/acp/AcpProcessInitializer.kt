@@ -206,7 +206,9 @@ private suspend fun AcpClientService.initializeFreshProcessAttempt(
         val transport = StdioTransport(
             protocolScope,
             Dispatchers.IO,
-            inputStream.bufferedReader(Charsets.UTF_8).asLineFlow(),
+            inputStream.bufferedReader(Charsets.UTF_8).asLineFlow { available ->
+                if (diagnostics == null) authStatusAvailability[adapterInfo.id] = available
+            },
             outputStream.bufferedWriter(Charsets.UTF_8).asLineWriter()
         )
         val protocol = Protocol(protocolScope, transport)
@@ -309,7 +311,7 @@ internal fun AcpClientService.resolveAdapterProcessWorkingDirectory(adapterRoot:
         ?: adapterRoot
 }
 
-private fun java.io.BufferedReader.asLineFlow() = flow {
+private fun java.io.BufferedReader.asLineFlow(onAuthStatusCapability: (Boolean) -> Unit) = flow {
     var initializeResponseSeen = false
     while (true) {
         val line = try {
@@ -318,7 +320,7 @@ private fun java.io.BufferedReader.asLineFlow() = flow {
             break
         } ?: break
         val initializeResponse = if (!initializeResponseSeen && line.contains("\"agentCapabilities\"")) {
-            withoutAuthStatusCapability(line)
+            withoutAuthStatusCapability(line, onAuthStatusCapability)
         } else {
             null
         }
@@ -333,15 +335,17 @@ private fun java.io.BufferedReader.asLineFlow() = flow {
  * Returns the initialize response [line] without `agentCapabilities.auth.status`, or null when
  * [line] is not an initialize response. The ACP schema advertises that capability as an object
  * (`{}`), but Kotlin SDK 0.34.0 decodes it as Boolean and then fails the whole response.
- * The plugin sends `auth/status` raw without checking this capability (see `AcpLoginStatus`).
- * Remove once the SDK decodes the object.
+ * [onAuthStatusCapability] receives whether the agent advertised it, for the plugin to send
+ * `auth/status` raw (see `AcpLoginStatus`). Remove once the SDK decodes the object.
  */
-private fun withoutAuthStatusCapability(line: String): String? {
+private fun withoutAuthStatusCapability(line: String, onAuthStatusCapability: (Boolean) -> Unit): String? {
     val root = runCatching { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject ?: return null
     val result = root["result"] as? JsonObject ?: return null
     val capabilities = result["agentCapabilities"] as? JsonObject ?: return null
     val auth = capabilities["auth"] as? JsonObject
-    if (auth == null || auth["status"] !is JsonObject) return line
+    val statusAvailable = auth != null && auth["status"] is JsonObject
+    onAuthStatusCapability(statusAvailable)
+    if (auth == null || !statusAvailable) return line
     val patchedCapabilities = JsonObject(capabilities + ("auth" to JsonObject(auth - "status")))
     return JsonObject(root + ("result" to JsonObject(result + ("agentCapabilities" to patchedCapabilities)))).toString()
 }
