@@ -83,7 +83,7 @@ function sanitizeMarkdownTags(html: string): string {
     ],
     ALLOWED_ATTR: [
       'alt', 'aria-label', 'class', 'colspan', 'height', 'href', 'loading', 'rel',
-      'rowspan', 'src', 'target', 'title', 'width'
+      'rowspan', 'src', 'start', 'target', 'title', 'width'
     ],
     ALLOWED_URI_REGEXP: SAFE_URI_PATTERN,
   });

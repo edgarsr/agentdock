@@ -12,6 +12,7 @@ interface ReferenceChipProps {
   tooltipClassName?: string;
   onClick?: () => void;
   onRemove?: (e: React.MouseEvent) => void;
+  atLineStart?: boolean;
 }
 
 function ReferenceChip({
@@ -24,12 +25,15 @@ function ReferenceChip({
   tooltipClassName,
   onClick,
   onRemove,
+  atLineStart = false,
 }: ReferenceChipProps) {
+  // On the outermost element, so that a tooltip wrapper does not shift the chip in the text line.
+  const lineAlignClassName = 'reference-chip mt-[-0.4rem] relative top-[2px] align-middle';
   const chip = (
     <div contentEditable={false}
-      className={`reference-chip inline-flex min-h-[22px] items-center gap-1.5 px-2 py-1 rounded-[6px] border bg-background-secondary
-        border-border mt-[-0.4rem] relative top-[2px] align-middle transition-all group 
-        has-[:focus-visible]:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] mx-0.5`}
+      className={`inline-flex min-h-[22px] items-center gap-1.5 px-2 py-1 rounded-[6px] border bg-background-secondary
+        border-border ${tooltip ? '' : lineAlignClassName} transition-all group
+        has-[:focus-visible]:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] ${atLineStart ? 'ml-0 mr-0.5' : 'mx-0.5'}`}
     >
       <button type="button"
         onClick={(e) => {
@@ -60,9 +64,11 @@ function ReferenceChip({
 
   if (!tooltip) return chip;
 
-  // Inline, so that the chip stays in the text flow of a sent message.
+  // Inline, so that the chip stays in the text flow of a sent message; flex, so that no text line of its own
+  // lies around the chip.
   return (
-    <Tooltip variant={tooltipVariant} content={tooltip} className="!inline-block" contentClassName={tooltipClassName}>
+    <Tooltip variant={tooltipVariant} content={tooltip} className={`!inline-flex ${lineAlignClassName}`}
+      contentClassName={tooltipClassName}>
       {chip}
     </Tooltip>
   );
@@ -120,6 +126,34 @@ export function CodeReferenceChip({
       tooltipVariant="minimal"
       onClick={onClick}
       onRemove={onRemove}
+    />
+  );
+}
+
+interface ImageChipProps {
+  /** The image address, or none while the image is not loaded. */
+  src?: string;
+  onClick?: () => void;
+  onRemove?: (e: React.MouseEvent) => void;
+  atLineStart?: boolean;
+}
+
+export function ImageChip({ src, onClick, onRemove, atLineStart }: ImageChipProps) {
+  return (
+    <ReferenceChip
+      icon={src ? <img src={src} alt="" className="h-full w-full rounded-sm object-cover" /> : (
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+      )}
+      label="Image"
+      removeLabel="Remove image"
+      onClick={onClick}
+      onRemove={onRemove}
+      atLineStart={atLineStart}
     />
   );
 }

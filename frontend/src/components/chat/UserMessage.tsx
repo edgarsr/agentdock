@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, memo } from 'rea
 import { Message, RichContentBlock, TextBlock, ImageBlock, FileBlock, CodeReferenceBlock } from '../../types/chat';
 import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { AttachmentItem } from './shared/AttachmentItem';
-import { CodeReferenceChip, QuoteChip } from './shared/ReferenceChip';
+import { CodeReferenceChip, ImageChip, QuoteChip } from './shared/ReferenceChip';
 import { Tooltip } from './shared/Tooltip';
 import { listClassName, parseMarkdownLists, type MarkdownList, type MarkdownListBlock } from './shared/markdownLists';
 import { openFile } from '../../utils/openFile';
@@ -151,18 +151,8 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber, onElemen
   const renderInlineBlock = (block: RichContentBlock, key: number) => {
     if (block.type === 'image' && (block as ImageBlock).data) {
       const img = block as ImageBlock;
-      return (
-        <AttachmentItem
-          key={key}
-          att={{
-            id: String(key),
-            name: 'Image',
-            mimeType: img.mimeType,
-            data: img.data
-          }}
-          onImageClick={onImageClick}
-        />
-      );
+      const src = `data:${img.mimeType};base64,${img.data}`;
+      return <ImageChip key={key} src={src} onClick={() => onImageClick(src)} />;
     }
     if (block.type === 'code_ref') {
       const codeRef = block as CodeReferenceBlock;

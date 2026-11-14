@@ -154,7 +154,7 @@ export default function HistoryPanel({
   const pinSelected = selectedItems.length === 0 || selectedItems.some((item) => !item.pinned);
 
   return (
-    <div className="flex min-h-0 w-full flex-col bg-background text-foreground">
+    <div className="flex min-h-0 w-full flex-1 flex-col bg-background text-foreground">
       <SectionPage padding="px-5 pt-1.5 pb-2" toolbar={(
       <div className="flex shrink-0 flex-wrap items-center gap-3 min-h-12 px-4 py-1 border-b border-border">
         <div className="flex min-w-0 flex-auto items-center gap-1.5">

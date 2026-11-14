@@ -16,9 +16,9 @@ interface SectionPageProps {
  */
 export function SectionPage({ toolbar, onAdd, padding = 'px-5 pb-8 pt-3', children }: SectionPageProps) {
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {toolbar}
-      <div data-section-scroll tabIndex={-1} className="min-h-0 overflow-y-auto focus:outline-none">
+      <div data-section-scroll tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus:outline-none">
         <div className={`flex flex-col ${padding}`}>
           {onAdd ? (
             <div className="flex justify-end pb-4">

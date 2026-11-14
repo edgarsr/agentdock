@@ -12,6 +12,7 @@ import {
   LexicalEditor 
 } from 'lexical';
 import { ChatInputActionsContext } from './ChatInputActionsContext';
+import { ImageChip } from '../shared/ReferenceChip';
 
 export type SerializedImageNode = Spread<
   { id: string },
@@ -85,46 +86,13 @@ function ImageComponent({ id, nodeKey }: { id: string; nodeKey: NodeKey }) {
     });
   };
 
-  const onClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (actions && att) {
-      actions.onImageClick(`data:${att.mimeType};base64,${att.data}`);
-    }
-  };
-
+  const src = att && `data:${att.mimeType};base64,${att.data}`;
   return (
-    <span contentEditable={false}
-      className={`inline-flex min-h-[22px] items-center gap-1.5 px-2 py-1 rounded-[6px] border  
-        border-border mt-[-0.4rem] relative top-[2px] align-middle bg-background-secondary transition-all group 
-        has-[:focus-visible]:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)] 
-        ${isAtStart ? 'ml-0 mr-0.5' : 'mx-0.5'}`}
-    >
-      <button type="button" onClick={onClick}
-        className="flex items-center gap-1.5 cursor-pointer rounded-sm focus:outline-none"
-      >
-        {att ? (
-          <div className="w-3 h-3 rounded-sm overflow-hidden flex-shrink-0">
-            <img src={`data:${att.mimeType};base64,${att.data}`} alt={att.name} className="w-full h-full object-cover"/>
-          </div>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
-        )}
-        <span className="text-xs font-medium text-foreground">Image</span>
-      </button>
-      <button type="button" onClick={onDelete}
-        className="ml-0.5 rounded-[4px] p-0.5 text-foreground transition-all hover:bg-background-secondary
-          focus:outline-none focus-visible:shadow-[0_0_0_1px_var(--ide-Button-default-focusColor)]"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-             <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </span>
+    <ImageChip
+      src={src}
+      onClick={src ? () => actions?.onImageClick(src) : undefined}
+      onRemove={onDelete}
+      atLineStart={isAtStart}
+    />
   );
 }
