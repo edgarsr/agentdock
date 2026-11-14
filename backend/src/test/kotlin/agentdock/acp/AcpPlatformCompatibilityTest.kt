@@ -9,20 +9,6 @@ import kotlin.test.assertTrue
 
 class AcpPlatformCompatibilityTest {
     @Test
-    fun `Claude Code uses its CLI login status method`() {
-        val adapter = AcpAdapterConfig.getAdapterInfo("claude-code")
-
-        assertEquals("claudeCodeCliAuthStatus", adapter.loginStatusMethod)
-    }
-
-    @Test
-    fun `Claude Code login status parser reads logged in state`() {
-        assertEquals(false, parseClaudeCodeLoginStatus("""{"loggedIn":false,"authMethod":"none"}"""))
-        assertEquals(true, parseClaudeCodeLoginStatus("""{"loggedIn":true,"authMethod":"claude.ai"}"""))
-        assertEquals(null, parseClaudeCodeLoginStatus("""{"authMethod":"none"}"""))
-    }
-
-    @Test
     fun `Codex uses its CLI login status method`() {
         val adapter = AcpAdapterConfig.getAdapterInfo("codex")
 

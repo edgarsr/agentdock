@@ -1,18 +1,20 @@
 package agentdock.acp
 
+import com.agentclientprotocol.rpc.MethodName
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Duration.Companion.seconds
 
 internal object AcpLoginStatus {
+    private const val ACP_METHOD = "acp"
     private const val ANTIGRAVITY_METHOD = "antigravityCliModels"
-    private const val CLAUDE_CODE_METHOD = "claudeCodeCliAuthStatus"
     private const val CODEX_METHOD = "codexCliLoginStatus"
     private const val CURSOR_METHOD = "cursorCliStatus"
     private const val COPILOT_RPC_METHOD = "copilotRpcAuthStatus"
@@ -20,9 +22,13 @@ internal object AcpLoginStatus {
     private const val QODER_METHOD = "qoderCliStatus"
     private const val STATUS_TIMEOUT_SECONDS = 10L
 
-    fun resolve(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? = when (adapterInfo.loginStatusMethod) {
+    /** Blocks for the non-ACP methods; call from an IO context. */
+    suspend fun resolve(
+        adapterInfo: AcpAdapterConfig.AdapterInfo,
+        service: AcpClientService
+    ): Boolean? = when (adapterInfo.loginStatusMethod) {
+        ACP_METHOD -> resolveAcp(adapterInfo.id, service)
         ANTIGRAVITY_METHOD -> runCliStatusCommand(adapterInfo, listOf("models"))?.let(::parseAntigravityLoginStatus)
-        CLAUDE_CODE_METHOD -> resolveClaudeCode(adapterInfo)
         CODEX_METHOD -> resolveCodex(adapterInfo)
         CURSOR_METHOD -> resolveCursor(adapterInfo)
         COPILOT_RPC_METHOD -> AcpCopilotAuthenticationRpc.fetchLoginStatus(adapterInfo.id)
@@ -31,17 +37,19 @@ internal object AcpLoginStatus {
         else -> null
     }
 
-    private fun resolveClaudeCode(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? {
-        val adapterRoot = AcpAdapterPaths.getDownloadPath(adapterInfo.id)
-        val command = buildAdapterLaunchCommand(
-            adapterRootPath = adapterRoot,
-            adapterInfo = adapterInfo.copy(args = emptyList())
-        ) + listOf("--cli", "auth", "status")
-        val result = runCatching {
-            AcpExecutionMode.runCommand(command = command, timeout = STATUS_TIMEOUT_SECONDS.seconds)
-        }.getOrNull() ?: return null
-        return parseClaudeCodeLoginStatus(result.stdout)
-            ?: parseClaudeCodeLoginStatus(result.stderr)
+    /**
+     * Sends the draft-RFD `auth/status` request raw: Kotlin SDK 0.34.0 models an older response
+     * shape (`authenticated`) than adapters send (`state`).
+     */
+    private suspend fun resolveAcp(adapterId: String, service: AcpClientService): Boolean? = try {
+        val protocol = AcpAuthenticationService.initializedProcess(adapterId, service).protocol
+        withTimeoutOrNull(STATUS_TIMEOUT_SECONDS.seconds) {
+            protocol?.sendRequestRaw(MethodName("auth/status"), JsonObject(emptyMap()))
+        }?.let(::parseAcpLoginStatus)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
     }
 
     private fun resolveCodex(adapterInfo: AcpAdapterConfig.AdapterInfo): Boolean? =
@@ -74,18 +82,13 @@ internal fun parseAntigravityLoginStatus(output: String): Boolean? = when {
     else -> null
 }
 
-internal fun parseClaudeCodeLoginStatus(output: String): Boolean? {
-    val jsonStart = output.indexOf('{')
-    val jsonEnd = output.lastIndexOf('}')
-    if (jsonStart !in 0..jsonEnd) return null
-
-    return runCatching {
-        Json.parseToJsonElement(output.substring(jsonStart, jsonEnd + 1))
-            .jsonObject["loggedIn"]
-            ?.jsonPrimitive
-            ?.booleanOrNull
-    }.getOrNull()
-}
+/** `auth/status` answers `authenticated`, `unauthenticated`, or `unknown`, which is no result. */
+internal fun parseAcpLoginStatus(response: JsonElement): Boolean? =
+    when (((response as? JsonObject)?.get("state") as? JsonPrimitive)?.contentOrNull) {
+        "authenticated" -> true
+        "unauthenticated" -> false
+        else -> null
+    }
 
 internal fun parseCodexLoginStatus(output: String): Boolean? {
     val lines = output.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()

@@ -333,7 +333,8 @@ private fun java.io.BufferedReader.asLineFlow() = flow {
  * Returns the initialize response [line] without `agentCapabilities.auth.status`, or null when
  * [line] is not an initialize response. The ACP schema advertises that capability as an object
  * (`{}`), but Kotlin SDK 0.34.0 decodes it as Boolean and then fails the whole response.
- * The plugin does not use `auth/status`. Remove once the SDK decodes the object.
+ * The plugin sends `auth/status` raw without checking this capability (see `AcpLoginStatus`).
+ * Remove once the SDK decodes the object.
  */
 private fun withoutAuthStatusCapability(line: String): String? {
     val root = runCatching { Json.parseToJsonElement(line) }.getOrNull() as? JsonObject ?: return null

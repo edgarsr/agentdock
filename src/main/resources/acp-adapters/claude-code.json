@@ -12,7 +12,7 @@
   "sessionDeleteMethod": "acp",
   "loginMethod": "acp",
   "logoutMethod": "acp",
-  "loginStatusMethod": "claudeCodeCliAuthStatus",
+  "loginStatusMethod": "acp",
   "patches": [
     "@patches/claude-code/disable-auto-updater.patch"
   ],

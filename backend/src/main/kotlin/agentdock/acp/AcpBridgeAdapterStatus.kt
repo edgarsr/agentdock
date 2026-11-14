@@ -283,7 +283,7 @@ private fun AcpBridge.ensureLoginStatusCheckStarted(
     launchRuntimeCheck(loginStatusJobs, info.id) {
         runRuntimeCheckWithRetries { attempt ->
             try {
-                val loggedIn = AcpLoginStatus.resolve(info)
+                val loggedIn = AcpLoginStatus.resolve(info, service)
                 if (loggedIn != null) {
                     val becameLoggedIn = loggedIn && service.loginStatusStates[info.id] == false
                     service.loginStatusStates[info.id] = loggedIn

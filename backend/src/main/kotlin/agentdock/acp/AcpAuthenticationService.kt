@@ -57,7 +57,7 @@ internal object AcpAuthenticationService {
             is AuthMethod.TerminalAuth -> {
                 openTerminalAuth(method.name, method.args.orEmpty(), method.env.orEmpty())
                 if (!adapterInfo.isCustom) {
-                    waitForLogin(adapterInfo)
+                    waitForLogin(adapterInfo, service)
                 }
             }
 
@@ -67,13 +67,13 @@ internal object AcpAuthenticationService {
         }
     }
 
-    private suspend fun waitForLogin(adapterInfo: AcpAdapterConfig.AdapterInfo) {
+    private suspend fun waitForLogin(adapterInfo: AcpAdapterConfig.AdapterInfo, service: AcpClientService) {
         check(adapterInfo.loginStatusMethod != null) {
             "Authentication status is not configured for '${adapterInfo.id}'"
         }
         val authenticated = withTimeoutOrNull(AUTH_TIMEOUT) {
             while (true) {
-                if (withContext(Dispatchers.IO) { AcpLoginStatus.resolve(adapterInfo) } == true) {
+                if (withContext(Dispatchers.IO) { AcpLoginStatus.resolve(adapterInfo, service) } == true) {
                     return@withTimeoutOrNull true
                 }
                 delay(AUTH_STATUS_POLL_INTERVAL)
@@ -148,7 +148,7 @@ internal object AcpAuthenticationService {
         )
     }
 
-    private suspend fun initializedProcess(
+    suspend fun initializedProcess(
         adapterId: String,
         service: AcpClientService
     ): AcpClientService.SharedProcess {
