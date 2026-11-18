@@ -603,17 +603,18 @@ internal fun hasFullOutputToolKind(raw: JsonObject): Boolean =
 // Long tool output is truncated before it reaches the UI or history, wherever the adapter puts it.
 // Tool input, diffs and inline images stay intact: diffs are needed for undo, and images are shown.
 internal fun compactToolRawJson(parsed: JsonObject, fullOutput: Boolean): JsonObject {
-    val withoutImageCopies = dropImageCopies(parsed)
-    if (fullOutput || (parsed["kind"] as? JsonPrimitive)?.contentOrNull in FULL_OUTPUT_TOOL_KINDS) return withoutImageCopies
-    return JsonObject(withoutImageCopies.mapValues { (key, value) -> if (key == "rawInput") value else limitToolOutputStrings(value) })
+    val used = dropUnusedToolCallData(parsed)
+    if (fullOutput || (parsed["kind"] as? JsonPrimitive)?.contentOrNull in FULL_OUTPUT_TOOL_KINDS) return used
+    return JsonObject(used.mapValues { (key, value) -> if (key == "rawInput") value else limitToolOutputStrings(value) })
 }
 
-// The UI shows a tool call's image objects only from its content. Copies an adapter repeats
-// elsewhere, such as Claude Code's rawOutput and _meta, would only multiply the image data.
-internal fun dropImageCopies(raw: JsonObject): JsonObject {
+// Nothing uses a tool call's _meta, where an adapter such as Claude Code repeats the tool's output
+// and even whole edited files. The UI shows a tool call's image objects only from its content, so
+// copies elsewhere, such as in rawOutput, would only multiply the image data.
+internal fun dropUnusedToolCallData(raw: JsonObject): JsonObject {
     val intact = setOf("content", "rawInput")
     return JsonObject(
-        raw.filter { (key, value) -> key in intact || !isImageObject(value) }
+        raw.filter { (key, value) -> key != "_meta" && (key in intact || !isImageObject(value)) }
             .mapValues { (key, value) -> if (key in intact) value else withoutImageObjects(value) }
     )
 }

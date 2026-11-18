@@ -1,6 +1,6 @@
 package agentdock.history
 
-import agentdock.acp.dropImageCopies
+import agentdock.acp.dropUnusedToolCallData
 import agentdock.utils.atomicWriteBytes
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -87,7 +87,8 @@ internal object HistoryImageStore {
 
     private fun storeToolCallImages(event: JsonObject, storeImage: (JsonObject) -> JsonObject): JsonObject {
         val rawJson = (event["toolRawJson"] as? JsonPrimitive)?.contentOrNull ?: return event
-        if (!rawJson.contains("\"image\"")) return event
+        // Text in the JSON has its quotes escaped, so only a key matches "_meta":.
+        if (!rawJson.contains("\"image\"") && !rawJson.contains("\"_meta\":")) return event
         val raw = runCatching { Json.parseToJsonElement(rawJson) as? JsonObject }.getOrNull() ?: return event
         val content = (raw["content"] as? JsonArray)?.map { item ->
             val block = item as? JsonObject ?: return@map item
@@ -99,8 +100,8 @@ internal object HistoryImageStore {
                 else -> item
             }
         }
-        // A tool call stored with the copies of its images loses them here.
-        val stored = dropImageCopies(if (content == null) raw else JsonObject(raw + ("content" to JsonArray(content))))
+        // A tool call stored with data nothing uses, such as copies of its images, loses it here.
+        val stored = dropUnusedToolCallData(if (content == null) raw else JsonObject(raw + ("content" to JsonArray(content))))
         if (stored == raw) return event
         return JsonObject(event + ("toolRawJson" to JsonPrimitive(stored.toString())))
     }
