@@ -54,10 +54,9 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Improved loading performance of long chats.</li>
-            <li>Added formatted list creation in the chat input.</li>
-            <li>Added a workaround for a Kotlin ACP SDK bug.</li>
-            <li>Minor bug fixes and UI refinements.</li>
+            <li>Switched Google Antigravity integration to the Antigravity CLI's built-in ACP mode.</li>
+            <li>Optimized chat history storage.</li>
+            <li>Minor bug fixes.</li>
         </ul>
     ]]></change-notes>
 
