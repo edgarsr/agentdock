@@ -202,7 +202,7 @@ function buildBlocks(chunk: ContentChunk): RichContentBlock[] {
         }]
       }];
     case 'image':
-      return [{ type: 'image', data: chunk.data!, mimeType: chunk.mimeType!, isInline: chunk.isInline } as any];
+      return [{ type: 'image', data: chunk.data!, mimeType: chunk.mimeType!, isInline: chunk.isInline, storedImage: chunk.storedImage } as any];
     case 'audio':
       return [{ type: 'audio', data: chunk.data!, mimeType: chunk.mimeType! } as any];
     case 'video':

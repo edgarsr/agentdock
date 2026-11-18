@@ -120,7 +120,7 @@ object AgentDockHistoryService {
         }
     }
 
-    /** The base64 data of a stored tool call image; see [HistoryImageStore]. */
+    /** The base64 data of a stored prompt or tool call image; see [HistoryImageStore]. */
     fun readStoredImage(projectPath: String?, ref: String): String? {
         val cleanProjectPath = canonicalHistoryProjectPath(projectPath)
         if (cleanProjectPath.isBlank()) return null

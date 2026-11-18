@@ -647,7 +647,7 @@ export const ACPBridge = {
     return request;
   },
 
-  /** The base64 data of a tool call image the history stores apart from the conversation; `null` when it is gone. */
+  /** The base64 data of a prompt or tool call image the history stores apart from the conversation; `null` when it is gone. */
   requestStoredImage: (image: string): Promise<string | null> => {
     const pending = pendingStoredImageRequests.get(image);
     if (pending) return pending;

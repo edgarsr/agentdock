@@ -33,7 +33,8 @@ export interface TextBlock { type: 'text'; text: string; }
 /** A user's form reply within an existing prompt, rather than a new prompt. */
 export interface ElicitationAnswer { question: string; answer: string; }
 export interface ElicitationAnswerBlock { type: 'elicitation_answer'; text: string; answers?: ElicitationAnswer[]; }
-export interface ImageBlock { type: 'image'; data: string; mimeType: string; isInline?: boolean; }
+// A stored prompt's image has an empty `data` and is loaded by its `storedImage`; see ACPBridge.requestStoredImage.
+export interface ImageBlock { type: 'image'; data: string; mimeType: string; isInline?: boolean; storedImage?: string; }
 export interface AudioBlock { type: 'audio'; data: string; mimeType: string; isInline?: boolean; }
 export interface VideoBlock { type: 'video'; data: string; mimeType: string; name?: string; path?: string; isInline?: boolean; }
 export interface FileBlock { type: 'file'; name: string; mimeType: string; data?: string; path?: string; isInline?: boolean; }
@@ -305,6 +306,7 @@ export interface ContentChunk {
   answers?: ElicitationAnswer[];
   quote?: string;
   data?: string;
+  storedImage?: string;
   path?: string;
   name?: string;
   mimeType?: string;
@@ -336,6 +338,7 @@ export interface ReplayContentBlock {
   answers?: ElicitationAnswer[];
   quote?: string;
   data?: string;
+  storedImage?: string;
   path?: string;
   name?: string;
   mimeType?: string;

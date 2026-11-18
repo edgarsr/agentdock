@@ -27,7 +27,7 @@ import { $isListItemNode, $isListNode } from '@lexical/list';
 import { $createImageNode, ImageNode } from './ImageNode';
 import { ReferenceNode, $createReferenceNode, $isReferenceNode, type ReferenceKind } from './ReferenceNode';
 import { ChatAttachment, RichContentBlock } from '../../../types/chat';
-import { pastedPrompt, PROMPT_MIME } from '../../../utils/promptClipboard';
+import { pastedPrompt, PROMPT_MIME, withStoredImageData } from '../../../utils/promptClipboard';
 import { markdownFromHtmlLists, TYPED_LIST_MARKER } from '../shared/markdownLists';
 import { $applyTypedListMarker, $insertComposerText, $selectedListItem, restoreComposerContent } from './composerContent';
 
@@ -127,7 +127,9 @@ export function PasteLogPlugin({ attachments, onAttachmentsChange }: {
           || pastedPrompt(plainText || '');
         if (prompt) {
           event.preventDefault();
-          insertPrompt(editor, prompt, attachments, onAttachmentsChange);
+          void withStoredImageData(prompt).then((blocks) => {
+            if (editor.getRootElement()) insertPrompt(editor, blocks, attachmentsRef.current, onAttachmentsChange);
+          });
           return true;
         }
 

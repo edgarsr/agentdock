@@ -7,6 +7,8 @@ import { Tooltip } from './shared/Tooltip';
 import { listClassName, parseMarkdownLists, type MarkdownList, type MarkdownListBlock } from './shared/markdownLists';
 import { openFile } from '../../utils/openFile';
 import { copyPrompt } from '../../utils/promptClipboard';
+import { imageDataSrc } from '../../utils/toolCallImages';
+import { ACPBridge } from '../../utils/bridge';
 
 interface UserMessageProps {
   message: Message;
@@ -62,6 +64,34 @@ function splitBlocks(message: Message) {
     });
   }
   return { inline, trailing };
+}
+
+// The image's data, loaded when the history stores it apart from the chat.
+function useImageData(image: ImageBlock): string | null {
+  const [stored, setStored] = useState<string | null>(null);
+  useEffect(() => {
+    if (image.data || !image.storedImage) return;
+    let active = true;
+    ACPBridge.requestStoredImage(image.storedImage).then((data) => {
+      if (active) setStored(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [image.data, image.storedImage]);
+  return image.data || stored;
+}
+
+function InlineImage({ image, onImageClick }: { image: ImageBlock; onImageClick: (src: string) => void }) {
+  const data = useImageData(image);
+  if (!data) return null;
+  const src = imageDataSrc(data, image.mimeType);
+  return <ImageChip src={src} onClick={() => onImageClick(src)} />;
+}
+
+function TrailingImage({ image, id, onImageClick }: { image: ImageBlock; id: string; onImageClick: (src: string) => void }) {
+  const data = useImageData(image);
+  return <AttachmentItem att={{ id, name: 'Image', mimeType: image.mimeType, data: data ?? undefined }} onImageClick={onImageClick} />;
 }
 
 // Stands for the inline block at an index, so that lists hold the chips and images among their text.
@@ -149,10 +179,8 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber, onElemen
   };
 
   const renderInlineBlock = (block: RichContentBlock, key: number) => {
-    if (block.type === 'image' && (block as ImageBlock).data) {
-      const img = block as ImageBlock;
-      const src = `data:${img.mimeType};base64,${img.data}`;
-      return <ImageChip key={key} src={src} onClick={() => onImageClick(src)} />;
+    if (block.type === 'image') {
+      return <InlineImage key={key} image={block as ImageBlock} onImageClick={onImageClick} />;
     }
     if (block.type === 'code_ref') {
       const codeRef = block as CodeReferenceBlock;
@@ -213,13 +241,7 @@ export const UserMessage = memo(({ message, onImageClick, promptNumber, onElemen
               />
             );
           }
-          const ib = block as ImageBlock;
-          return (
-            <AttachmentItem key={`trail-${idx}`}
-              att={{ id: `trail-${idx}`, name: 'Image', mimeType: ib.mimeType, data: ib.data }}
-              onImageClick={onImageClick}
-            />
-          );
+          return <TrailingImage key={`trail-${idx}`} id={`trail-${idx}`} image={block as ImageBlock} onImageClick={onImageClick} />;
         })}
       </div>
     );

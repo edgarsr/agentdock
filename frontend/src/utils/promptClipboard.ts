@@ -1,5 +1,6 @@
 import type { Message, RichContentBlock } from '../types/chat';
 import { plainTextFromBlocks } from '../hooks/chatSession/messageBasics';
+import { ACPBridge } from './bridge';
 
 const PREFIX = 'agentdock-prompt:v1:';
 export const PROMPT_MIME = 'application/x-agentdock-prompt';
@@ -54,6 +55,16 @@ export function pastedPrompt(text: string): RichContentBlock[] | null {
   }
 }
 
+/** The blocks with the data of the images the history stores apart from the chat; an image that is gone is left out. */
+export async function withStoredImageData(blocks: RichContentBlock[]): Promise<RichContentBlock[]> {
+  const loaded = await Promise.all(blocks.map(async (block) => {
+    if (block.type !== 'image' || block.data || !block.storedImage) return block;
+    const data = await ACPBridge.requestStoredImage(block.storedImage);
+    return data ? { ...block, data } : null;
+  }));
+  return loaded.filter((block): block is RichContentBlock => block !== null);
+}
+
 function isPromptBlock(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const block = value as Record<string, unknown>;
@@ -61,6 +72,8 @@ function isPromptBlock(value: unknown): boolean {
     case 'text':
       return typeof block.text === 'string';
     case 'image':
+      return typeof block.data === 'string' && typeof block.mimeType === 'string'
+        && (block.storedImage === undefined || typeof block.storedImage === 'string');
     case 'audio':
       return typeof block.data === 'string' && typeof block.mimeType === 'string';
     case 'video':

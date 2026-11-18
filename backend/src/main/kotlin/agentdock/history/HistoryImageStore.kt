@@ -13,14 +13,14 @@ import java.security.MessageDigest
 import java.util.Base64
 
 /**
- * The images of the conversations' tool calls, kept out of the data files so that these stay small
- * enough to read, rewrite after every prompt and send to the UI, which loads an image only when it
- * shows it.
+ * The images of the conversations' prompts and tool calls, kept out of the data files so that these
+ * stay small enough to read, rewrite after every prompt and send to the UI, which loads an image
+ * only when it shows it.
  *
  * Each image is an image file in its conversation's images directory, named by the SHA-256 of its
- * bytes. In the tool call's content the image keeps its `mimeType`, and [STORED_IMAGE_KEY],
- * `<conversation id>/<file name>`, replaces its `data`. An image of another type, or whose data is
- * not base64, stays in the content.
+ * bytes. In the prompt's blocks or the tool call's content the image keeps its other fields, and
+ * [STORED_IMAGE_KEY], `<conversation id>/<file name>`, replaces its `data`. An image of another
+ * type, or whose data is not base64, stays in the data.
  */
 internal object HistoryImageStore {
     const val STORED_IMAGE_KEY = "storedImage"
@@ -28,7 +28,7 @@ internal object HistoryImageStore {
     private val fileNamePattern = Regex("[0-9a-f]{64}\\.(${imageExtensions.values.joinToString("|")})")
 
     /**
-     * Moves the images of [data]'s tool calls into the conversation's images directory, also those
+     * Moves the images of [data]'s prompts and tool calls into the conversation's images directory, also those
      * of another conversation, which a fork's or a merged conversation's data refers to. Returns the
      * data referring to them and the names of the image files it uses.
      */
@@ -62,7 +62,10 @@ internal object HistoryImageStore {
 
         val stored = data.copy(sessions = data.sessions.map { session ->
             session.copy(prompts = session.prompts.map { prompt ->
-                prompt.copy(events = prompt.events.map { event -> storeToolCallImages(event, ::storeImage) })
+                prompt.copy(
+                    blocks = prompt.blocks.map { block -> if (type(block) == "image") storeImage(block) else block },
+                    events = prompt.events.map { event -> storeToolCallImages(event, ::storeImage) }
+                )
             })
         })
         return stored to used

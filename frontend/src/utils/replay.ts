@@ -110,6 +110,7 @@ function userChunkFromBlock(block: ReplayContentBlock): ContentChunk | null {
         ...baseChunk('user'),
         type: 'image',
         data: block.data || '',
+        storedImage: block.storedImage,
         mimeType: block.mimeType || '',
         isInline: block.isInline,
       };
